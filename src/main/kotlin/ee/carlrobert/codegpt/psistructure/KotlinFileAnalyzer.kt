@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.codecompletions.psi.structure
+package ee.carlrobert.codegpt.psistructure
 
 import com.intellij.openapi.roots.PackageIndex
 import com.intellij.psi.PsiElement
@@ -7,7 +7,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.PsiShortNamesCache
 import com.intellij.psi.util.PsiTreeUtil
-import ee.carlrobert.codegpt.codecompletions.psi.structure.models.*
+import ee.carlrobert.codegpt.psistructure.models.*
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*

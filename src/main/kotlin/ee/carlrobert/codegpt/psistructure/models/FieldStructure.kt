@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.codecompletions.psi.structure.models
+package ee.carlrobert.codegpt.psistructure.models
 
 data class FieldStructure(
     val name: String,

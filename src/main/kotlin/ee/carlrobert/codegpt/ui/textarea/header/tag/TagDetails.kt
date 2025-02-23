@@ -4,18 +4,19 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.Icons.Tree
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.ui.DocumentationDetails
 import git4idea.GitCommit
 import java.util.*
 import javax.swing.Icon
 
-open class TagDetails(
-    open val name: String,
+sealed class TagDetails(
+    val name: String,
     val icon: Icon? = null,
-    open var selected: Boolean = true
-) {
+    var selected: Boolean = true,
     val id: UUID = UUID.randomUUID()
+) {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -25,6 +26,14 @@ open class TagDetails(
 
     override fun hashCode(): Int {
         return id.hashCode()
+    }
+}
+
+class PsiStructureTagDetails(val tokenCount: Int) :
+    TagDetails("AST structure", Tree, id = TAG_UUID) {
+
+    private companion object {
+        val TAG_UUID: UUID = UUID.randomUUID()
     }
 }
 

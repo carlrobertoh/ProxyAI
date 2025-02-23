@@ -1,9 +1,9 @@
-package ee.carlrobert.codegpt.codecompletions.psi.structure
+package ee.carlrobert.codegpt.psistructure
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.psi.PsiFile
-import ee.carlrobert.codegpt.codecompletions.psi.structure.models.ClassStructure
+import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import org.jetbrains.kotlin.psi.KtFile
 
 class PsiStructureProvider {
