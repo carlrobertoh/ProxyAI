@@ -1,12 +1,11 @@
 package ee.carlrobert.codegpt.ui.textarea.header.tag
 
-import com.intellij.openapi.vfs.VirtualFile
-import java.util.*
+import java.util.concurrent.CopyOnWriteArraySet
 
 class TagManager {
 
-    private val tags = mutableSetOf<TagDetails>()
-    private val listeners = mutableListOf<TagManagerListener>()
+    private val tags = CopyOnWriteArraySet<TagDetails>()
+    private val listeners = CopyOnWriteArraySet<TagManagerListener>()
 
     fun addListener(listener: TagManagerListener) {
         listeners.add(listener)
@@ -20,27 +19,17 @@ class TagManager {
         }
     }
 
-    fun removeFileTag(virtualFile: VirtualFile) {
-        getFileTag(virtualFile)?.let {
-            removeTag(it.id)
+    fun notifySelectionChanged(tagDetails: TagDetails) {
+        if (tags.contains(tagDetails)) {
+            listeners.forEach { it.onTagSelectionChanged(tagDetails) }
         }
     }
 
-    fun removeTag(id: UUID) {
-        tags.find { it.id == id }
-            ?.let { tag ->
-                if (tags.removeIf { it.id == tag.id }) {
-                    listeners.forEach { it.onTagRemoved(tag) }
-                }
-            }
+    fun remove(tagDetails: TagDetails) {
+        if (tags.remove(tagDetails)) {
+            listeners.forEach { it.onTagRemoved(tagDetails) }
+        }
     }
-
-    fun getTag(id: UUID): TagDetails? = tags.find { it.id == id }
-
-    fun getFileTag(file: VirtualFile): FileTagDetails? =
-        tags.filterIsInstance<FileTagDetails>().find { it.virtualFile == file }
-
-    fun isFileTagExists(file: VirtualFile): Boolean = getFileTag(file) != null
 
     fun clear() {
         val tagsToRemove = tags.toList()

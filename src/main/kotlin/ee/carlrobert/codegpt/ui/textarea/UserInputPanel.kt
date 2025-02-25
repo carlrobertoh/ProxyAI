@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.ui.textarea
 
+import com.intellij.collaboration.ui.util.bindEnabledIn
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionPlaces
@@ -30,6 +31,8 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
+import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository
+import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
@@ -37,9 +40,12 @@ import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
+import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import git4idea.GitCommit
+import kotlinx.coroutines.flow.map
 import java.awt.*
 import java.awt.geom.Area
 import java.awt.geom.Rectangle2D
@@ -51,6 +57,8 @@ class UserInputPanel(
     private val conversation: Conversation,
     private val totalTokensPanel: TotalTokensPanel,
     parentDisposable: Disposable,
+    psiStructureRepository: PsiStructureRepository,
+    tagManager: TagManager,
     private val onSubmit: (String, List<TagDetails>) -> Unit,
     private val onStop: () -> Unit
 ) : JPanel(BorderLayout()) {
@@ -59,11 +67,12 @@ class UserInputPanel(
         private const val CORNER_RADIUS = 16
     }
 
+    private val disposableCoroutineScope = DisposableCoroutineScope()
     private val suggestionsPopupManager = SuggestionsPopupManager(project, this)
     private val promptTextField =
         PromptTextField(project, suggestionsPopupManager, ::updateUserTokens, ::handleSubmit)
     private val userInputHeaderPanel =
-        UserInputHeaderPanel(project, suggestionsPopupManager, promptTextField)
+        UserInputHeaderPanel(project, tagManager, suggestionsPopupManager, promptTextField)
     private val submitButton = IconActionButton(
         object : AnAction(
             CodeGPTBundle.get("smartTextPane.submitButton.title"),
@@ -94,12 +103,20 @@ class UserInputPanel(
         get() = promptTextField.text
 
     init {
+        Disposer.register(parentDisposable, disposableCoroutineScope)
         background = service<EditorColorsManager>().globalScheme.defaultBackground
         add(userInputHeaderPanel, BorderLayout.NORTH)
         add(promptTextField, BorderLayout.CENTER)
         add(getFooter(), BorderLayout.SOUTH)
 
         Disposer.register(parentDisposable, promptTextField)
+
+        @Suppress("UnstableApiUsage")
+        submitButton.bindEnabledIn(
+            disposableCoroutineScope,
+            psiStructureRepository.getStructureState().map {
+                it != PsiStructureState.UpdateInProgress
+            })
     }
 
     fun getSelectedTags(): List<TagDetails> {

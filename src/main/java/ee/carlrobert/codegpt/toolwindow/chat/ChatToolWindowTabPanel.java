@@ -21,10 +21,13 @@ import ee.carlrobert.codegpt.completions.ToolwindowChatCompletionRequestHandler;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.message.Message;
+import ee.carlrobert.codegpt.psistructure.PsiStructureProvider;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
+import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
+import ee.carlrobert.codegpt.toolwindow.chat.structure.presentation.PsiStructureViewModel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensDetails;
@@ -38,7 +41,9 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
 import ee.carlrobert.codegpt.util.EditorUtil;
+import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
 import ee.carlrobert.codegpt.util.file.FileUtil;
 import git4idea.GitCommit;
 import java.awt.BorderLayout;
@@ -64,6 +69,8 @@ public class ChatToolWindowTabPanel implements Disposable {
   private final ConversationService conversationService;
   private final TotalTokensPanel totalTokensPanel;
   private final ChatToolWindowScrollablePanel toolWindowScrollablePanel;
+  private final PsiStructureRepository psiStructureRepository;
+  private final PsiStructureViewModel psiStructureViewModel;
 
   private @Nullable ToolwindowChatCompletionRequestHandler requestHandler;
 
@@ -73,16 +80,30 @@ public class ChatToolWindowTabPanel implements Disposable {
     this.chatSession = new ChatSession();
     conversationService = ConversationService.getInstance();
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
+    this.psiStructureRepository = new PsiStructureRepository(
+        new PsiStructureProvider(),
+        new CoroutineDispatchers()
+    );
+    TagManager tagManager = new TagManager();
+
+    this.psiStructureViewModel = new PsiStructureViewModel(
+        this,
+        psiStructureRepository,
+        tagManager);
+
     totalTokensPanel = new TotalTokensPanel(
         project,
         conversation,
         EditorUtil.getSelectedEditorSelectedText(project),
+        psiStructureViewModel,
         this);
     userInputPanel = new UserInputPanel(
         project,
         conversation,
         totalTokensPanel,
         this,
+        psiStructureRepository,
+        tagManager,
         this::handleSubmit,
         this::handleCancel);
     userInputPanel.requestFocus();
@@ -233,7 +254,7 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private void reloadMessage(ChatCompletionParameters prevParameters,
-      UserMessagePanel userMessagePanel) {
+                             UserMessagePanel userMessagePanel) {
     var prevMessage = prevParameters.getMessage();
     ResponseMessagePanel responsePanel = null;
     try {

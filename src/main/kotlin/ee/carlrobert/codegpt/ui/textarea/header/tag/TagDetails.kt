@@ -4,7 +4,6 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.Icons.Tree
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.ui.DocumentationDetails
 import git4idea.GitCommit
@@ -14,9 +13,14 @@ import javax.swing.Icon
 sealed class TagDetails(
     val name: String,
     val icon: Icon? = null,
-    var selected: Boolean = true,
     val id: UUID = UUID.randomUUID()
 ) {
+
+    var selected: Boolean = true
+        set(value) {
+            println("sssssss $this")
+            field = value
+        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -29,16 +33,46 @@ sealed class TagDetails(
     }
 }
 
-class PsiStructureTagDetails(val tokenCount: Int) :
-    TagDetails("AST structure", Tree, id = TAG_UUID) {
+class EditorTagDetails(val virtualFile: VirtualFile) : TagDetails(virtualFile.name, virtualFile.fileType.icon) {
 
-    private companion object {
-        val TAG_UUID: UUID = UUID.randomUUID()
+    private val type: String = "EditorTagDetails"
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as EditorTagDetails
+
+        if (virtualFile != other.virtualFile) return false
+        if (type != other.type) return false
+
+        return true
     }
+
+    override fun hashCode(): Int =
+        31 * virtualFile.hashCode() + type.hashCode()
+
 }
 
-data class FileTagDetails(var virtualFile: VirtualFile) :
-    TagDetails(virtualFile.name, virtualFile.fileType.icon)
+class FileTagDetails(val virtualFile: VirtualFile) : TagDetails(virtualFile.name, virtualFile.fileType.icon) {
+
+    private val type: String = "FileTagDetails"
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as FileTagDetails
+
+        if (virtualFile != other.virtualFile) return false
+        if (type != other.type) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int =
+        31 * virtualFile.hashCode() + type.hashCode()
+}
 
 data class SelectionTagDetails(
     var virtualFile: VirtualFile,
