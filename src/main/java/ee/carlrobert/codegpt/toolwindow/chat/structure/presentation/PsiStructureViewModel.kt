@@ -18,15 +18,15 @@ internal class PsiStructureViewModel(
 
     private val tagsListener = object : TagManagerListener {
         override fun onTagAdded(tag: TagDetails) {
-            println("sssssss onTagAdded $tag")
+
         }
 
         override fun onTagRemoved(tag: TagDetails) {
-            println("sssssss onTagRemoved $tag")
+
         }
 
         override fun onTagSelectionChanged(tag: TagDetails) {
-            println("sssssss onTagSelectionChanged $tag")
+
         }
     }
 

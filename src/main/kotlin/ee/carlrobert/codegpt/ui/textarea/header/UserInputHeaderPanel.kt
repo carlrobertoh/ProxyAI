@@ -1,11 +1,9 @@
 package ee.carlrobert.codegpt.ui.textarea.header
 
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.SelectionModel
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
@@ -17,6 +15,7 @@ import ee.carlrobert.codegpt.EditorNotifier
 import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
+import ee.carlrobert.codegpt.ui.textarea.TagDetailsComparator
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
 import ee.carlrobert.codegpt.util.EditorUtil
@@ -27,7 +26,6 @@ import java.awt.FlowLayout
 import java.awt.Graphics
 import javax.swing.JButton
 import javax.swing.JPanel
-import kotlin.math.min
 
 class UserInputHeaderPanel(
     private val project: Project,
@@ -38,17 +36,8 @@ class UserInputHeaderPanel(
 
     companion object {
         private const val INITIAL_VISIBLE_FILES = 2
-        private const val TAG_INSERTION_OFFSET = 1
     }
 
-    //    private val selectedFileTagPanel = object : SelectedFileTagPanel(project, promptTextField, tagManager) {
-//        override fun onClose() {
-//            this.isVisible = false
-//            if (tagManager.getTags().isEmpty()) {
-//                emptyText.isVisible = true
-//            }
-//        }
-//    }
     private val emptyText = JBLabel("No context included").apply {
         foreground = JBUI.CurrentTheme.Label.disabledForeground()
         font = JBUI.Fonts.smallFont()
@@ -56,7 +45,8 @@ class UserInputHeaderPanel(
         preferredSize = Dimension(preferredSize.width, 20)
         verticalAlignment = JBLabel.CENTER
     }
-    private val selectionTagPanel = SelectionTagPanel(project, tagManager, promptTextField)
+
+    //    private val selectionTagPanel = SelectionTagPanel(project, tagManager, promptTextField)
     private val defaultHeaderTagsPanel = CustomFlowPanel().apply {
         add(AddButton {
             if (suggestionsPopupManager.isPopupVisible()) {
@@ -66,7 +56,7 @@ class UserInputHeaderPanel(
             }
         })
         add(emptyText)
-        add(selectionTagPanel)
+//        add(selectionTagPanel)
     }
 
     init {
@@ -77,17 +67,6 @@ class UserInputHeaderPanel(
 
     fun getSelectedTags(): List<TagDetails> {
         val selectedTags = tagManager.getTags().filter { it.selected }.toMutableList()
-
-//        val selectedFile = getSelectedFile()
-//        if (selectedFileTagPanel.isVisible && selectedFileTagPanel.isSelected && selectedFile != null) {
-//            selectedTags.add(FileTagDetails(selectedFile))
-//        }
-
-        (selectionTagPanel.tagDetails as? SelectionTagDetails)?.let {
-            if (!it.selectedText.isNullOrEmpty()) {
-                selectedTags.add(it)
-            }
-        }
 
         return selectedTags
     }
@@ -105,9 +84,7 @@ class UserInputHeaderPanel(
     }
 
     override fun onTagSelectionChanged(tag: TagDetails) {
-        val existingTagComponent = components.filterIsInstance<TagPanel>().find { it.tagDetails == tag } ?: return
-        existingTagComponent.update(tag.name, tag.icon)
-        updateTagPosition(existingTagComponent)
+        onTagsChanged()
     }
 
     private fun onTagsChanged() {
@@ -131,70 +108,36 @@ class UserInputHeaderPanel(
             } else {
                 true
             }
-        }.toSet()
+        }
+            .sortedWith(TagDetailsComparator())
+            .toSet()
 
         emptyText.isVisible = tags.none { it.selected }
 
-        tags.forEach { add(createTagPanel(it), getInsertionIndex()) }
+        tags.forEach { add(createTagPanel(it)) }
 
-        promptTextField.requestFocus()
         revalidate()
         repaint()
     }
 
     private fun createTagPanel(tagDetails: TagDetails) =
-        object : TagPanel(tagDetails, tagManager, false) {
+        if (tagDetails is EditorSelectionTagDetails) {
+            SelectionTagPanel(tagDetails, tagManager, promptTextField)
+        } else {
+            object : TagPanel(tagDetails, tagManager, false) {
 
-            init {
-                cursor =
-                    if (tagDetails is FileTagDetails) Cursor(Cursor.HAND_CURSOR) else Cursor(Cursor.DEFAULT_CURSOR)
-            }
+                init {
+                    cursor =
+                        if (tagDetails is FileTagDetails) Cursor(Cursor.HAND_CURSOR) else Cursor(Cursor.DEFAULT_CURSOR)
+                }
 
-            override fun onSelect(tagDetails: TagDetails) {
-                if (tagDetails is FileTagDetails) {
-                    if (tagDetails.selected) {
-                        project.service<FileEditorManager>().openFile(tagDetails.virtualFile)
-                        return
-                    }
+                override fun onSelect(tagDetails: TagDetails) = Unit
 
-                    tagDetails.selected = true
-
-                    val canAddNewTag = tagManager.getTags()
-                        .filterIsInstance<FileTagDetails>()
-                        .count { !it.selected } < 2
-                    if (canAddNewTag) {
-//                        addNextOpenFile()
-                    }
-                    update(tagDetails.name, tagDetails.icon)
+                override fun onClose() {
+                    tagManager.remove(tagDetails)
                 }
             }
-
-            override fun onClose() {
-                tagManager.remove(tagDetails)
-            }
         }
-
-    private fun updateTagPosition(tag: TagPanel) {
-        remove(tag)
-        add(tag, getInsertionIndex())
-        revalidate()
-        repaint()
-    }
-
-    private fun getInsertionIndex(): Int {
-        val lastSelectionTagIndex = getLastSelectedTagIndex()
-        return if (lastSelectionTagIndex != -1) {
-            min(lastSelectionTagIndex + TAG_INSERTION_OFFSET + 1, components.size)
-        } else {
-            TAG_INSERTION_OFFSET
-        }
-    }
-
-    private fun getLastSelectedTagIndex(): Int =
-        components
-            .filter { it !is SelectionTagPanel }
-            .filterIsInstance<TagPanel>()
-            .indexOfLast { it.tagDetails.selected }
 
     private fun initializeUI() {
         isOpaque = false
@@ -259,7 +202,16 @@ class UserInputHeaderPanel(
             selectionModel: SelectionModel,
             virtualFile: VirtualFile
         ) {
-            selectionTagPanel.update(virtualFile, selectionModel)
+            if (selectionModel.hasSelection()) {
+                val editorSelectionTagDetails = EditorSelectionTagDetails(virtualFile, selectionModel)
+                if (tagManager.getTags().contains(editorSelectionTagDetails)) {
+                    tagManager.remove(editorSelectionTagDetails)
+                }
+                tagManager.addTag(EditorSelectionTagDetails(virtualFile, selectionModel))
+            } else {
+                tagManager.remove(EditorSelectionTagDetails(virtualFile, selectionModel))
+            }
+
         }
     }
 

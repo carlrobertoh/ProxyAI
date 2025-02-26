@@ -85,6 +85,26 @@ data class SelectionTagDetails(
         private set
 }
 
+data class EditorSelectionTagDetails(
+    var virtualFile: VirtualFile,
+    var selectionModel: SelectionModel
+) : TagDetails(
+    "${virtualFile.name} (${selectionModel.selectionStartPosition?.line}:${selectionModel.selectionEndPosition?.line})",
+    virtualFile.fileType.icon
+) {
+    var selectedText: String? = selectionModel.selectedText
+        private set
+
+    override fun equals(other: Any?): Boolean {
+        if (other === null) return false
+        return other::class == this::class
+    }
+
+    override fun hashCode(): Int {
+        return this::class.hashCode()
+    }
+}
+
 data class DocumentationTagDetails(var documentationDetails: DocumentationDetails) :
     TagDetails(documentationDetails.name, AllIcons.Toolwindows.Documentation)
 
