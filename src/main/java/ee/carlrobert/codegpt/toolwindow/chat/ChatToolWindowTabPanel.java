@@ -27,8 +27,8 @@ import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
-import ee.carlrobert.codegpt.toolwindow.chat.structure.presentation.PsiStructureViewModel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody;
+import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatSettingsPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensDetails;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel;
@@ -50,6 +50,7 @@ import java.awt.BorderLayout;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import javax.swing.Box;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import kotlin.Unit;
@@ -70,7 +71,7 @@ public class ChatToolWindowTabPanel implements Disposable {
   private final TotalTokensPanel totalTokensPanel;
   private final ChatToolWindowScrollablePanel toolWindowScrollablePanel;
   private final PsiStructureRepository psiStructureRepository;
-  private final PsiStructureViewModel psiStructureViewModel;
+  private final TagManager tagManager;
 
   private @Nullable ToolwindowChatCompletionRequestHandler requestHandler;
 
@@ -84,18 +85,12 @@ public class ChatToolWindowTabPanel implements Disposable {
         new PsiStructureProvider(),
         new CoroutineDispatchers()
     );
-    TagManager tagManager = new TagManager();
-
-    this.psiStructureViewModel = new PsiStructureViewModel(
-        this,
-        psiStructureRepository,
-        tagManager);
+    tagManager = new TagManager();
 
     totalTokensPanel = new TotalTokensPanel(
         project,
         conversation,
         EditorUtil.getSelectedEditorSelectedText(project),
-        psiStructureViewModel,
         this);
     userInputPanel = new UserInputPanel(
         project,
@@ -357,12 +352,26 @@ public class ChatToolWindowTabPanel implements Disposable {
     panel.setBorder(JBUI.Borders.compound(
         JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0),
         JBUI.Borders.empty(8)));
-    if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
-      panel.add(JBUI.Panels.simplePanel(totalTokensPanel)
-          .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
-    }
+
+    panel.add(JBUI.Panels.simplePanel(createTopPanel())
+        .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
     panel.add(userInputPanel, BorderLayout.CENTER);
     return panel;
+  }
+
+  private JPanel createTopPanel() {
+    JPanel topPanel = new JPanel(new BorderLayout());
+    if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
+      topPanel.add(JBUI.Panels.simplePanel(totalTokensPanel), BorderLayout.WEST);
+      topPanel.add(Box.createHorizontalStrut(100));
+    }
+    JPanel settingsPanel = new ChatSettingsPanel(
+        this,
+        psiStructureRepository,
+        tagManager);
+    topPanel.add(settingsPanel, BorderLayout.EAST);
+
+    return topPanel;
   }
 
   private JComponent getLandingView() {

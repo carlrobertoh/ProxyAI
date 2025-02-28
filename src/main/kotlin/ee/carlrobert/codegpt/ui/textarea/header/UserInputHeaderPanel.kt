@@ -16,7 +16,14 @@ import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.TagDetailsComparator
-import ee.carlrobert.codegpt.ui.textarea.header.tag.*
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagPanel
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManagerListener
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagPanel
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
@@ -203,10 +210,6 @@ class UserInputHeaderPanel(
             virtualFile: VirtualFile
         ) {
             if (selectionModel.hasSelection()) {
-                val editorSelectionTagDetails = EditorSelectionTagDetails(virtualFile, selectionModel)
-                if (tagManager.getTags().contains(editorSelectionTagDetails)) {
-                    tagManager.remove(editorSelectionTagDetails)
-                }
                 tagManager.addTag(EditorSelectionTagDetails(virtualFile, selectionModel))
             } else {
                 tagManager.remove(EditorSelectionTagDetails(virtualFile, selectionModel))
@@ -222,10 +225,6 @@ class UserInputHeaderPanel(
             }
         }
     }
-
-//    private fun getSelectedFile(): VirtualFile? {
-//        return (selectedFileTagPanel.tagDetails as? FileTagDetails)?.virtualFile
-//    }
 
     private inner class FileSelectionListener : FileEditorManagerListener {
         override fun selectionChanged(event: FileEditorManagerEvent) {

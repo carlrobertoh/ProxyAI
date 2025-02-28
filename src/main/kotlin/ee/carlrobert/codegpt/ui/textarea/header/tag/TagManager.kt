@@ -14,6 +14,9 @@ class TagManager {
     fun getTags(): Set<TagDetails> = tags.toSet()
 
     fun addTag(tagDetails: TagDetails) {
+        if (tagDetails is EditorSelectionTagDetails && tags.contains(tagDetails)) {
+            tags.remove(tagDetails)
+        }
         if (tags.add(tagDetails)) {
             listeners.forEach { it.onTagAdded(tagDetails) }
         }

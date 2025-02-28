@@ -24,10 +24,10 @@ class PsiStructureRepository(
 
     internal suspend fun update(psiFiles: List<PsiFile>) {
         mutex.withLock {
-            withContext(dispatchers.io()) {
-                if (structureState.value == PsiStructureState.Disabled) return@withContext
-                structureState.value = PsiStructureState.UpdateInProgress
+            if (structureState.value == PsiStructureState.Disabled) return
+            structureState.value = PsiStructureState.UpdateInProgress
 
+            withContext(dispatchers.io()) {
                 val result = psiStructureProvider.get(psiFiles)
                 structureState.update { currentState ->
                     if (currentState == PsiStructureState.Disabled) {
@@ -36,6 +36,7 @@ class PsiStructureRepository(
                         PsiStructureState.Content(result)
                     }
                 }
+                return@withContext structureState.value
             }
         }
     }

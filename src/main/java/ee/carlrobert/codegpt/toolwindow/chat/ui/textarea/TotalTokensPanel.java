@@ -39,18 +39,15 @@ public class TotalTokensPanel extends JPanel {
   private final EncodingManager encodingManager = EncodingManager.getInstance();
   private final TotalTokensDetails totalTokensDetails;
   private final JBLabel label;
-  private final PsiStructureViewModel psiStructureViewModel;
 
   public TotalTokensPanel(
       @NotNull Project project,
       Conversation conversation,
       @Nullable String highlightedText,
-      PsiStructureViewModel psiStructureViewModel,
       Disposable parentDisposable) {
     super(new FlowLayout(FlowLayout.LEADING, 0, 0));
     this.totalTokensDetails = createTokenDetails(conversation, highlightedText);
     this.label = getLabel(totalTokensDetails);
-    this.psiStructureViewModel = psiStructureViewModel;
 
     setBorder(JBUI.Borders.empty(4));
     setOpaque(false);
