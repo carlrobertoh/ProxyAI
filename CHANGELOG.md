@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Rebranding
+
+- CodeGPT -> ProxyAI
+
 ## [2.16.4-233] - 2025-02-25
 
 ### Added

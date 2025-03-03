@@ -16,7 +16,7 @@ class AzureServiceConfigurable : Configurable {
     private lateinit var component: AzureSettingsForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: Azure Service"
+        return "ProxyAI: Azure Service"
     }
 
     override fun createComponent(): JComponent {

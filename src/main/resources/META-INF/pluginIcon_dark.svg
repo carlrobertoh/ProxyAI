@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <!-- Creator: CorelDRAW -->
-<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="20px" height="20px" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
-  viewBox="8300 5150 6800 6800"
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" width="512px" height="512px" version="1.1" style="shape-rendering:geometricPrecision; text-rendering:geometricPrecision; image-rendering:optimizeQuality; fill-rule:evenodd; clip-rule:evenodd"
+  viewBox="7650 4500 8000 8000"
   xmlns:xlink="http://www.w3.org/1999/xlink"
   xmlns:xodm="http://www.corel.com/coreldraw/odm/2003">
  <defs>
   <style type="text/css">
    <![CDATA[
-    .fil0 {fill:#091423}
+    .fil0 {fill:white}
+    .fil2 {fill:white;fill-rule:nonzero}
     .fil1 {fill:transparent;fill-rule:nonzero}
-    .fil2 {fill:#091423;fill-rule:nonzero}
    ]]>
   </style>
  </defs>
   <g id="Layer_x0020_1">
   <metadata id="CorelCorpID_0Corel-Layer"/>
-    <g id="_1795317850640">
+    <g id="_1795322293696">
    <path class="fil1" d="M15657.84 8267.42c0,2190 -1775.34,3965.34 -3965.35,3965.34 -2190,0 -3965.35,-1775.34 -3965.35,-3965.34 0,-2190.01 1775.35,-3965.35 3965.35,-3965.35 2190.01,0 3965.35,1775.34 3965.35,3965.35z"/>
       <path class="fil2" d="M11910.24 5583.59c-15.56,-121.43 -131.46,-206.72 -258.74,-190.45 -127.27,16.33 -217.86,128.04 -202.36,249.53 15.58,121.43 131.46,206.72 258.72,190.47 127.28,-16.35 217.9,-128.06 202.37,-249.55zm340.89 109.84c-119.2,142.66 -286.14,284.32 -463.86,323.06 -286.64,62.5 -531.04,-139.67 -701.79,-354.15 -14.8,-13.8 -25.11,-30.09 -30.92,-48.71 -1.67,-5.31 -0.84,-10.31 2.64,-14.8 96.6,-128 208.67,-231.59 336.36,-310.89 360.46,-223.47 696.3,37.24 908.29,320.56 4,5.14 4,12.46 0,17.77l-50.72 67.18z"/>
       <path class="fil2" d="M10376.06 5731.01c64.63,-0.5 116.7,-55.34 116.19,-122.52 -0.5,-67.18 -53.19,-121.38 -117.9,-120.88 -64.66,0.5 -116.7,55.36 -116.2,122.53 0.51,67.18 53.21,121.37 117.91,120.87zm282.1 1.99c-25.74,59.19 -64,107.09 -114.87,143.83l-183.37 37.07c-37.74,-2.98 -79.81,-14.62 -126.37,-35.08 -34.42,-15.12 -61.68,-34.58 -82.13,-58.69 -84.14,-99.42 -101.09,-210.99 -51.06,-334.83 44.08,-93.63 116.9,-150.98 218.31,-172.1 233.76,-48.54 425.64,206.16 339.5,419.8z"/>

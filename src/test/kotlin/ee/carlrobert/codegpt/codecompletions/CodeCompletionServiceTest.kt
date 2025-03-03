@@ -16,7 +16,7 @@ import testsupport.IntegrationTest
 
 class CodeCompletionServiceTest : IntegrationTest() {
 
-    fun `test code completion with CodeGPT provider`() {
+    fun `test code completion with ProxyAI provider`() {
         useCodeGPTService()
         service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(

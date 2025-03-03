@@ -22,11 +22,11 @@ import javax.swing.JPanel;
 public class TelemetryComponent {
 
     private static final String DESCRIPTION =
-            "Help CodeGPT improve its products by sending anonymous data about features and plugins used, "
+            "Help ProxyAI improve its products by sending anonymous data about features and plugins used, "
                     + "hardware and software configuration.<br/>"
                     + "<br/>"
                     + "Please note that this will not include personal data or any sensitive Information.<br/>"
-                    + "The data sent complies with the <a href=\"https://codegpt.ee/privacy\">Privacy Policy</a>.";
+                    + "The data sent complies with the <a href=\"https://tryproxy.io/privacy\">Privacy Policy</a>.";
 
     private final JPanel panel;
     private final JBCheckBox enabled = new JBCheckBox("Send usage statistics");

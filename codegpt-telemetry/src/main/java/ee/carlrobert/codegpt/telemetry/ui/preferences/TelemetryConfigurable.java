@@ -35,7 +35,7 @@ public class TelemetryConfigurable implements SearchableConfigurable {
   @Nls(capitalization = Nls.Capitalization.Title)
   @Override
   public String getDisplayName() {
-    return "CodeGPT Telemetry";
+    return "ProxyAI Telemetry";
   }
 
   @Override
