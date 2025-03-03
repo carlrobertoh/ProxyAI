@@ -52,7 +52,7 @@ class ServiceConfigurableComponent {
 
     private fun addLinks(formBuilder: FormBuilder) {
         mapOf(
-            "CodeGPT" to CodeGPTServiceConfigurable::class.java,
+            "ProxyAI" to CodeGPTServiceConfigurable::class.java,
             "OpenAI" to OpenAIServiceConfigurable::class.java,
             "Custom OpenAI" to CustomServiceConfigurable::class.java,
             "Azure" to AzureServiceConfigurable::class.java,

@@ -39,8 +39,8 @@ public class TelemetryNotifications {
 
     public void queryUserConsent() {
         Notification notification = group.createNotification(
-                "Help CodeGPT improve its extensions by allowing them to collect anonymous usage data. " +
-                "Read our <a href=\"https://codegpt.ee/privacy\">privacy statement</a> " +
+                "Help ProxyAI improve its extensions by allowing them to collect anonymous usage data. " +
+                "Read our <a href=\"https://tryproxy.io/privacy\">privacy statement</a> " +
                 "and learn how to <a href=\"\">opt out</a>.",
         NotificationType.INFORMATION);
         notification.setTitle("Enable Telemetry");

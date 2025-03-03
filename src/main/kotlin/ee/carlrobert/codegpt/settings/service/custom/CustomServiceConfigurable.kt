@@ -25,7 +25,7 @@ class CustomServiceConfigurable : Configurable {
     private lateinit var component: CustomServiceListForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: Custom Service"
+        return "ProxyAI: Custom Service"
     }
 
     override fun createComponent(): JComponent {

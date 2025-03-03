@@ -62,7 +62,7 @@ class EditCodeCompletionListener(
             error.message,
             NotificationType.ERROR,
             NotificationAction.createSimpleExpiring("Upgrade plan") {
-                BrowserUtil.open("https://codegpt.ee/#pricing")
+                BrowserUtil.open("https://tryproxy.io/#pricing")
             },
         )
     }
