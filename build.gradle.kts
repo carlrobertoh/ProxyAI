@@ -124,7 +124,7 @@ tasks {
     enabled = true
     dependsOn("updateSubmodules")
     from("src/main/cpp/llama.cpp") {
-      into("CodeGPT/llama.cpp")
+      into("ProxyAI/llama.cpp")
     }
   }
 
