@@ -6,7 +6,18 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.ui.textarea.header.tag.*
+import ee.carlrobert.codegpt.ui.textarea.header.tag.CurrentGitChangesTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.DocumentationTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EmptyTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.WebTagDetails
 import ee.carlrobert.codegpt.util.GitUtil
 import git4idea.GitCommit
 
@@ -86,12 +97,6 @@ class EditorSelectionTagProcessor(
             .append("\n```${tagDetails.virtualFile.extension}\n")
             .append(tagDetails.selectedText)
             .append("\n```\n")
-
-        tagDetails.selectionModel.let {
-            if (it.hasSelection()) {
-                it.removeSelection()
-            }
-        }
     }
 }
 

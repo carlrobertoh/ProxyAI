@@ -3,16 +3,33 @@ package ee.carlrobert.codegpt.completions.factory
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.ReferencedFile
-import ee.carlrobert.codegpt.completions.*
+import ee.carlrobert.codegpt.completions.ChatCompletionParameters
+import ee.carlrobert.codegpt.completions.CommitMessageCompletionParameters
+import ee.carlrobert.codegpt.completions.CompletionRequestFactory
+import ee.carlrobert.codegpt.completions.CompletionRequestUtil
+import ee.carlrobert.codegpt.completions.ConversationType
+import ee.carlrobert.codegpt.completions.EditCodeCompletionParameters
+import ee.carlrobert.codegpt.completions.LookupCompletionParameters
+import ee.carlrobert.codegpt.completions.TotalUsageExceededException
 import ee.carlrobert.codegpt.conversations.ConversationsState
+import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings.Companion.getState
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import ee.carlrobert.codegpt.util.file.FileUtil.getImageMediaType
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.*
-import ee.carlrobert.llm.client.openai.completion.request.*
+import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.O_1_MINI
+import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.O_1_PREVIEW
+import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.O_3_MINI
+import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.findByCode
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionDetailedMessage
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIImageUrl
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIMessageImageURLContent
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIMessageTextContent
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -110,12 +127,14 @@ class OpenAIRequestFactory : CompletionRequestFactory {
         fun buildOpenAIMessages(
             model: String?,
             callParameters: ChatCompletionParameters,
-            referencedFiles: List<ReferencedFile>? = null
+            referencedFiles: List<ReferencedFile>? = null,
+            psiStructure: Set<ClassStructure>? = null
         ): List<OpenAIChatCompletionMessage> {
             val messages = buildOpenAIChatMessages(
-                model,
-                callParameters,
-                referencedFiles ?: callParameters.referencedFiles
+                model = model,
+                callParameters = callParameters,
+                referencedFiles = referencedFiles ?: callParameters.referencedFiles,
+                psiStructure = psiStructure,
             )
 
             if (model == null) {
@@ -151,7 +170,8 @@ class OpenAIRequestFactory : CompletionRequestFactory {
         private fun buildOpenAIChatMessages(
             model: String?,
             callParameters: ChatCompletionParameters,
-            referencedFiles: List<ReferencedFile>? = null
+            referencedFiles: List<ReferencedFile>? = null,
+            psiStructure: Set<ClassStructure>? = null
         ): MutableList<OpenAIChatCompletionMessage> {
             val message = callParameters.message
             val messages = mutableListOf<OpenAIChatCompletionMessage>()
@@ -254,7 +274,8 @@ class OpenAIRequestFactory : CompletionRequestFactory {
                 } else {
                     CompletionRequestUtil.getPromptWithContext(
                         referencedFiles,
-                        message.prompt
+                        message.prompt,
+                        psiStructure
                     )
                 }
                 messages.add(OpenAIChatCompletionStandardMessage("user", prompt))

@@ -1,7 +1,15 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
-import ee.carlrobert.codegpt.completions.factory.*
+import ee.carlrobert.codegpt.completions.factory.AzureRequestFactory
+import ee.carlrobert.codegpt.completions.factory.ClaudeRequestFactory
+import ee.carlrobert.codegpt.completions.factory.CodeGPTRequestFactory
+import ee.carlrobert.codegpt.completions.factory.CustomOpenAIRequestFactory
+import ee.carlrobert.codegpt.completions.factory.GoogleRequestFactory
+import ee.carlrobert.codegpt.completions.factory.LlamaRequestFactory
+import ee.carlrobert.codegpt.completions.factory.OllamaRequestFactory
+import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory
+import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -17,7 +25,7 @@ interface CompletionRequestFactory {
         @JvmStatic
         fun getFactory(serviceType: ServiceType): CompletionRequestFactory {
             return when (serviceType) {
-                ServiceType.CODEGPT -> CodeGPTRequestFactory()
+                ServiceType.CODEGPT -> CodeGPTRequestFactory(ClassStructureSerializer)
                 ServiceType.OPENAI -> OpenAIRequestFactory()
                 ServiceType.CUSTOM_OPENAI -> CustomOpenAIRequestFactory()
                 ServiceType.AZURE -> AzureRequestFactory()
@@ -35,7 +43,8 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         val prompt = "Code to modify:\n${params.selectedText}\n\nInstructions: ${params.prompt}"
         return createBasicCompletionRequest(
             service<PromptsSettings>().state.coreActions.editCode.instructions
-                ?: CoreActionsState.DEFAULT_EDIT_CODE_PROMPT, prompt, 8192, true)
+                ?: CoreActionsState.DEFAULT_EDIT_CODE_PROMPT, prompt, 8192, true
+        )
     }
 
     override fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest {
@@ -65,7 +74,9 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
             } else {
                 CompletionRequestUtil.getPromptWithContext(
                     it,
-                    callParameters.message.prompt
+                    callParameters.message.prompt,
+                    // TODO Support SPI structure fow other providers
+                    emptySet(),
                 )
             }
         } ?: return callParameters.message.prompt
