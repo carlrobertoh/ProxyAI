@@ -14,6 +14,10 @@ class TagManager {
         listeners.add(listener)
     }
 
+    fun removeListener(listener: TagManagerListener) {
+        listeners.remove(listener)
+    }
+
     fun enableEditorTags() {
         enabled = true
     }

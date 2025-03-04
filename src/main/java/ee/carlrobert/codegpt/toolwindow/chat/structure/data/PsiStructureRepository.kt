@@ -108,6 +108,9 @@ class PsiStructureRepository(
     init {
         Disposer.register(parentDisposable, coroutineScope)
         tagManager.addListener(tagsListener)
+        Disposer.register(parentDisposable) {
+            tagManager.removeListener(tagsListener)
+        }
         VirtualFileManager.getInstance().addAsyncFileListener(asyncFileListener, parentDisposable)
     }
 
