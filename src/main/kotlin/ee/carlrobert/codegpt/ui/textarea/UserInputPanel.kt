@@ -114,8 +114,8 @@ class UserInputPanel(
         @Suppress("UnstableApiUsage")
         submitButton.bindEnabledIn(
             disposableCoroutineScope,
-            psiStructureRepository.getStructureState().map {
-                it != PsiStructureState.UpdateInProgress
+            psiStructureRepository.structureState.map {
+                it !is PsiStructureState.UpdateInProgress
             })
     }
 

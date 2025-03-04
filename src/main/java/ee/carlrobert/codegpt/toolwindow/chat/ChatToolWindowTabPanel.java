@@ -50,7 +50,6 @@ import java.awt.BorderLayout;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import javax.swing.Box;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import kotlin.Unit;
@@ -81,11 +80,14 @@ public class ChatToolWindowTabPanel implements Disposable {
     this.chatSession = new ChatSession();
     conversationService = ConversationService.getInstance();
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
+    tagManager = new TagManager();
     this.psiStructureRepository = new PsiStructureRepository(
+        this,
+        project,
+        tagManager,
         new PsiStructureProvider(),
         new CoroutineDispatchers()
     );
-    tagManager = new TagManager();
 
     totalTokensPanel = new TotalTokensPanel(
         project,
@@ -363,12 +365,16 @@ public class ChatToolWindowTabPanel implements Disposable {
     JPanel topPanel = new JPanel(new BorderLayout());
     if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
       topPanel.add(JBUI.Panels.simplePanel(totalTokensPanel), BorderLayout.WEST);
-      topPanel.add(Box.createHorizontalStrut(100));
     }
-    JPanel settingsPanel = new ChatSettingsPanel(
+    ChatSettingsPanel settingsPanel = new ChatSettingsPanel(
         this,
         psiStructureRepository,
-        tagManager);
+        tagManager,
+        tokenCount -> {
+          totalTokensPanel.updatePsiTokenCount(tokenCount);
+          return Unit.INSTANCE;
+        }
+    );
     topPanel.add(settingsPanel, BorderLayout.EAST);
 
     return topPanel;

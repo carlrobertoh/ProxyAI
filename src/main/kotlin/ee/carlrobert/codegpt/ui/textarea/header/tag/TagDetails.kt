@@ -17,10 +17,6 @@ sealed class TagDetails(
 ) {
 
     var selected: Boolean = true
-        set(value) {
-            println("sssssss $this")
-            field = value
-        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -85,9 +81,9 @@ data class SelectionTagDetails(
         private set
 }
 
-data class EditorSelectionTagDetails(
-    var virtualFile: VirtualFile,
-    var selectionModel: SelectionModel
+class EditorSelectionTagDetails(
+    val virtualFile: VirtualFile,
+    val selectionModel: SelectionModel
 ) : TagDetails(
     "${virtualFile.name} (${selectionModel.selectionStartPosition?.line}:${selectionModel.selectionEndPosition?.line})",
     virtualFile.fileType.icon

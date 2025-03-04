@@ -1,7 +1,10 @@
 package ee.carlrobert.codegpt.psistructure.models
 
+import com.intellij.openapi.vfs.VirtualFile
+
 data class ClassStructure(
     val name: ClassName,
+    val virtualFile: VirtualFile,
     val simpleName: ClassName,
     val classType: ClassType,
     val modifierList: List<String>,

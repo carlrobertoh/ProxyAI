@@ -21,7 +21,6 @@ import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.toolwindow.chat.structure.presentation.PsiStructureViewModel;
 import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -103,6 +102,11 @@ public class TotalTokensPanel extends JPanel {
 
   public void update(int total) {
     label.setText(getLabelHtml(total));
+  }
+
+  public void updatePsiTokenCount(int psiTokenCount) {
+    totalTokensDetails.setPsiTokens(psiTokenCount);
+    update();
   }
 
   public void updateConversationTokens(Conversation conversation) {

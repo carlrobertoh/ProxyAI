@@ -62,8 +62,8 @@ class UserInputHeaderPanel(
                 suggestionsPopupManager.showPopup(this)
             }
         })
+        add(RemoveAllButton())
         add(emptyText)
-//        add(selectionTagPanel)
     }
 
     init {
@@ -192,6 +192,29 @@ class UserInputHeaderPanel(
             icon = IconUtil.scale(AllIcons.General.InlineAdd, null, 0.75f)
             rolloverIcon = IconUtil.scale(AllIcons.General.InlineAddHover, null, 0.75f)
             pressedIcon = IconUtil.scale(AllIcons.General.InlineAddHover, null, 0.75f)
+        }
+
+        override fun paintComponent(g: Graphics) {
+            PaintUtil.drawRoundedBackground(g, this, true)
+            super.paintComponent(g)
+        }
+    }
+
+    private inner class RemoveAllButton : JButton() {
+        init {
+            addActionListener {
+                tagManager.clear()
+            }
+
+            cursor = Cursor(Cursor.HAND_CURSOR)
+            preferredSize = Dimension(20, 20)
+            isContentAreaFilled = false
+            isOpaque = false
+            border = null
+            toolTipText = "Remove All Context"
+            icon = IconUtil.scale(AllIcons.Actions.Close, null, 0.75f)
+            rolloverIcon = IconUtil.scale(AllIcons.Actions.CloseHovered, null, 0.75f)
+            pressedIcon = IconUtil.scale(AllIcons.Actions.CloseHovered, null, 0.75f)
         }
 
         override fun paintComponent(g: Graphics) {

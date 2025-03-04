@@ -1,17 +1,21 @@
 package ee.carlrobert.codegpt.toolwindow.chat.structure.presentation
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.project.ProjectLocator
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.AnimatedIcon
-import com.intellij.ui.dsl.builder.*
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.AlignY
+import com.intellij.ui.dsl.builder.Row
+import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.selected
 import com.intellij.ui.layout.selected
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
-import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -22,7 +26,7 @@ import javax.swing.JPanel
 class PsiStructurePanel(
     parentDisposable: Disposable,
     psiStructureRepository: PsiStructureRepository,
-    tagManager: TagManager
+    onPsiTokenUpdate: (Int) -> Unit
 ) : JPanel() {
 
     private val coroutineScope = DisposableCoroutineScope()
@@ -30,15 +34,24 @@ class PsiStructurePanel(
     private val viewModel = PsiStructureViewModel(
         parentDisposable,
         psiStructureRepository,
-        tagManager,
         EncodingManager.getInstance(),
-        ProjectLocator.getInstance(),
         ClassStructureSerializer,
-        CoroutineDispatchers(),
     )
 
     init {
         Disposer.register(parentDisposable, coroutineScope)
+        viewModel.state
+            .filterIsInstance<PsiStructureViewModelState.Content>()
+            .onEach { content ->
+                val tokens = if (content.enabled) {
+                    content.psiStructureTokens
+                } else {
+                    0
+                }
+                onPsiTokenUpdate(tokens)
+            }
+            .launchIn(coroutineScope)
+
         layout = BorderLayout()
         add(
             panel {
@@ -98,7 +111,7 @@ class PsiStructurePanel(
                         viewModel.state
                             .onEach { state ->
                                 component.text = when (state) {
-                                    is PsiStructureViewModelState.Content -> state.psiStructureTokens
+                                    is PsiStructureViewModelState.Content -> state.psiStructureTokens.toString()
                                     is PsiStructureViewModelState.Progress -> ""
                                 }
                                 val isVisible = when (state) {

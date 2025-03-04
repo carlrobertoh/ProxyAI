@@ -20,8 +20,9 @@ class PsiStructureProvider {
         var attempts = 0
         val maxAttempts = 5
 
-        val kotlinFileAnalyzerAvailable: Boolean =
-            ApplicationManager.getApplication().hasComponent(KotlinFileAnalyzer::class.java)
+        val kotlinFileAnalyzerAvailable: Boolean = ApplicationManager
+            .getApplication()
+            .hasComponent(KotlinFileAnalyzer::class.java)
 
         while (result == null && attempts < maxAttempts) {
             attempts++
@@ -29,6 +30,7 @@ class PsiStructureProvider {
                 val project = psiFiles
                     .map { it.project }
                     .firstOrNull { !it.isDisposed } ?: error("Project not available")
+
                 val coroutineContext = currentCoroutineContext()
                 val future = ReadAction.nonBlocking<Set<ClassStructure>> {
                     val classStructureSet = mutableSetOf<ClassStructure>()
