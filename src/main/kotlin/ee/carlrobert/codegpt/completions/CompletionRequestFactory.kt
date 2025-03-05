@@ -75,8 +75,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                 CompletionRequestUtil.getPromptWithContext(
                     it,
                     callParameters.message.prompt,
-                    // TODO Support SPI structure fow other providers
-                    emptySet(),
+                    callParameters.psiStructure,
                 )
             }
         } ?: return callParameters.message.prompt
