@@ -156,6 +156,10 @@ class UserInputHeaderPanel(
 
     private fun addInitialTags() {
         val selectedFile = getSelectedEditor(project)?.virtualFile
+        if (selectedFile != null) {
+            tagManager.addTag(EditorTagDetails(selectedFile))
+        }
+
         EditorUtil.getOpenLocalFiles(project)
             .map { EditorTagDetails(it) }
             .filterNot { it.virtualFile == selectedFile }
