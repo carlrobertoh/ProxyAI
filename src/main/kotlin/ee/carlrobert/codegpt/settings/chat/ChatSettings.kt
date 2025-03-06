@@ -1,11 +1,11 @@
 package ee.carlrobert.codegpt.settings.chat
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.BaseState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.SimplePersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
-import com.intellij.openapi.components.service
 
 @Service
 @State(
@@ -14,11 +14,12 @@ import com.intellij.openapi.components.service
 )
 class ChatSettings :
     SimplePersistentStateComponent<ChatSettingsState>(ChatSettingsState()) {
-    companion object {
-        @JvmStatic
-        fun getState(): ChatSettingsState {
-            return service<ChatSettings>().state
-        }
+
+    override fun loadState(state: ChatSettingsState) {
+        super.loadState(state)
+        ApplicationManager.getApplication().messageBus
+            .syncPublisher(ChatSettingsListener.TOPIC)
+            .onChatSettingsChanged(state)
     }
 }
 

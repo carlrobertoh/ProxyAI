@@ -53,6 +53,10 @@ public class TotalTokensDetails {
     return referencedFilesTokens;
   }
 
+  public int getPsiTokens() {
+    return psiTokens;
+  }
+
   public int getTotal() {
     return systemPromptTokens
         + conversationTokens

@@ -1,8 +1,11 @@
 package ee.carlrobert.codegpt.ui.textarea.header.tag
 
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import ee.carlrobert.codegpt.settings.chat.ChatSettingsListener
 import java.util.concurrent.CopyOnWriteArraySet
 
-class TagManager {
+class TagManager(parentDisposable: Disposable) {
 
     private val tags = mutableSetOf<TagDetails>()
     private val listeners = CopyOnWriteArraySet<TagManagerListener>()
@@ -10,21 +13,28 @@ class TagManager {
     @Volatile
     private var enabled: Boolean = true
 
+    init {
+        val connection = ApplicationManager.getApplication().messageBus
+            .connect(parentDisposable)
+
+        connection.subscribe(
+            ChatSettingsListener.TOPIC,
+            ChatSettingsListener { newState ->
+                if (newState.editorContextTagEnabled) {
+                    enabled = true
+                } else {
+                    enabled = false
+                    clear()
+                }
+            })
+    }
+
     fun addListener(listener: TagManagerListener) {
         listeners.add(listener)
     }
 
     fun removeListener(listener: TagManagerListener) {
         listeners.remove(listener)
-    }
-
-    fun enableEditorTags() {
-        enabled = true
-    }
-
-    fun disableEditorTags() {
-        enabled = false
-        clear()
     }
 
     fun getTags(): Set<TagDetails> = synchronized(this) { tags.toSet() }

@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.toolwindow.chat.structure.presentation
+package ee.carlrobert.codegpt.toolwindow.chat.ui.textarea
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
@@ -7,49 +7,43 @@ import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState
+import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 
-internal class PsiStructureViewModel(
+class PsiStructureTotalTokenProvider(
     parentDisposable: Disposable,
-    private val psiStructureRepository: PsiStructureRepository,
-    private val encodingManager: EncodingManager,
     private val classStructureSerializer: ClassStructureSerializer,
+    private val encodingManager: EncodingManager,
+    dispatchers: CoroutineDispatchers,
+    psiStructureRepository: PsiStructureRepository,
+    onPsiTokenHandled: (Int) -> Unit
 ) {
 
     private val coroutineScope = DisposableCoroutineScope()
-    private val _state: MutableStateFlow<PsiStructureViewModelState> = MutableStateFlow(
-        PsiStructureViewModelState.Progress(true)
-    )
-    val state: StateFlow<PsiStructureViewModelState> = _state.asStateFlow()
 
     init {
         Disposer.register(parentDisposable, coroutineScope)
         psiStructureRepository.structureState
-            .onEach { structureState ->
-                _state.value = when (structureState) {
-                    is PsiStructureState.Content -> PsiStructureViewModelState.Content(
-                        getPsiTokensCount(structureState.elements),
-                        true
-                    )
+            .map { structureState ->
+                when (structureState) {
+                    is PsiStructureState.Content -> {
+                        getPsiTokensCount(structureState.elements)
+                    }
 
-                    PsiStructureState.Disabled -> PsiStructureViewModelState.Content(0, false)
-                    is PsiStructureState.UpdateInProgress -> PsiStructureViewModelState.Progress(true)
+                    PsiStructureState.Disabled -> 0
+
+                    is PsiStructureState.UpdateInProgress -> 0
                 }
             }
+            .flowOn(dispatchers.io())
+            .onEach { psiTokens ->
+                onPsiTokenHandled(psiTokens)
+            }
             .launchIn(coroutineScope)
-    }
-
-    fun disablePsiAnalyzer() {
-        psiStructureRepository.disable()
-    }
-
-    fun enablePsiAnalyzer() {
-        psiStructureRepository.enable()
     }
 
     private fun getPsiTokensCount(psiStructureSet: Set<ClassStructure>): Int =

@@ -30,7 +30,6 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody;
-import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatSettingsPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensDetails;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel;
@@ -87,7 +86,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     this.chatSession = new ChatSession();
     conversationService = ConversationService.getInstance();
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
-    tagManager = new TagManager();
+    tagManager = new TagManager(this);
     this.psiStructureRepository = new PsiStructureRepository(
         this,
         project,
@@ -100,7 +99,8 @@ public class ChatToolWindowTabPanel implements Disposable {
         project,
         conversation,
         EditorUtil.getSelectedEditorSelectedText(project),
-        this);
+        this,
+        psiStructureRepository);
     userInputPanel = new UserInputPanel(
         project,
         conversation,
@@ -397,29 +397,12 @@ public class ChatToolWindowTabPanel implements Disposable {
         JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0),
         JBUI.Borders.empty(8)));
 
-    panel.add(JBUI.Panels.simplePanel(createTopPanel())
-        .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
+    if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
+      panel.add(JBUI.Panels.simplePanel(totalTokensPanel)
+          .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
+    }
     panel.add(userInputPanel, BorderLayout.CENTER);
     return panel;
-  }
-
-  private JPanel createTopPanel() {
-    JPanel topPanel = new JPanel(new BorderLayout());
-    if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
-      topPanel.add(JBUI.Panels.simplePanel(totalTokensPanel), BorderLayout.WEST);
-    }
-    ChatSettingsPanel settingsPanel = new ChatSettingsPanel(
-        this,
-        psiStructureRepository,
-        tagManager,
-        tokenCount -> {
-          totalTokensPanel.updatePsiTokenCount(tokenCount);
-          return Unit.INSTANCE;
-        }
-    );
-    topPanel.add(settingsPanel, BorderLayout.EAST);
-
-    return topPanel;
   }
 
   private JComponent getLandingView() {

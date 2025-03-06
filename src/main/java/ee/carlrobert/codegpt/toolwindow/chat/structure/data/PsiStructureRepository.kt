@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.toolwindow.chat.structure.data
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -11,6 +12,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.util.io.await
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
+import ee.carlrobert.codegpt.settings.chat.ChatSettingsListener
 import ee.carlrobert.codegpt.ui.textarea.header.tag.CurrentGitChangesTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.DocumentationTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
@@ -112,6 +114,19 @@ class PsiStructureRepository(
             tagManager.removeListener(tagsListener)
         }
         VirtualFileManager.getInstance().addAsyncFileListener(asyncFileListener, parentDisposable)
+
+        val connection = ApplicationManager.getApplication().messageBus
+            .connect(parentDisposable)
+
+        connection.subscribe(
+            ChatSettingsListener.TOPIC,
+            ChatSettingsListener { newState ->
+                if (newState.psiStructureEnabled) {
+                    enable()
+                } else {
+                    disable()
+                }
+            })
     }
 
     private val _structureState: MutableStateFlow<PsiStructureState> = MutableStateFlow(
@@ -119,12 +134,12 @@ class PsiStructureRepository(
     )
     val structureState = _structureState.asStateFlow()
 
-    internal fun disable() {
+    private fun disable() {
         updatePsiStructureJob?.cancel()
         _structureState.value = PsiStructureState.Disabled
     }
 
-    internal fun enable() {
+    private fun enable() {
         val tags = tagManager.getTags().getPsiAnalyzedTags()
         _structureState.value = PsiStructureState.UpdateInProgress(tags)
         update(tags)
@@ -169,6 +184,7 @@ class PsiStructureRepository(
                 null
             } else {
                 when (tagDetails) {
+                    is SelectionTagDetails -> tagDetails.virtualFile
                     is FileTagDetails -> tagDetails.virtualFile
                     is EditorTagDetails -> tagDetails.virtualFile
 
@@ -176,7 +192,6 @@ class PsiStructureRepository(
                     is FolderTagDetails -> null
 
                     is EditorSelectionTagDetails -> null
-                    is SelectionTagDetails -> null
                     is DocumentationTagDetails -> null
                     is CurrentGitChangesTagDetails -> null
                     is GitCommitTagDetails -> null
@@ -209,7 +224,7 @@ class PsiStructureRepository(
         }
             .toSet()
 
-    fun Set<TagDetails>.toVirtualFilesSet(): Set<VirtualFile> =
+    private fun Set<TagDetails>.toVirtualFilesSet(): Set<VirtualFile> =
         mapNotNull { tagDetails ->
             if (!tagDetails.selected) {
                 null
