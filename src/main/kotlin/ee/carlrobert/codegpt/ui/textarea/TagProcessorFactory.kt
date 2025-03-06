@@ -6,7 +6,18 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.ui.textarea.header.tag.*
+import ee.carlrobert.codegpt.ui.textarea.header.tag.CurrentGitChangesTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.DocumentationTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EmptyTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.WebTagDetails
 import ee.carlrobert.codegpt.util.GitUtil
 import git4idea.GitCommit
 
@@ -14,28 +25,25 @@ object TagProcessorFactory {
 
     fun getProcessor(project: Project, tagDetails: TagDetails): TagProcessor {
         return when (tagDetails) {
-            is FileTagDetails -> FileTagProcessor()
-            is SelectionTagDetails -> SelectionTagProcessor()
-            is DocumentationTagDetails -> DocumentationTagProcessor()
-            is PersonaTagDetails -> PersonaTagProcessor()
-            is FolderTagDetails -> FolderTagProcessor()
+            is FileTagDetails -> FileTagProcessor(tagDetails)
+            is SelectionTagDetails -> SelectionTagProcessor(tagDetails)
+            is DocumentationTagDetails -> DocumentationTagProcessor(tagDetails)
+            is PersonaTagDetails -> PersonaTagProcessor(tagDetails)
+            is FolderTagDetails -> FolderTagProcessor(tagDetails)
             is WebTagDetails -> WebTagProcessor()
-            is GitCommitTagDetails -> GitCommitTagProcessor(project)
+            is GitCommitTagDetails -> GitCommitTagProcessor(project, tagDetails)
             is CurrentGitChangesTagDetails -> CurrentGitChangesTagProcessor(project)
-            else -> throw IllegalArgumentException("Unknown tag type: ${tagDetails::class.simpleName}")
+            is EditorSelectionTagDetails -> EditorSelectionTagProcessor(tagDetails)
+            is EditorTagDetails -> EditorTagProcessor(tagDetails)
+            is EmptyTagDetails -> TagProcessor { _, _ -> }
         }
     }
 }
 
-class FileTagProcessor : TagProcessor {
-    override fun process(
-        message: Message,
-        tagDetails: TagDetails,
-        promptBuilder: StringBuilder
-    ) {
-        if (tagDetails !is FileTagDetails) {
-            return
-        }
+class FileTagProcessor(
+    private val tagDetails: FileTagDetails,
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
         if (message.referencedFilePaths == null) {
             message.referencedFilePaths = mutableListOf()
         }
@@ -43,23 +51,33 @@ class FileTagProcessor : TagProcessor {
     }
 }
 
-class SelectionTagProcessor : TagProcessor {
-    override fun process(
-        message: Message,
-        tagDetails: TagDetails,
-        promptBuilder: StringBuilder
-    ) {
-        val selectionTagDetails = tagDetails as? SelectionTagDetails ?: return
-        if (selectionTagDetails.selectedText.isNullOrEmpty()) {
+class EditorTagProcessor(
+    private val tagDetails: EditorTagDetails,
+) : TagProcessor {
+
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        if (message.referencedFilePaths == null) {
+            message.referencedFilePaths = mutableListOf()
+        }
+        message.referencedFilePaths?.add(tagDetails.virtualFile.path)
+    }
+}
+
+class SelectionTagProcessor(
+    private val tagDetails: SelectionTagDetails,
+) : TagProcessor {
+
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        if (tagDetails.selectedText.isNullOrEmpty()) {
             return
         }
 
         promptBuilder
             .append("\n```${tagDetails.virtualFile.extension}\n")
-            .append(selectionTagDetails.selectedText)
+            .append(tagDetails.selectedText)
             .append("\n```\n")
 
-        selectionTagDetails.selectionModel.let {
+        tagDetails.selectionModel.let {
             if (it.hasSelection()) {
                 it.removeSelection()
             }
@@ -67,42 +85,44 @@ class SelectionTagProcessor : TagProcessor {
     }
 }
 
-class DocumentationTagProcessor : TagProcessor {
-    override fun process(
-        message: Message,
-        tagDetails: TagDetails,
-        promptBuilder: StringBuilder
-    ) {
-        if (tagDetails !is DocumentationTagDetails) {
+class EditorSelectionTagProcessor(
+    private val tagDetails: EditorSelectionTagDetails,
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        if (tagDetails.selectedText.isNullOrEmpty()) {
             return
         }
+
+        promptBuilder
+            .append("\n```${tagDetails.virtualFile.extension}\n")
+            .append(tagDetails.selectedText)
+            .append("\n```\n")
+    }
+}
+
+class DocumentationTagProcessor(
+    private val tagDetails: DocumentationTagDetails,
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
         message.documentationDetails = tagDetails.documentationDetails
     }
 }
 
-class PersonaTagProcessor : TagProcessor {
-    override fun process(
-        message: Message,
-        tagDetails: TagDetails,
-        promptBuilder: StringBuilder
-    ) {
-        if (tagDetails !is PersonaTagDetails) {
-            return
-        }
+class PersonaTagProcessor(
+    private val tagDetails: PersonaTagDetails,
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
         message.personaName = tagDetails.personaDetails.name
     }
 }
 
-class FolderTagProcessor : TagProcessor {
+class FolderTagProcessor(
+    private val tagDetails: FolderTagDetails,
+) : TagProcessor {
     override fun process(
         message: Message,
-        tagDetails: TagDetails,
         promptBuilder: StringBuilder
     ) {
-        if (tagDetails !is FolderTagDetails) {
-            return
-        }
-
         if (message.referencedFilePaths == null) {
             message.referencedFilePaths = mutableListOf()
         }
@@ -123,25 +143,17 @@ class FolderTagProcessor : TagProcessor {
 class WebTagProcessor : TagProcessor {
     override fun process(
         message: Message,
-        tagDetails: TagDetails,
         promptBuilder: StringBuilder
     ) {
-        if (tagDetails !is WebTagDetails) {
-            return
-        }
         message.isWebSearchIncluded = true
     }
 }
 
-class GitCommitTagProcessor(private val project: Project) : TagProcessor {
-    override fun process(
-        message: Message,
-        tagDetails: TagDetails,
-        promptBuilder: StringBuilder
-    ) {
-        if (tagDetails !is GitCommitTagDetails) {
-            return
-        }
+class GitCommitTagProcessor(
+    private val project: Project,
+    private val tagDetails: GitCommitTagDetails,
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
         promptBuilder
             .append("\n```shell\n")
             .append(getDiffString(project, tagDetails.gitCommit))
@@ -167,16 +179,14 @@ class GitCommitTagProcessor(private val project: Project) : TagProcessor {
     }
 }
 
-class CurrentGitChangesTagProcessor(private val project: Project) : TagProcessor {
+class CurrentGitChangesTagProcessor(
+    private val project: Project,
+) : TagProcessor {
+
     override fun process(
         message: Message,
-        tagDetails: TagDetails,
         promptBuilder: StringBuilder
     ) {
-        if (tagDetails !is CurrentGitChangesTagDetails) {
-            return
-        }
-
         ProgressManager.getInstance().runProcessWithProgressSynchronously<Unit, Exception>(
             {
                 GitUtil.getCurrentChanges(project)?.let {

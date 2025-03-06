@@ -20,6 +20,7 @@ import ee.carlrobert.codegpt.ui.OverlayUtil;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
@@ -69,7 +70,8 @@ public class ProjectCompilationStatusListener implements CompilationStatusListen
         .toList());
     message.setPrompt(CompletionRequestUtil.getPromptWithContext(
         new ArrayList<>(errorMapping.keySet()),
-        prompt));
+        prompt,
+        new HashSet<>()));
     return message;
   }
 

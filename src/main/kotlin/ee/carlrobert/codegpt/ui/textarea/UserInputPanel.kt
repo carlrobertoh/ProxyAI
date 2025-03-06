@@ -37,10 +37,17 @@ import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
+import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import git4idea.GitCommit
-import java.awt.*
+import java.awt.BasicStroke
+import java.awt.BorderLayout
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.Insets
+import java.awt.RenderingHints
 import java.awt.geom.Area
 import java.awt.geom.Rectangle2D
 import java.awt.geom.RoundRectangle2D
@@ -51,7 +58,8 @@ class UserInputPanel(
     private val conversation: Conversation,
     private val totalTokensPanel: TotalTokensPanel,
     parentDisposable: Disposable,
-    private val onSubmit: (String, List<TagDetails>) -> Unit,
+    tagManager: TagManager,
+    private val onSubmit: (String) -> Unit,
     private val onStop: () -> Unit
 ) : JPanel(BorderLayout()) {
 
@@ -59,11 +67,12 @@ class UserInputPanel(
         private const val CORNER_RADIUS = 16
     }
 
+    private val disposableCoroutineScope = DisposableCoroutineScope()
     private val suggestionsPopupManager = SuggestionsPopupManager(project, this)
     private val promptTextField =
         PromptTextField(project, suggestionsPopupManager, ::updateUserTokens, ::handleSubmit)
     private val userInputHeaderPanel =
-        UserInputHeaderPanel(project, suggestionsPopupManager, promptTextField)
+        UserInputHeaderPanel(project, tagManager, suggestionsPopupManager, promptTextField)
     private val submitButton = IconActionButton(
         object : AnAction(
             CodeGPTBundle.get("smartTextPane.submitButton.title"),
@@ -71,7 +80,7 @@ class UserInputPanel(
             IconUtil.scale(Icons.Send, null, 0.85f)
         ) {
             override fun actionPerformed(e: AnActionEvent) {
-                handleSubmit(promptTextField.text, userInputHeaderPanel.getSelectedTags())
+                handleSubmit(promptTextField.text)
             }
         },
         "SUBMIT"
@@ -94,6 +103,7 @@ class UserInputPanel(
         get() = promptTextField.text
 
     init {
+        Disposer.register(parentDisposable, disposableCoroutineScope)
         background = service<EditorColorsManager>().globalScheme.defaultBackground
         add(userInputHeaderPanel, BorderLayout.NORTH)
         add(promptTextField, BorderLayout.CENTER)
@@ -187,12 +197,8 @@ class UserInputPanel(
     override fun getInsets(): Insets = JBUI.insets(4)
 
     private fun handleSubmit(text: String) {
-        handleSubmit(text, userInputHeaderPanel.getSelectedTags())
-    }
-
-    private fun handleSubmit(text: String, appliedTags: List<TagDetails> = emptyList()) {
         if (text.isNotEmpty() && submitButton.isEnabled) {
-            onSubmit(text, appliedTags)
+            onSubmit(text)
             promptTextField.clear()
         }
     }

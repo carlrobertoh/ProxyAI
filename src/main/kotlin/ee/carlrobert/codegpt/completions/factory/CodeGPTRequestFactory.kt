@@ -6,12 +6,17 @@ import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.buildOpenAIMessages
+import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.llm.client.codegpt.request.chat.*
+import ee.carlrobert.llm.client.codegpt.request.chat.AdditionalRequestContext
+import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest
+import ee.carlrobert.llm.client.codegpt.request.chat.ContextFile
+import ee.carlrobert.llm.client.codegpt.request.chat.DocumentationDetails
+import ee.carlrobert.llm.client.codegpt.request.chat.Metadata
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 
-class CodeGPTRequestFactory : BaseRequestFactory() {
+class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructureSerializer) : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): ChatCompletionRequest {
         val model = service<CodeGPTServiceSettings>().state.chatCompletionSettings.model
@@ -46,10 +51,18 @@ class CodeGPTRequestFactory : BaseRequestFactory() {
                 DocumentationDetails(it.name, it.url)
             )
         }
-        params.referencedFiles?.let {
-            requestBuilder.setContext(AdditionalRequestContext(it.map { file ->
-                ContextFile(file.fileName(), file.fileContent())
-            }))
+
+        val contextFiles = params.referencedFiles?.map { file ->
+            ContextFile(file.fileName(), file.fileContent())
+        }.orEmpty()
+
+        val psiContext = params.psiStructure?.map { classStructure ->
+            ContextFile(classStructure.virtualFile.name, classStructureSerializer.serialize(classStructure))
+        }.orEmpty()
+
+        val contextFilesWithPsi = contextFiles + psiContext
+        if (contextFilesWithPsi.isNotEmpty()) {
+            requestBuilder.setContext(AdditionalRequestContext(contextFilesWithPsi))
         }
 
         return requestBuilder.build()

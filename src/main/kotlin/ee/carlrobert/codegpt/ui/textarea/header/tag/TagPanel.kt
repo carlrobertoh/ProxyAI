@@ -3,34 +3,22 @@ package ee.carlrobert.codegpt.ui.textarea.header.tag
 import com.intellij.icons.AllIcons
 import com.intellij.icons.AllIcons.Actions.Close
 import com.intellij.openapi.components.service
-import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
-import com.jetbrains.rd.util.UUID
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.header.PaintUtil
-import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
-import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditorFile
-import java.awt.Cursor
-import java.awt.Dimension
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.Graphics
+import java.awt.*
 import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JToggleButton
-import javax.swing.JPanel
 
 abstract class TagPanel(
     var tagDetails: TagDetails,
+    private val tagManager: TagManager,
     private val shouldPreventDeselection: Boolean = true,
 ) : JToggleButton() {
-
-    val id: UUID = tagDetails.id
 
     private val label = TagLabel(tagDetails.name, tagDetails.icon, tagDetails.selected)
     private val closeButton = CloseButton {
@@ -99,6 +87,7 @@ abstract class TagPanel(
 
             closeButton.isVisible = isSelected
             tagDetails.selected = isSelected
+            tagManager.notifySelectionChanged(tagDetails)
             label.update(isSelected)
         }
 
@@ -154,58 +143,18 @@ abstract class TagPanel(
     }
 }
 
-abstract class SelectedFileTagPanel(
-    private val project: Project,
-    private val promptTextField: PromptTextField,
-    virtualFile: VirtualFile? = getSelectedEditorFile(project)
-) : TagPanel(
-    (if (virtualFile == null) EmptyTagDetails()
-    else FileTagDetails(virtualFile)).apply { selected = true },
-    false
-) {
-
-    init {
-        isVisible = getSelectedEditorFile(project) != null
-    }
-
-    override fun onSelect(tagDetails: TagDetails) {
-        if (tagDetails is FileTagDetails) {
-            update(tagDetails.virtualFile.name, tagDetails.virtualFile.fileType.icon)
-        }
-        promptTextField.requestFocus()
-    }
-
-    fun update(tagDetails: FileTagDetails) {
-        this.tagDetails = tagDetails
-        isVisible = true
-        isSelected = true
-        update(tagDetails.name, tagDetails.virtualFile.fileType.icon)
-    }
-}
-
 class SelectionTagPanel(
-    project: Project,
-    private val promptTextField: PromptTextField
-) : TagPanel(getDefaultSelectionTagDetails(project), true) {
+    tagDetails: EditorSelectionTagDetails,
+    tagManager: TagManager,
+    private val promptTextField: PromptTextField,
+) : TagPanel(tagDetails, tagManager, true) {
 
     init {
         cursor = Cursor(Cursor.DEFAULT_CURSOR)
-    }
-
-    companion object {
-        fun getDefaultSelectionTagDetails(project: Project): TagDetails {
-            val editor = getSelectedEditor(project)
-            val selectionModel = editor?.selectionModel
-            return if (selectionModel?.hasSelection() == true) {
-                SelectionTagDetails(editor.virtualFile, selectionModel)
-            } else {
-                EmptyTagDetails()
-            }
-        }
-    }
-
-    init {
-        isVisible = tagDetails !is EmptyTagDetails
+        update(
+            "${tagDetails.virtualFile.name}:${tagDetails.selectionModel.selectionStart}-${tagDetails.selectionModel.selectionEnd}",
+            tagDetails.virtualFile.fileType.icon
+        )
     }
 
     override fun onSelect(tagDetails: TagDetails) {
@@ -213,15 +162,6 @@ class SelectionTagPanel(
     }
 
     override fun onClose() {
-        (tagDetails as? SelectionTagDetails)?.selectionModel?.removeSelection()
-    }
-
-    fun update(virtualFile: VirtualFile, selectionModel: SelectionModel) {
-        tagDetails = SelectionTagDetails(virtualFile, selectionModel)
-        isVisible = selectionModel.hasSelection()
-        update(
-            "${virtualFile.name}:${selectionModel.selectionStart}-${selectionModel.selectionEnd}",
-            virtualFile.fileType.icon
-        )
+        (tagDetails as? EditorSelectionTagDetails)?.selectionModel?.removeSelection()
     }
 }

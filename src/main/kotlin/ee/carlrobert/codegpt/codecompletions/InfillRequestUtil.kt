@@ -7,7 +7,7 @@ import com.intellij.refactoring.suggested.startOffset
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.codecompletions.psi.CompletionContextService
 import ee.carlrobert.codegpt.codecompletions.psi.readText
-import ee.carlrobert.codegpt.codecompletions.psi.structure.PsiStructureProvider
+import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.util.GitUtil
 

@@ -1,6 +1,6 @@
-package ee.carlrobert.codegpt.codecompletions.psi.structure
+package ee.carlrobert.codegpt.psistructure
 
-import ee.carlrobert.codegpt.codecompletions.psi.structure.models.*
+import ee.carlrobert.codegpt.psistructure.models.*
 import org.jetbrains.kotlin.utils.addToStdlib.ifNotEmpty
 
 object ClassStructureSerializer {

@@ -1,52 +1,84 @@
 package ee.carlrobert.codegpt.ui.textarea.header.tag
 
-import com.intellij.openapi.vfs.VirtualFile
-import java.util.*
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
+import ee.carlrobert.codegpt.settings.chat.ChatSettingsListener
+import java.util.concurrent.CopyOnWriteArraySet
 
-class TagManager {
+class TagManager(parentDisposable: Disposable) {
 
     private val tags = mutableSetOf<TagDetails>()
-    private val listeners = mutableListOf<TagManagerListener>()
+    private val listeners = CopyOnWriteArraySet<TagManagerListener>()
+
+    @Volatile
+    private var enabled: Boolean = true
+
+    init {
+        val connection = ApplicationManager.getApplication().messageBus
+            .connect(parentDisposable)
+
+        connection.subscribe(
+            ChatSettingsListener.TOPIC,
+            ChatSettingsListener { newState ->
+                if (newState.editorContextTagEnabled) {
+                    enabled = true
+                } else {
+                    enabled = false
+                    clear()
+                }
+            })
+    }
 
     fun addListener(listener: TagManagerListener) {
         listeners.add(listener)
     }
 
-    fun getTags(): Set<TagDetails> = tags.toSet()
+    fun removeListener(listener: TagManagerListener) {
+        listeners.remove(listener)
+    }
+
+    fun getTags(): Set<TagDetails> = synchronized(this) { tags.toSet() }
 
     fun addTag(tagDetails: TagDetails) {
-        if (tags.add(tagDetails)) {
+        val wasAdded = synchronized(this) {
+            if (!enabled && isEditorTag(tagDetails)) return
+
+            if (tagDetails is EditorSelectionTagDetails) {
+                tags.remove(tagDetails)
+            }
+
+            tags.add(tagDetails)
+        }
+        if (wasAdded) {
             listeners.forEach { it.onTagAdded(tagDetails) }
         }
     }
 
-    fun removeFileTag(virtualFile: VirtualFile) {
-        getFileTag(virtualFile)?.let {
-            removeTag(it.id)
+    fun notifySelectionChanged(tagDetails: TagDetails) {
+        val containsTag = synchronized(this) { tags.contains(tagDetails) }
+        if (containsTag) {
+            listeners.forEach { it.onTagSelectionChanged(tagDetails) }
         }
     }
 
-    fun removeTag(id: UUID) {
-        tags.find { it.id == id }
-            ?.let { tag ->
-                if (tags.removeIf { it.id == tag.id }) {
-                    listeners.forEach { it.onTagRemoved(tag) }
-                }
-            }
+    fun remove(tagDetails: TagDetails) {
+        val wasRemoved = synchronized(this) { tags.remove(tagDetails) }
+        if (wasRemoved) {
+            listeners.forEach { it.onTagRemoved(tagDetails) }
+        }
     }
 
-    fun getTag(id: UUID): TagDetails? = tags.find { it.id == id }
-
-    fun getFileTag(file: VirtualFile): FileTagDetails? =
-        tags.filterIsInstance<FileTagDetails>().find { it.virtualFile == file }
-
-    fun isFileTagExists(file: VirtualFile): Boolean = getFileTag(file) != null
-
     fun clear() {
-        val tagsToRemove = tags.toList()
-        tags.clear()
-        tagsToRemove.forEach { tag ->
+        val removedTags = mutableListOf<TagDetails>()
+        synchronized(this) {
+            removedTags.addAll(tags)
+            tags.clear()
+        }
+        removedTags.forEach { tag ->
             listeners.forEach { it.onTagRemoved(tag) }
         }
     }
+
+    private fun isEditorTag(tagDetails: TagDetails): Boolean =
+        tagDetails is EditorSelectionTagDetails || tagDetails is EditorTagDetails
 }

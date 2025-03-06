@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.completions
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.util.file.FileUtil
 import java.nio.file.Files
@@ -20,6 +21,7 @@ class ChatCompletionParameters private constructor(
     var imageDetails: ImageDetails?,
     var referencedFiles: List<ReferencedFile>?,
     var personaDetails: PersonaDetails?,
+    var psiStructure: Set<ClassStructure>?,
 ) : CompletionParameters {
 
     fun toBuilder(): Builder {
@@ -30,6 +32,7 @@ class ChatCompletionParameters private constructor(
             imageDetails(this@ChatCompletionParameters.imageDetails)
             referencedFiles(this@ChatCompletionParameters.referencedFiles)
             personaDetails(this@ChatCompletionParameters.personaDetails)
+            psiStructure(this@ChatCompletionParameters.psiStructure)
         }
     }
 
@@ -40,6 +43,7 @@ class ChatCompletionParameters private constructor(
         private var imageDetails: ImageDetails? = null
         private var referencedFiles: List<ReferencedFile>? = null
         private var personaDetails: PersonaDetails? = null
+        private var psiStructure: Set<ClassStructure>? = null
         private var gitDiff: String = ""
 
         fun sessionId(sessionId: UUID?) = apply { this.sessionId = sessionId }
@@ -64,6 +68,8 @@ class ChatCompletionParameters private constructor(
 
         fun personaDetails(personaDetails: PersonaDetails?) = apply { this.personaDetails = personaDetails }
 
+        fun psiStructure(psiStructure: Set<ClassStructure>?) = apply { this.psiStructure = psiStructure }
+
         fun build(): ChatCompletionParameters {
             return ChatCompletionParameters(
                 conversation,
@@ -73,7 +79,8 @@ class ChatCompletionParameters private constructor(
                 retry,
                 imageDetails,
                 referencedFiles,
-                personaDetails
+                personaDetails,
+                psiStructure,
             )
         }
     }
