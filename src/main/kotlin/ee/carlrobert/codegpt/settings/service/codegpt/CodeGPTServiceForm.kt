@@ -32,9 +32,9 @@ class CodeGPTServiceForm {
             renderer = CustomComboBoxRenderer()
         }
 
-    private val codeAssistantEnabledCheckBox = JBCheckBox(
-        CodeGPTBundle.get("shared.enableCodeAssistant"),
-        service<CodeGPTServiceSettings>().state.codeAssistantEnabled
+    private val enableNextEditsEnabledCheckBox = JBCheckBox(
+        "Enable multi-line edits",
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled
     )
 
     private val codeCompletionsEnabledCheckBox = JBCheckBox(
@@ -73,9 +73,9 @@ class CodeGPTServiceForm {
             UIUtil.createComment("settingsConfigurable.service.codegpt.codeCompletionModel.comment")
         )
         .addVerticalGap(4)
-        .addComponent(codeAssistantEnabledCheckBox)
+        .addComponent(enableNextEditsEnabledCheckBox)
         .addComponent(
-            UIUtil.createComment("settingsConfigurable.service.codegpt.enableCodeAssistant.comment", 90)
+            UIUtil.createComment("settingsConfigurable.service.codegpt.enableNextEdits.comment", 90)
         )
         .addVerticalGap(4)
         .addComponent(codeCompletionsEnabledCheckBox)
@@ -90,14 +90,14 @@ class CodeGPTServiceForm {
     fun isModified() = service<CodeGPTServiceSettings>().state.run {
         (chatCompletionModelComboBox.selectedItem as CodeGPTModel).code != chatCompletionSettings.model
                 || (codeCompletionModelComboBox.selectedItem as CodeGPTModel).code != codeCompletionSettings.model
-                || codeAssistantEnabledCheckBox.isSelected != codeAssistantEnabled
+                || enableNextEditsEnabledCheckBox.isSelected != nextEditsEnabled
                 || codeCompletionsEnabledCheckBox.isSelected != codeCompletionSettings.codeCompletionsEnabled
                 || getApiKey() != getCredential(CodeGptApiKey)
     }
 
     fun applyChanges() {
         service<CodeGPTServiceSettings>().state.run {
-            codeAssistantEnabled = codeAssistantEnabledCheckBox.isSelected
+            nextEditsEnabled = enableNextEditsEnabledCheckBox.isSelected
             chatCompletionSettings.model =
                 (chatCompletionModelComboBox.selectedItem as CodeGPTModel).code
             codeCompletionSettings.codeCompletionsEnabled =
@@ -110,7 +110,7 @@ class CodeGPTServiceForm {
 
     fun resetForm() {
         service<CodeGPTServiceSettings>().state.run {
-            codeAssistantEnabledCheckBox.isSelected = codeAssistantEnabled
+            enableNextEditsEnabledCheckBox.isSelected = nextEditsEnabled
             chatCompletionModelComboBox.selectedItem = chatCompletionSettings.model
             codeCompletionModelComboBox.selectedItem = codeCompletionSettings.model
             codeCompletionsEnabledCheckBox.isSelected =

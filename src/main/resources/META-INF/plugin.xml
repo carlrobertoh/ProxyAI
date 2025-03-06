@@ -248,16 +248,16 @@
             <override-text place="popup" use-text-of-place="MainMenu"/>
         </action>
         <action
-          id="statusbar.enableCodeAssistant"
-          class="ee.carlrobert.codegpt.actions.EnableCodeAssistantAction">
+          id="statusbar.enableNextEdits"
+          class="ee.carlrobert.codegpt.actions.EnableNextEditsAction">
             <keyboard-shortcut first-keystroke="ctrl shift alt a" keymap="$default"/>
 
             <override-text place="MainMenu"/>
             <override-text place="popup" use-text-of-place="MainMenu"/>
         </action>
         <action
-          id="statusbar.disableCodeAssistant"
-          class="ee.carlrobert.codegpt.actions.DisableCodeAssistantAction">
+          id="statusbar.disableNextEdits"
+          class="ee.carlrobert.codegpt.actions.DisableNextEditsAction">
             <keyboard-shortcut first-keystroke="ctrl shift alt a" keymap="$default"/>
 
             <override-text place="MainMenu"/>
@@ -285,8 +285,8 @@
             <separator/>
             <reference id="statusbar.stopServer" />
             <reference id="statusbar.startServer" />
-            <reference id="statusbar.disableCodeAssistant" />
-            <reference id="statusbar.enableCodeAssistant" />
+            <reference id="statusbar.disableNextEdits" />
+            <reference id="statusbar.enableNextEdits" />
             <reference id="statusbar.disableCompletions" />
             <reference id="statusbar.enableCompletions" />
         </group>

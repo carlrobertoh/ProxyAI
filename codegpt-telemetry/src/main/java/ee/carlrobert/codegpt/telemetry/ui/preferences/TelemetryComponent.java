@@ -21,19 +21,29 @@ import javax.swing.JPanel;
  */
 public class TelemetryComponent {
 
-    private static final String DESCRIPTION =
+    private static final String USAGE_DESCRIPTION =
             "Help ProxyAI improve its products by sending anonymous data about features and plugins used, "
                     + "hardware and software configuration.<br/>"
                     + "<br/>"
                     + "Please note that this will not include personal data or any sensitive Information.<br/>"
                     + "The data sent complies with the <a href=\"https://tryproxy.io/privacy\">Privacy Policy</a>.";
 
+    private static final String COMPLETION_DESCRIPTION =
+        "Help ProxyAI improve its products by allowing us to gather your code inputs and the completions we generate.<br/>"
+            + "This data is essential for training our multi-line edit prediction model, which we're committed to releasing as open source to benefit the entire developer ecosystem.<br/>"
+            + "<br/>"
+            + "See our <a href=\"https://tryproxy.io/privacy\">Privacy Policy</a> for details.";
+
     private final JPanel panel;
-    private final JBCheckBox enabled = new JBCheckBox("Send usage statistics");
+    private final JBCheckBox usageStatisticsEnabled = new JBCheckBox("Send usage statistics");
+    private final JBCheckBox completionStatisticsEnabled = new JBCheckBox("Send completion statistics");
 
     public TelemetryComponent() {
         this.panel = FormBuilder.createFormBuilder()
-                .addComponent(createCommentedPanel(enabled, DESCRIPTION), 1)
+                .addComponent(
+                    createCommentedPanel(usageStatisticsEnabled, USAGE_DESCRIPTION), 1)
+                .addComponent(
+                    createCommentedPanel(completionStatisticsEnabled, COMPLETION_DESCRIPTION), 1)
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
     }
@@ -50,15 +60,22 @@ public class TelemetryComponent {
     }
 
     public JComponent getPreferredFocusedComponent() {
-        return enabled;
+        return usageStatisticsEnabled;
     }
 
-    public boolean isEnabled() {
-        return enabled.isSelected();
+    public boolean getUsageStatisticsEnabled() {
+        return usageStatisticsEnabled.isSelected();
     }
 
-    public void setEnabled(boolean enabled) {
-        this.enabled.setSelected(enabled);
+    public void setUsageStatisticsEnabled(boolean usageStatisticsEnabled) {
+        this.usageStatisticsEnabled.setSelected(usageStatisticsEnabled);
     }
 
+    public boolean getCompletionStatisticsEnabled() {
+        return completionStatisticsEnabled.isSelected();
+    }
+
+    public void setCompletionStatisticsEnabled(boolean completionStatisticsEnabled) {
+        this.completionStatisticsEnabled.setSelected(completionStatisticsEnabled);
+    }
 }

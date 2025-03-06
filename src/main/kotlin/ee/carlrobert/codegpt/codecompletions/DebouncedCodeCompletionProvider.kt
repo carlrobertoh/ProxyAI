@@ -11,6 +11,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_EDITOR_COMPLETION
+import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -52,10 +53,29 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         get() = CodeCompletionProviderPresentation()
 
     override suspend fun getSuggestionDebounced(request: InlineCompletionRequest): InlineCompletionSuggestion {
+        if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT
+            && service<CodeGPTServiceSettings>().state.nextEditsEnabled
+        ) {
+            predictNextEdit(request)
+            return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
+        }
+
         return if (service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled) {
             getMultiLineSuggestionDebounced(request)
         } else {
             getSingleLineSuggestionDebounced(request)
+        }
+    }
+
+    private fun predictNextEdit(request: InlineCompletionRequest) {
+        val project = request.editor.project ?: return
+        try {
+            CompletionProgressNotifier.update(project, true)
+            project.service<GrpcClientService>().getNextEdit(request.editor)
+        } catch (ex: Exception) {
+            logger.error("Error communicating with server: ${ex.message}")
+        } finally {
+            CompletionProgressNotifier.update(project, false)
         }
     }
 
@@ -90,7 +110,11 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
                 .getCodeCompletionAsync(
                     infillRequest,
                     CodeCompletionMultiLineEventListener(request) {
-                        trySend(InlineCompletionGrayTextElement(it))
+                        if (it.isEmpty() && service<CodeGPTServiceSettings>().state.nextEditsEnabled) {
+                            predictNextEdit(request)
+                        } else {
+                            trySend(InlineCompletionGrayTextElement(it))
+                        }
                     }
                 )
         }
@@ -104,10 +128,6 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         val project = request.editor.project
         if (project == null) {
             logger.error("Could not find project")
-            return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
-        }
-
-        if (LookupManager.getActiveLookup(request.editor) != null) {
             return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
         }
 
@@ -145,7 +165,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         }
 
         if (!codeCompletionsEnabled) {
-            return false
+            return selectedService == ServiceType.CODEGPT && service<CodeGPTServiceSettings>().state.nextEditsEnabled
         }
 
         if (LookupManager.getActiveLookup(event.toRequest()?.editor) != null) {
@@ -162,7 +182,6 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         nextCompletion: String,
         request: InlineCompletionRequest
     ): InlineCompletionSingleSuggestion {
-
         return InlineCompletionSingleSuggestion.build(elements = channelFlow {
             launch {
                 trySend(

@@ -53,13 +53,15 @@ public class TelemetryConfigurable implements SearchableConfigurable {
   @Override
   public boolean isModified() {
       boolean modified = false;
-      modified |= (component.isEnabled() != configuration.isEnabled());
+      modified |= (component.getUsageStatisticsEnabled() != configuration.isEnabled());
+      modified |= (component.getCompletionStatisticsEnabled() != configuration.isCompletionTelemetryEnabled());
       return modified;
   }
 
   @Override
   public void apply() {
-    configuration.setEnabled(component.isEnabled());
+    configuration.setEnabled(component.getUsageStatisticsEnabled());
+    configuration.setCompletionTelemetryEnabled(component.getCompletionStatisticsEnabled());
     try {
       configuration.save();
     } catch (IOException e) {
@@ -69,7 +71,8 @@ public class TelemetryConfigurable implements SearchableConfigurable {
 
   @Override
   public void reset() {
-    component.setEnabled(configuration.isEnabled());
+    component.setUsageStatisticsEnabled(configuration.isEnabled());
+    component.setCompletionStatisticsEnabled(configuration.isCompletionTelemetryEnabled());
   }
 
   @Override

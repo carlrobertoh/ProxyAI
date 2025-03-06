@@ -14,11 +14,11 @@ abstract class CodeAssistantFeatureToggleAction(
 
     override fun actionPerformed(e: AnActionEvent) {
         val settings = service<CodeGPTServiceSettings>().state
-        settings.codeAssistantEnabled = enableFeatureAction
+        settings.nextEditsEnabled = enableFeatureAction
     }
 
     override fun update(e: AnActionEvent) {
-        val codeAssistantEnabled = service<CodeGPTServiceSettings>().state.codeAssistantEnabled
+        val codeAssistantEnabled = service<CodeGPTServiceSettings>().state.nextEditsEnabled
 
         e.presentation.isVisible = GeneralSettings.getSelectedService() == CODEGPT
                     && codeAssistantEnabled != enableFeatureAction
@@ -30,6 +30,6 @@ abstract class CodeAssistantFeatureToggleAction(
     }
 }
 
-class EnableCodeAssistantAction : CodeAssistantFeatureToggleAction(true)
+class EnableNextEditsAction : CodeAssistantFeatureToggleAction(true)
 
-class DisableCodeAssistantAction : CodeAssistantFeatureToggleAction(false)
+class DisableNextEditsAction : CodeAssistantFeatureToggleAction(false)
