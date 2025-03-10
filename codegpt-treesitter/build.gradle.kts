@@ -11,7 +11,7 @@ dependencies {
     implementation("io.github.bonede:tree-sitter-css:0.23.1")
     implementation("io.github.bonede:tree-sitter-cpp:0.23.4")
     implementation("io.github.bonede:tree-sitter-c-sharp:0.23.1")
-    implementation("io.github.bonede:tree-sitter-fortran:master-a")
+    implementation("io.github.bonede:tree-sitter-fortran:master")
     implementation("io.github.bonede:tree-sitter-gitattributes:0.1.6")
     implementation("io.github.bonede:tree-sitter-go:0.23.3")
     implementation("io.github.bonede:tree-sitter-graphql:master-a")
