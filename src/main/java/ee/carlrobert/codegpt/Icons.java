@@ -24,6 +24,7 @@ public final class Icons {
   public static final Icon You = IconLoader.getIcon("/icons/you.svg", Icons.class);
   public static final Icon Ollama = IconLoader.getIcon("/icons/ollama.svg", Icons.class);
   public static final Icon User = IconLoader.getIcon("/icons/user.svg", Icons.class);
+  public static final Icon Tree = IconLoader.getIcon("/icons/tree.svg", Icons.class);
   public static final Icon Lightning = IconLoader.getIcon("/icons/lightning.svg", Icons.class);
   public static final Icon LightningDisabled =
       IconLoader.getIcon("/icons/lightning.svg", Icons.class);

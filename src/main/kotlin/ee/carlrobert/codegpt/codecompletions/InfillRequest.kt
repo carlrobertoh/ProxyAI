@@ -7,7 +7,7 @@ import com.intellij.psi.PsiElement
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.codecompletions.psi.filePath
 import ee.carlrobert.codegpt.codecompletions.psi.readText
-import ee.carlrobert.codegpt.codecompletions.psi.structure.models.ClassStructure
+import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 
 const val MAX_PROMPT_TOKENS = 256
 

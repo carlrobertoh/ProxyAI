@@ -18,9 +18,12 @@ import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier;
 import ee.carlrobert.codegpt.conversations.Conversation;
+import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
+import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
+import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
 import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -30,6 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import javax.swing.Box;
 import javax.swing.JPanel;
+import kotlin.Unit;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,10 +47,24 @@ public class TotalTokensPanel extends JPanel {
       @NotNull Project project,
       Conversation conversation,
       @Nullable String highlightedText,
-      Disposable parentDisposable) {
+      Disposable parentDisposable,
+      PsiStructureRepository psiStructureRepository
+  ) {
     super(new FlowLayout(FlowLayout.LEADING, 0, 0));
     this.totalTokensDetails = createTokenDetails(conversation, highlightedText);
     this.label = getLabel(totalTokensDetails);
+
+    new PsiStructureTotalTokenProvider(
+        parentDisposable,
+        ClassStructureSerializer.INSTANCE,
+        encodingManager,
+        new CoroutineDispatchers(),
+        psiStructureRepository,
+        psiTokens -> {
+          updatePsiTokenCount(psiTokens);
+          return Unit.INSTANCE;
+        }
+    );
 
     setBorder(JBUI.Borders.empty(4));
     setOpaque(false);
@@ -104,6 +122,11 @@ public class TotalTokensPanel extends JPanel {
     label.setText(getLabelHtml(total));
   }
 
+  public void updatePsiTokenCount(int psiTokenCount) {
+    totalTokensDetails.setPsiTokens(psiTokenCount);
+    update();
+  }
+
   public void updateConversationTokens(Conversation conversation) {
     totalTokensDetails.setConversationTokens(encodingManager.countConversationTokens(conversation));
     update();
@@ -148,7 +171,8 @@ public class TotalTokensPanel extends JPanel {
             "Conversation Tokens", totalTokensDetails.getConversationTokens(),
             "Input Tokens", totalTokensDetails.getUserPromptTokens(),
             "Highlighted Tokens", totalTokensDetails.getHighlightedTokens(),
-            "Referenced Files Tokens", totalTokensDetails.getReferencedFilesTokens()))
+            "Referenced Files Tokens", totalTokensDetails.getReferencedFilesTokens(),
+            "Dependency structure Tokens", totalTokensDetails.getPsiTokens()))
             .entrySet().stream()
             .map(entry -> format(
                 "<p style=\"margin: 0; padding: 0;\"><small>%s: <strong>%d</strong></small></p>",
