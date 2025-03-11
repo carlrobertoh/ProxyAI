@@ -25,7 +25,7 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
             .active
         val request = buildCustomOpenAIChatCompletionRequest(
             activeService.chatCompletionSettings,
-            OpenAIRequestFactory.buildOpenAIMessages(null, params),
+            OpenAIRequestFactory.buildOpenAIMessages(null, params, params.referencedFiles, params.psiStructure),
             true,
             getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
         )
