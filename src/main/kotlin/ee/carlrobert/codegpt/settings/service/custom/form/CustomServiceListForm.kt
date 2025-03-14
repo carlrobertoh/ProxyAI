@@ -157,6 +157,7 @@ class CustomServiceListForm(
         }
         apiKeyField.text = selectedItem.apiKey
         nameField.text = selectedItem.name
+        templateComboBox.selectedItem = selectedItem.template
         updateTemplateHelpTextTooltip(selectedItem.template)
     }
 
