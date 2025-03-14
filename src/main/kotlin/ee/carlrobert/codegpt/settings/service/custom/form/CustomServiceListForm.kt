@@ -6,6 +6,7 @@ import com.intellij.ide.HelpTooltip
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.*
@@ -37,11 +38,7 @@ import java.awt.Dimension
 import java.awt.FlowLayout
 import java.net.MalformedURLException
 import java.net.URL
-import javax.swing.Box
-import javax.swing.JButton
-import javax.swing.JPanel
-import javax.swing.JTabbedPane
-import javax.swing.ListSelectionModel
+import javax.swing.*
 
 class CustomServiceListForm(
     private val service: CustomServicesSettings,
@@ -49,6 +46,9 @@ class CustomServiceListForm(
 ) {
 
     private val formState = MutableStateFlow(service.state.mapToData())
+
+    private val project = ProjectManager.getInstance().defaultProject
+    private val customSettingsFileProvider = CustomSettingsFileProvider()
 
     private var lastSelectedIndex = 0
 
@@ -91,6 +91,7 @@ class CustomServiceListForm(
     private val codeCompletionsForm: CustomServiceCodeCompletionForm
     private val tabbedPane: JTabbedPane
     private val exportButton: JButton
+    private val importButton: JButton
 
     init {
         val selectedItem = formState.value.services.first()
@@ -129,6 +130,9 @@ class CustomServiceListForm(
         }
         exportButton = JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportSettings")).apply {
             addActionListener { exportSettingsToFile() }
+        }
+        importButton = JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.importSettings")).apply {
+            addActionListener { importSettingsFromFile() }
         }
         updateTemplateHelpTextTooltip(selectedItem.template)
     }
@@ -200,9 +204,7 @@ class CustomServiceListForm(
             JPanel(BorderLayout()).apply {
                 add(
                     JPanel(FlowLayout()).apply {
-                        add(JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.importSettings")).apply {
-                            addActionListener { }
-                        })
+                        add(importButton)
                         add(exportButton)
                     }, BorderLayout.WEST
                 )
@@ -309,8 +311,6 @@ class CustomServiceListForm(
     private fun exportSettingsToFile() {
         val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val defaultSettingsFileName = "CustomOpenAiSettings.json"
-        val customSettingsFileProvider = CustomSettingsFileProvider()
-        val project = ProjectManager.getInstance().defaultProject
 
         val fileNameTextField = JBTextField(defaultSettingsFileName).apply {
             columns = 20
@@ -348,6 +348,35 @@ class CustomServiceListForm(
         }
     }
 
+    private fun importSettingsFromFile() {
+        val fileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileDescriptor()
+            .apply { isForcedToUseIdeaFileChooser = true }
+
+        FileChooser.chooseFile(fileChooserDescriptor, project, null)?.let { file ->
+            coroutineScope.launch {
+                runCatching {
+                    file.canonicalPath?.let { customSettingsFileProvider.readFromFile(it) }
+                }.onSuccess { settings ->
+                    if (settings != null) {
+                        val newActualService = settings.firstOrNull { it.name == formState.value.active.name }
+                            ?: settings.first()
+
+                        service.state.run {
+                            services = settings.mapTo(mutableListOf()) { it.mapToState() }
+                            active = newActualService.mapToState()
+                        }
+
+                        formState.update {
+                            service.state.mapToData()
+                        }
+                    }
+                }.onFailure {
+                    showImportErrorMessage()
+                }
+            }
+        }
+    }
+
     private fun exportSettingsDialog(
         fileNameTextField: JBTextField,
         filePathButton: TextFieldWithBrowseButton,
@@ -376,6 +405,14 @@ class CustomServiceListForm(
             CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.exportError"),
             MessageType.ERROR,
             exportButton,
+        )
+    }
+
+    private fun showImportErrorMessage() {
+        OverlayUtil.showBalloon(
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.importError"),
+            MessageType.ERROR,
+            importButton,
         )
     }
 
