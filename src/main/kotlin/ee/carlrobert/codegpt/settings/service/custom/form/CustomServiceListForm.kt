@@ -9,12 +9,14 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.MessageType
 import com.intellij.ui.EnumComboBoxModel
+import com.intellij.ui.TitledSeparator
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
+import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.credentials.CredentialsStore
@@ -29,17 +31,16 @@ import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import okhttp3.internal.toImmutableList
+import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.net.MalformedURLException
 import java.net.URL
 import javax.swing.Box
+import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.JTabbedPane
 import javax.swing.ListSelectionModel
@@ -188,8 +189,27 @@ class CustomServiceListForm(
 
     fun getForm(): JPanel =
         BorderLayoutPanel(8, 0)
+            .addToTop(createImportExportPanel())
             .addToLeft(createToolbarDecorator().createPanel())
             .addToCenter(createContentPanel())
+
+    private fun createImportExportPanel() = FormBuilder.createFormBuilder()
+        .addComponent(
+            JPanel(BorderLayout()).apply {
+                add(
+                    JPanel(FlowLayout()).apply {
+                        add(JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.importSettings")).apply {
+                            addActionListener { }
+                        })
+                        add(JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportSettings")).apply {
+                            addActionListener { }
+                        })
+                    }, BorderLayout.WEST
+                )
+            }
+        )
+        .addVerticalGap(4)
+        .panel
 
     private fun createToolbarDecorator(): ToolbarDecorator =
         ToolbarDecorator.createDecorator(customProvidersJBList)
