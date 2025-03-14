@@ -13,10 +13,7 @@ import com.intellij.openapi.ui.*
 import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
 import com.intellij.ui.EnumComboBoxModel
 import com.intellij.ui.ToolbarDecorator
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBPasswordField
-import com.intellij.ui.components.JBTextField
+import com.intellij.ui.components.*
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -101,7 +98,7 @@ class CustomServiceListForm(
         }
         chatCompletionsForm = CustomServiceChatCompletionForm(selectedItem.chatCompletionSettings, this::getApiKey)
         codeCompletionsForm = CustomServiceCodeCompletionForm(selectedItem.codeCompletionSettings, this::getApiKey)
-        tabbedPane = JTabbedPane().apply {
+        tabbedPane = JBTabbedPane().apply {
             add(CodeGPTBundle.get("shared.chatCompletions"), chatCompletionsForm.form)
             add(CodeGPTBundle.get("shared.codeCompletions"), codeCompletionsForm.form)
             templateComboBox.selectedItem = selectedItem.template
