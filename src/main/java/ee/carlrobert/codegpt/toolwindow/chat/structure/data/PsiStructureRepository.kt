@@ -12,7 +12,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.util.io.await
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
-import ee.carlrobert.codegpt.settings.chat.ChatSettingsListener
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import ee.carlrobert.codegpt.ui.textarea.header.tag.CurrentGitChangesTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.DocumentationTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
@@ -119,9 +119,9 @@ class PsiStructureRepository(
             .connect(parentDisposable)
 
         connection.subscribe(
-            ChatSettingsListener.TOPIC,
-            ChatSettingsListener { newState ->
-                if (newState.psiStructureEnabled) {
+            ConfigurationStateListener.TOPIC,
+            ConfigurationStateListener { newState ->
+                if (newState.chatCompletionSettings.psiStructureEnabled) {
                     enable()
                 } else {
                     disable()
