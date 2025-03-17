@@ -6,6 +6,8 @@ import com.intellij.ide.HelpTooltip
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.ProjectManager
@@ -13,10 +15,8 @@ import com.intellij.openapi.ui.*
 import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
 import com.intellij.ui.EnumComboBoxModel
 import com.intellij.ui.ToolbarDecorator
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBPasswordField
-import com.intellij.ui.components.JBTextField
+import com.intellij.ui.components.*
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -25,13 +25,17 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
+import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceSettingsData
 import ee.carlrobert.codegpt.settings.service.custom.form.model.mapToData
 import ee.carlrobert.codegpt.settings.service.custom.form.model.mapToState
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTemplate
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import okhttp3.internal.toImmutableList
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -101,7 +105,7 @@ class CustomServiceListForm(
         }
         chatCompletionsForm = CustomServiceChatCompletionForm(selectedItem.chatCompletionSettings, this::getApiKey)
         codeCompletionsForm = CustomServiceCodeCompletionForm(selectedItem.codeCompletionSettings, this::getApiKey)
-        tabbedPane = JTabbedPane().apply {
+        tabbedPane = JBTabbedPane().apply {
             add(CodeGPTBundle.get("shared.chatCompletions"), chatCompletionsForm.form)
             add(CodeGPTBundle.get("shared.codeCompletions"), codeCompletionsForm.form)
             templateComboBox.selectedItem = selectedItem.template
@@ -353,10 +357,13 @@ class CustomServiceListForm(
             .apply { isForcedToUseIdeaFileChooser = true }
 
         FileChooser.chooseFile(fileChooserDescriptor, project, null)?.let { file ->
-            coroutineScope.launch {
-                runCatching {
-                    file.canonicalPath?.let { customSettingsFileProvider.readFromFile(it) }
-                }.onSuccess { settings ->
+            ReadAction.nonBlocking<List<CustomServiceSettingsData>> {
+                file.canonicalPath?.let {
+                    customSettingsFileProvider.readFromFile(it)
+                }
+            }
+                .inSmartMode(project)
+                .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
                     if (settings != null) {
                         val newActualService = settings.firstOrNull { it.name == formState.value.active.name }
                             ?: settings.first()
@@ -365,15 +372,13 @@ class CustomServiceListForm(
                             services = settings.mapTo(mutableListOf()) { it.mapToState() }
                             active = newActualService.mapToState()
                         }
-
                         formState.update {
                             service.state.mapToData()
                         }
                     }
-                }.onFailure {
-                    showImportErrorMessage()
                 }
-            }
+                .submit(AppExecutorUtil.getAppExecutorService())
+                .onError { showImportErrorMessage() }
         }
     }
 
