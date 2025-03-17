@@ -12,9 +12,6 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.actionSystem.EditorAction
 import com.intellij.openapi.editor.actionSystem.EditorWriteActionHandler
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
-import ee.carlrobert.codegpt.credentials.CredentialsStore.isCredentialSet
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
@@ -33,14 +30,14 @@ class TriggerCustomPredictionAction : EditorAction(Handler()), HintManagerImpl.A
                 return
             }
 
-            if (!service<CodeGPTServiceSettings>().state.codeAssistantEnabled) {
+            if (!service<CodeGPTServiceSettings>().state.nextEditsEnabled) {
                 val notification = OverlayUtil.getDefaultNotification(
-                    "Please enable Code Assistant before using this feature.",
+                    "Please enable multi-line edits before using this feature.",
                     NotificationType.WARNING,
                 )
-                notification.addAction(object : AnAction("Enable Code Assistant") {
+                notification.addAction(object : AnAction("Enable Multi-Line Edits") {
                     override fun actionPerformed(e: AnActionEvent) {
-                        service<CodeGPTServiceSettings>().state.codeAssistantEnabled = true
+                        service<CodeGPTServiceSettings>().state.nextEditsEnabled = true
                         notification.hideBalloon()
                     }
                 })
@@ -49,18 +46,8 @@ class TriggerCustomPredictionAction : EditorAction(Handler()), HintManagerImpl.A
                 return
             }
 
-            val encodingManager = service<EncodingManager>()
-            if (!isCredentialSet(CodeGptApiKey) && encodingManager.countTokens(editor.document.text) > 2048) {
-                OverlayUtil.showNotification("The file exceeds the token limit of 2,048. Please upgrade your plan to access higher limits.")
-                return
-            }
-            if (encodingManager.countTokens(editor.document.text) > 4096) {
-                OverlayUtil.showNotification("The file exceeds the token limit of 4,096.")
-                return
-            }
-
             ApplicationManager.getApplication().executeOnPooledThread {
-                service<PredictionService>().displayDirectPrediction(editor)
+                service<PredictionService>().displayInlineDiff(editor, true)
             }
         }
 

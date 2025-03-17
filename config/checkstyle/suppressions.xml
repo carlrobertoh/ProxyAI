@@ -9,4 +9,8 @@
     files="[\\/]src[\\/]main[\\/]java[\\/]ee[\\/]carlrobert[\\/]codegpt[\\/]telemetry"
     checks="."/>
   <suppress files="[\\/]src[\\/]main[\\/]java[\\/]grammar" checks="."/>
+  <suppress
+    files="[\\/]build[\\/]generated[\\/]source[\\/]proto[\\/]main"
+    checks="."/>
+
 </suppressions>

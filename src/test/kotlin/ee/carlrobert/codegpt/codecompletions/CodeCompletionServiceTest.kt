@@ -18,6 +18,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
 
     fun `test code completion with ProxyAI provider`() {
         useCodeGPTService()
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -58,6 +59,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
 
     fun `test code completion with OpenAI provider`() {
         useOpenAIService()
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -98,6 +100,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
 
     fun `_test apply inline suggestions without initial following text`() {
         useCodeGPTService()
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -215,7 +218,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
 
     fun `_test apply inline suggestions with initial following text`() {
         useCodeGPTService()
-        service<CodeGPTServiceSettings>().state.codeAssistantEnabled = false
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -287,6 +290,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
 
     fun `test adjust completion line whitespaces`() {
         useCodeGPTService()
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",

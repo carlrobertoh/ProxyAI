@@ -15,6 +15,9 @@ kotlin = "2.0.0"
 llm-client = "0.8.37"
 okio = "3.9.0"
 tree-sitter = "0.24.4"
+grpc = "1.71.0"
+protobuf = "3.25.1"
+protobuf-plugin = "0.9.4"
 
 [libraries]
 analytics = { module = "com.rudderstack.sdk.java.analytics:analytics", version.ref = "analytics" }
@@ -31,6 +34,12 @@ kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", v
 llm-client = { module = "ee.carlrobert:llm-client", version.ref = "llm-client" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 tree-sitter = { module = "io.github.bonede:tree-sitter", version.ref = "tree-sitter" }
+grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
+grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
+grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
+protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
+protobuf-java = { module = "io.grpc:protoc-gen-grpc-java", version.ref = "grpc" }
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }
