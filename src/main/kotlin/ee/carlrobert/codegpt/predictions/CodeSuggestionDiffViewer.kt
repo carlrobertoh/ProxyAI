@@ -27,15 +27,19 @@ import com.intellij.openapi.util.*
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.util.application
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
+import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.service.NextEditResponse
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Point
+import java.util.*
 import javax.swing.Box
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -45,6 +49,7 @@ import kotlin.math.max
 
 class CodeSuggestionDiffViewer(
     request: DiffRequest,
+    private val responseId: UUID,
     private val mainEditor: Editor,
     private val isManuallyOpened: Boolean
 ) : UnifiedDiffViewer(MyDiffContext(mainEditor.project), request), Disposable {
@@ -116,6 +121,10 @@ class CodeSuggestionDiffViewer(
 
         if (changes.size == 1) {
             popup.dispose()
+        }
+
+        application.executeOnPooledThread {
+            project?.service<GrpcClientService>()?.acceptEdit(responseId, change.toString())
         }
     }
 
@@ -288,17 +297,23 @@ class CodeSuggestionDiffViewer(
         @RequiresEdt
         fun displayInlineDiff(
             editor: Editor,
-            nextRevision: String,
+            nextEditResponse: NextEditResponse,
             isManuallyOpened: Boolean = false
         ) {
-            if ((editor is EditorEx && editor.virtualFile == null) || editor.isViewer) {
+            val nextRevision = nextEditResponse.nextRevision
+            if ((editor is EditorEx && editor.virtualFile == null) || editor.isViewer || nextRevision.isEmpty()) {
                 return
             }
 
             editor.getUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER)?.dispose()
 
             val diffRequest = createSimpleDiffRequest(editor, nextRevision)
-            val diffViewer = CodeSuggestionDiffViewer(diffRequest, editor, isManuallyOpened)
+            val diffViewer = CodeSuggestionDiffViewer(
+                diffRequest,
+                UUID.fromString(nextEditResponse.id),
+                editor,
+                isManuallyOpened
+            )
             editor.putUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER, diffViewer)
             diffViewer.rediff(true)
         }

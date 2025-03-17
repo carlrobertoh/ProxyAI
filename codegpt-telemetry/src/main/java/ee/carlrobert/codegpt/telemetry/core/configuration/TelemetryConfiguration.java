@@ -20,6 +20,7 @@ import java.util.List;
 public class TelemetryConfiguration extends CompositeConfiguration {
 
     public static final String KEY_MODE = "ee.carlrobert.telemetry.mode";
+    public static final String KEY_COMPLETION_TELEMETRY_ENABLED = "ee.carlrobert.telemetry.completionStatisticsEnabled";
 
     private static final SaveableFileConfiguration FILE = new SaveableFileConfiguration(
             Directories.PATH.resolve("ee.carlrobert.intellij.telemetry"));
@@ -48,6 +49,14 @@ public class TelemetryConfiguration extends CompositeConfiguration {
 
     public void setEnabled(boolean enabled) {
         setMode(Mode.valueOf(enabled));
+    }
+
+    public boolean isCompletionTelemetryEnabled() {
+        return Boolean.parseBoolean(get(KEY_COMPLETION_TELEMETRY_ENABLED));
+    }
+
+    public void setCompletionTelemetryEnabled(boolean enabled) {
+        put(KEY_COMPLETION_TELEMETRY_ENABLED, String.valueOf(enabled));
     }
 
     public boolean isDebug() {

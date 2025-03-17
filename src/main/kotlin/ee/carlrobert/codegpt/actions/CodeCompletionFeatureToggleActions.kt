@@ -37,7 +37,8 @@ abstract class CodeCompletionFeatureToggleActions(
     override fun update(e: AnActionEvent) {
         val selectedService = GeneralSettings.getSelectedService()
         val codeCompletionEnabled =
-            e.project?.service<CodeCompletionService>()?.isCodeCompletionsEnabled(selectedService) ?: false
+            e.project?.service<CodeCompletionService>()?.isCodeCompletionsEnabled(selectedService)
+                ?: false
         e.presentation.isVisible = codeCompletionEnabled != enableFeatureAction
         e.presentation.isEnabled = when (selectedService) {
             CODEGPT,
