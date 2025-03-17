@@ -3,8 +3,8 @@ package ee.carlrobert.codegpt.ui.textarea.header.tag
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
-import ee.carlrobert.codegpt.settings.chat.ChatSettings
-import ee.carlrobert.codegpt.settings.chat.ChatSettingsListener
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import java.util.concurrent.CopyOnWriteArraySet
 
 class TagManager(parentDisposable: Disposable) {
@@ -17,9 +17,9 @@ class TagManager(parentDisposable: Disposable) {
             .connect(parentDisposable)
 
         connection.subscribe(
-            ChatSettingsListener.TOPIC,
-            ChatSettingsListener { newState ->
-                if (!newState.editorContextTagEnabled) {
+            ConfigurationStateListener.TOPIC,
+            ConfigurationStateListener { newState ->
+                if (!newState.chatCompletionSettings.editorContextTagEnabled) {
                     clear()
                 }
             })
@@ -37,7 +37,9 @@ class TagManager(parentDisposable: Disposable) {
 
     fun addTag(tagDetails: TagDetails) {
         val wasAdded = synchronized(this) {
-            if (!service<ChatSettings>().state.editorContextTagEnabled && isEditorTag(tagDetails)) return
+            if (!service<ConfigurationSettings>().state.chatCompletionSettings.editorContextTagEnabled
+                && isEditorTag(tagDetails)
+            ) return
 
             if (tagDetails is EditorSelectionTagDetails) {
                 tags.remove(tagDetails)

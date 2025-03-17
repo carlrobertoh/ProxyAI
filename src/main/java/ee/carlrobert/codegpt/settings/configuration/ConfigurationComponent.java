@@ -30,6 +30,7 @@ public class ConfigurationComponent {
   private final JBCheckBox autocompletionGitContextCheckBox;
   private final IntegerField maxTokensField;
   private final JBTextField temperatureField;
+  private final ChatCompletionConfigurationForm chatCompletionForm;
 
   public ConfigurationComponent(
       Disposable parentDisposable,
@@ -84,6 +85,7 @@ public class ConfigurationComponent {
         CodeGPTBundle.get("configurationConfigurable.autocompletionGitContextCheckBox.label"),
         configuration.getAutocompletionGitContextEnabled()
     );
+    chatCompletionForm = new ChatCompletionConfigurationForm();
 
     mainPanel = FormBuilder.createFormBuilder()
         .addComponent(checkForPluginUpdatesCheckBox)
@@ -97,6 +99,9 @@ public class ConfigurationComponent {
         .addComponent(new TitledSeparator(
             CodeGPTBundle.get("configurationConfigurable.section.assistant.title")))
         .addComponent(createAssistantConfigurationForm())
+        .addComponent(new TitledSeparator(
+            CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.title")))
+        .addComponent(chatCompletionForm.createPanel())
         .addComponentFillVertically(new JPanel(), 0)
         .getPanel();
   }
@@ -116,6 +121,7 @@ public class ConfigurationComponent {
     state.setAutocompletionPostProcessingEnabled(autocompletionPostProcessingCheckBox.isSelected());
     state.setAutocompletionContextAwareEnabled(autocompletionContextAwareCheckBox.isSelected());
     state.setAutocompletionGitContextEnabled(autocompletionGitContextCheckBox.isSelected());
+    state.setChatCompletionSettings(chatCompletionForm.getFormState());
     return state;
   }
 
@@ -134,6 +140,7 @@ public class ConfigurationComponent {
     autocompletionGitContextCheckBox.setSelected(
         configuration.getAutocompletionGitContextEnabled()
     );
+    chatCompletionForm.resetForm(configuration.getChatCompletionSettings());
   }
 
   // Formatted keys are not referenced in the messages bundle file

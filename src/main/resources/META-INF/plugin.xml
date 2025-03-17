@@ -48,8 +48,6 @@
           instance="ee.carlrobert.codegpt.settings.documentation.DocumentationsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.configuration" parentId="settings.codegpt" displayName="Configuration"
             instance="ee.carlrobert.codegpt.settings.configuration.ConfigurationConfigurable"/>
-        <applicationConfigurable id="settings.codegpt.chat" parentId="settings.codegpt" displayName="Chat Settings"
-                                 instance="ee.carlrobert.codegpt.settings.chat.ChatConfigurationConfigurable"/>
         <applicationConfigurable id="settings.codegpt.advanced" parentId="settings.codegpt" displayName="Advanced Settings"
             instance="ee.carlrobert.codegpt.settings.advanced.AdvancedSettingsConfigurable"/>
         <applicationConfigurable

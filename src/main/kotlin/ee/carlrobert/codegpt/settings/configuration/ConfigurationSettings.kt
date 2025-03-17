@@ -35,8 +35,14 @@ class ConfigurationSettingsState : BaseState() {
     var autocompletionContextAwareEnabled by property(false)
     var autocompletionGitContextEnabled by property(true)
     var tableData by map<String, String>()
+    var chatCompletionSettings by property(ChatCompletionSettingsState())
 
     init {
         tableData.putAll(EditorActionsUtil.DEFAULT_ACTIONS)
     }
+}
+
+class ChatCompletionSettingsState : BaseState() {
+    var editorContextTagEnabled by property(true)
+    var psiStructureEnabled by property(true)
 }

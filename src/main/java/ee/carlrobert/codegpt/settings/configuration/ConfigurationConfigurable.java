@@ -5,7 +5,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.util.Disposer;
 import ee.carlrobert.codegpt.CodeGPTBundle;
-import ee.carlrobert.codegpt.actions.editor.EditorActionsUtil;
 import javax.swing.JComponent;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
@@ -39,8 +38,12 @@ public class ConfigurationConfigurable implements Configurable {
 
   @Override
   public void apply() {
-    ApplicationManager.getApplication().getService(ConfigurationSettings.class)
-        .loadState(component.getCurrentFormState());
+    var application = ApplicationManager.getApplication();
+    var state = component.getCurrentFormState();
+    application.getService(ConfigurationSettings.class).loadState(state);
+    application.getMessageBus()
+        .syncPublisher(ConfigurationStateListener.Companion.getTOPIC())
+        .onConfigurationChanged(state);
   }
 
   @Override
