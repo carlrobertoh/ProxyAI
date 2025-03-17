@@ -37,7 +37,10 @@ class GrpcClientService(private val project: Project) : Disposable {
     private var prevObserver: NextEditStreamObserver? = null
 
     companion object {
+        private const val HOST = "grpc.tryproxy.io"
+        private const val PORT = 9090
         private const val SHUTDOWN_TIMEOUT_SECONDS = 5L
+
         private val logger = thisLogger()
     }
 
@@ -45,9 +48,7 @@ class GrpcClientService(private val project: Project) : Disposable {
     private fun ensureConnection() {
         if (channel == null || channel?.isShutdown == true) {
             try {
-                channel = NettyChannelBuilder
-                    .forAddress("grpc.tryproxy.io", 9090)
-                    .build()
+                channel = NettyChannelBuilder.forAddress(HOST, PORT).build()
                 stub = NextEditServiceImplGrpc.newStub(channel)
                     .withCallCredentials(
                         ApiKeyCredentials(CredentialsStore.getCredential(CodeGptApiKey) ?: "")
@@ -86,12 +87,7 @@ class GrpcClientService(private val project: Project) : Disposable {
     ) : StreamObserver<NextEditResponse> {
         override fun onNext(response: NextEditResponse) {
             runInEdt {
-                CodeSuggestionDiffViewer.displayInlineDiff(
-                    editor,
-                    response.nextRevision,
-                    UUID.fromString(response.id),
-                    isManuallyOpened
-                )
+                CodeSuggestionDiffViewer.displayInlineDiff(editor, response, isManuallyOpened)
             }
         }
 

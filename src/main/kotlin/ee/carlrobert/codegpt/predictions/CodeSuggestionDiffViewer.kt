@@ -35,6 +35,7 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.service.NextEditResponse
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -297,11 +298,11 @@ class CodeSuggestionDiffViewer(
         @RequiresEdt
         fun displayInlineDiff(
             editor: Editor,
-            nextRevision: String,
-            responseId: UUID,
+            nextEditResponse: NextEditResponse,
             isManuallyOpened: Boolean = false
         ) {
-            if (editor.virtualFile == null || editor.isViewer) {
+            val nextRevision = nextEditResponse.nextRevision
+            if (editor.virtualFile == null || editor.isViewer || nextRevision.isEmpty()) {
                 return
             }
 
@@ -314,8 +315,12 @@ class CodeSuggestionDiffViewer(
             }
 
             val diffRequest = createSimpleDiffRequest(editor, nextRevision)
-            val diffViewer =
-                CodeSuggestionDiffViewer(diffRequest, responseId, editor, isManuallyOpened)
+            val diffViewer = CodeSuggestionDiffViewer(
+                diffRequest,
+                UUID.fromString(nextEditResponse.id),
+                editor,
+                isManuallyOpened
+            )
             editor.putUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER, diffViewer)
             diffViewer.rediff(true)
         }

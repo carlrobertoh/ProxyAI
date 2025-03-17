@@ -25,14 +25,12 @@ public class TelemetryComponent {
             "Help ProxyAI improve its products by sending anonymous data about features and plugins used, "
                     + "hardware and software configuration.<br/>"
                     + "<br/>"
-                    + "Please note that this will not include personal data or any sensitive Information.<br/>"
-                    + "The data sent complies with the <a href=\"https://tryproxy.io/privacy\">Privacy Policy</a>.";
+                    + "Please note that this will not include personal data or any sensitive Information.";
 
     private static final String COMPLETION_DESCRIPTION =
-        "Help ProxyAI improve its products by allowing us to gather your code inputs and the completions we generate.<br/>"
-            + "This data is essential for training our multi-line edit prediction model, which we're committed to releasing as open source to benefit the entire developer ecosystem.<br/>"
-            + "<br/>"
-            + "See our <a href=\"https://tryproxy.io/privacy\">Privacy Policy</a> for details.";
+            "Help ProxyAI improve its products by sharing your code inputs and completions.<br/>"
+                    + "<br/>"
+                    + "The data sent complies with the <a href=\"https://tryproxy.io/privacy\">Privacy Policy</a>.";
 
     private final JPanel panel;
     private final JBCheckBox usageStatisticsEnabled = new JBCheckBox("Send usage statistics");
