@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
+import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.notification.NotificationAction.createSimpleExpiring
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
@@ -87,7 +88,10 @@ class GrpcClientService(private val project: Project) : Disposable {
     ) : StreamObserver<NextEditResponse> {
         override fun onNext(response: NextEditResponse) {
             runInEdt {
-                CodeSuggestionDiffViewer.displayInlineDiff(editor, response, isManuallyOpened)
+                if (LookupManager.getActiveLookup(editor) == null) {
+                    // TODO: Display when appropriate
+                    CodeSuggestionDiffViewer.displayInlineDiff(editor, response, isManuallyOpened)
+                }
             }
         }
 
