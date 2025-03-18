@@ -146,6 +146,10 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
     }
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
+        if (LookupManager.getActiveLookup(event.toRequest()?.editor) != null) {
+            return false
+        }
+
         val selectedService = GeneralSettings.getSelectedService()
         val codeCompletionsEnabled = when (selectedService) {
             ServiceType.CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
@@ -158,19 +162,16 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             ServiceType.GOOGLE,
             null -> false
         }
-
-        if (!codeCompletionsEnabled) {
-            return selectedService == ServiceType.CODEGPT && service<CodeGPTServiceSettings>().state.nextEditsEnabled
-        }
-
-        if (LookupManager.getActiveLookup(event.toRequest()?.editor) != null) {
-            return false
-        }
-
-        val containsActiveCompletion =
+        val hasActiveCompletion =
             REMAINING_EDITOR_COMPLETION.get(event.toRequest()?.editor)?.isNotEmpty() ?: false
 
-        return event is InlineCompletionEvent.DocumentChange || containsActiveCompletion
+        if (!codeCompletionsEnabled) {
+            return selectedService == ServiceType.CODEGPT
+                    && service<CodeGPTServiceSettings>().state.nextEditsEnabled
+                    && !hasActiveCompletion
+        }
+
+        return event is InlineCompletionEvent.DocumentChange || hasActiveCompletion
     }
 
     private fun sendNextSuggestion(
