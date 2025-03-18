@@ -7,30 +7,24 @@ import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.JBMenuItem
+import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
+import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
 import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.TagDetailsComparator
-import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagPanel
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManagerListener
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagPanel
+import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
-import java.awt.Cursor
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.Graphics
+import java.awt.*
+import java.awt.event.ActionListener
 import javax.swing.JButton
 import javax.swing.JPanel
 
@@ -53,7 +47,6 @@ class UserInputHeaderPanel(
         verticalAlignment = JBLabel.CENTER
     }
 
-    //    private val selectionTagPanel = SelectionTagPanel(project, tagManager, promptTextField)
     private val defaultHeaderTagsPanel = CustomFlowPanel().apply {
         add(AddButton {
             if (suggestionsPopupManager.isPopupVisible()) {
@@ -62,7 +55,6 @@ class UserInputHeaderPanel(
                 suggestionsPopupManager.showPopup(this)
             }
         })
-        add(RemoveAllButton())
         add(emptyText)
     }
 
@@ -128,14 +120,16 @@ class UserInputHeaderPanel(
     }
 
     private fun createTagPanel(tagDetails: TagDetails) =
-        if (tagDetails is EditorSelectionTagDetails) {
+        (if (tagDetails is EditorSelectionTagDetails) {
             SelectionTagPanel(tagDetails, tagManager, promptTextField)
         } else {
             object : TagPanel(tagDetails, tagManager, false) {
 
                 init {
-                    cursor =
-                        if (tagDetails is FileTagDetails) Cursor(Cursor.HAND_CURSOR) else Cursor(Cursor.DEFAULT_CURSOR)
+                    cursor = if (tagDetails is FileTagDetails)
+                        Cursor(Cursor.HAND_CURSOR)
+                    else
+                        Cursor(Cursor.DEFAULT_CURSOR)
                 }
 
                 override fun onSelect(tagDetails: TagDetails) = Unit
@@ -144,6 +138,8 @@ class UserInputHeaderPanel(
                     tagManager.remove(tagDetails)
                 }
             }
+        }).apply {
+            componentPopupMenu = TagPopupMenu()
         }
 
     private fun initializeUI() {
@@ -204,29 +200,6 @@ class UserInputHeaderPanel(
         }
     }
 
-    private inner class RemoveAllButton : JButton() {
-        init {
-            addActionListener {
-                tagManager.clear()
-            }
-
-            cursor = Cursor(Cursor.HAND_CURSOR)
-            preferredSize = Dimension(20, 20)
-            isContentAreaFilled = false
-            isOpaque = false
-            border = null
-            toolTipText = "Remove All Context"
-            icon = IconUtil.scale(AllIcons.Actions.Close, null, 0.75f)
-            rolloverIcon = IconUtil.scale(AllIcons.Actions.CloseHovered, null, 0.75f)
-            pressedIcon = IconUtil.scale(AllIcons.Actions.CloseHovered, null, 0.75f)
-        }
-
-        override fun paintComponent(g: Graphics) {
-            PaintUtil.drawRoundedBackground(g, this, true)
-            super.paintComponent(g)
-        }
-    }
-
     private inner class EditorSelectionChangeListener : EditorNotifier.SelectionChange {
         override fun selectionChanged(selectionModel: SelectionModel, virtualFile: VirtualFile) {
             handleSelectionChange(selectionModel, virtualFile)
@@ -266,6 +239,93 @@ class UserInputHeaderPanel(
     private inner class IncludedFilesListener : IncludeFilesInContextNotifier {
         override fun filesIncluded(includedFiles: MutableList<VirtualFile>) {
             includedFiles.forEach { tagManager.addTag(FileTagDetails(it)) }
+        }
+    }
+
+    private inner class TagPopupMenu : JBPopupMenu() {
+        private val closeMenuItem =
+            createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.close")) {
+                val tagPanel = invoker as? TagPanel
+                tagPanel?.let {
+                    tagManager.remove(it.tagDetails)
+                }
+            }
+
+        private val closeOtherTagsMenuItem =
+            createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.closeOthers")) {
+                val tagPanel = invoker as? TagPanel
+                tagPanel?.let { currentPanel ->
+                    val currentTag = currentPanel.tagDetails
+                    tagManager.getTags()
+                        .filter { it != currentTag }
+                        .forEach { tagManager.remove(it) }
+                }
+            }
+
+        private val closeAllTagsMenuItem =
+            createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.closeAll")) {
+                tagManager.clear()
+            }
+
+        private val closeTagsToLeftMenuItem =
+            createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.closeTagsToLeft")) {
+                closeTagsInRange { components, currentIndex ->
+                    if (currentIndex > 0) {
+                        components.take(currentIndex)
+                    } else {
+                        emptyList()
+                    }
+                }
+            }
+
+        private val closeTagsToRightMenuItem =
+            createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.closeTagsToRight")) {
+                closeTagsInRange { components, currentIndex ->
+                    if (currentIndex >= 0 && currentIndex < components.size - 1) {
+                        components.drop(currentIndex + 1)
+                    } else {
+                        emptyList()
+                    }
+                }
+            }
+
+        private fun closeTagsInRange(rangeSelector: (Array<Component>, Int) -> List<Component>) {
+            val tagPanel = invoker as? TagPanel
+            tagPanel?.let { currentPanel ->
+                val components = this@UserInputHeaderPanel.components
+                val currentIndex = components.indexOf(currentPanel)
+
+                rangeSelector(components, currentIndex)
+                    .filterIsInstance<TagPanel>()
+                    .forEach { tagManager.remove(it.tagDetails) }
+            }
+        }
+
+        init {
+            add(closeMenuItem)
+            add(closeOtherTagsMenuItem)
+            add(closeAllTagsMenuItem)
+            add(closeTagsToLeftMenuItem)
+            add(closeTagsToRightMenuItem)
+        }
+
+        override fun show(invoker: Component, x: Int, y: Int) {
+            if (invoker is TagPanel) {
+                val components = this@UserInputHeaderPanel.components.filterIsInstance<TagPanel>()
+                val currentIndex = components.indexOf(invoker)
+
+                closeTagsToLeftMenuItem.isEnabled = currentIndex > 0
+                closeTagsToRightMenuItem.isEnabled = currentIndex < components.size - 1
+                closeOtherTagsMenuItem.isEnabled = components.size > 1
+
+                super.show(invoker, x, y)
+            }
+        }
+
+        private fun createPopupMenuItem(label: String, listener: ActionListener): JBMenuItem {
+            val menuItem = JBMenuItem(label)
+            menuItem.addActionListener(listener)
+            return menuItem
         }
     }
 }
