@@ -262,7 +262,7 @@ class KotlinFileAnalyzer(
         val type = property.typeReference?.text ?: "TypeUnknown"
         val resolvedType = resolveType(type)
         val modifierList = getModifiers(property)
-        return FieldStructure(property.name!!, resolvedType, modifierList)
+        return FieldStructure(property.name ?: "", resolvedType, modifierList)
     }
 
     private fun analyzeFunction(function: KtFunction): MethodStructure {

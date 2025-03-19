@@ -38,8 +38,6 @@ class PredictionService {
             project.service<GrpcClientService>().getNextEdit(editor, isManuallyOpened)
         } catch (ex: Exception) {
             logger.error("Error communicating with server: ${ex.message}")
-        } finally {
-            CompletionProgressNotifier.update(project, false)
         }
     }
 

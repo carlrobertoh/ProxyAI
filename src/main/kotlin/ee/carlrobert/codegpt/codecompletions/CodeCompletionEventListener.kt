@@ -72,6 +72,7 @@ class CodeCompletionMultiLineEventListener(
 ) : CodeCompletionEventListener(request.editor) {
 
     override fun handleCompleted(messageBuilder: StringBuilder) {
+        request.editor.project?.let { CompletionProgressNotifier.update(it, false) }
         runInEdt {
             onCompletionReceived(runWriteAction {
                 messageBuilder.toString().formatCompletion(request)
