@@ -21,10 +21,6 @@ public class TotalTokensDetails {
     this.conversationTokens = conversationTokens;
   }
 
-  public void setPsiTokens(int psiTokens) {
-    this.psiTokens = psiTokens;
-  }
-
   public int getConversationTokens() {
     return conversationTokens;
   }
@@ -51,6 +47,10 @@ public class TotalTokensDetails {
 
   public int getReferencedFilesTokens() {
     return referencedFilesTokens;
+  }
+
+  public void setPsiTokens(int psiTokens) {
+    this.psiTokens = psiTokens;
   }
 
   public int getPsiTokens() {

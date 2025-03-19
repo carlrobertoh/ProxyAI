@@ -13,7 +13,8 @@ import javax.swing.Icon
 sealed class TagDetails(
     val name: String,
     val icon: Icon? = null,
-    val id: UUID = UUID.randomUUID()
+    val id: UUID = UUID.randomUUID(),
+    val createdOn: Long = System.currentTimeMillis()
 ) {
 
     var selected: Boolean = true
