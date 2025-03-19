@@ -12,6 +12,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.jetbrains.rd.util.UUID
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer
@@ -89,25 +90,21 @@ class GrpcClientService(private val project: Project) : Disposable {
         override fun onNext(response: NextEditResponse) {
             runInEdt {
                 if (LookupManager.getActiveLookup(editor) == null) {
-                    // TODO: Display when appropriate
                     CodeSuggestionDiffViewer.displayInlineDiff(editor, response, isManuallyOpened)
                 }
             }
         }
 
         override fun onError(ex: Throwable) {
-            if (ex is CancellationException) {
+            if (ex is CancellationException ||
+                (ex is StatusRuntimeException && ex.status.code == Status.Code.CANCELLED)
+            ) {
                 onCompleted()
                 return
             }
 
             try {
                 if (ex is StatusRuntimeException) {
-                    if (ex.status.code == Status.Code.CANCELLED) {
-                        onCompleted()
-                        return
-                    }
-
                     OverlayUtil.showNotification(
                         ex.status.description ?: ex.localizedMessage,
                         NotificationType.ERROR,
@@ -119,11 +116,13 @@ class GrpcClientService(private val project: Project) : Disposable {
                     logger.error("Something went wrong", ex)
                 }
             } finally {
+                onCompleted()
                 onDispose()
             }
         }
 
         override fun onCompleted() {
+            editor.project?.let { CompletionProgressNotifier.update(it, false) }
         }
     }
 
