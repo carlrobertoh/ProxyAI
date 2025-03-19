@@ -26,6 +26,7 @@ import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.settings.IncludedFilesSettings;
+import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.ui.checkbox.FileCheckboxTree;
 import ee.carlrobert.codegpt.ui.checkbox.VirtualFileCheckboxTree;
@@ -80,9 +81,12 @@ public class IncludeFilesInContextAction extends AnAction {
         totalTokensLabel,
         checkboxTree);
     if (show == OK_EXIT_CODE) {
-      project.getMessageBus()
-          .syncPublisher(IncludeFilesInContextNotifier.FILES_INCLUDED_IN_CONTEXT_TOPIC)
-          .filesIncluded(checkboxTree.getReferencedFiles());
+      project.getService(ChatToolWindowContentManager.class)
+          .tryFindActiveChatTabPanel()
+          .ifPresent(tabPanel -> {
+            tabPanel.includeFiles(checkboxTree.getReferencedFiles());
+          });
+
       includedFilesSettings.setPromptTemplate(promptTemplateTextArea.getText());
       includedFilesSettings.setRepeatableContext(repeatableContextTextArea.getText());
     }

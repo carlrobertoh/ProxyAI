@@ -96,7 +96,6 @@ public class ChatToolWindowTabPanel implements Disposable {
     );
 
     totalTokensPanel = new TotalTokensPanel(
-        project,
         conversation,
         EditorUtil.getSelectedEditorSelectedText(project),
         this,
@@ -230,7 +229,8 @@ public class ChatToolWindowTabPanel implements Disposable {
 
       totalTokensPanel.updateConversationTokens(conversation);
       if (callParameters.getReferencedFiles() != null) {
-        totalTokensPanel.updateReferencedFilesTokens(callParameters.getReferencedFiles());
+        totalTokensPanel.updateReferencedFilesTokens(
+            callParameters.getReferencedFiles().stream().map(ReferencedFile::fileContent).toList());
       }
 
       var userMessagePanel = createUserMessagePanel(message, callParameters);
@@ -242,6 +242,12 @@ public class ChatToolWindowTabPanel implements Disposable {
 
       call(callParameters, responseMessagePanel, userMessagePanel);
     });
+  }
+
+  public void includeFiles(List<VirtualFile> referencedFiles) {
+    userInputPanel.includeFiles(referencedFiles);
+    totalTokensPanel.updateReferencedFilesTokens(
+        referencedFiles.stream().map(it -> ReferencedFile.from(it).fileContent()).toList());
   }
 
   private boolean hasReferencedFilePaths(Message message) {
@@ -280,8 +286,9 @@ public class ChatToolWindowTabPanel implements Disposable {
     return panel;
   }
 
-  private void reloadMessage(ChatCompletionParameters prevParameters,
-                             UserMessagePanel userMessagePanel) {
+  private void reloadMessage(
+      ChatCompletionParameters prevParameters,
+      UserMessagePanel userMessagePanel) {
     var prevMessage = prevParameters.getMessage();
     ResponseMessagePanel responsePanel = null;
     try {

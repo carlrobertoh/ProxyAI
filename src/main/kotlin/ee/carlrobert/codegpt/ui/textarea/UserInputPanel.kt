@@ -34,6 +34,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
@@ -72,7 +73,13 @@ class UserInputPanel(
     private val promptTextField =
         PromptTextField(project, suggestionsPopupManager, ::updateUserTokens, ::handleSubmit)
     private val userInputHeaderPanel =
-        UserInputHeaderPanel(project, tagManager, suggestionsPopupManager, promptTextField)
+        UserInputHeaderPanel(
+            project,
+            tagManager,
+            totalTokensPanel,
+            suggestionsPopupManager,
+            promptTextField
+        )
     private val submitButton = IconActionButton(
         object : AnAction(
             CodeGPTBundle.get("smartTextPane.submitButton.title"),
@@ -151,6 +158,10 @@ class UserInputPanel(
         if (text.isNotEmpty() && text.last() == '@') {
             promptTextField.text = text.substring(0, text.length - 1)
         }
+    }
+
+    fun includeFiles(referencedFiles: MutableList<VirtualFile>) {
+        referencedFiles.forEach { userInputHeaderPanel.addTag(FileTagDetails(it)) }
     }
 
     override fun requestFocus() {

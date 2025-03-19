@@ -45,6 +45,10 @@ class TagManager(parentDisposable: Disposable) {
                 tags.remove(tagDetails)
             }
 
+            if (tags.count { !it.selected } == 2) {
+                tags.remove(tags.sortedBy { it.createdOn }.first { !it.selected })
+            }
+
             tags.add(tagDetails)
         }
         if (wasAdded) {
