@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0-223] - 2025-03-20
+
 ### Added
 
 - Support for multi-line edits (replaces the old Code Assistant logic)
@@ -904,7 +906,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.0.0-223...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.0-223...HEAD
+[3.1.0-223]: https://github.com/carlrobertoh/ProxyAI/compare/v3.0.0-223...v3.1.0-223
 [3.0.0-223]: https://github.com/carlrobertoh/ProxyAI/compare/v2.16.4-223...v3.0.0-223
 [2.16.4-223]: https://github.com/carlrobertoh/ProxyAI/compare/v2.16.3-241.1...v2.16.4-223
 [2.16.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v2.16.2-223...v2.16.3-241.1
