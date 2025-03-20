@@ -62,7 +62,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             }
 
             predictNextEdit(request)
-            return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
+            return InlineCompletionSuggestion.Default(emptyFlow())
         }
 
         return if (service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled) {
