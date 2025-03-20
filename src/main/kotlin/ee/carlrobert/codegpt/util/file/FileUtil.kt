@@ -9,6 +9,7 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.io.FileUtil.createDirectory
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileFilter
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings.getLlamaModelsPath
@@ -263,6 +264,23 @@ object FileUtil {
         }
     }
 
+    @JvmStatic
+    fun readContent(file: File): String {
+        try {
+            return String(Files.readAllBytes(Paths.get(file.path)))
+        } catch (e: IOException) {
+            throw java.lang.RuntimeException("Failed to read file content", e)
+        }
+    }
+
+    @JvmStatic
+    fun readContent(virtualFile: VirtualFile): String {
+        try {
+            return VfsUtilCore.loadText(virtualFile)
+        } catch (e: IOException) {
+            throw java.lang.RuntimeException("Failed to read virtual file content", e)
+        }
+    }
 }
 
 data class SearchResult(val file: VirtualFile, val score: Int)

@@ -5,14 +5,12 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.readText
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
@@ -26,6 +24,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
+import ee.carlrobert.codegpt.util.file.FileUtil
 import java.awt.*
 import java.awt.event.ActionListener
 import javax.swing.JButton
@@ -174,8 +173,8 @@ class UserInputHeaderPanel(
             .filter { it.selected }
             .mapNotNull { tag ->
                 when (tag) {
-                    is FileTagDetails -> tag.virtualFile.readText()
-                    is EditorTagDetails -> tag.virtualFile.readText()
+                    is FileTagDetails -> FileUtil.readContent(tag.virtualFile)
+                    is EditorTagDetails -> FileUtil.readContent(tag.virtualFile)
                     else -> null
                 }
             }

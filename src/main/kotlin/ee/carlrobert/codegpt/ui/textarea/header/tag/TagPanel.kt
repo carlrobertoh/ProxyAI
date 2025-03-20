@@ -156,19 +156,6 @@ class SelectionTagPanel(
         cursor = Cursor(Cursor.DEFAULT_CURSOR)
     }
 
-    companion object {
-        fun getDefaultSelectionTagDetails(project: Project): TagDetails {
-            val editor = getSelectedEditor(project)
-            val selectionModel = editor?.selectionModel
-            val file = (editor as? EditorEx)?.virtualFile
-            return if (selectionModel?.hasSelection() == true && file != null) {
-                SelectionTagDetails(file, selectionModel)
-            } else {
-                EmptyTagDetails()
-            }
-        }
-    }
-
     init {
         isVisible = tagDetails !is EmptyTagDetails
     }

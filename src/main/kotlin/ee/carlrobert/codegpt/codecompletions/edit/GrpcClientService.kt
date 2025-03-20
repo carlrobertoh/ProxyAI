@@ -10,9 +10,9 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.jetbrains.rd.util.UUID
-import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer
@@ -69,7 +69,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         prevObserver?.onCompleted()
 
         val request = NextEditRequest.newBuilder()
-            .setFileName(editor.virtualFile.name)
+            .setFileName((editor as EditorEx).virtualFile.name)
             .setFileContent(editor.document.text)
             .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")
             .setCursorPosition(runReadAction { editor.caretModel.offset })
@@ -122,7 +122,6 @@ class GrpcClientService(private val project: Project) : Disposable {
         }
 
         override fun onCompleted() {
-            editor.project?.let { CompletionProgressNotifier.update(it, false) }
         }
     }
 
@@ -178,5 +177,8 @@ internal class ApiKeyCredentials(private val apiKey: String) : CallCredentials()
                 metadataApplier.fail(Status.UNAUTHENTICATED.withCause(e))
             }
         }
+    }
+
+    override fun thisUsesUnstableApi() {
     }
 }

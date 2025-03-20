@@ -10,7 +10,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
-import com.intellij.util.io.await
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import ee.carlrobert.codegpt.ui.textarea.header.tag.CurrentGitChangesTagDetails
@@ -164,7 +163,7 @@ class PsiStructureRepository(
                 }
                     .inSmartMode(project)
                     .submit(dispatchers.default().asExecutor())
-                    .await()
+                    .get()
 
                 val virtualFilesToRemoveFromStructure = tags.getExcludedVirtualFiles()
                 val result = psiStructureProvider.get(psiFiles)
