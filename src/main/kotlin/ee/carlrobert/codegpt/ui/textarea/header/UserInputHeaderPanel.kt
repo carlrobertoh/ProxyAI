@@ -25,6 +25,9 @@ import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
 import ee.carlrobert.codegpt.util.file.FileUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.awt.*
 import java.awt.event.ActionListener
 import javax.swing.JButton
@@ -169,17 +172,19 @@ class UserInputHeaderPanel(
     }
 
     private fun updateReferencedFilesTokens(tags: Set<TagDetails>) {
-        val referencedFileContents = tags.asSequence()
-            .filter { it.selected }
-            .mapNotNull { tag ->
-                when (tag) {
-                    is FileTagDetails -> FileUtil.readContent(tag.virtualFile)
-                    is EditorTagDetails -> FileUtil.readContent(tag.virtualFile)
-                    else -> null
+        CoroutineScope(Dispatchers.IO).launch {
+            val referencedFileContents = tags.asSequence()
+                .filter { it.selected }
+                .mapNotNull { tag ->
+                    when (tag) {
+                        is FileTagDetails -> FileUtil.readContent(tag.virtualFile)
+                        is EditorTagDetails -> FileUtil.readContent(tag.virtualFile)
+                        else -> null
+                    }
                 }
-            }
-            .toList()
-        totalTokensPanel.updateReferencedFilesTokens(referencedFileContents)
+                .toList()
+            totalTokensPanel.updateReferencedFilesTokens(referencedFileContents)
+        }
     }
 
     private fun initializeEventListeners() {
