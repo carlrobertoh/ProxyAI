@@ -3,15 +3,6 @@
 ProxyAI is an AI-powered code assistant designed to help you with various programming activities.
 It's a powerful alternative to GitHub Copilot, AI Assistant, Codiumate, and other JetBrains plugins.
 
-## Code Assistant <sup><small>(new)</small></sup>
-
-Get multi-line edits based on your recent activity, open files and previous chat interactions.
-
-ProxyAI is the first JetBrains extension capable of suggesting modifications beyond the
-current cursor location.
-
-Learn more in our recent [blog post](https://tryproxy.io/blog/introducing-code-assistant).
-
 ## Highly Configurable
 
 Access top-tier language models (LLMs) with your own API key or use privately hosted models within your corporate network.
@@ -53,8 +44,6 @@ Chat with your images. Upload manually or let ProxyAI auto-detect your screensho
 
 Quickly access and reference your project files and folders for context-aware coding assistance. 
 
-With our **$10** pricing plan, you can chat with files containing up to **200k tokens** using any of our offered models.
-
 ![Reference files and folders](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/reference-files-w800.png)
 
 **Reference web documentations**
@@ -81,9 +70,9 @@ Get helpful code completions as you type, edit your code using natural language,
 concise commit messages automatically, and more. ProxyAI equips you with cutting-edge tools to
 streamline your workflow.
 
-**Code Assistant <sup><small>(new)</small></sup>**
+**Next edits**
 
-Get multi-line edits based on your recent activity, open files and previous chat interactions.
+Get multi-line edits based on your recent activity as you type.
 
 ![Code assistant](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/code-assistant-w800.png)
 
@@ -123,14 +112,14 @@ Integrate local open-source language models into your coding environment and enj
 
 ## License
 
-CodeGPT's code is open source under the Apache License 2.0.
+ProxyAI's code is open source under the Apache License 2.0.
 
 ## Feedback
 
 Your input helps us grow. Reach out through:
 
 - [Homepage](https://proxyai.ee)
-- [Issue Tracker](https://github.com/carlrobertoh/CodeGPT/issues)
+- [Issue Tracker](https://github.com/carlrobertoh/ProxyAI/issues)
 - [Discord](https://discord.gg/8dTGGrwcnR)
 - [Email](mailto:carlrobertoh@gmail.com)
 

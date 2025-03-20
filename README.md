@@ -65,7 +65,7 @@ ProxyAI offers a wide range of features to enhance your development experience:
 ### Code
 
 
-- **Code Assistant <sup><small>(new)</small></sup>:** Get multi-line edits based on your recent activity, open files and previous chat interactions.
+- **Next edits:** Get multi-line edits based on your recent activity as you type.
 
 - **Autocomplete your code:** Receive single-line or whole-function autocomplete suggestions as you type.
 

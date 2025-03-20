@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support for multi-line edits (replaces the old Code Assistant logic)
+- Popup menu with close actions and other UX improvements for chat tags
+- Support for importing and exporting Custom OpenAI settings [#921](https://github.com/carlrobertoh/ProxyAI/pull/921)
+- Dependency structure analyser for chat (Kotlin) [#897](https://github.com/carlrobertoh/ProxyAI/pull/897)
+
 ## [3.0.0-223] - 2025-03-04
 
 ### Rebranding
