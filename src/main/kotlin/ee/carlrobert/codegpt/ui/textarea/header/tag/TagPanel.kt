@@ -9,7 +9,12 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.header.PaintUtil
-import java.awt.*
+import java.awt.Cursor
+import java.awt.Dimension
+import java.awt.Graphics
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import javax.swing.BorderFactory
 import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JToggleButton
@@ -46,7 +51,7 @@ abstract class TagPanel(
         val closeButtonWidth = if (closeButton.isVisible) closeButton.preferredSize.width else 0
         return Dimension(
             label.preferredSize.width + closeButtonWidth + insets.left + insets.right,
-            20
+            JBUI.scale(20)
         )
     }
 
@@ -134,8 +139,13 @@ abstract class TagPanel(
                 onClose()
             }
 
-            preferredSize = Dimension(Close.iconWidth, Close.iconHeight)
-            border = JBUI.Borders.emptyLeft(4)
+            val iconSize = Dimension(Close.iconWidth, Close.iconHeight)
+            preferredSize = iconSize
+            minimumSize = iconSize
+            maximumSize = iconSize
+
+            border = BorderFactory.createEmptyBorder(0, 4, 0, 4)
+
             isContentAreaFilled = false
             toolTipText = "Remove"
             rolloverIcon = AllIcons.Actions.CloseHovered
