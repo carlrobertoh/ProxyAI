@@ -12,7 +12,7 @@ class OllamaSettingsConfigurable : Configurable {
     private lateinit var component: OllamaSettingsForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: Ollama Service"
+        return "ProxyAI: Ollama Service"
     }
 
     override fun createComponent(): JComponent {

@@ -15,7 +15,7 @@ class LlamaServiceConfigurable : Configurable {
     private lateinit var component: LlamaSettingsForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: Custom Service"
+        return "ProxyAI: Custom Service"
     }
 
     override fun createComponent(): JComponent {

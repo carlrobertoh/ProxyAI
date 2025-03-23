@@ -10,12 +10,14 @@ import git4idea.GitCommit
 import java.util.*
 import javax.swing.Icon
 
-open class TagDetails(
-    open val name: String,
+sealed class TagDetails(
+    val name: String,
     val icon: Icon? = null,
-    open var selected: Boolean = true
+    val id: UUID = UUID.randomUUID(),
+    val createdOn: Long = System.currentTimeMillis()
 ) {
-    val id: UUID = UUID.randomUUID()
+
+    var selected: Boolean = true
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -28,8 +30,46 @@ open class TagDetails(
     }
 }
 
-data class FileTagDetails(var virtualFile: VirtualFile) :
-    TagDetails(virtualFile.name, virtualFile.fileType.icon)
+class EditorTagDetails(val virtualFile: VirtualFile) : TagDetails(virtualFile.name, virtualFile.fileType.icon) {
+
+    private val type: String = "EditorTagDetails"
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as EditorTagDetails
+
+        if (virtualFile != other.virtualFile) return false
+        if (type != other.type) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int =
+        31 * virtualFile.hashCode() + type.hashCode()
+
+}
+
+class FileTagDetails(val virtualFile: VirtualFile) : TagDetails(virtualFile.name, virtualFile.fileType.icon) {
+
+    private val type: String = "FileTagDetails"
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as FileTagDetails
+
+        if (virtualFile != other.virtualFile) return false
+        if (type != other.type) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int =
+        31 * virtualFile.hashCode() + type.hashCode()
+}
 
 data class SelectionTagDetails(
     var virtualFile: VirtualFile,
@@ -40,6 +80,26 @@ data class SelectionTagDetails(
 ) {
     var selectedText: String? = selectionModel.selectedText
         private set
+}
+
+class EditorSelectionTagDetails(
+    val virtualFile: VirtualFile,
+    val selectionModel: SelectionModel
+) : TagDetails(
+    "${virtualFile.name} (${selectionModel.selectionStartPosition?.line}:${selectionModel.selectionEndPosition?.line})",
+    virtualFile.fileType.icon
+) {
+    var selectedText: String? = selectionModel.selectedText
+        private set
+
+    override fun equals(other: Any?): Boolean {
+        if (other === null) return false
+        return other::class == this::class
+    }
+
+    override fun hashCode(): Int {
+        return this::class.hashCode()
+    }
 }
 
 data class DocumentationTagDetails(var documentationDetails: DocumentationDetails) :

@@ -6,14 +6,17 @@ import com.intellij.ide.HelpTooltip
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.ui.MessageType
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.*
+import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
 import com.intellij.ui.EnumComboBoxModel
 import com.intellij.ui.ToolbarDecorator
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBList
-import com.intellij.ui.components.JBPasswordField
-import com.intellij.ui.components.JBTextField
+import com.intellij.ui.components.*
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -22,27 +25,24 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
+import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceSettingsData
 import ee.carlrobert.codegpt.settings.service.custom.form.model.mapToData
 import ee.carlrobert.codegpt.settings.service.custom.form.model.mapToState
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTemplate
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.runBlocking
 import okhttp3.internal.toImmutableList
+import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.net.MalformedURLException
 import java.net.URL
-import javax.swing.Box
-import javax.swing.JPanel
-import javax.swing.JTabbedPane
-import javax.swing.ListSelectionModel
+import javax.swing.*
 
 class CustomServiceListForm(
     private val service: CustomServicesSettings,
@@ -50,6 +50,9 @@ class CustomServiceListForm(
 ) {
 
     private val formState = MutableStateFlow(service.state.mapToData())
+
+    private val project = ProjectManager.getInstance().defaultProject
+    private val customSettingsFileProvider = CustomSettingsFileProvider()
 
     private var lastSelectedIndex = 0
 
@@ -91,6 +94,8 @@ class CustomServiceListForm(
     private val chatCompletionsForm: CustomServiceChatCompletionForm
     private val codeCompletionsForm: CustomServiceCodeCompletionForm
     private val tabbedPane: JTabbedPane
+    private val exportButton: JButton
+    private val importButton: JButton
 
     init {
         val selectedItem = formState.value.services.first()
@@ -100,7 +105,7 @@ class CustomServiceListForm(
         }
         chatCompletionsForm = CustomServiceChatCompletionForm(selectedItem.chatCompletionSettings, this::getApiKey)
         codeCompletionsForm = CustomServiceCodeCompletionForm(selectedItem.codeCompletionSettings, this::getApiKey)
-        tabbedPane = JTabbedPane().apply {
+        tabbedPane = JBTabbedPane().apply {
             add(CodeGPTBundle.get("shared.chatCompletions"), chatCompletionsForm.form)
             add(CodeGPTBundle.get("shared.codeCompletions"), codeCompletionsForm.form)
             templateComboBox.selectedItem = selectedItem.template
@@ -127,6 +132,12 @@ class CustomServiceListForm(
                 tabbedPane.setEnabledAt(1, false)
             }
         }
+        exportButton = JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportSettings")).apply {
+            addActionListener { exportSettingsToFile() }
+        }
+        importButton = JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.importSettings")).apply {
+            addActionListener { importSettingsFromFile() }
+        }
         updateTemplateHelpTextTooltip(selectedItem.template)
     }
 
@@ -150,6 +161,7 @@ class CustomServiceListForm(
         }
         apiKeyField.text = selectedItem.apiKey
         nameField.text = selectedItem.name
+        templateComboBox.selectedItem = selectedItem.template
         updateTemplateHelpTextTooltip(selectedItem.template)
     }
 
@@ -188,8 +200,23 @@ class CustomServiceListForm(
 
     fun getForm(): JPanel =
         BorderLayoutPanel(8, 0)
+            .addToTop(createImportExportPanel())
             .addToLeft(createToolbarDecorator().createPanel())
             .addToCenter(createContentPanel())
+
+    private fun createImportExportPanel() = FormBuilder.createFormBuilder()
+        .addComponent(
+            JPanel(BorderLayout()).apply {
+                add(
+                    JPanel(FlowLayout()).apply {
+                        add(importButton)
+                        add(exportButton)
+                    }, BorderLayout.WEST
+                )
+            }
+        )
+        .addVerticalGap(4)
+        .panel
 
     private fun createToolbarDecorator(): ToolbarDecorator =
         ToolbarDecorator.createDecorator(customProvidersJBList)
@@ -284,6 +311,115 @@ class CustomServiceListForm(
     fun isModified(): Boolean {
         updateStateFromForm(lastSelectedIndex)
         return service.state.mapToData() != formState.value
+    }
+
+    private fun exportSettingsToFile() {
+        val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val defaultSettingsFileName = "CustomOpenAiSettings.json"
+
+        val fileNameTextField = JBTextField(defaultSettingsFileName).apply {
+            columns = 20
+        }
+        val fileChooserDescriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
+            isForcedToUseIdeaFileChooser = true
+        }
+        val textFieldWithBrowseButton = TextFieldWithBrowseButton().apply {
+            text = project.basePath ?: System.getProperty("user.home")
+            addBrowseFolderListener(
+                TextBrowseFolderListener(fileChooserDescriptor, project)
+            )
+        }
+
+        val result = exportSettingsDialog(
+            fileNameTextField = fileNameTextField,
+            filePathButton = textFieldWithBrowseButton
+        ).show()
+
+        val fileName = fileNameTextField.text.ifEmpty { defaultSettingsFileName }
+        val filePath = textFieldWithBrowseButton.text
+
+        if (result == OK_EXIT_CODE) {
+            val fullFilePath = "$filePath/$fileName"
+            coroutineScope.launch {
+                runCatching {
+                    customSettingsFileProvider.writeSettings(
+                        path = fullFilePath,
+                        data = formState.value.services,
+                    )
+                }.onFailure {
+                    showExportErrorMessage()
+                }
+            }
+        }
+    }
+
+    private fun importSettingsFromFile() {
+        val fileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileDescriptor()
+            .apply { isForcedToUseIdeaFileChooser = true }
+
+        FileChooser.chooseFile(fileChooserDescriptor, project, null)?.let { file ->
+            ReadAction.nonBlocking<List<CustomServiceSettingsData>> {
+                file.canonicalPath?.let {
+                    customSettingsFileProvider.readFromFile(it)
+                }
+            }
+                .inSmartMode(project)
+                .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
+                    if (settings != null) {
+                        val newActualService = settings.firstOrNull { it.name == formState.value.active.name }
+                            ?: settings.first()
+
+                        service.state.run {
+                            services = settings.mapTo(mutableListOf()) { it.mapToState() }
+                            active = newActualService.mapToState()
+                        }
+                        formState.update {
+                            service.state.mapToData()
+                        }
+                    }
+                }
+                .submit(AppExecutorUtil.getAppExecutorService())
+                .onError { showImportErrorMessage() }
+        }
+    }
+
+    private fun exportSettingsDialog(
+        fileNameTextField: JBTextField,
+        filePathButton: TextFieldWithBrowseButton,
+    ): DialogBuilder {
+        val form = FormBuilder.createFormBuilder()
+            .addLabeledComponent(
+                CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.filename"),
+                fileNameTextField
+            )
+            .addLabeledComponent(
+                CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.saveTo"),
+                filePathButton
+            )
+            .panel
+
+        return DialogBuilder().apply {
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.title")
+            centerPanel(form)
+            addOkAction()
+            addCancelAction()
+        }
+    }
+
+    private fun showExportErrorMessage() {
+        OverlayUtil.showBalloon(
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.exportError"),
+            MessageType.ERROR,
+            exportButton,
+        )
+    }
+
+    private fun showImportErrorMessage() {
+        OverlayUtil.showBalloon(
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.importError"),
+            MessageType.ERROR,
+            importButton,
+        )
     }
 
     fun applyChanges() {

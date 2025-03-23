@@ -1,6 +1,6 @@
 package ee.carlrobert.codegpt.codecompletions
 
-import ee.carlrobert.codegpt.codecompletions.psi.structure.ClassStructureSerializer
+import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import org.jetbrains.kotlin.utils.addToStdlib.ifNotEmpty
 
 enum class InfillPromptTemplate(val label: String, val stopTokens: List<String>? = listOf("\n\n")) {

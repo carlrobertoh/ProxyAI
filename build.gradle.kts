@@ -24,6 +24,7 @@ fun environment(key: String) = providers.environmentVariable(key)
 plugins {
   id("codegpt.java-conventions")
   alias(libs.plugins.changelog)
+  alias(libs.plugins.protobuf)
 }
 
 group = properties("pluginGroup").get()
@@ -67,6 +68,9 @@ dependencies {
   implementation(libs.jsoup)
   implementation(libs.commons.text)
   implementation(libs.jtokkit)
+  implementation(libs.grpc.protobuf)
+  implementation(libs.grpc.stub)
+  implementation(libs.grpc.netty.shaded)
   testImplementation(kotlin("test"))
 }
 
@@ -124,7 +128,7 @@ tasks {
     enabled = true
     dependsOn("updateSubmodules")
     from("src/main/cpp/llama.cpp") {
-      into("CodeGPT/llama.cpp")
+      into("ProxyAI/llama.cpp")
     }
   }
 
@@ -160,5 +164,24 @@ tasks {
       exceptionFormat = TestExceptionFormat.FULL
       showStandardStreams = true
     }
+  }
+}
+
+protobuf {
+  protoc {
+    artifact = libs.protobuf.protoc.get().toString()
+  }
+  plugins {
+    create("grpc") {
+      artifact = libs.protobuf.java.get().toString()
+    }
+  }
+  generateProtoTasks {
+    all()
+      .forEach {
+          it.plugins {
+            create("grpc")
+          }
+      }
   }
 }

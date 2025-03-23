@@ -26,6 +26,7 @@ import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupListener;
 import com.intellij.openapi.ui.popup.LightweightWindowEvent;
 import com.intellij.openapi.ui.popup.ListPopup;
+import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.CodeGPTKeys;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
@@ -133,7 +134,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
     var actionGroup = new DefaultActionGroup();
 
     if (availableProviders.contains(CODEGPT)) {
-      actionGroup.addSeparator("CodeGPT");
+      actionGroup.addSeparator(CodeGPTBundle.get("project.label"));
       actionGroup.addAll(getCodeGPTModelActions(project, presentation));
       actionGroup.addSeparator();
     }

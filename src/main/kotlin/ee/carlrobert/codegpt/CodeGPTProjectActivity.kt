@@ -13,7 +13,7 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTService
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier
 import ee.carlrobert.codegpt.ui.OverlayUtil
-import io.ktor.util.*
+import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
@@ -34,13 +34,23 @@ class CodeGPTProjectActivity : ProjectActivity {
         ) {
             val desktopPath = Paths.get(System.getProperty("user.home"), "Desktop")
             project.service<FileWatcher>().watch(desktopPath) {
-                if (watchExtensions.contains(it.extension.lowercase())) {
+                if (watchExtensions.contains(getFileExtension(it))) {
                     showImageAttachmentNotification(
                         project,
                         desktopPath.resolve(it).absolutePathString()
                     )
                 }
             }
+        }
+    }
+
+    private fun getFileExtension(path: Path): String {
+        val fileName = path.fileName.toString()
+        val lastIndexOfDot = fileName.lastIndexOf('.')
+        return if (lastIndexOfDot != -1) {
+            fileName.substring(lastIndexOfDot + 1).lowercase()
+        } else {
+            ""
         }
     }
 

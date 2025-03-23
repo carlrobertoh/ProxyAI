@@ -41,10 +41,10 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
       panel.addContent(UIUtil.createTextPane("""
               <html>
               <p style="margin-top: 4px; margin-bottom: 4px;">
-                It looks like you haven't configured your API key yet. Visit <a href="#OPEN_SETTINGS">CodeGPT settings</a> to do so.
+                It looks like you haven't configured your API key yet. Visit <a href="#OPEN_SETTINGS">ProxyAI settings</a> to do so.
               </p>
               <p style="margin-top: 4px; margin-bottom: 4px;">
-                Don't have an account? <a href="https://codegpt.ee">Sign up</a> to get the most out of CodeGPT.
+                Don't have an account? <a href="https://tryproxy.io/signin">Sign up</a> to get the most out of ProxyAI.
               </p>
               </html>""",
           false,

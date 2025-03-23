@@ -9,7 +9,6 @@ import static java.util.Objects.requireNonNull;
 
 import com.intellij.execution.ExecutionBundle;
 import com.intellij.notification.Notification;
-import com.intellij.notification.NotificationGroup;
 import com.intellij.notification.NotificationListener;
 import com.intellij.notification.NotificationType;
 import com.intellij.notification.Notifications;
@@ -36,8 +35,8 @@ import org.jetbrains.annotations.NotNull;
 
 public class OverlayUtil {
 
-  public static final String NOTIFICATION_GROUP_ID = "CodeGPT Notification Group";
-  public static final String NOTIFICATION_GROUP_STICKY_ID = "CodeGPT Notification Group Sticky";
+  public static final String NOTIFICATION_GROUP_ID = "proxyai.notification.group";
+  public static final String NOTIFICATION_GROUP_STICKY_ID = "proxyai.notification.sticky.group";
 
   private OverlayUtil() {
   }
@@ -49,7 +48,8 @@ public class OverlayUtil {
 
   public static Notification getDefaultNotification(
       @NotNull String content, @NotNull NotificationType type, @NotNull AnAction... actions) {
-    var notification = new Notification(NOTIFICATION_GROUP_ID, "CodeGPT", content, type);
+    var notification =
+        new Notification(NOTIFICATION_GROUP_ID, CodeGPTBundle.get("project.label"), content, type);
     notification.setListener(new NotificationListener.UrlOpeningListener(true));
     Arrays.asList(actions).forEach(notification::addAction);
     return notification;
@@ -62,7 +62,11 @@ public class OverlayUtil {
 
   public static Notification getStickyNotification(
       @NotNull String content, @NotNull NotificationType type, @NotNull AnAction... actions) {
-    var notification = new Notification(NOTIFICATION_GROUP_STICKY_ID, "CodeGPT", content, type);
+    var notification = new Notification(
+        NOTIFICATION_GROUP_STICKY_ID,
+        CodeGPTBundle.get("project.label"),
+        content,
+        type);
     Arrays.asList(actions).forEach(notification::addAction);
     return notification;
   }

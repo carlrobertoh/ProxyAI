@@ -69,7 +69,7 @@ private fun getDefaultHeaders(key: String, value: String): MutableMap<String, St
 private fun getDefaultHeaders(additionalHeaders: Map<String, String>): MutableMap<String, String> {
     val defaultHeaders = mutableMapOf(
         "Content-Type" to "application/json",
-        "X-LLM-Application-Tag" to "codegpt"
+        "X-LLM-Application-Tag" to "proxyai"
     )
     defaultHeaders.putAll(additionalHeaders)
     return defaultHeaders

@@ -7,6 +7,7 @@ public class TotalTokensDetails {
   private int userPromptTokens;
   private int highlightedTokens;
   private int referencedFilesTokens;
+  private int psiTokens;
 
   public TotalTokensDetails(int systemPromptTokens) {
     this.systemPromptTokens = systemPromptTokens;
@@ -48,11 +49,20 @@ public class TotalTokensDetails {
     return referencedFilesTokens;
   }
 
+  public void setPsiTokens(int psiTokens) {
+    this.psiTokens = psiTokens;
+  }
+
+  public int getPsiTokens() {
+    return psiTokens;
+  }
+
   public int getTotal() {
     return systemPromptTokens
         + conversationTokens
         + userPromptTokens
         + highlightedTokens
-        + referencedFilesTokens;
+        + referencedFilesTokens
+        + psiTokens;
   }
 }

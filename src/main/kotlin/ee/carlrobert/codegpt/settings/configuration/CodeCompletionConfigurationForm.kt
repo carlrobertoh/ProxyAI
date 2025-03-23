@@ -4,6 +4,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 
 class CodeCompletionConfigurationForm {
@@ -44,7 +45,7 @@ class CodeCompletionConfigurationForm {
                 cell(collectDependencyStructureBox)
                     .comment(CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.collectDependencyStructure.description"))
             }
-        }
+        }.withBorder(JBUI.Borders.emptyLeft(16))
     }
 
     fun resetForm(prevState: CodeCompletionSettingsState) {

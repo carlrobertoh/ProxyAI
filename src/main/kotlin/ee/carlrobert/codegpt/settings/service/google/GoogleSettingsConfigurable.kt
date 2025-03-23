@@ -14,7 +14,7 @@ class GoogleSettingsConfigurable : Configurable {
     private lateinit var component: GoogleSettingsForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: Google Service"
+        return "ProxyAI: Google Service"
     }
 
     override fun createComponent(): JComponent {

@@ -52,7 +52,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     imageFileAttachmentNotification = new ToolWindowFooterNotification(() ->
         project.putUserData(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH, ""));
     upgradePlanLink = new ActionLink("Upgrade your plan", event -> {
-      BrowserUtil.browse("https://codegpt.ee/#pricing");
+      BrowserUtil.browse("https://tryproxy.io/#pricing");
     });
     upgradePlanLink.setFont(JBUI.Fonts.smallFont());
     upgradePlanLink.setExternalLinkIcon();
