@@ -369,13 +369,10 @@ class CustomServiceListForm(
                         val newActualService = settings.firstOrNull { it.name == formState.value.active.name }
                             ?: settings.first()
 
-                        service.state.run {
-                            services = settings.mapTo(mutableListOf()) { it.mapToState() }
-                            active = newActualService.mapToState()
+                        formState.update { state ->
+                            state.copy(services = settings, active = newActualService)
                         }
-                        formState.update {
-                            service.state.mapToData()
-                        }
+                        updateFormData(0)
                     }
                 }
                 .submit(AppExecutorUtil.getAppExecutorService())
