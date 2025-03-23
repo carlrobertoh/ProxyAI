@@ -3,12 +3,9 @@ package ee.carlrobert.codegpt.util.coroutines
 import com.intellij.openapi.application.ModalityState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainCoroutineDispatcher
 
 class CoroutineDispatchers {
     fun default(): CoroutineDispatcher = Dispatchers.Default
-
-    fun main(): MainCoroutineDispatcher = Dispatchers.Main
 
     fun unconfined(): CoroutineDispatcher = Dispatchers.Unconfined
 

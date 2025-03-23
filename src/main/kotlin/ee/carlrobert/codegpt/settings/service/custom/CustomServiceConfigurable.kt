@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.settings.service.custom
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import ee.carlrobert.codegpt.settings.service.custom.form.CustomServiceListForm
+import ee.carlrobert.codegpt.util.coroutines.EdtDispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -11,7 +12,7 @@ import javax.swing.JComponent
 
 class CustomServiceConfigurable : Configurable {
 
-    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val coroutineScope = CoroutineScope(SupervisorJob() + EdtDispatchers.Default)
     private lateinit var component: CustomServiceListForm
 
     override fun getDisplayName(): String {
