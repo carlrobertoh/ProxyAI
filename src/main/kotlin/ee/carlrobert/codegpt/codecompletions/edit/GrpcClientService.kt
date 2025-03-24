@@ -89,7 +89,10 @@ class GrpcClientService(private val project: Project) : Disposable {
     ) : StreamObserver<NextEditResponse> {
         override fun onNext(response: NextEditResponse) {
             runInEdt {
-                if (LookupManager.getActiveLookup(editor) == null) {
+                val documentText = editor.document.text
+                if (LookupManager.getActiveLookup(editor) == null
+                    && documentText != response.nextRevision
+                    && documentText == response.oldRevision) {
                     CodeSuggestionDiffViewer.displayInlineDiff(editor, response, isManuallyOpened)
                 }
             }
