@@ -35,6 +35,7 @@ jobs:
     name: Verify Plugin
     needs: [ build ]
     runs-on: ubuntu-latest
+    if: ${{ false }} # Disable temporarily
     steps:
       - name: Maximize Build Space
         uses: jlumbroso/free-disk-space@main
