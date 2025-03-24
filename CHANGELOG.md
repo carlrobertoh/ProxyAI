@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Re-add logic to include the active editor selection when creating a new chat
+
+### Fixed
+
+- Custom OpenAI settings UI [#938](https://github.com/carlrobertoh/ProxyAI/pull/938)
+- Suggestions popup positioning and tag panel styling [#934](https://github.com/carlrobertoh/ProxyAI/pull/934)
+- Typo in Rubber Duck persona [#892](https://github.com/carlrobertoh/ProxyAI/pull/892)
+- Prompts configuration [#933](https://github.com/carlrobertoh/ProxyAI/pull/933)
+
 ## [3.1.0-223] - 2025-03-20
 
 ### Added
