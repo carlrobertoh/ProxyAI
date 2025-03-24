@@ -21,6 +21,7 @@ message NextEditRequest {
 message NextEditResponse {
   string id = 1;
   string next_revision = 2;
+  string old_revision = 3;
 }
 
 message AcceptEditRequest {
