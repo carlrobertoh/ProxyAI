@@ -34,12 +34,14 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
+import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
+import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import git4idea.GitCommit
@@ -119,6 +121,17 @@ class UserInputPanel(
         add(userInputHeaderPanel, BorderLayout.NORTH)
         add(promptTextField, BorderLayout.CENTER)
         add(getFooter(), BorderLayout.SOUTH)
+
+        EditorUtil.getSelectedEditor(project)?.let { editor ->
+            if (EditorUtil.hasSelection(editor)) {
+                tagManager.addTag(
+                    EditorSelectionTagDetails(
+                        editor.virtualFile,
+                        editor.selectionModel
+                    )
+                )
+            }
+        }
 
         Disposer.register(parentDisposable, promptTextField)
     }
