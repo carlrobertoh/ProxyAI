@@ -17,10 +17,12 @@ import com.intellij.openapi.util.Disposer;
 import com.intellij.ui.components.ActionLink;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.JBUI.CurrentTheme.Link;
+import com.intellij.util.ui.components.BorderLayoutPanel;
 import ee.carlrobert.codegpt.CodeGPTKeys;
 import ee.carlrobert.codegpt.actions.toolwindow.ClearChatWindowAction;
 import ee.carlrobert.codegpt.actions.toolwindow.CreateNewConversationAction;
 import ee.carlrobert.codegpt.actions.toolwindow.OpenInEditorAction;
+import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.ConversationsState;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
@@ -33,18 +35,15 @@ import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ToolWindowFooterNotification;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier;
 import ee.carlrobert.llm.client.codegpt.PricingPlan;
-import java.awt.BorderLayout;
 import java.nio.file.Path;
-import javax.swing.BoxLayout;
 import javax.swing.JComponent;
-import javax.swing.JPanel;
 import org.jetbrains.annotations.NotNull;
 
 public class ChatToolWindowPanel extends SimpleToolWindowPanel {
 
   private final ToolWindowFooterNotification imageFileAttachmentNotification;
   private final ActionLink upgradePlanLink;
-  private ChatToolWindowTabbedPane tabbedPane;
+  private final ChatToolWindowTabbedPane tabbedPane;
 
   public ChatToolWindowPanel(
       @NotNull Project project,
@@ -53,16 +52,31 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     imageFileAttachmentNotification = new ToolWindowFooterNotification(() ->
         project.putUserData(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH, ""));
     upgradePlanLink = new ActionLink("Upgrade your plan", event -> {
-      BrowserUtil.browse("https://codegpt.ee/#pricing");
+      BrowserUtil.browse("https://tryproxy.io/#pricing");
     });
     upgradePlanLink.setFont(JBUI.Fonts.smallFont());
     upgradePlanLink.setExternalLinkIcon();
     upgradePlanLink.setVisible(false);
 
-    ApplicationManager.getApplication().invokeLater(() -> {
-      init(project, parentDisposable);
-    });
+    var tabPanel = new ChatToolWindowTabPanel(project, getConversation());
+    tabbedPane = new ChatToolWindowTabbedPane(parentDisposable);
+    tabbedPane.addNewTab(tabPanel);
 
+    initToolWindowPanel(project);
+    initializeEventListeners(project);
+
+    Disposer.register(parentDisposable, tabPanel);
+  }
+
+  private Conversation getConversation() {
+    var conversation = ConversationsState.getCurrentConversation();
+    if (conversation == null) {
+      return ConversationService.getInstance().startConversation();
+    }
+    return conversation;
+  }
+
+  private void initializeEventListeners(Project project) {
     var messageBusConnection = project.getMessageBus().connect();
     messageBusConnection.subscribe(AttachImageNotifier.IMAGE_ATTACHMENT_FILE_PATH_TOPIC,
         (AttachImageNotifier) filePath -> imageFileAttachmentNotification.show(
@@ -100,14 +114,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     project.putUserData(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH, "");
   }
 
-  private void init(Project project, Disposable parentDisposable) {
-    var conversation = ConversationsState.getCurrentConversation();
-    if (conversation == null) {
-      conversation = ConversationService.getInstance().startConversation();
-    }
-
-    var tabPanel = new ChatToolWindowTabPanel(project, conversation);
-    tabbedPane = createTabbedPane(tabPanel, parentDisposable);
+  private void initToolWindowPanel(Project project) {
     Runnable onAddNewTab = () -> {
       tabbedPane.addNewTab(new ChatToolWindowTabPanel(
           project,
@@ -115,19 +122,15 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
       repaint();
       revalidate();
     };
-    var actionToolbarPanel = new JPanel(new BorderLayout());
-    actionToolbarPanel.add(
-        createActionToolbar(project, tabbedPane, onAddNewTab).getComponent(),
-        BorderLayout.LINE_START);
-    actionToolbarPanel.add(upgradePlanLink, BorderLayout.LINE_END);
 
-    setToolbar(actionToolbarPanel);
-    var notificationContainer = new JPanel(new BorderLayout());
-    notificationContainer.setLayout(new BoxLayout(notificationContainer, BoxLayout.PAGE_AXIS));
-    notificationContainer.add(imageFileAttachmentNotification);
-    setContent(JBUI.Panels.simplePanel(tabbedPane).addToBottom(notificationContainer));
-
-    Disposer.register(parentDisposable, tabPanel);
+    ApplicationManager.getApplication().invokeLater(() -> {
+      setToolbar(new BorderLayoutPanel()
+          .addToLeft(createActionToolbar(project, tabbedPane, onAddNewTab).getComponent())
+          .addToRight(upgradePlanLink));
+      setContent(new BorderLayoutPanel()
+          .addToCenter(tabbedPane)
+          .addToBottom(imageFileAttachmentNotification));
+    });
   }
 
   private ActionToolbar createActionToolbar(
@@ -148,15 +151,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     toolbar.setTargetComponent(this);
     return toolbar;
   }
-
-  private ChatToolWindowTabbedPane createTabbedPane(
-      ChatToolWindowTabPanel tabPanel,
-      Disposable parentDisposable) {
-    var tabbedPane = new ChatToolWindowTabbedPane(parentDisposable);
-    tabbedPane.addNewTab(tabPanel);
-    return tabbedPane;
-  }
-
+  
   private static class SelectedPersonaActionLink extends DumbAwareAction implements
       CustomComponentAction {
 

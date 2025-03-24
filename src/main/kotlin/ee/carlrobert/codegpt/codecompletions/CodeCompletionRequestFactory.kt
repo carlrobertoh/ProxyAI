@@ -8,7 +8,7 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.Placeholder.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettings
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettingsState
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
@@ -53,8 +53,9 @@ object CodeCompletionRequestFactory {
 
     @JvmStatic
     fun buildCustomRequest(details: InfillRequest): Request {
-        val settings = service<CustomServiceSettings>().state.codeCompletionSettings
-        val credential = getCredential(CredentialKey.CUSTOM_SERVICE_API_KEY)
+        val activeService = service<CustomServicesSettings>().state.active
+        val settings = activeService.codeCompletionSettings
+        val credential = getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
         return buildCustomRequest(
             details,
             settings.url!!,

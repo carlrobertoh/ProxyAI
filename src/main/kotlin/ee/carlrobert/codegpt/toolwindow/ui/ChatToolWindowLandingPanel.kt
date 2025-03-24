@@ -56,7 +56,7 @@ class ChatToolWindowLandingPanel(onAction: (LandingPanelAction, Point) -> Unit) 
         return """
             <html>
             <p style="margin-top: 4px; margin-bottom: 4px;">
-            Hi <strong>${GeneralSettings.getCurrentState().displayName}</strong>, I'm CodeGPT! You can ask me anything, but most people request help with their code. Here are a few examples of what you can ask me:
+            Hi <strong>${GeneralSettings.getCurrentState().displayName}</strong>, I'm ProxyAI! You can ask me anything, but most people request help with their code. Here are a few examples of what you can ask me:
             </p>
             </html>
         """.trimIndent()

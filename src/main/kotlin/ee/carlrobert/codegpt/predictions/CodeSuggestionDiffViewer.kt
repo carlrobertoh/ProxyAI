@@ -6,7 +6,6 @@ import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffContext
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.diff.tools.combined.COMBINED_DIFF_MAIN_UI
 import com.intellij.diff.tools.fragmented.UnifiedDiffChange
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.util.DiffUtil
@@ -22,26 +21,26 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.event.VisibleAreaEvent
 import com.intellij.openapi.editor.event.VisibleAreaListener
 import com.intellij.openapi.keymap.KeymapUtil
-import com.intellij.openapi.observable.util.whenDisposed
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
-import com.intellij.openapi.util.Key
-import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.util.UserDataHolder
-import com.intellij.openapi.util.UserDataHolderBase
+import com.intellij.openapi.util.*
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.util.application
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
+import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.service.NextEditResponse
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Point
+import java.util.*
 import javax.swing.Box
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -51,6 +50,7 @@ import kotlin.math.max
 
 class CodeSuggestionDiffViewer(
     request: DiffRequest,
+    private val responseId: UUID,
     private val mainEditor: Editor,
     private val isManuallyOpened: Boolean
 ) : UnifiedDiffViewer(MyDiffContext(mainEditor.project), request), Disposable {
@@ -67,9 +67,8 @@ class CodeSuggestionDiffViewer(
         setupDiffEditor()
         mainEditor.scrollingModel.addVisibleAreaListener(visibleAreaListener)
         mainEditor.document.addDocumentListener(documentListener, this)
-        popup.whenDisposed {
-            clearListeners()
-        }
+
+        Disposer.register(popup) { clearListeners() }
     }
 
     override fun onDispose() {
@@ -123,6 +122,10 @@ class CodeSuggestionDiffViewer(
 
         if (changes.size == 1) {
             popup.dispose()
+        }
+
+        application.executeOnPooledThread {
+            project?.service<GrpcClientService>()?.acceptEdit(responseId, change.toString())
         }
     }
 
@@ -203,10 +206,11 @@ class CodeSuggestionDiffViewer(
 
         myEditor.component.add(
             BorderLayoutPanel()
-                .addToRight(JBLabel(footerText)
-                    .apply {
-                        font = JBUI.Fonts.miniFont()
-                    })
+                .addToRight(
+                    JBLabel(footerText)
+                        .apply {
+                            font = JBUI.Fonts.miniFont()
+                        })
                 .apply {
                     background = editor.backgroundColor
                     border = JBUI.Borders.empty(4)
@@ -265,15 +269,19 @@ class CodeSuggestionDiffViewer(
     }
 
     private class MyDiffContext(private val project: Project?) : DiffContext() {
-        private val mainUi get() = getUserData(COMBINED_DIFF_MAIN_UI)
-
         private val ownContext: UserDataHolder = UserDataHolderBase()
 
         override fun getProject() = project
-        override fun isFocusedInWindow(): Boolean = mainUi?.isFocusedInWindow() ?: false
-        override fun isWindowFocused(): Boolean = mainUi?.isWindowFocused() ?: false
+
+        override fun isFocusedInWindow(): Boolean {
+            return false
+        }
+
+        override fun isWindowFocused(): Boolean {
+            return false
+        }
+
         override fun requestFocusInWindow() {
-            mainUi?.requestFocusInWindow()
         }
 
         override fun <T> getUserData(key: Key<T>): T? {
@@ -290,10 +298,11 @@ class CodeSuggestionDiffViewer(
         @RequiresEdt
         fun displayInlineDiff(
             editor: Editor,
-            nextRevision: String,
+            nextEditResponse: NextEditResponse,
             isManuallyOpened: Boolean = false
         ) {
-            if (editor.virtualFile == null || editor.isViewer) {
+            val nextRevision = nextEditResponse.nextRevision
+            if (editor.virtualFile == null || editor.isViewer || nextRevision.isEmpty()) {
                 return
             }
 
@@ -306,7 +315,12 @@ class CodeSuggestionDiffViewer(
             }
 
             val diffRequest = createSimpleDiffRequest(editor, nextRevision)
-            val diffViewer = CodeSuggestionDiffViewer(diffRequest, editor, isManuallyOpened)
+            val diffViewer = CodeSuggestionDiffViewer(
+                diffRequest,
+                UUID.fromString(nextEditResponse.id),
+                editor,
+                isManuallyOpened
+            )
             editor.putUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER, diffViewer)
             diffViewer.rediff(true)
         }

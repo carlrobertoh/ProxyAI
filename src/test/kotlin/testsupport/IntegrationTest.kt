@@ -16,7 +16,6 @@ open class IntegrationTest : BasePlatformTestCase(), ExternalServiceTestMixin, S
     }
 
     private fun clearKeys() {
-        putUserData(CodeGPTKeys.PREVIOUS_INLAY_TEXT, "")
         putUserData(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH, "")
     }
 

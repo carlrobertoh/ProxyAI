@@ -7,7 +7,7 @@ import ee.carlrobert.codegpt.completions.ChatCompletionParameters
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
-import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettings
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 import ee.carlrobert.llm.completion.CompletionRequest
@@ -20,13 +20,14 @@ class CustomOpenAIRequest(val request: Request) : CompletionRequest
 class CustomOpenAIRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): CustomOpenAIRequest {
+        val activeService = service<CustomServicesSettings>()
+            .state
+            .active
         val request = buildCustomOpenAIChatCompletionRequest(
-            service<CustomServiceSettings>()
-                .state
-                .chatCompletionSettings,
-            OpenAIRequestFactory.buildOpenAIMessages(null, params),
+            activeService.chatCompletionSettings,
+            OpenAIRequestFactory.buildOpenAIMessages(null, params, params.referencedFiles, params.psiStructure),
             true,
-            getCredential(CredentialKey.CUSTOM_SERVICE_API_KEY)
+            getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
         )
         return CustomOpenAIRequest(request)
     }
@@ -37,14 +38,17 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
         maxTokens: Int,
         stream: Boolean
     ): CompletionRequest {
+        val activeService = service<CustomServicesSettings>()
+            .state
+            .active
         val request = buildCustomOpenAIChatCompletionRequest(
-            service<CustomServiceSettings>().state.chatCompletionSettings,
+            activeService.chatCompletionSettings,
             listOf(
                 OpenAIChatCompletionStandardMessage("system", systemPrompt),
                 OpenAIChatCompletionStandardMessage("user", userPrompt)
             ),
             stream,
-            getCredential(CredentialKey.CUSTOM_SERVICE_API_KEY)
+            getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
         )
         return CustomOpenAIRequest(request)
     }

@@ -2,16 +2,16 @@ package ee.carlrobert.codegpt.settings.service.google
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.ui.EnumComboBoxModel
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.util.ui.FormBuilder
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.GOOGLE_API_KEY
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.GoogleApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.llm.client.google.models.GoogleModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import javax.swing.DefaultComboBoxModel
 import javax.swing.JPanel
 
 class GoogleSettingsForm {
@@ -23,14 +23,20 @@ class GoogleSettingsForm {
         val state = service<GoogleSettings>().state
         apiKeyField.columns = 30
         apiKeyField.text = runBlocking(Dispatchers.IO) {
-            getCredential(GOOGLE_API_KEY)
+            getCredential(GoogleApiKey)
         }
         completionModelComboBox = ComboBox(
-            EnumComboBoxModel(GoogleModel::class.java)
+            DefaultComboBoxModel(
+                arrayOf(
+                    GoogleModel.GEMINI_2_0_PRO_EXP,
+                    GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP,
+                    GoogleModel.GEMINI_2_0_FLASH,
+                    GoogleModel.GEMINI_1_5_PRO
+                )
+            )
         )
         completionModelComboBox.selectedItem = GoogleModel.findByCode(state.model)
     }
-
 
     fun getForm(): JPanel = FormBuilder.createFormBuilder()
         .addLabeledComponent(
@@ -60,12 +66,12 @@ class GoogleSettingsForm {
 
     fun resetForm() {
         val state = service<GoogleSettings>().state
-        apiKeyField.text = getCredential(GOOGLE_API_KEY)
+        apiKeyField.text = getCredential(GoogleApiKey)
         completionModelComboBox.selectedItem = GoogleModel.findByCode(state.model)
     }
 
     fun isModified(): Boolean = service<GoogleSettings>().state.run {
-        model != getModel() || getApiKey() != getCredential(GOOGLE_API_KEY)
+        model != getModel() || getApiKey() != getCredential(GoogleApiKey)
     }
 
     fun applyChanges() {

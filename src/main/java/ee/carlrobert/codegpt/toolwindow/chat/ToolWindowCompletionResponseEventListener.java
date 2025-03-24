@@ -4,7 +4,9 @@ import static com.intellij.openapi.ui.Messages.OK;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.EncodingManager;
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.completions.CompletionResponseEventListener;
 import ee.carlrobert.codegpt.conversations.Conversation;
@@ -29,9 +31,9 @@ abstract class ToolWindowCompletionResponseEventListener implements
       ToolWindowCompletionResponseEventListener.class);
   private static final int UPDATE_INTERVAL_MS = 8;
 
+  private final Project project;
   private final StringBuilder messageBuilder = new StringBuilder();
   private final EncodingManager encodingManager;
-  private final ConversationService conversationService;
   private final ResponseMessagePanel responsePanel;
   private final UserMessagePanel userMessagePanel;
   private final ChatMessageResponseBody responseContainer;
@@ -44,13 +46,13 @@ abstract class ToolWindowCompletionResponseEventListener implements
   private boolean streamResponseReceived = false;
 
   public ToolWindowCompletionResponseEventListener(
-      ConversationService conversationService,
+      Project project,
       UserMessagePanel userMessagePanel,
       ResponseMessagePanel responsePanel,
       TotalTokensPanel totalTokensPanel,
       UserInputPanel textArea) {
     this.encodingManager = EncodingManager.getInstance();
-    this.conversationService = conversationService;
+    this.project = project;
     this.userMessagePanel = userMessagePanel;
     this.responsePanel = responsePanel;
     this.responseContainer = (ChatMessageResponseBody) responsePanel.getContent();
@@ -92,8 +94,6 @@ abstract class ToolWindowCompletionResponseEventListener implements
           responseContainer.displayError(error.getMessage());
         }
       } finally {
-        LOG.error(error.getMessage(), ex);
-        responsePanel.enableAllActions(true);
         stopStreaming(responseContainer);
       }
     });
@@ -109,7 +109,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
             .property("model", conversation.getModel())
             .send();
 
-        conversationService.discardTokenLimits(conversation);
+        ConversationService.getInstance().discardTokenLimits(conversation);
         handleTokensExceededPolicyAccepted();
       } else {
         stopStreaming(responseContainer);
@@ -119,7 +119,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   @Override
   public void handleCompleted(String fullMessage, ChatCompletionParameters callParameters) {
-    conversationService.saveMessage(fullMessage, callParameters);
+    ConversationService.getInstance().saveMessage(fullMessage, callParameters);
 
     ApplicationManager.getApplication().invokeLater(() -> {
       try {
@@ -163,5 +163,6 @@ abstract class ToolWindowCompletionResponseEventListener implements
     userMessagePanel.enableAllActions(true);
     responsePanel.enableAllActions(true);
     responseContainer.hideCaret();
+    CompletionProgressNotifier.update(project, false);
   }
 }

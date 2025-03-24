@@ -14,6 +14,7 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.ui.JBColor
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.toolwindow.chat.ThinkingOutputParser
 import ee.carlrobert.codegpt.ui.ObservableProperties
 import ee.carlrobert.codegpt.ui.OverlayUtil
@@ -45,19 +46,25 @@ class EditCodeCompletionListener(
             }
             cleanupAndFormat()
         }
-        observableProperties.loading.set(false)
+        stopLoading()
     }
 
     override fun onError(error: ErrorDetails, ex: Throwable) {
-        observableProperties.loading.set(false)
-
         OverlayUtil.showNotification(
             error.message,
             NotificationType.ERROR,
             NotificationAction.createSimpleExpiring("Upgrade plan") {
-                BrowserUtil.open("https://codegpt.ee/#pricing")
+                BrowserUtil.open("https://tryproxy.io/#pricing")
             },
         )
+        stopLoading()
+    }
+
+    private fun stopLoading() {
+        observableProperties.loading.set(false)
+        editor.project?.let {
+            CompletionProgressNotifier.update(it, false)
+        }
     }
 
     private fun updateHighlighter(editor: Editor) {

@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.settings.service.custom.form
 
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.observable.util.whenTextChanged
 import com.intellij.openapi.ui.MessageType
 import com.intellij.util.ui.FormBuilder
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -8,6 +9,7 @@ import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.completions.factory.CustomOpenAIRequestFactory
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceFormTabbedPane
+import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceChatCompletionSettingsData
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.URLTextField
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails
@@ -18,7 +20,7 @@ import javax.swing.JButton
 import javax.swing.JPanel
 
 class CustomServiceChatCompletionForm(
-    state: CustomServiceChatCompletionSettingsState,
+    state: CustomServiceChatCompletionSettingsData,
     val getApiKey: () -> String?
 ) {
 

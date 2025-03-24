@@ -20,7 +20,7 @@ interface ShortcutsTestMixin {
 
   fun useCodeGPTService() {
     service<GeneralSettings>().state.selectedService = ServiceType.CODEGPT
-    setCredential(CODEGPT_API_KEY, "TEST_API_KEY")
+    setCredential(CodeGptApiKey, "TEST_API_KEY")
     service<CodeGPTServiceSettings>().state.run {
       chatCompletionSettings.model = "TEST_MODEL"
       codeCompletionSettings.model = "TEST_CODE_MODEL"
@@ -30,7 +30,7 @@ interface ShortcutsTestMixin {
 
   fun useOpenAIService(chatModel: String? = "gpt-4") {
     service<GeneralSettings>().state.selectedService = ServiceType.OPENAI
-    setCredential(OPENAI_API_KEY, "TEST_API_KEY")
+    setCredential(OpenaiApiKey, "TEST_API_KEY")
     service<OpenAISettings>().state.run {
       model = chatModel
       isCodeCompletionsEnabled = true
@@ -39,7 +39,7 @@ interface ShortcutsTestMixin {
 
   fun useAzureService() {
     GeneralSettings.getCurrentState().selectedService = ServiceType.AZURE
-    setCredential(AZURE_OPENAI_API_KEY, "TEST_API_KEY")
+    setCredential(AzureOpenaiApiKey, "TEST_API_KEY")
     val azureSettings = AzureSettings.getCurrentState()
     azureSettings.resourceName = "TEST_RESOURCE_NAME"
     azureSettings.apiVersion = "TEST_API_VERSION"
@@ -55,7 +55,7 @@ interface ShortcutsTestMixin {
 
   fun useOllamaService() {
     GeneralSettings.getCurrentState().selectedService = ServiceType.OLLAMA
-    setCredential(OLLAMA_API_KEY, "TEST_API_KEY")
+    setCredential(OllamaApikey, "TEST_API_KEY")
     service<OllamaSettings>().state.apply {
       model = HuggingFaceModel.LLAMA_3_8B_Q6_K.code
       host = null
@@ -64,7 +64,7 @@ interface ShortcutsTestMixin {
 
   fun useGoogleService() {
     GeneralSettings.getCurrentState().selectedService = ServiceType.GOOGLE
-    setCredential(GOOGLE_API_KEY, "TEST_API_KEY")
+    setCredential(GoogleApiKey, "TEST_API_KEY")
     service<GoogleSettings>().state.model = GoogleModel.GEMINI_PRO.code
   }
 

@@ -6,6 +6,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.ColorUtil
 import com.intellij.ui.JBColor
 import com.intellij.ui.RoundedIcon
@@ -22,6 +23,10 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ImageAccordion
 import ee.carlrobert.codegpt.toolwindow.chat.ui.SelectedFilesAccordion
 import ee.carlrobert.codegpt.ui.IconActionButton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.awt.Image
 import java.io.IOException
 import java.nio.file.Files
@@ -51,7 +56,11 @@ class UserMessagePanel(
                 Icons.User
             } else {
                 val originalIcon = ImageIcon(Base64.getDecoder().decode(avatarBase64))
-                val resizedImage = originalIcon.image.getScaledInstance(24, 24, Image.SCALE_SMOOTH)
+                val resizedImage = originalIcon.image.getScaledInstance(
+                    24,
+                    24,
+                    Image.SCALE_SMOOTH
+                )
                 RoundedIcon(resizedImage, 1.0)
             }
         } catch (ex: Exception) {
@@ -143,7 +152,7 @@ class UserMessagePanel(
         )
     }
 
-    private fun getAdditionalContextPanel(project: Project?, message: Message): JPanel? {
+    private fun getAdditionalContextPanel(project: Project, message: Message): JPanel? {
         val documentationDetails = message.documentationDetails
         val referencedFilePaths = message.referencedFilePaths ?: emptyList()
         if (documentationDetails == null && referencedFilePaths.isEmpty() && message.personaName.isNullOrEmpty()) {
@@ -184,7 +193,14 @@ class UserMessagePanel(
             }
 
             if (referencedFilePaths.isNotEmpty()) {
-                additionalContextPanel.add(SelectedFilesAccordion(project!!, referencedFilePaths))
+                CoroutineScope(Dispatchers.IO).launch {
+                    val referencedFiles = referencedFilePaths.mapNotNull {
+                        LocalFileSystem.getInstance().findFileByPath(it)
+                    }
+                    withContext(Dispatchers.Main) {
+                        additionalContextPanel.add(SelectedFilesAccordion(project, referencedFiles))
+                    }
+                }
             }
         }
     }

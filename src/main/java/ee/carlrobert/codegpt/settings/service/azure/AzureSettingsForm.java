@@ -41,7 +41,7 @@ public class AzureSettingsForm {
     azureApiKeyField = new JBPasswordField();
     azureApiKeyField.setColumns(30);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      var apiKey = CredentialsStore.getCredential(CredentialKey.AZURE_OPENAI_API_KEY);
+      var apiKey = CredentialsStore.getCredential(CredentialKey.AzureOpenaiApiKey.INSTANCE);
       SwingUtilities.invokeLater(() -> azureApiKeyField.setText(apiKey));
     });
     azureApiKeyFieldPanel = UI.PanelFactory.panel(azureApiKeyField)
@@ -51,7 +51,7 @@ public class AzureSettingsForm {
     azureActiveDirectoryTokenField = new JBPasswordField();
     azureActiveDirectoryTokenField.setColumns(30);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      var apiKey = CredentialsStore.getCredential(CredentialKey.AZURE_ACTIVE_DIRECTORY_TOKEN);
+      var apiKey = CredentialsStore.getCredential(CredentialKey.AzureActiveDirectoryToken.INSTANCE);
       SwingUtilities.invokeLater(() -> azureActiveDirectoryTokenField.setText(apiKey));
     });
     azureActiveDirectoryTokenFieldPanel = UI.PanelFactory.panel(azureActiveDirectoryTokenField)
@@ -125,9 +125,11 @@ public class AzureSettingsForm {
 
   public void resetForm() {
     var state = AzureSettings.getCurrentState();
-    azureApiKeyField.setText(CredentialsStore.getCredential(CredentialKey.AZURE_OPENAI_API_KEY));
+    azureApiKeyField.setText(
+        CredentialsStore.getCredential(CredentialKey.AzureOpenaiApiKey.INSTANCE)
+    );
     azureActiveDirectoryTokenField.setText(
-        CredentialsStore.getCredential(CredentialKey.AZURE_ACTIVE_DIRECTORY_TOKEN));
+        CredentialsStore.getCredential(CredentialKey.AzureActiveDirectoryToken.INSTANCE));
     useAzureApiKeyAuthenticationRadioButton.setSelected(state.isUseAzureApiKeyAuthentication());
     useAzureActiveDirectoryAuthenticationRadioButton.setSelected(
         state.isUseAzureActiveDirectoryAuthentication());

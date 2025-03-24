@@ -1,6 +1,6 @@
 package ee.carlrobert.codegpt.settings.service.llama;
 
-import static ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LLAMA_API_KEY;
+import static ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LlamaApiKey;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.LLAMA_CPP;
 import static org.apache.commons.lang3.SystemUtils.IS_OS_LINUX;
 import static org.apache.commons.lang3.SystemUtils.IS_OS_MAC_OSX;
@@ -77,7 +77,7 @@ public class LlamaSettings implements PersistentStateComponent<LlamaSettingsStat
     return !form.getCurrentState().equals(state)
         || !StringUtils.equals(
         form.getLlamaServerPreferencesForm().getApiKey(),
-        CredentialsStore.getCredential(LLAMA_API_KEY));
+        CredentialsStore.getCredential(LlamaApiKey.INSTANCE));
   }
 
   public static boolean isRunnable() {

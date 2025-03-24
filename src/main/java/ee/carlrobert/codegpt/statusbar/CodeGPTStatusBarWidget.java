@@ -1,7 +1,6 @@
 package ee.carlrobert.codegpt.statusbar;
 
-import static ee.carlrobert.codegpt.CodeGPTKeys.IS_FETCHING_COMPLETION;
-import static ee.carlrobert.codegpt.CodeGPTKeys.PENDING_PREDICTION_CALL;
+import static ee.carlrobert.codegpt.CodeGPTKeys.COMPLETION_IN_PROGRESS;
 
 import com.intellij.openapi.actionSystem.ActionGroup;
 import com.intellij.openapi.actionSystem.ActionManager;
@@ -17,7 +16,7 @@ import com.intellij.openapi.wm.WindowManager;
 import com.intellij.openapi.wm.impl.status.EditorBasedStatusBarPopup;
 import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
-import ee.carlrobert.codegpt.codecompletions.CodeCompletionProgressNotifier;
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -32,8 +31,8 @@ public class CodeGPTStatusBarWidget extends EditorBasedStatusBarPopup {
     project.getMessageBus()
         .connect(this)
         .subscribe(
-            CodeCompletionProgressNotifier.Companion.getCODE_COMPLETION_PROGRESS_TOPIC(),
-            (CodeCompletionProgressNotifier) loading -> {
+            CompletionProgressNotifier.Companion.getCOMPLETION_PROGRESS_TOPIC(),
+            (CompletionProgressNotifier) () -> {
               CodeGPTStatusBarWidget widget = findWidget(project);
               if (widget != null && widget.myStatusBar != null) {
                 widget.update(() -> widget.myStatusBar.updateWidget(ID));
@@ -43,12 +42,9 @@ public class CodeGPTStatusBarWidget extends EditorBasedStatusBarPopup {
 
   @Override
   protected @NotNull WidgetState getWidgetState(@Nullable VirtualFile file) {
+    var completionInProgress = COMPLETION_IN_PROGRESS.get(getProject());
+    var loading = (completionInProgress != null && completionInProgress);
     var state = new WidgetState(CodeGPTBundle.get("statusBar.widget.tooltip"), "", true);
-    var fetchingCompletion = IS_FETCHING_COMPLETION.get(getEditor());
-    var pendingPredicationCall = PENDING_PREDICTION_CALL.get(getEditor());
-    var loading =
-        (fetchingCompletion != null && fetchingCompletion) || pendingPredicationCall != null;
-
     state.setIcon(loading ? Icons.StatusBarCompletionInProgress : Icons.DefaultSmall);
     return state;
   }

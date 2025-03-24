@@ -17,7 +17,6 @@ import com.intellij.openapi.editor.actionSystem.EditorWriteActionHandler
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.util.concurrency.ThreadingAssertions
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_EDITOR_COMPLETION
-import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.predictions.PredictionService
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -47,18 +46,13 @@ class CodeCompletionInsertAction :
                     )
                 }
 
-                val beforeApply = editor.document.text
                 InlineCompletion.getHandlerOrNull(editor)?.insert()
 
                 if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT
-                    && service<CodeGPTServiceSettings>().state.codeAssistantEnabled
-                    && service<EncodingManager>().countTokens(editor.document.text) <= 4096) {
+                    && service<CodeGPTServiceSettings>().state.nextEditsEnabled
+                ) {
                     ApplicationManager.getApplication().executeOnPooledThread {
-                        service<PredictionService>().displayAutocompletePrediction(
-                            editor,
-                            textToInsert,
-                            beforeApply
-                        )
+                        service<PredictionService>().displayInlineDiff(editor)
                     }
                     return
                 }

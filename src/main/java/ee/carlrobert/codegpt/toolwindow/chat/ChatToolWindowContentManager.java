@@ -11,6 +11,7 @@ import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowAnchor;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.content.Content;
+import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.conversations.Conversation;
@@ -122,12 +123,12 @@ public final class ChatToolWindowContentManager {
 
   public @NotNull ToolWindow getToolWindow() {
     var toolWindowManager = ToolWindowManager.getInstance(project);
-    var toolWindow = toolWindowManager.getToolWindow("CodeGPT");
+    var toolWindow = toolWindowManager.getToolWindow("ProxyAI");
     // https://intellij-support.jetbrains.com/hc/en-us/community/posts/11533368171026/comments/11538403084562
     return Objects.requireNonNullElseGet(toolWindow, () -> toolWindowManager
         .registerToolWindow(RegisterToolWindowTask.closable(
-            "CodeGPT",
-            () -> "CodeGPT",
+            "ProxyAI",
+            () -> CodeGPTBundle.get("project.label"),
             Icons.DefaultSmall,
             ToolWindowAnchor.RIGHT)));
   }

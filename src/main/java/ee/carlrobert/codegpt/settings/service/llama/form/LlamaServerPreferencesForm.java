@@ -1,6 +1,6 @@
 package ee.carlrobert.codegpt.settings.service.llama.form;
 
-import static ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LLAMA_API_KEY;
+import static ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LlamaApiKey;
 import static ee.carlrobert.codegpt.settings.service.llama.LlamaSettings.isModelExists;
 import static ee.carlrobert.codegpt.ui.UIUtil.createComment;
 import static ee.carlrobert.codegpt.ui.UIUtil.createForm;
@@ -92,7 +92,7 @@ public class LlamaServerPreferencesForm {
     apiKeyField = new JBPasswordField();
     apiKeyField.setColumns(30);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      var apiKey = CredentialsStore.getCredential(CredentialKey.LLAMA_API_KEY);
+      var apiKey = CredentialsStore.getCredential(CredentialKey.LlamaApiKey.INSTANCE);
       SwingUtilities.invokeLater(() -> apiKeyField.setText(apiKey));
     });
 
@@ -140,7 +140,7 @@ public class LlamaServerPreferencesForm {
     additionalEnvironmentVariablesField.setText(state.getAdditionalEnvironmentVariables());
     remotePromptTemplatePanel.setPromptTemplate(state.getRemoteModelPromptTemplate()); // ?
     infillPromptTemplatePanel.setPromptTemplate(state.getRemoteModelInfillPromptTemplate());
-    apiKeyField.setText(CredentialsStore.getCredential(LLAMA_API_KEY));
+    apiKeyField.setText(CredentialsStore.getCredential(LlamaApiKey.INSTANCE));
   }
 
   public JComponent createUseExistingServerForm() {

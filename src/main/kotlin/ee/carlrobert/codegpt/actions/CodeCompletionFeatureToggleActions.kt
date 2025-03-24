@@ -8,7 +8,7 @@ import ee.carlrobert.codegpt.codecompletions.CodeCompletionService
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettings
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
@@ -26,7 +26,7 @@ abstract class CodeCompletionFeatureToggleActions(
 
         OLLAMA -> service<OllamaSettings>().state::codeCompletionsEnabled::set
 
-        CUSTOM_OPENAI -> service<CustomServiceSettings>().state.codeCompletionSettings::codeCompletionsEnabled::set
+        CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings::codeCompletionsEnabled::set
 
         ANTHROPIC,
         AZURE,
@@ -37,7 +37,8 @@ abstract class CodeCompletionFeatureToggleActions(
     override fun update(e: AnActionEvent) {
         val selectedService = GeneralSettings.getSelectedService()
         val codeCompletionEnabled =
-            e.project?.service<CodeCompletionService>()?.isCodeCompletionsEnabled(selectedService) ?: false
+            e.project?.service<CodeCompletionService>()?.isCodeCompletionsEnabled(selectedService)
+                ?: false
         e.presentation.isVisible = codeCompletionEnabled != enableFeatureAction
         e.presentation.isEnabled = when (selectedService) {
             CODEGPT,

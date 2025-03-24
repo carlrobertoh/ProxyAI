@@ -13,7 +13,7 @@ import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettings
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
@@ -31,7 +31,8 @@ class CodeCompletionService {
         return when (service<GeneralSettings>().state.selectedService) {
             CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.model
             OPENAI -> "gpt-3.5-turbo-instruct"
-            CUSTOM_OPENAI -> service<CustomServiceSettings>().state
+            CUSTOM_OPENAI -> service<CustomServicesSettings>().state
+                .active
                 .codeCompletionSettings
                 .body
                 .getOrDefault("model", null) as String
@@ -46,7 +47,7 @@ class CodeCompletionService {
         when (selectedService) {
             CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled
-            CUSTOM_OPENAI -> service<CustomServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
+            CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
             LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
             else -> false
@@ -67,7 +68,7 @@ class CodeCompletionService {
                 CompletionClientProvider.getDefaultClientBuilder().build()
             ).newEventSource(
                 buildCustomRequest(infillRequest),
-                if (service<CustomServiceSettings>().state.codeCompletionSettings.parseResponseAsChatCompletions) {
+                if (service<CustomServicesSettings>().state.active.codeCompletionSettings.parseResponseAsChatCompletions) {
                     OpenAIChatCompletionEventSourceListener(eventListener)
                 } else {
                     OpenAITextCompletionEventSourceListener(eventListener)

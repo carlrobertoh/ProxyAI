@@ -1,7 +1,9 @@
 package ee.carlrobert.codegpt;
 
+import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,7 +18,7 @@ public record ReferencedFile(String fileName, String filePath, String fileConten
     return new ReferencedFile(
         file.getName(),
         file.getPath(),
-        readContent(file)
+        FileUtil.readContent(file)
     );
   }
 
@@ -24,24 +26,17 @@ public record ReferencedFile(String fileName, String filePath, String fileConten
     return new ReferencedFile(
         virtualFile.getName(),
         virtualFile.getPath(),
-        readContent(virtualFile)
+        getVirtualFileContent(virtualFile)
     );
   }
 
-  private static String readContent(File file) {
-    try {
-      return new String(Files.readAllBytes(Paths.get(file.getPath())));
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to read file content", e);
+  private static String getVirtualFileContent(VirtualFile virtualFile) {
+    var documentManager = FileDocumentManager.getInstance();
+    var document = documentManager.getDocument(virtualFile);
+    if (document != null && documentManager.isDocumentUnsaved(document)) {
+      return document.getText();
     }
-  }
-
-  private static String readContent(VirtualFile virtualFile) {
-    try {
-      return VfsUtilCore.loadText(virtualFile);
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to read virtual file content", e);
-    }
+    return FileUtil.readContent(virtualFile);
   }
 
   public String getFileExtension() {

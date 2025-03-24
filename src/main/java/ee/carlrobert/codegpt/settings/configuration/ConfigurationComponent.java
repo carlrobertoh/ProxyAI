@@ -28,6 +28,7 @@ public class ConfigurationComponent {
   private final IntegerField maxTokensField;
   private final JBTextField temperatureField;
   private final CodeCompletionConfigurationForm codeCompletionForm;
+  private final ChatCompletionConfigurationForm chatCompletionForm;
 
   public ConfigurationComponent(
       Disposable parentDisposable,
@@ -72,6 +73,7 @@ public class ConfigurationComponent {
         configuration.getAutoFormattingEnabled());
 
     codeCompletionForm = new CodeCompletionConfigurationForm();
+    chatCompletionForm = new ChatCompletionConfigurationForm();
 
     mainPanel = FormBuilder.createFormBuilder()
         .addComponent(checkForPluginUpdatesCheckBox)
@@ -85,6 +87,9 @@ public class ConfigurationComponent {
         .addComponent(new TitledSeparator(
             CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.title")))
         .addComponent(codeCompletionForm.createPanel())
+        .addComponent(new TitledSeparator(
+            CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.title")))
+        .addComponent(chatCompletionForm.createPanel())
         .addComponentFillVertically(new JPanel(), 0)
         .getPanel();
   }
@@ -102,6 +107,7 @@ public class ConfigurationComponent {
     state.setMethodNameGenerationEnabled(methodNameGenerationCheckBox.isSelected());
     state.setAutoFormattingEnabled(autoFormattingCheckBox.isSelected());
     state.setCodeCompletionSettings(codeCompletionForm.getFormState());
+    state.setChatCompletionSettings(chatCompletionForm.getFormState());
     return state;
   }
 
@@ -114,6 +120,7 @@ public class ConfigurationComponent {
     methodNameGenerationCheckBox.setSelected(configuration.getMethodNameGenerationEnabled());
     autoFormattingCheckBox.setSelected(configuration.getAutoFormattingEnabled());
     codeCompletionForm.resetForm(configuration.getCodeCompletionSettings());
+    chatCompletionForm.resetForm(configuration.getChatCompletionSettings());
   }
 
   // Formatted keys are not referenced in the messages bundle file

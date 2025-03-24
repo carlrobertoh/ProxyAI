@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.actions
 
 import com.intellij.openapi.project.Project
 import com.intellij.vcs.commit.CommitWorkflowUi
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.CommitMessageCompletionParameters
 import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.settings.prompts.CommitMessageTemplate
@@ -17,6 +18,7 @@ class GenerateCommitMessageAction : BaseCommitWorkflowAction() {
         commitWorkflowUi: CommitWorkflowUi,
         gitDiff: String
     ) {
+        CompletionProgressNotifier.update(project, true)
         CompletionRequestService.getInstance().getCommitMessageAsync(
             CommitMessageCompletionParameters(
                 gitDiff,

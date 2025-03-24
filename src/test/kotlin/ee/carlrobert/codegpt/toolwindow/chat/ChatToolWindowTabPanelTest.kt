@@ -4,8 +4,6 @@ import com.intellij.openapi.components.service
 import com.intellij.testFramework.LightVirtualFile
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier
-import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier.FILES_INCLUDED_IN_CONTEXT_TOPIC
 import ee.carlrobert.codegpt.completions.ConversationType
 import ee.carlrobert.codegpt.completions.HuggingFaceModel
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate.LLAMA
@@ -106,15 +104,11 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
         val conversation = ConversationService.getInstance().startConversation()
         val panel = ChatToolWindowTabPanel(project, conversation)
-        project.messageBus
-            .syncPublisher<IncludeFilesInContextNotifier>(FILES_INCLUDED_IN_CONTEXT_TOPIC)
-            .filesIncluded(
-                listOf(
-                    LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1"),
-                    LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2"),
-                    LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3"),
-                )
-            )
+        panel.includeFiles(listOf(
+            LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1"),
+            LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2"),
+            LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3"),
+        ))
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
@@ -306,15 +300,13 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
         val conversation = ConversationService.getInstance().startConversation()
         val panel = ChatToolWindowTabPanel(project, conversation)
-        project.messageBus
-            .syncPublisher<IncludeFilesInContextNotifier>(FILES_INCLUDED_IN_CONTEXT_TOPIC)
-            .filesIncluded(
-                listOf(
-                    LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1"),
-                    LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2"),
-                    LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3"),
-                )
+        panel.includeFiles(
+            listOf(
+                LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1"),
+                LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2"),
+                LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3"),
             )
+        )
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")

@@ -1,18 +1,17 @@
 package ee.carlrobert.codegpt.codecompletions
 
-import com.intellij.codeInsight.inline.completion.InlineCompletionFontUtils
-import com.intellij.codeInsight.inline.completion.elements.InlineCompletionColorTextElement
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
+import com.intellij.codeInsight.inline.completion.elements.InlineCompletionGrayTextElement
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
 
 class CodeCompletionTextElement(
-    text: String,
+    override val text: String,
     private val insertOffset: Int,
     val textRange: TextRange,
     val offsetDelta: Int = 0,
     val originalText: String = text,
-) : InlineCompletionColorTextElement(text, InlineCompletionFontUtils::color) {
+) : InlineCompletionElement {
 
     override fun toPresentable(): InlineCompletionElement.Presentable =
         Presentable(this, insertOffset, textRange)
@@ -21,7 +20,7 @@ class CodeCompletionTextElement(
         element: InlineCompletionElement,
         private val insertOffset: Int,
         private val textRange: TextRange,
-    ) : InlineCompletionColorTextElement.Presentable(element, InlineCompletionFontUtils::color) {
+    ) : InlineCompletionGrayTextElement.Presentable(element) {
 
         override fun render(editor: Editor, offset: Int) {
             super.render(editor, insertOffset)

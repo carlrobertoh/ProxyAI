@@ -8,6 +8,7 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.util.text.StringUtil
 import com.jetbrains.rd.util.AtomicReference
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.completions.EditCodeCompletionParameters
 import ee.carlrobert.codegpt.ui.ObservableProperties
@@ -20,6 +21,10 @@ class EditCodeSubmissionHandler(
     private val previousSourceRef = AtomicReference<String?>(null)
 
     suspend fun handleSubmit(userPrompt: String) {
+        editor.project?.let {
+            CompletionProgressNotifier.update(it, true)
+        }
+
         observableProperties.loading.set(true)
         observableProperties.submitted.set(true)
 

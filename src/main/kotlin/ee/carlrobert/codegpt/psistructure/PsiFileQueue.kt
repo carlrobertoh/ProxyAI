@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.codecompletions.psi.structure
+package ee.carlrobert.codegpt.psistructure
 
 import com.intellij.psi.PsiFile
 

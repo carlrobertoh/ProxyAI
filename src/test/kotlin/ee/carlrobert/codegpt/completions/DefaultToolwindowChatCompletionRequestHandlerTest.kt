@@ -49,7 +49,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             )
         })
         val requestHandler =
-            ToolwindowChatCompletionRequestHandler(getRequestEventListener(message))
+            ToolwindowChatCompletionRequestHandler(project, getRequestEventListener(message))
 
         requestHandler.call(ChatCompletionParameters.builder(conversation, message).build())
 
@@ -94,7 +94,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         })
         val message = Message("TEST_PROMPT")
         val requestHandler =
-            ToolwindowChatCompletionRequestHandler(getRequestEventListener(message))
+            ToolwindowChatCompletionRequestHandler(project, getRequestEventListener(message))
 
         requestHandler.call(ChatCompletionParameters.builder(conversation, message).build())
 
@@ -135,7 +135,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             )
         })
         val requestHandler =
-            ToolwindowChatCompletionRequestHandler(getRequestEventListener(message))
+            ToolwindowChatCompletionRequestHandler(project, getRequestEventListener(message))
 
         requestHandler.call(ChatCompletionParameters.builder(conversation, message).build())
 
@@ -175,7 +175,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             )
         })
         val requestHandler =
-            ToolwindowChatCompletionRequestHandler(getRequestEventListener(message))
+            ToolwindowChatCompletionRequestHandler(project, getRequestEventListener(message))
 
         requestHandler.call(ChatCompletionParameters.builder(conversation, message).build())
 
@@ -220,7 +220,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             )
         })
         val requestHandler =
-            ToolwindowChatCompletionRequestHandler(getRequestEventListener(message))
+            ToolwindowChatCompletionRequestHandler(project, getRequestEventListener(message))
 
         requestHandler.call(ChatCompletionParameters.builder(conversation, message).build())
 
@@ -259,7 +259,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             )
         })
         val requestHandler =
-            ToolwindowChatCompletionRequestHandler(getRequestEventListener(message))
+            ToolwindowChatCompletionRequestHandler(project, getRequestEventListener(message))
 
         requestHandler.call(ChatCompletionParameters.builder(conversation, message).build())
 

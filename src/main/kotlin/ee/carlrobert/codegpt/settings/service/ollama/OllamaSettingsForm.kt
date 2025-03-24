@@ -15,7 +15,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.FormBuilder
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OLLAMA_API_KEY
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OllamaApikey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.service.CodeCompletionConfigurationForm
@@ -72,7 +72,7 @@ class OllamaSettingsForm {
         apiKeyField = JBPasswordField().apply {
             columns = 30
             text = runBlocking(Dispatchers.IO) {
-                getCredential(OLLAMA_API_KEY)
+                getCredential(OllamaApikey)
             }
         }
         refreshModels(settings.model)
@@ -126,7 +126,7 @@ class OllamaSettingsForm {
             codeCompletionConfigurationForm.fimTemplate = fimTemplate
             codeCompletionConfigurationForm.fimOverride != fimOverride
         }
-        apiKeyField.text = getCredential(OLLAMA_API_KEY)
+        apiKeyField.text = getCredential(OllamaApikey)
     }
 
     fun applyChanges() {
@@ -137,7 +137,7 @@ class OllamaSettingsForm {
             fimTemplate = codeCompletionConfigurationForm.fimTemplate!!
             fimOverride = codeCompletionConfigurationForm.fimOverride ?: false
         }
-        setCredential(OLLAMA_API_KEY, getApiKey())
+        setCredential(OllamaApikey, getApiKey())
     }
 
     fun isModified() = service<OllamaSettings>().state.run {
@@ -146,7 +146,7 @@ class OllamaSettingsForm {
                 || codeCompletionConfigurationForm.isCodeCompletionsEnabled != codeCompletionsEnabled
                 || codeCompletionConfigurationForm.fimTemplate != fimTemplate
                 || codeCompletionConfigurationForm.fimOverride != fimOverride
-                || getApiKey() != getCredential(OLLAMA_API_KEY)
+                || getApiKey() != getCredential(OllamaApikey)
     }
 
     private fun refreshModels(currentModel: String?) {

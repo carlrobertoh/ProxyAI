@@ -26,14 +26,6 @@ sealed interface EditorNotifier {
             val TOPIC = Topic.create("codegpt.editorReleased", Released::class.java)
         }
     }
-
-    interface Created : EditorNotifier {
-        fun editorCreated(editor: Editor)
-
-        companion object {
-            val TOPIC = Topic.create("codegpt.editorCreated", Created::class.java)
-        }
-    }
 }
 
 class CodeGPTEditorFactoryListener : EditorFactoryListener {
@@ -44,9 +36,6 @@ class CodeGPTEditorFactoryListener : EditorFactoryListener {
         }
 
         val project = event.editor.project ?: return
-        project.messageBus
-            .syncPublisher(EditorNotifier.Created.TOPIC)
-            .editorCreated(event.editor)
         event.editor.selectionModel.addSelectionListener(object : SelectionListener {
             override fun selectionChanged(e: SelectionEvent) {
                 val virtualFile = e.editor.virtualFile ?: return

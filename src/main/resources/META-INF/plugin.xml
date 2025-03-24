@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>ee.carlrobert.chatgpt</id>
-    <name>CodeGPT</name>
+    <name>Proxy AI</name>
     <vendor email="carlrobertoh@gmail.com" url="https://carlrobert.ee">Carl-Robert Linnupuu</vendor>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
@@ -28,11 +28,11 @@
         <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTProjectActivity"/>
         <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTUpdateActivity"/>
         <editorFactoryListener implementation="ee.carlrobert.codegpt.CodeGPTEditorFactoryListener"/>
-        <applicationConfigurable id="settings.codegpt" parentId="tools" displayName="CodeGPT"
+        <applicationConfigurable id="settings.codegpt" parentId="tools" displayName="ProxyAI"
             instance="ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services" parentId="settings.codegpt" displayName="Providers"
           instance="ee.carlrobert.codegpt.settings.service.ServiceConfigurable"/>
-        <applicationConfigurable id="settings.codegpt.services.codegpt" parentId="settings.codegpt.services" displayName="CodeGPT"
+        <applicationConfigurable id="settings.codegpt.services.codegpt" parentId="settings.codegpt.services" displayName="ProxyAI"
           instance="ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.openai" parentId="settings.codegpt.services" displayName="OpenAI"
           instance="ee.carlrobert.codegpt.settings.service.OpenAIServiceConfigurable"/>
@@ -78,10 +78,10 @@
         <inline.completion.provider
           id="CodeGPTInlineCompletionProvider"
           implementation="ee.carlrobert.codegpt.codecompletions.DebouncedCodeCompletionProvider"/>
-        <toolWindow id="CodeGPT" icon="ee.carlrobert.codegpt.Icons.DefaultSmall" anchor="right"
+        <toolWindow id="ProxyAI" icon="ee.carlrobert.codegpt.Icons.DefaultSmall" anchor="right"
             factoryClass="ee.carlrobert.codegpt.toolwindow.ProjectToolWindowFactory"/>
-        <notificationGroup id="CodeGPT Notification Group" displayType="BALLOON" key="notification.group.name"/>
-        <notificationGroup id="CodeGPT Notification Group Sticky" displayType="STICKY_BALLOON" key="notification.group.sticky.name"/>
+        <notificationGroup id="proxyai.notification.group" displayType="BALLOON" key="notification.group.name"/>
+        <notificationGroup id="proxyai.notification.sticky.group" displayType="STICKY_BALLOON" key="notification.group.sticky.name"/>
         <statusBarWidgetFactory order="first" id="ee.carlrobert.codegpt.statusbar.widget"
           implementation="ee.carlrobert.codegpt.statusbar.CodeGPTStatusBarWidgetFactory"/>
         <nameSuggestionProvider implementation="ee.carlrobert.codegpt.refactorings.DefaultNameSuggestionProvider"/>
@@ -113,7 +113,7 @@
           id="codegpt.openPrediction"
           text="Open Prediction"
           class="ee.carlrobert.codegpt.predictions.OpenPredictionAction">
-            <keyboard-shortcut first-keystroke="ctrl O" keymap="$default"/>
+            <keyboard-shortcut first-keystroke="ctrl shift ENTER" keymap="$default"/>
         </action>
 
         <action
@@ -165,7 +165,7 @@
         </group>
         <action id="CodeGPT.TriggerEditorPopup"
           class="ee.carlrobert.codegpt.actions.editor.ShowEditorActionGroupAction"
-          text="Show CodeGPT Actions">
+          text="Show ProxyAI Actions">
             <keyboard-shortcut first-keystroke="ctrl shift alt m" keymap="$default"/>
         </action>
         <group id="CodeGPT.ProjectViewPopupMenuRootGroup">
@@ -217,7 +217,7 @@
           id="CodeGPT.AddSelectionToContext"
           class="ee.carlrobert.codegpt.actions.editor.AddSelectionToContextAction"
           text="Include Selection in Prompt"
-          description="Adds the selected text to the CodeGPT context">
+          description="Adds the selected text to the ProxyAI context">
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift I" replace-all="true"/>
 
             <add-to-group group-id="action.editor.group.EditorActionGroup" anchor="after" relative-to-action="CodeGPT.NewChat"/>
@@ -248,16 +248,16 @@
             <override-text place="popup" use-text-of-place="MainMenu"/>
         </action>
         <action
-          id="statusbar.enableCodeAssistant"
-          class="ee.carlrobert.codegpt.actions.EnableCodeAssistantAction">
+          id="statusbar.enableNextEdits"
+          class="ee.carlrobert.codegpt.actions.EnableNextEditsAction">
             <keyboard-shortcut first-keystroke="ctrl shift alt a" keymap="$default"/>
 
             <override-text place="MainMenu"/>
             <override-text place="popup" use-text-of-place="MainMenu"/>
         </action>
         <action
-          id="statusbar.disableCodeAssistant"
-          class="ee.carlrobert.codegpt.actions.DisableCodeAssistantAction">
+          id="statusbar.disableNextEdits"
+          class="ee.carlrobert.codegpt.actions.DisableNextEditsAction">
             <keyboard-shortcut first-keystroke="ctrl shift alt a" keymap="$default"/>
 
             <override-text place="MainMenu"/>
@@ -285,8 +285,8 @@
             <separator/>
             <reference id="statusbar.stopServer" />
             <reference id="statusbar.startServer" />
-            <reference id="statusbar.disableCodeAssistant" />
-            <reference id="statusbar.enableCodeAssistant" />
+            <reference id="statusbar.disableNextEdits" />
+            <reference id="statusbar.enableNextEdits" />
             <reference id="statusbar.disableCompletions" />
             <reference id="statusbar.enableCompletions" />
         </group>

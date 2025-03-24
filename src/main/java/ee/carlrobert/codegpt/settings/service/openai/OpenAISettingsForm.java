@@ -1,7 +1,5 @@
 package ee.carlrobert.codegpt.settings.service.openai;
 
-import static ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OPENAI_API_KEY;
-
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.ui.ComboBox;
 import com.intellij.ui.EnumComboBoxModel;
@@ -29,7 +27,7 @@ public class OpenAISettingsForm {
     apiKeyField = new JBPasswordField();
     apiKeyField.setColumns(30);
     ApplicationManager.getApplication().executeOnPooledThread(() -> {
-      var apiKey = CredentialsStore.getCredential(CredentialKey.OPENAI_API_KEY);
+      var apiKey = CredentialsStore.getCredential(CredentialKey.OpenaiApiKey.INSTANCE);
       SwingUtilities.invokeLater(() -> apiKeyField.setText(apiKey));
     });
     organizationField = new JBTextField(settings.getOrganization(), 30);
@@ -84,7 +82,7 @@ public class OpenAISettingsForm {
 
   public void resetForm() {
     var state = OpenAISettings.getCurrentState();
-    apiKeyField.setText(CredentialsStore.getCredential(OPENAI_API_KEY));
+    apiKeyField.setText(CredentialsStore.getCredential(CredentialKey.OpenaiApiKey.INSTANCE));
     completionModelComboBox.setSelectedItem(
         OpenAIChatCompletionModel.findByCode(state.getModel()));
     organizationField.setText(state.getOrganization());

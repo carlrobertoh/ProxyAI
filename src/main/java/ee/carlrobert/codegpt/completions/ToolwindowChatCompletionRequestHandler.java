@@ -1,5 +1,7 @@
 package ee.carlrobert.codegpt.completions;
 
+import com.intellij.openapi.project.Project;
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
@@ -7,11 +9,14 @@ import okhttp3.sse.EventSource;
 
 public class ToolwindowChatCompletionRequestHandler {
 
+  private final Project project;
   private final CompletionResponseEventListener completionResponseEventListener;
   private EventSource eventSource;
 
   public ToolwindowChatCompletionRequestHandler(
+      Project project,
       CompletionResponseEventListener completionResponseEventListener) {
+    this.project = project;
     this.completionResponseEventListener = completionResponseEventListener;
   }
 
@@ -35,12 +40,16 @@ public class ToolwindowChatCompletionRequestHandler {
 
   private EventSource startCall(ChatCompletionParameters callParameters) {
     try {
+      CompletionProgressNotifier.Companion.update(project, true);
       var request = CompletionRequestFactory
           .getFactory(GeneralSettings.getSelectedService())
           .createChatRequest(callParameters);
       return CompletionRequestService.getInstance().getChatCompletionAsync(
           request,
-          new ChatCompletionEventListener(callParameters, completionResponseEventListener));
+          new ChatCompletionEventListener(
+              project,
+              callParameters,
+              completionResponseEventListener));
     } catch (Throwable ex) {
       handleCallException(ex);
       throw ex;

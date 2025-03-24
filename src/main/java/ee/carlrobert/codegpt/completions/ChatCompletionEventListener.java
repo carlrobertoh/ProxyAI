@@ -2,6 +2,8 @@ package ee.carlrobert.codegpt.completions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.intellij.openapi.project.Project;
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
 import ee.carlrobert.codegpt.events.CodeGPTEvent;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
@@ -10,13 +12,16 @@ import okhttp3.sse.EventSource;
 
 public class ChatCompletionEventListener implements CompletionEventListener<String> {
 
+  private final Project project;
   private final ChatCompletionParameters callParameters;
   private final CompletionResponseEventListener eventListener;
   private final StringBuilder messageBuilder = new StringBuilder();
 
   public ChatCompletionEventListener(
+      Project project,
       ChatCompletionParameters callParameters,
       CompletionResponseEventListener eventListener) {
+    this.project = project;
     this.callParameters = callParameters;
     this.eventListener = eventListener;
   }
@@ -64,6 +69,7 @@ public class ChatCompletionEventListener implements CompletionEventListener<Stri
   }
 
   private void handleCompleted(StringBuilder messageBuilder) {
+    CompletionProgressNotifier.Companion.update(project, false);
     eventListener.handleCompleted(messageBuilder.toString(), callParameters);
   }
 

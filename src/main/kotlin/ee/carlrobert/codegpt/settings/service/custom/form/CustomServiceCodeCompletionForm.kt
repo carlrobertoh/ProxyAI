@@ -18,6 +18,7 @@ import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.settings.Placeholder
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceCodeCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceFormTabbedPane
+import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceCodeCompletionSettingsData
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.URLTextField
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails
@@ -31,7 +32,7 @@ import javax.swing.JButton
 import javax.swing.JPanel
 
 class CustomServiceCodeCompletionForm(
-    state: CustomServiceCodeCompletionSettingsState,
+    state: CustomServiceCodeCompletionSettingsData,
     val getApiKey: () -> String?
 ) {
 

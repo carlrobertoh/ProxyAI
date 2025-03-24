@@ -1,16 +1,7 @@
 <!-- Plugin description -->
 
-CodeGPT is an AI-powered code assistant designed to help you with various programming activities.
+ProxyAI is an AI-powered code assistant designed to help you with various programming activities.
 It's a powerful alternative to GitHub Copilot, AI Assistant, Codiumate, and other JetBrains plugins.
-
-## Code Assistant <sup><small>(new)</small></sup>
-
-Get multi-line edits based on your recent activity, open files and previous chat interactions.
-
-CodeGPT is the first JetBrains extension capable of suggesting modifications beyond the
-current cursor location.
-
-Learn more in our recent [blog post](https://codegpt.ee/blog/introducing-code-assistant).
 
 ## Highly Configurable
 
@@ -22,7 +13,7 @@ Access top-tier language models (LLMs) with your own API key or use privately ho
 
 ## Build Your Own Local AI Assistant
 
-CodeGPT is the leading open-source extension for connecting your locally running LLM with JetBrains IDEs. Enjoy full AI assistance without sending data externally or needing an internet connection.
+ProxyAI is the leading open-source extension for connecting your locally running LLM with JetBrains IDEs. Enjoy full AI assistance without sending data externally or needing an internet connection.
 
 - **Ollama Integration:** Automatically detect and utilize Ollama-managed models.
 - **GGUF Support:** Easily connect custom models.
@@ -30,7 +21,7 @@ CodeGPT is the leading open-source extension for connecting your locally running
 
 ## Core Features
 
-CodeGPT offers a wide range of features to enhance your development experience:
+ProxyAI offers a wide range of features to enhance your development experience:
 
 ### Chat
 
@@ -41,75 +32,73 @@ Get instant coding advice through a ChatGPT-like interface that accepts image in
 Stream AI-suggested code changes directly into your editor. Preview modifications in diff view and
 approve or reject them with a single click.
 
-![Auto apply](https://www.codegpt.ee/images/features/auto-apply-w800.png)
+![Auto apply](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/auto-apply-w800.png)
 
 **Use images**
 
-Chat with your images. Upload manually or let CodeGPT auto-detect your screenshots.
+Chat with your images. Upload manually or let ProxyAI auto-detect your screenshots.
 
-![Use images](https://www.codegpt.ee/images/features/use-images-w800.png)
+![Use images](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/use-images-w800.png)
 
 **Reference your files and folders**
 
 Quickly access and reference your project files and folders for context-aware coding assistance. 
 
-With our **$10** pricing plan, you can chat with files containing up to **200k tokens** using any of our offered models.
-
-![Reference files and folders](https://www.codegpt.ee/images/features/reference-files-w800.png)
+![Reference files and folders](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/reference-files-w800.png)
 
 **Reference web documentations**
 
 Easily pull in relevant web documentation into your chat for quick reference—whether it’s API docs, library guides, framework manuals, or something else.
 
-![Reference files and folders](https://www.codegpt.ee/images/features/reference-docs-w800.png)
+![Reference files and folders](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/reference-docs-w800.png)
 
 **Search the web**
 
-Connect your favourite LLM to the web. CodeGPT will search for the most relevant information to answer your questions.
+Connect your favourite LLM to the web. ProxyAI will search for the most relevant information to answer your questions.
 
-![Web search](https://www.codegpt.ee/images/features/web-search-w800.png)
+![Web search](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/web-search-w800.png)
 
 **Customize your assistant**
 
 Choose between multiple different personas for your specific needs, whether you're looking to learn, write or proofread. 
 
-![Customize your assistant](https://www.codegpt.ee/images/features/persona-suggestions-w800.png)
+![Customize your assistant](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/persona-suggestions-w800.png)
 
 ### Code
 
 Get helpful code completions as you type, edit your code using natural language, create clear and
-concise commit messages automatically, and more. CodeGPT equips you with cutting-edge tools to
+concise commit messages automatically, and more. ProxyAI equips you with cutting-edge tools to
 streamline your workflow.
 
-**Code Assistant <sup><small>(new)</small></sup>**
+**Next edits**
 
-Get multi-line edits based on your recent activity, open files and previous chat interactions.
+Get multi-line edits based on your recent activity as you type.
 
-![Code assistant](https://www.codegpt.ee/images/features/code-assistant-w800.png)
+![Code assistant](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/code-assistant-w800.png)
 
 **Autocomplete your code**
 
 Receive single-line or whole-function autocomplete suggestions as you type.
 
-![Autocomplete your code](https://www.codegpt.ee/images/features/inline-completion-w800.png)
+![Autocomplete your code](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/inline-completion-w800.png)
 
 **Edit code in natural language**
 
-Highlight the code you want to modify, describe the desired changes, and watch CodeGPT work its magic.
+Highlight the code you want to modify, describe the desired changes, and watch ProxyAI work its magic.
 
-![Edit code](https://www.codegpt.ee/images/features/edit-code-w800.png)
+![Edit code](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/edit-code-w800.png)
 
 **Get name suggestions**
 
 Get context-aware naming suggestions for methods, variables, and more.
 
-![Name suggestions](https://www.codegpt.ee/images/features/name-suggestions-w800.png)
+![Name suggestions](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/name-suggestions-w800.png)
 
 **Generate commit messages**
 
 Generate concise and descriptive commit messages based on the changes made in your codebase.
 
-![Generate commit messages](https://www.codegpt.ee/images/features/generate-commit-message-w800.png)
+![Generate commit messages](https://codegpt-assets.s3.us-west-2.amazonaws.com/images/jetbrains/features/generate-commit-message-w800.png)
 
 **Offline Development Support (llama.cpp and Ollama)**
 
@@ -119,18 +108,18 @@ Integrate local open-source language models into your coding environment and enj
 
 ## Privacy
 
-**Your data stays yours.** CodeGPT **does not** collect or store any sensitive information. With users' consent, we collect anonymous usage data to understand how users interact with the extension, including the most-used features and preferred providers.
+**Your data stays yours.** ProxyAI **does not** collect or store any sensitive information. With users' consent, we collect anonymous usage data to understand how users interact with the extension, including the most-used features and preferred providers.
 
 ## License
 
-CodeGPT's code is open source under the Apache License 2.0.
+ProxyAI's code is open source under the Apache License 2.0.
 
 ## Feedback
 
 Your input helps us grow. Reach out through:
 
-- [Homepage](https://codegpt.ee)
-- [Issue Tracker](https://github.com/carlrobertoh/CodeGPT/issues)
+- [Homepage](https://proxyai.ee)
+- [Issue Tracker](https://github.com/carlrobertoh/ProxyAI/issues)
 - [Discord](https://discord.gg/8dTGGrwcnR)
 - [Email](mailto:carlrobertoh@gmail.com)
 

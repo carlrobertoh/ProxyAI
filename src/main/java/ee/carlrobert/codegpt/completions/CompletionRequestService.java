@@ -197,13 +197,15 @@ public final class CompletionRequestService {
 
   private static boolean isRequestAllowed(ServiceType serviceType) {
     return switch (serviceType) {
-      case OPENAI -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.OPENAI_API_KEY);
+      case OPENAI -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.OpenaiApiKey.INSTANCE);
       case AZURE -> CredentialsStore.INSTANCE.isCredentialSet(
           AzureSettings.getCurrentState().isUseAzureApiKeyAuthentication()
-              ? CredentialKey.AZURE_OPENAI_API_KEY
-              : CredentialKey.AZURE_ACTIVE_DIRECTORY_TOKEN);
-      case ANTHROPIC -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.ANTHROPIC_API_KEY);
-      case GOOGLE -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.GOOGLE_API_KEY);
+              ? CredentialKey.AzureOpenaiApiKey.INSTANCE
+              : CredentialKey.AzureActiveDirectoryToken.INSTANCE);
+      case ANTHROPIC -> CredentialsStore.INSTANCE.isCredentialSet(
+          CredentialKey.AnthropicApiKey.INSTANCE
+      );
+      case GOOGLE -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.GoogleApiKey.INSTANCE);
       case CODEGPT, CUSTOM_OPENAI, LLAMA_CPP, OLLAMA -> true;
     };
   }

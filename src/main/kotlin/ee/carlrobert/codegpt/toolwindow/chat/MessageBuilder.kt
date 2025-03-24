@@ -44,8 +44,10 @@ class MessageBuilder(private val project: Project, private val text: String) {
         message: Message,
         tags: List<TagDetails>
     ): String = buildString {
-        tags.forEach {
-            TagProcessorFactory.getProcessor(project, it).process(message, it, this)
-        }
+        tags
+            .map {
+                TagProcessorFactory.getProcessor(project, it)
+            }
+            .forEach { it.process(message, this) }
     }
 }

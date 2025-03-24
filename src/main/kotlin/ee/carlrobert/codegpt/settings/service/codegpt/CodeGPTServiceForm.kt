@@ -6,7 +6,7 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.util.ui.FormBuilder
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CODEGPT_API_KEY
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.ui.UIUtil
@@ -32,9 +32,9 @@ class CodeGPTServiceForm {
             renderer = CustomComboBoxRenderer()
         }
 
-    private val codeAssistantEnabledCheckBox = JBCheckBox(
-        CodeGPTBundle.get("shared.enableCodeAssistant"),
-        service<CodeGPTServiceSettings>().state.codeAssistantEnabled
+    private val enableNextEditsEnabledCheckBox = JBCheckBox(
+        "Enable multi-line edits",
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled
     )
 
     private val codeCompletionsEnabledCheckBox = JBCheckBox(
@@ -52,7 +52,7 @@ class CodeGPTServiceForm {
 
     init {
         apiKeyField.text = runBlocking(Dispatchers.IO) {
-            getCredential(CODEGPT_API_KEY)
+            getCredential(CodeGptApiKey)
         }
     }
 
@@ -73,12 +73,15 @@ class CodeGPTServiceForm {
             UIUtil.createComment("settingsConfigurable.service.codegpt.codeCompletionModel.comment")
         )
         .addVerticalGap(4)
-        .addComponent(codeAssistantEnabledCheckBox)
+        .addComponent(enableNextEditsEnabledCheckBox)
         .addComponent(
-            UIUtil.createComment("settingsConfigurable.service.codegpt.enableCodeAssistant.comment", 90)
+            UIUtil.createComment("settingsConfigurable.service.codegpt.enableNextEdits.comment", 90)
         )
         .addVerticalGap(4)
         .addComponent(codeCompletionsEnabledCheckBox)
+        .addComponent(
+            UIUtil.createComment("settingsConfigurable.service.codegpt.enableCodeCompletion.comment", 90)
+        )
         .addComponentFillVertically(JPanel(), 0)
         .panel
 
@@ -87,14 +90,14 @@ class CodeGPTServiceForm {
     fun isModified() = service<CodeGPTServiceSettings>().state.run {
         (chatCompletionModelComboBox.selectedItem as CodeGPTModel).code != chatCompletionSettings.model
                 || (codeCompletionModelComboBox.selectedItem as CodeGPTModel).code != codeCompletionSettings.model
-                || codeAssistantEnabledCheckBox.isSelected != codeAssistantEnabled
+                || enableNextEditsEnabledCheckBox.isSelected != nextEditsEnabled
                 || codeCompletionsEnabledCheckBox.isSelected != codeCompletionSettings.codeCompletionsEnabled
-                || getApiKey() != getCredential(CODEGPT_API_KEY)
+                || getApiKey() != getCredential(CodeGptApiKey)
     }
 
     fun applyChanges() {
         service<CodeGPTServiceSettings>().state.run {
-            codeAssistantEnabled = codeAssistantEnabledCheckBox.isSelected
+            nextEditsEnabled = enableNextEditsEnabledCheckBox.isSelected
             chatCompletionSettings.model =
                 (chatCompletionModelComboBox.selectedItem as CodeGPTModel).code
             codeCompletionSettings.codeCompletionsEnabled =
@@ -102,18 +105,18 @@ class CodeGPTServiceForm {
             codeCompletionSettings.model =
                 (codeCompletionModelComboBox.selectedItem as CodeGPTModel).code
         }
-        setCredential(CODEGPT_API_KEY, getApiKey())
+        setCredential(CodeGptApiKey, getApiKey())
     }
 
     fun resetForm() {
         service<CodeGPTServiceSettings>().state.run {
-            codeAssistantEnabledCheckBox.isSelected = codeAssistantEnabled
+            enableNextEditsEnabledCheckBox.isSelected = nextEditsEnabled
             chatCompletionModelComboBox.selectedItem = chatCompletionSettings.model
             codeCompletionModelComboBox.selectedItem = codeCompletionSettings.model
             codeCompletionsEnabledCheckBox.isSelected =
                 codeCompletionSettings.codeCompletionsEnabled
         }
-        apiKeyField.text = getCredential(CODEGPT_API_KEY)
+        apiKeyField.text = getCredential(CodeGptApiKey)
     }
 
     private class CustomComboBoxRenderer : DefaultListCellRenderer() {

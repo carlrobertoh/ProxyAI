@@ -8,7 +8,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
-import ee.carlrobert.codegpt.CodeGPTKeys.IS_FETCHING_COMPLETION
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_EDITOR_COMPLETION
 import ee.carlrobert.codegpt.codecompletions.CompletionUtil.formatCompletion
 import ee.carlrobert.codegpt.settings.GeneralSettings
@@ -61,10 +60,9 @@ abstract class CodeCompletionEventListener(
     }
 
     private fun setLoading(loading: Boolean) {
-        IS_FETCHING_COMPLETION.set(editor, loading)
-        editor.project?.messageBus
-            ?.syncPublisher(CodeCompletionProgressNotifier.CODE_COMPLETION_PROGRESS_TOPIC)
-            ?.loading(loading)
+        editor.project?.let {
+            CompletionProgressNotifier.update(it, loading)
+        }
     }
 }
 
@@ -74,6 +72,7 @@ class CodeCompletionMultiLineEventListener(
 ) : CodeCompletionEventListener(request.editor) {
 
     override fun handleCompleted(messageBuilder: StringBuilder) {
+        request.editor.project?.let { CompletionProgressNotifier.update(it, false) }
         runInEdt {
             onCompletionReceived(runWriteAction {
                 messageBuilder.toString().formatCompletion(request)

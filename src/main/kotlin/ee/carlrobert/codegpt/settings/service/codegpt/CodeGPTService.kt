@@ -5,7 +5,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CODEGPT_API_KEY
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier.Companion.CODEGPT_USER_DETAILS_TOPIC
@@ -17,7 +17,7 @@ class CodeGPTService private constructor(val project: Project) {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     fun syncUserDetailsAsync() {
-        syncUserDetailsAsync(getCredential(CODEGPT_API_KEY))
+        syncUserDetailsAsync(getCredential(CodeGptApiKey))
     }
 
     fun syncUserDetailsAsync(apiKey: String?) {

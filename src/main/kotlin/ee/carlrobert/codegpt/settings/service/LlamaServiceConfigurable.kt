@@ -1,9 +1,8 @@
 package ee.carlrobert.codegpt.settings.service
 
 import com.intellij.openapi.components.service
-import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.options.Configurable
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LLAMA_API_KEY
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LlamaApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.GeneralSettings
@@ -16,7 +15,7 @@ class LlamaServiceConfigurable : Configurable {
     private lateinit var component: LlamaSettingsForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: Custom Service"
+        return "ProxyAI: Custom Service"
     }
 
     override fun createComponent(): JComponent {
@@ -26,12 +25,12 @@ class LlamaServiceConfigurable : Configurable {
 
     override fun isModified(): Boolean {
         return component.getCurrentState() != service<LlamaSettings>().state
-                || component.llamaServerPreferencesForm.getApiKey() != getCredential(LLAMA_API_KEY)
+                || component.llamaServerPreferencesForm.getApiKey() != getCredential(LlamaApiKey)
     }
 
     override fun apply() {
         service<GeneralSettings>().state.selectedService = ServiceType.LLAMA_CPP
-        setCredential(LLAMA_API_KEY, component.llamaServerPreferencesForm.getApiKey())
+        setCredential(LlamaApiKey, component.llamaServerPreferencesForm.getApiKey())
         service<LlamaSettings>().loadState(component.currentState)
     }
 

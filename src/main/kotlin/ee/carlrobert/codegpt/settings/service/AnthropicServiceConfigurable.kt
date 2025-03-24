@@ -2,7 +2,7 @@ package ee.carlrobert.codegpt.settings.service
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.ANTHROPIC_API_KEY
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.AnthropicApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.GeneralSettings
@@ -15,7 +15,7 @@ class AnthropicServiceConfigurable : Configurable {
     private lateinit var component: AnthropicSettingsForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: Anthropic Service"
+        return "ProxyAI: Anthropic Service"
     }
 
     override fun createComponent(): JComponent {
@@ -25,11 +25,11 @@ class AnthropicServiceConfigurable : Configurable {
 
     override fun isModified(): Boolean {
         return component.getCurrentState() != service<AnthropicSettings>().state
-                || component.getApiKey() != getCredential(ANTHROPIC_API_KEY)
+                || component.getApiKey() != getCredential(AnthropicApiKey)
     }
 
     override fun apply() {
-        setCredential(ANTHROPIC_API_KEY, component.getApiKey())
+        setCredential(AnthropicApiKey, component.getApiKey())
         service<GeneralSettings>().state.selectedService = ServiceType.ANTHROPIC
         service<AnthropicSettings>().loadState(component.getCurrentState())
     }

@@ -32,11 +32,17 @@ class ConfigurationSettingsState : BaseState() {
     var captureCompileErrors by property(true)
     var autoFormattingEnabled by property(true)
     var tableData by map<String, String>()
+    var chatCompletionSettings by property(ChatCompletionSettingsState())
     var codeCompletionSettings by property(CodeCompletionSettingsState())
 
     init {
         tableData.putAll(EditorActionsUtil.DEFAULT_ACTIONS)
     }
+}
+
+class ChatCompletionSettingsState : BaseState() {
+    var editorContextTagEnabled by property(true)
+    var psiStructureEnabled by property(true)
 }
 
 class CodeCompletionSettingsState : BaseState() {

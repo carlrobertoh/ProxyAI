@@ -105,8 +105,8 @@ enum class CustomServiceChatCompletionTemplate(
         getDefaultHeaders(
             mapOf(
                 "Authorization" to "Bearer \$CUSTOM_SERVICE_API_KEY",
-                "HTTP-Referer" to "https://plugins.jetbrains.com/plugin/21056-codegpt",
-                "X-Title" to "CodeGPT"
+                "HTTP-Referer" to "https://tryproxy.io",
+                "X-Title" to "ProxyAI"
             )
         ),
         getDefaultBodyParams(
@@ -133,7 +133,7 @@ private fun getDefaultHeaders(key: String, value: String): MutableMap<String, St
 private fun getDefaultHeaders(additionalHeaders: Map<String, String>): MutableMap<String, String> {
     val defaultHeaders = mutableMapOf(
         "Content-Type" to "application/json",
-        "X-LLM-Application-Tag" to "codegpt"
+        "X-LLM-Application-Tag" to "proxyai"
     )
     defaultHeaders.putAll(additionalHeaders)
     return defaultHeaders

@@ -12,15 +12,18 @@ import com.intellij.openapi.editor.event.EditorFactoryListener;
 import com.intellij.openapi.editor.event.SelectionEvent;
 import com.intellij.openapi.editor.event.SelectionListener;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.text.Strings;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.EncodingManager;
-import ee.carlrobert.codegpt.ReferencedFile;
-import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier;
 import ee.carlrobert.codegpt.conversations.Conversation;
+import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
+import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
+import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
 import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -30,6 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import javax.swing.Box;
 import javax.swing.JPanel;
+import kotlin.Unit;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -40,13 +44,29 @@ public class TotalTokensPanel extends JPanel {
   private final JBLabel label;
 
   public TotalTokensPanel(
-      @NotNull Project project,
       Conversation conversation,
       @Nullable String highlightedText,
-      Disposable parentDisposable) {
+      Disposable parentDisposable,
+      PsiStructureRepository psiStructureRepository
+  ) {
     super(new FlowLayout(FlowLayout.LEADING, 0, 0));
     this.totalTokensDetails = createTokenDetails(conversation, highlightedText);
     this.label = getLabel(totalTokensDetails);
+
+    new PsiStructureTotalTokenProvider(
+        parentDisposable,
+        ClassStructureSerializer.INSTANCE,
+        encodingManager,
+        new CoroutineDispatchers(),
+        psiStructureRepository,
+        psiTokens -> {
+          if (ConfigurationSettings.getState().getChatCompletionSettings()
+              .getPsiStructureEnabled()) {
+            updatePsiTokenCount(psiTokens);
+          }
+          return Unit.INSTANCE;
+        }
+    );
 
     setBorder(JBUI.Borders.empty(4));
     setOpaque(false);
@@ -54,13 +74,6 @@ public class TotalTokensPanel extends JPanel {
     add(Box.createHorizontalStrut(4));
     add(label);
     addSelectionListeners(parentDisposable);
-
-    project.getMessageBus()
-        .connect()
-        .subscribe(IncludeFilesInContextNotifier.FILES_INCLUDED_IN_CONTEXT_TOPIC,
-            (IncludeFilesInContextNotifier) includedFiles ->
-                updateReferencedFilesTokens(
-                    includedFiles.stream().map(ReferencedFile::from).toList()));
   }
 
   private void addSelectionListeners(Disposable parentDisposable) {
@@ -104,6 +117,11 @@ public class TotalTokensPanel extends JPanel {
     label.setText(getLabelHtml(total));
   }
 
+  public void updatePsiTokenCount(int psiTokenCount) {
+    totalTokensDetails.setPsiTokens(psiTokenCount);
+    update();
+  }
+
   public void updateConversationTokens(Conversation conversation) {
     totalTokensDetails.setConversationTokens(encodingManager.countConversationTokens(conversation));
     update();
@@ -119,10 +137,9 @@ public class TotalTokensPanel extends JPanel {
     update();
   }
 
-  public void updateReferencedFilesTokens(List<ReferencedFile> includedFiles) {
-    totalTokensDetails.setReferencedFilesTokens(includedFiles.stream()
-        .mapToInt(file -> encodingManager.countTokens(file.fileContent()))
-        .sum());
+  public void updateReferencedFilesTokens(List<String> includedFileContents) {
+    totalTokensDetails.setReferencedFilesTokens(
+        encodingManager.countTokens(Strings.join(includedFileContents, "\n")));
     update();
   }
 
@@ -148,7 +165,8 @@ public class TotalTokensPanel extends JPanel {
             "Conversation Tokens", totalTokensDetails.getConversationTokens(),
             "Input Tokens", totalTokensDetails.getUserPromptTokens(),
             "Highlighted Tokens", totalTokensDetails.getHighlightedTokens(),
-            "Referenced Files Tokens", totalTokensDetails.getReferencedFilesTokens()))
+            "Referenced Files Tokens", totalTokensDetails.getReferencedFilesTokens(),
+            "Dependency Structure Tokens", totalTokensDetails.getPsiTokens()))
             .entrySet().stream()
             .map(entry -> format(
                 "<p style=\"margin: 0; padding: 0;\"><small>%s: <strong>%d</strong></small></p>",

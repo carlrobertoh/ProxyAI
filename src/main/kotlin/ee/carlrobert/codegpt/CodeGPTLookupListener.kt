@@ -8,8 +8,6 @@ import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CODEGPT_API_KEY
-import ee.carlrobert.codegpt.credentials.CredentialsStore.isCredentialSet
 import ee.carlrobert.codegpt.predictions.PredictionService
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -34,22 +32,14 @@ class CodeGPTLookupListener : LookupManagerListener {
 
                 override fun itemSelected(event: LookupEvent) {
                     val editor = newLookup.editor
-                    val encodingManager = EncodingManager.getInstance()
                     if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT
-                        || !service<CodeGPTServiceSettings>().state.codeAssistantEnabled
-                        || encodingManager.countTokens(editor.document.text) > 4096
-                        || !isCredentialSet(CODEGPT_API_KEY) && encodingManager.countTokens(editor.document.text) > 2048
+                        || !service<CodeGPTServiceSettings>().state.nextEditsEnabled
                     ) {
                         return
                     }
 
                     ApplicationManager.getApplication().executeOnPooledThread {
-                        service<PredictionService>().displayLookupPrediction(
-                            editor,
-                            event,
-                            beforeApply,
-                            cursorOffset
-                        )
+                        service<PredictionService>().displayInlineDiff(editor)
                     }
                 }
             })

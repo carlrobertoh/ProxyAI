@@ -28,19 +28,19 @@ public class CompletionClientProvider {
 
   public static CodeGPTClient getCodeGPTClient() {
     return new CodeGPTClient(
-        getCredential(CredentialKey.CODEGPT_API_KEY),
+        getCredential(CredentialKey.CodeGptApiKey.INSTANCE),
         getDefaultClientBuilder());
   }
 
   public static OpenAIClient getOpenAIClient() {
-    return new OpenAIClient.Builder(getCredential(CredentialKey.OPENAI_API_KEY))
+    return new OpenAIClient.Builder(getCredential(CredentialKey.OpenaiApiKey.INSTANCE))
         .setOrganization(OpenAISettings.getCurrentState().getOrganization())
         .build(getDefaultClientBuilder());
   }
 
   public static ClaudeClient getClaudeClient() {
     return new ClaudeClient(
-        getCredential(CredentialKey.ANTHROPIC_API_KEY),
+        getCredential(CredentialKey.AnthropicApiKey.INSTANCE),
         AnthropicSettings.getCurrentState().getApiVersion(),
         getDefaultClientBuilder());
   }
@@ -53,8 +53,8 @@ public class CompletionClientProvider {
         settings.getApiVersion());
     var useAzureActiveDirectoryAuthentication = settings.isUseAzureActiveDirectoryAuthentication();
     var credential = useAzureActiveDirectoryAuthentication
-        ? getCredential(CredentialKey.AZURE_ACTIVE_DIRECTORY_TOKEN)
-        : getCredential(CredentialKey.AZURE_OPENAI_API_KEY);
+        ? getCredential(CredentialKey.AzureActiveDirectoryToken.INSTANCE)
+        : getCredential(CredentialKey.AzureOpenaiApiKey.INSTANCE);
     return new AzureClient.Builder(credential, params)
         .setActiveDirectoryAuthentication(useAzureActiveDirectoryAuthentication)
         .build(getDefaultClientBuilder());
@@ -66,7 +66,7 @@ public class CompletionClientProvider {
         .setPort(llamaSettings.getServerPort());
     if (!llamaSettings.isRunLocalServer()) {
       builder.setHost(llamaSettings.getBaseHost());
-      String apiKey = getCredential(CredentialKey.LLAMA_API_KEY);
+      String apiKey = getCredential(CredentialKey.LlamaApiKey.INSTANCE);
       if (apiKey != null && !apiKey.isBlank()) {
         builder.setApiKey(apiKey);
       }
@@ -82,7 +82,7 @@ public class CompletionClientProvider {
     var builder = new OllamaClient.Builder()
         .setHost(host);
 
-    String apiKey = getCredential(CredentialKey.OLLAMA_API_KEY);
+    String apiKey = getCredential(CredentialKey.OllamaApikey.INSTANCE);
     if (apiKey != null && !apiKey.isBlank()) {
       builder.setApiKey(apiKey);
     }
@@ -90,7 +90,7 @@ public class CompletionClientProvider {
   }
 
   public static GoogleClient getGoogleClient() {
-    return new GoogleClient.Builder(getCredential(CredentialKey.GOOGLE_API_KEY))
+    return new GoogleClient.Builder(getCredential(CredentialKey.GoogleApiKey.INSTANCE))
         .build(getDefaultClientBuilder());
   }
 

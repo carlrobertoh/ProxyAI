@@ -2,7 +2,7 @@ package ee.carlrobert.codegpt.settings.service
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OPENAI_API_KEY
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OpenaiApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.GeneralSettings
@@ -15,7 +15,7 @@ class OpenAIServiceConfigurable : Configurable {
     private lateinit var component: OpenAISettingsForm
 
     override fun getDisplayName(): String {
-        return "CodeGPT: OpenAI Service"
+        return "ProxyAI: OpenAI Service"
     }
 
     override fun createComponent(): JComponent {
@@ -25,12 +25,12 @@ class OpenAIServiceConfigurable : Configurable {
 
     override fun isModified(): Boolean {
         return component.getCurrentState() != service<OpenAISettings>().state
-                || component.getApiKey() != getCredential(OPENAI_API_KEY)
+                || component.getApiKey() != getCredential(OpenaiApiKey)
     }
 
     override fun apply() {
         service<GeneralSettings>().state.selectedService = ServiceType.OPENAI
-        setCredential(OPENAI_API_KEY, component.getApiKey())
+        setCredential(OpenaiApiKey, component.getApiKey())
         service<OpenAISettings>().loadState(component.getCurrentState())
     }
 
