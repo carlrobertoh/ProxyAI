@@ -10,6 +10,7 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -126,7 +127,7 @@ class UserInputPanel(
             if (EditorUtil.hasSelection(editor)) {
                 tagManager.addTag(
                     EditorSelectionTagDetails(
-                        editor.virtualFile,
+                        (editor as EditorEx).virtualFile,
                         editor.selectionModel
                     )
                 )

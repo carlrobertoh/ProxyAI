@@ -14,7 +14,3 @@ suspend fun <T> withEdt(
 suspend fun <T> withCurrentEdt(block: suspend CoroutineScope.() -> T): T {
     return withContext(EdtDispatchers.Current, block)
 }
-
-suspend fun <T> withNonModalEdt(block: suspend CoroutineScope.() -> T): T {
-    return withContext(EdtDispatchers.NonModal, block)
-}

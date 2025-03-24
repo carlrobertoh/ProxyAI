@@ -11,15 +11,12 @@ class CoroutineDispatchers {
 
     fun io(): CoroutineDispatcher = Dispatchers.IO
 
-    fun edtNonModal(): CoroutineDispatcher = EdtDispatchers.NonModal
-
     fun edtCurrent(): CoroutineDispatcher = EdtDispatchers.Current
 
     fun edtDefault(): CoroutineDispatcher = EdtDispatchers.Default
 }
 
 object EdtDispatchers {
-    val NonModal = EdtCoroutineDispatcher(ModalityState.nonModal())
     val Default = EdtCoroutineDispatcher()
     val Current = EdtCoroutineDispatcher(ModalityState.current())
 
