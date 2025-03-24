@@ -6,8 +6,20 @@ import com.intellij.openapi.ui.popup.JBPopupListener
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
 import com.intellij.ui.awt.RelativePoint
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
-import ee.carlrobert.codegpt.ui.textarea.suggestion.item.*
-import kotlinx.coroutines.*
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.DocumentationSuggestionGroupItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.FileSuggestionGroupItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.FolderSuggestionGroupItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.GitSuggestionGroupItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.PersonaSuggestionGroupItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.SuggestionActionItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.SuggestionGroupItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.SuggestionItem
+import ee.carlrobert.codegpt.ui.textarea.suggestion.item.WebSearchActionItem
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.awt.Dimension
 import java.awt.Point
 import javax.swing.DefaultListModel
@@ -22,7 +34,7 @@ class SuggestionsPopupManager(
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var selectedActionGroup: SuggestionGroupItem? = null
     private var popup: JBPopup? = null
-    private var originalLocation: Point? = null
+
     private val listModel = DefaultListModel<SuggestionItem>().apply {
         addListDataListener(object : ListDataListener {
             override fun intervalAdded(e: ListDataEvent) = adjustPopupSize()
@@ -46,12 +58,12 @@ class SuggestionsPopupManager(
         popup = SuggestionsPopupBuilder()
             .setPreferableFocusComponent(component)
             .setOnCancel {
-                originalLocation = null
                 true
             }
             .build(list)
+
         popup?.showAbove(userInputPanel)
-        originalLocation = userInputPanel.locationOnScreen
+
         reset(true)
         selectNext()
     }
@@ -123,10 +135,19 @@ class SuggestionsPopupManager(
         list.repaint()
 
         popup?.size = Dimension(list.preferredSize.width, list.preferredSize.height + 32)
-        originalLocation?.let { original ->
-            val newY = original.y - list.preferredSize.height - 32
-            popup?.setLocation(Point(original.x, maxOf(newY, 0)))
-        }
+
+        val bounds = userInputPanel.bounds
+        val locationOnScreen = userInputPanel.locationOnScreen
+
+        val deviceConfiguration = userInputPanel.graphicsConfiguration
+        val screenBounds = deviceConfiguration.bounds
+
+        val popupSize = popup?.size ?: Dimension(0, 0)
+        val newY = locationOnScreen.y - popupSize.height
+
+        val adjustedY = if (newY < screenBounds.y) locationOnScreen.y + bounds.height else newY
+
+        popup?.setLocation(Point(locationOnScreen.x, adjustedY))
     }
 }
 
