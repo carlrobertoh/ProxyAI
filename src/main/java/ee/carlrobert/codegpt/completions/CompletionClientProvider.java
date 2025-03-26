@@ -39,10 +39,12 @@ public class CompletionClientProvider {
   }
 
   public static ClaudeClient getClaudeClient() {
-    return new ClaudeClient(
-        getCredential(CredentialKey.AnthropicApiKey.INSTANCE),
-        AnthropicSettings.getCurrentState().getApiVersion(),
-        getDefaultClientBuilder());
+    var builder = new ClaudeClient.Builder(getCredential(CredentialKey.AnthropicApiKey.INSTANCE),
+            AnthropicSettings.getCurrentState().getApiVersion());
+    if (AnthropicSettings.getCurrentState().hasCustomBaseHost()) {
+      builder.setHost(AnthropicSettings.getCurrentState().getBaseHost());
+    }
+    return builder.build(getDefaultClientBuilder());
   }
 
   public static AzureClient getAzureClient() {
