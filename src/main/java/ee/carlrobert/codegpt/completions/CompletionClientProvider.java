@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.completions;
 import static ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential;
 
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.util.net.ssl.CertificateManager;
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
 import ee.carlrobert.codegpt.settings.advanced.AdvancedSettings;
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings;
@@ -21,6 +22,7 @@ import ee.carlrobert.llm.client.openai.OpenAIClient;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.util.concurrent.TimeUnit;
+import javax.net.ssl.X509TrustManager;
 import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
 
@@ -98,6 +100,9 @@ public class CompletionClientProvider {
 
   public static OkHttpClient.Builder getDefaultClientBuilder() {
     OkHttpClient.Builder builder = new OkHttpClient.Builder();
+    CertificateManager certificateManager = CertificateManager.getInstance();
+    X509TrustManager trustManager = certificateManager.getTrustManager();
+    builder.sslSocketFactory(certificateManager.getSslContext().getSocketFactory(), trustManager);
     var advancedSettings = AdvancedSettings.getCurrentState();
     var proxyHost = advancedSettings.getProxyHost();
     var proxyPort = advancedSettings.getProxyPort();
