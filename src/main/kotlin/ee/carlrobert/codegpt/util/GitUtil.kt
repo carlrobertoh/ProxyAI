@@ -89,6 +89,19 @@ object GitUtil {
     }
 
     @Throws(VcsException::class)
+    fun visitRepositoryCommits(
+        project: Project,
+        repository: GitRepository,
+        onVisit: (GitCommit) -> Unit
+    ) {
+        try {
+            GitHistoryUtils.loadDetails(project, repository.root, { onVisit(it) })
+        } catch (e: VcsException) {
+            logger.error("Error fetching commit history: {}", e.message)
+        }
+    }
+
+    @Throws(VcsException::class)
     fun getAllRecentCommits(
         project: Project,
         repository: GitRepository,

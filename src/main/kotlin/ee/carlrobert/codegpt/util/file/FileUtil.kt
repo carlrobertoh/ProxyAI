@@ -3,15 +3,12 @@ package ee.carlrobert.codegpt.util.file
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.io.FileUtil.createDirectory
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileFilter
+import com.intellij.psi.search.*
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings.getLlamaModelsPath
 import java.io.File
 import java.io.FileOutputStream
@@ -237,54 +234,4 @@ object FileUtil {
                 )
             }
     }
-
-    fun searchProjectFiles(
-        project: Project,
-        query: String,
-        maxResults: Int = 6,
-    ): List<VirtualFile> {
-        val results = mutableListOf<SearchResult>()
-        val fileIndex = project.service<ProjectFileIndex>()
-
-        fileIndex.iterateContent({ file ->
-            if (results.size > 9) {
-                return@iterateContent false
-            }
-
-            val score = calculateScore(file, query)
-            if (score > 0) {
-                results.add(SearchResult(file, score))
-            }
-            true
-        }, object : VirtualFileFilter {
-            override fun accept(file: VirtualFile): Boolean {
-                return !file.isDirectory && fileIndex.isInContent(file)
-            }
-
-            override fun toString(): String {
-                return "NONE"
-            }
-        })
-
-        return results
-            .sortedByDescending { it.score }
-            .take(maxResults)
-            .map { it.file }
-    }
-
-    private fun calculateScore(file: VirtualFile, query: String): Int {
-        val fileName = file.nameWithoutExtension.lowercase()
-        val lowercaseQuery = query.lowercase()
-
-        return when {
-            fileName == lowercaseQuery -> 100
-            fileName.startsWith(lowercaseQuery) -> 50
-            lowercaseQuery in fileName -> 25
-            fileName.length < lowercaseQuery.length && lowercaseQuery.startsWith(fileName) -> 15
-            else -> 0
-        }
-    }
-
 }
-
-data class SearchResult(val file: VirtualFile, val score: Int)

@@ -18,6 +18,7 @@ public final class Icons {
   public static final Icon Google = IconLoader.getIcon("/icons/google.svg", Icons.class);
   public static final Icon Llama = IconLoader.getIcon("/icons/llama.svg", Icons.class);
   public static final Icon OpenAI = IconLoader.getIcon("/icons/openai.svg", Icons.class);
+  public static final Icon MCP = IconLoader.getIcon("/icons/mcp.svg", Icons.class);
   public static final Icon Meta = IconLoader.getIcon("/icons/meta.svg", Icons.class);
   public static final Icon Mistral = IconLoader.getIcon("/icons/mistral.svg", Icons.class);
   public static final Icon Send = IconLoader.getIcon("/icons/send.svg", Icons.class);
