@@ -6,6 +6,7 @@ public class AnthropicSettingsState {
 
   private String apiVersion = "2023-06-01";
   private String model = "claude-3-opus-20240229";
+  private String baseHost = "";
 
   public String getApiVersion() {
     return apiVersion;
@@ -23,6 +24,18 @@ public class AnthropicSettingsState {
     this.model = model;
   }
 
+  public String getBaseHost() {
+    return baseHost;
+  }
+
+  public void setBaseHost(String baseHost) {
+    this.baseHost = baseHost;
+  }
+
+  public boolean hasCustomBaseHost() {
+    return baseHost != null && !baseHost.trim().isEmpty();
+  }
+
   @Override
   public boolean equals(Object o) {
     if (this == o) {
@@ -32,11 +45,13 @@ public class AnthropicSettingsState {
       return false;
     }
     AnthropicSettingsState that = (AnthropicSettingsState) o;
-    return Objects.equals(apiVersion, that.apiVersion) && Objects.equals(model, that.model);
+    return Objects.equals(apiVersion, that.apiVersion)
+            && Objects.equals(model, that.model)
+            && Objects.equals(baseHost, that.baseHost);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(apiVersion, model);
+    return Objects.hash(apiVersion, model, baseHost);
   }
 }
