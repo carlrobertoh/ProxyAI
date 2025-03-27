@@ -16,7 +16,7 @@ llm-client = "0.8.37"
 okio = "3.9.0"
 tree-sitter = "0.24.5"
 grpc = "1.71.0"
-protobuf = "3.25.1"
+protobuf = "4.30.2"
 protobuf-plugin = "0.9.4"
 
 [libraries]
