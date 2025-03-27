@@ -1,24 +1,33 @@
 package ee.carlrobert.codegpt;
 
 import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
 import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public record ReferencedFile(String fileName, String filePath, String fileContent) {
+public record ReferencedFile(String fileName, String filePath, String fileContent,
+                             boolean directory) {
+
+  public ReferencedFile(String fileName, String filePath, String fileContent) {
+    this(fileName, filePath, fileContent, false);
+  }
+
+  public ReferencedFile(String fileName, String filePath, String fileContent, boolean directory) {
+    this.fileName = fileName;
+    this.filePath = filePath;
+    this.fileContent = fileContent;
+    this.directory = directory;
+  }
 
   public static ReferencedFile from(File file) {
     return new ReferencedFile(
         file.getName(),
         file.getPath(),
-        FileUtil.readContent(file)
+        FileUtil.readContent(file),
+        file.isDirectory()
     );
   }
 
@@ -26,7 +35,8 @@ public record ReferencedFile(String fileName, String filePath, String fileConten
     return new ReferencedFile(
         virtualFile.getName(),
         virtualFile.getPath(),
-        getVirtualFileContent(virtualFile)
+        getVirtualFileContent(virtualFile),
+        virtualFile.isDirectory()
     );
   }
 

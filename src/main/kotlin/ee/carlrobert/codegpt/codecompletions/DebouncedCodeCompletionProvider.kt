@@ -10,7 +10,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_EDITOR_COMPLETION
-import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.codegpt.predictions.PredictionService
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -51,8 +51,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
     override suspend fun getSuggestionDebounced(request: InlineCompletionRequest): InlineCompletionSuggestion {
         val codegptSettings = service<CodeGPTServiceSettings>().state
-        if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT && codegptSettings.nextEditsEnabled
-        ) {
+        if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT && codegptSettings.nextEditsEnabled) {
             if (codegptSettings.codeCompletionSettings.codeCompletionsEnabled) {
                 codegptSettings.codeCompletionSettings.codeCompletionsEnabled = false
                 OverlayUtil.showNotification(
@@ -76,7 +75,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         val project = request.editor.project ?: return
         try {
             CompletionProgressNotifier.update(project, true)
-            project.service<GrpcClientService>().getNextEdit(request.editor)
+            project.service<PredictionService>().displayInlineDiff(request.editor)
         } catch (ex: Exception) {
             logger.error("Error communicating with server: ${ex.message}")
         }
@@ -172,7 +171,8 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             REMAINING_EDITOR_COMPLETION.get(event.toRequest()?.editor)?.isNotEmpty() ?: false
 
         if (!codeCompletionsEnabled) {
-            return selectedService == ServiceType.CODEGPT
+            return event is InlineCompletionEvent.DocumentChange
+                    && selectedService == ServiceType.CODEGPT
                     && service<CodeGPTServiceSettings>().state.nextEditsEnabled
                     && !hasActiveCompletion
         }
