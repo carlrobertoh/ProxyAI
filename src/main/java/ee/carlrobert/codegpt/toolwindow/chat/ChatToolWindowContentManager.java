@@ -138,4 +138,8 @@ public final class ChatToolWindowContentManager {
         .filter(content -> "Chat".equals(content.getTabName()))
         .findFirst();
   }
+
+  public void clearAllTags() {
+    tryFindActiveChatTabPanel().ifPresent(ChatToolWindowTabPanel::clearAllTags);
+  }
 }

@@ -119,6 +119,13 @@
                     <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift N" replace-all="true"/>
                 </action>
                 <action
+                        id="CodeGPT.ClearTags"
+                        class="ee.carlrobert.codegpt.actions.toolwindow.ClearChatTagsAction"
+                        text="Clear Tags"
+                        description="Clear all files tags in active chat">
+                    <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift T" replace-all="true"/>
+                </action>
+                <action
                   id="CodeGPT.ContextMenuEditCodeAction"
                   text="Edit Code"
                   description="Edit code from editor's context menu"

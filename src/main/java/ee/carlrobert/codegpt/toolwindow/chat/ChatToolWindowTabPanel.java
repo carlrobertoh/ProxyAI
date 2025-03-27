@@ -245,6 +245,10 @@ public class ChatToolWindowTabPanel implements Disposable {
     });
   }
 
+  public void clearAllTags() {
+    tagManager.clear();
+  }
+
   public void includeFiles(List<VirtualFile> referencedFiles) {
     userInputPanel.includeFiles(referencedFiles);
     totalTokensPanel.updateReferencedFilesTokens(

@@ -5,7 +5,7 @@ import kotlinx.coroutines.*
 import kotlin.coroutines.CoroutineContext
 
 internal class DisposableCoroutineScope(
-    scopeDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate
+    scopeDispatcher: CoroutineDispatcher = EdtDispatchers.Default
 ) : Disposable, CoroutineScope {
 
     private val coroutineScope = CoroutineScope(SupervisorJob() + scopeDispatcher)
