@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.ui.textarea.header
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.SelectionModel
@@ -21,12 +22,12 @@ import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.TagDetailsComparator
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
-import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
 import ee.carlrobert.codegpt.util.file.FileUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.awt.*
 import java.awt.event.ActionListener
@@ -37,7 +38,6 @@ class UserInputHeaderPanel(
     private val project: Project,
     private val tagManager: TagManager,
     private val totalTokensPanel: TotalTokensPanel,
-    suggestionsPopupManager: SuggestionsPopupManager,
     private val promptTextField: PromptTextField
 ) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener {
 
@@ -55,10 +55,16 @@ class UserInputHeaderPanel(
 
     private val defaultHeaderTagsPanel = CustomFlowPanel().apply {
         add(AddButton {
-            if (suggestionsPopupManager.isPopupVisible()) {
-                suggestionsPopupManager.hidePopup()
-            } else {
-                suggestionsPopupManager.showPopup(this)
+            CoroutineScope(Dispatchers.Main + SupervisorJob()).launch {
+                promptTextField.requestFocus()
+
+                // TODO: Replace with promptTextField.showGroupLookup()
+                runUndoTransparentWriteAction {
+                    val caretOffset = promptTextField.editor?.caretModel?.offset
+                        ?: return@runUndoTransparentWriteAction
+                    promptTextField.document.insertString(caretOffset, "@")
+                    promptTextField.editor?.caretModel?.moveToOffset(caretOffset + 1)
+                }
             }
         })
         add(emptyText)
@@ -70,10 +76,13 @@ class UserInputHeaderPanel(
         initializeEventListeners()
     }
 
-    fun getSelectedTags(): List<TagDetails> {
-        val selectedTags = tagManager.getTags().filter { it.selected }.toMutableList()
+    fun getSelectedTags(): List<TagDetails> =
+        tagManager.getTags().filter { it.selected }.toMutableList()
 
-        return selectedTags
+    fun getLastTag(): TagDetails? {
+        return tagManager.getTags()
+            .sortedWith(TagDetailsComparator())
+            .lastOrNull()
     }
 
     fun addTag(tagDetails: TagDetails) {

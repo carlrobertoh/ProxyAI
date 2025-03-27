@@ -2,6 +2,8 @@ package ee.carlrobert.codegpt.completions.factory
 
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.components.service
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
@@ -9,14 +11,12 @@ import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.llm.client.codegpt.request.chat.AdditionalRequestContext
-import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest
-import ee.carlrobert.llm.client.codegpt.request.chat.ContextFile
-import ee.carlrobert.llm.client.codegpt.request.chat.DocumentationDetails
-import ee.carlrobert.llm.client.codegpt.request.chat.Metadata
+import ee.carlrobert.codegpt.util.file.FileUtil
+import ee.carlrobert.llm.client.codegpt.request.chat.*
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 
-class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructureSerializer) : BaseRequestFactory() {
+class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructureSerializer) :
+    BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): ChatCompletionRequest {
         val model = service<CodeGPTServiceSettings>().state.chatCompletionSettings.model
@@ -47,17 +47,30 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
             requestBuilder.setWebSearchIncluded(true)
         }
         params.message.documentationDetails?.let {
-            requestBuilder.setDocumentationDetails(
-                DocumentationDetails(it.name, it.url)
-            )
+            requestBuilder.setDocumentationDetails(DocumentationDetails(it.name, it.url))
         }
 
-        val contextFiles = params.referencedFiles?.map { file ->
-            ContextFile(file.fileName(), file.fileContent())
-        }.orEmpty()
+        val contextFiles = params.referencedFiles
+            ?.mapNotNull { file ->
+                LocalFileSystem.getInstance().findFileByPath(file.filePath)?.let {
+                    if (it.isDirectory) {
+                        val children = mutableListOf<ContextFile>()
+                        processFolder(it, children)
+                        children
+                    } else {
+                        listOf(ContextFile(file.fileName(), file.fileContent()))
+                    }
+                }
+            }
+            ?.flatten()
+            .orEmpty()
+
 
         val psiContext = params.psiStructure?.map { classStructure ->
-            ContextFile(classStructure.virtualFile.name, classStructureSerializer.serialize(classStructure))
+            ContextFile(
+                classStructure.virtualFile.name,
+                classStructureSerializer.serialize(classStructure)
+            )
         }.orEmpty()
 
         val contextFilesWithPsi = contextFiles + psiContext
@@ -66,6 +79,15 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         }
 
         return requestBuilder.build()
+    }
+
+    private fun processFolder(folder: VirtualFile, contextFiles: MutableList<ContextFile>) {
+        folder.children.forEach { child ->
+            when {
+                child.isDirectory -> processFolder(child, contextFiles)
+                else -> contextFiles.add(ContextFile(child.name, FileUtil.readContent(child)))
+            }
+        }
     }
 
     override fun createBasicCompletionRequest(

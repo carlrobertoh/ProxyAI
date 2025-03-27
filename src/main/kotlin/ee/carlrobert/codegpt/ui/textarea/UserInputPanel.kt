@@ -35,23 +35,13 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
-import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
-import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
+import ee.carlrobert.codegpt.ui.textarea.header.tag.*
+import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import git4idea.GitCommit
-import java.awt.BasicStroke
-import java.awt.BorderLayout
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.Insets
-import java.awt.RenderingHints
+import java.awt.*
 import java.awt.geom.Area
 import java.awt.geom.Rectangle2D
 import java.awt.geom.RoundRectangle2D
@@ -62,7 +52,7 @@ class UserInputPanel(
     private val conversation: Conversation,
     private val totalTokensPanel: TotalTokensPanel,
     parentDisposable: Disposable,
-    tagManager: TagManager,
+    private val tagManager: TagManager,
     private val onSubmit: (String) -> Unit,
     private val onStop: () -> Unit
 ) : JPanel(BorderLayout()) {
@@ -72,15 +62,20 @@ class UserInputPanel(
     }
 
     private val disposableCoroutineScope = DisposableCoroutineScope()
-    private val suggestionsPopupManager = SuggestionsPopupManager(project, this)
     private val promptTextField =
-        PromptTextField(project, suggestionsPopupManager, ::updateUserTokens, ::handleSubmit)
+        PromptTextField(
+            project,
+            tagManager,
+            ::updateUserTokens,
+            ::handleBackSpace,
+            ::handleLookupAdded,
+            ::handleSubmit
+        )
     private val userInputHeaderPanel =
         UserInputHeaderPanel(
             project,
             tagManager,
             totalTokensPanel,
-            suggestionsPopupManager,
             promptTextField
         )
     private val submitButton = IconActionButton(
@@ -234,6 +229,16 @@ class UserInputPanel(
 
     private fun updateUserTokens(text: String) {
         totalTokensPanel.updateUserPromptTokens(text)
+    }
+
+    private fun handleBackSpace() {
+        if (text.isEmpty()) {
+            userInputHeaderPanel.getLastTag()?.let { tagManager.remove(it) }
+        }
+    }
+
+    private fun handleLookupAdded(item: LookupActionItem) {
+        item.execute(project, this)
     }
 
     private fun getFooter(): JPanel {

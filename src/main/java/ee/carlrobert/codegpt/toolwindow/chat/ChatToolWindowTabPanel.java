@@ -41,6 +41,7 @@ import ee.carlrobert.codegpt.ui.OverlayUtil;
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails;
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
@@ -196,6 +197,8 @@ public class ChatToolWindowTabPanel implements Disposable {
         virtualFile = ((FileTagDetails) tag).getVirtualFile();
       } else if (tag instanceof EditorTagDetails) {
         virtualFile = ((EditorTagDetails) tag).getVirtualFile();
+      } else if (tag instanceof FolderTagDetails) {
+        virtualFile = ((FolderTagDetails) tag).getFolder();
       }
 
     }
