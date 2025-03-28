@@ -4,7 +4,6 @@ import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
@@ -28,7 +27,7 @@ class FilesGroupItem(
     override val icon = AllIcons.FileTypes.Any_type
 
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
-        project.service<ProjectFileIndex>().iterateContent {
+        ProjectFileIndex.getInstance(project).iterateContent {
             if (!it.isDirectory && !containsTag(it)) {
                 runInEdt {
                     LookupUtil.addLookupItem(lookup, FileActionItem(project, it))
@@ -40,8 +39,8 @@ class FilesGroupItem(
 
     override suspend fun getLookupItems(searchText: String): List<LookupActionItem> {
         return readAction {
-            val projectFileIndex = project.service<ProjectFileIndex>()
-            project.service<FileEditorManager>().openFiles
+            val projectFileIndex = ProjectFileIndex.getInstance(project)
+            FileEditorManager.getInstance(project).openFiles
                 .filter { projectFileIndex.isInContent(it) && !containsTag(it) }
                 .toFileSuggestions()
         }

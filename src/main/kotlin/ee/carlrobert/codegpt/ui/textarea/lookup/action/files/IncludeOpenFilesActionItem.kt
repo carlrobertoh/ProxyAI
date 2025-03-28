@@ -17,7 +17,7 @@ class IncludeOpenFilesActionItem : AbstractLookupActionItem() {
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
         val fileTags = userInputPanel.getSelectedTags().filterIsInstance<FileTagDetails>()
-        project.service<FileEditorManager>().openFiles
+        FileEditorManager.getInstance(project).openFiles
             .filter { openFile ->
                 fileTags.none { it.virtualFile == openFile }
             }

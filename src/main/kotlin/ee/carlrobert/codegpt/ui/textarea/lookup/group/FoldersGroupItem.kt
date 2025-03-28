@@ -25,7 +25,7 @@ class FoldersGroupItem(
     override val icon = AllIcons.Nodes.Folder
 
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
-        project.service<ProjectFileIndex>().iterateContent {
+        ProjectFileIndex.getInstance(project).iterateContent {
             if (it.isDirectory && !it.name.startsWith(".") && !tagManager.containsTag(it)) {
                 runInEdt {
                     LookupUtil.addLookupItem(lookup, FolderActionItem(project, it))
@@ -49,7 +49,7 @@ class FoldersGroupItem(
 
     private suspend fun getProjectFolders(project: Project) = withContext(Dispatchers.IO) {
         val folders = mutableSetOf<VirtualFile>()
-        project.service<ProjectFileIndex>().iterateContent { file: VirtualFile ->
+        ProjectFileIndex.getInstance(project).iterateContent { file: VirtualFile ->
             if (file.isDirectory && !file.name.startsWith(".") && !tagManager.containsTag(file)) {
                 val folderPath = file.path
                 if (folders.none { it.path.startsWith(folderPath) }) {

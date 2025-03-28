@@ -25,7 +25,7 @@ object EditorDiffUtil {
         toolwindowEditor: Editor,
         highlightedText: String
     ) {
-        val mainEditor = project.service<FileEditorManager>().selectedTextEditor ?: return
+        val mainEditor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
         val mainEditorFile =
             service<FileDocumentManager>().getFile(mainEditor.document) ?: return
         val tempFile = LightVirtualFile(
