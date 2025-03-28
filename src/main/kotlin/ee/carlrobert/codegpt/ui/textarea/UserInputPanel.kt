@@ -286,7 +286,8 @@ class UserInputPanel(
                     "gpt-4o-mini",
                     "gemini-pro-1.5",
                     "claude-3-opus",
-                    "claude-3.5-sonnet"
+                    "claude-3.5-sonnet",
+                    "claude-3.7-sonnet"
                 ).contains(
                     service<CodeGPTServiceSettings>()
                         .state
