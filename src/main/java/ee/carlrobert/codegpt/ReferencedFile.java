@@ -41,6 +41,10 @@ public record ReferencedFile(String fileName, String filePath, String fileConten
   }
 
   private static String getVirtualFileContent(VirtualFile virtualFile) {
+    if (virtualFile.isDirectory()) {
+      return "";
+    }
+
     var documentManager = FileDocumentManager.getInstance();
     var document = documentManager.getDocument(virtualFile);
     if (document != null && documentManager.isDocumentUnsaved(document)) {
