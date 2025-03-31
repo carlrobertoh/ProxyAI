@@ -6,7 +6,7 @@ import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 
 /**
- * [JBTextField] that automatically removes all trailing "/" after loosing focus.
+ * [JBTextField] that automatically removes all trailing "/" after losing focus.
  */
 class URLTextField : JBTextField {
     constructor() : super()
