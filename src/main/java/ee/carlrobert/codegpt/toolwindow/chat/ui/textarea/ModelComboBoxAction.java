@@ -179,6 +179,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
       var googleGroup = DefaultActionGroup.createPopupGroup(() -> "Google (Gemini)");
       googleGroup.getTemplatePresentation().setIcon(Icons.Google);
       List.of(
+              GoogleModel.GEMINI_2_5_PRO_EXP,
               GoogleModel.GEMINI_2_0_PRO_EXP,
               GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP,
               GoogleModel.GEMINI_2_0_FLASH,
