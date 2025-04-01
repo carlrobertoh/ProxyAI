@@ -8,7 +8,9 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.treeStructure.SimpleTree
+import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.settings.prompts.ChatActionsState
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PersonasState
@@ -16,8 +18,11 @@ import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.getFormState
 import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.toState
 import ee.carlrobert.codegpt.settings.prompts.form.details.*
+import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
+import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.tree.DefaultMutableTreeNode
@@ -79,7 +84,17 @@ class PromptsForm {
         }
     }
 
+    private val exportButton: JButton
+    private val importButton: JButton
+
     init {
+        exportButton = JButton(CodeGPTBundle.get("settingsConfigurable.prompts.export")).apply {
+            addActionListener { }
+        }
+        importButton = JButton(CodeGPTBundle.get("settingsConfigurable.prompts.import")).apply {
+            addActionListener { }
+        }
+
         runInEdt {
             expandAll()
             selectFirstPersonaNode()
@@ -88,9 +103,24 @@ class PromptsForm {
 
     fun createPanel(): JComponent {
         return BorderLayoutPanel(8, 0)
+            .addToTop(createImportExportPanel())
             .addToLeft(createToolbarDecorator().createPanel())
             .addToCenter(promptDetailsContainer)
     }
+
+    private fun createImportExportPanel() = FormBuilder.createFormBuilder()
+        .addComponent(
+            JPanel(BorderLayout()).apply {
+                add(
+                    JPanel(FlowLayout()).apply {
+                        add(importButton)
+                        add(exportButton)
+                    }, BorderLayout.WEST
+                )
+            }
+        )
+        .addVerticalGap(4)
+        .panel
 
     fun isModified(): Boolean {
         val settings = service<PromptsSettings>().state
