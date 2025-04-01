@@ -17,7 +17,7 @@ okio = "3.10.2"
 tree-sitter = "0.24.5"
 grpc = "1.71.0"
 protobuf = "3.25.1"
-protobuf-plugin = "0.9.4"
+protobuf-plugin = "0.9.5"
 
 [libraries]
 analytics = { module = "com.rudderstack.sdk.java.analytics:analytics", version.ref = "analytics" }
