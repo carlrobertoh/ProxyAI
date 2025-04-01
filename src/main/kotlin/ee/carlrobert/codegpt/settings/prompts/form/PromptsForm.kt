@@ -10,6 +10,7 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.DialogBuilder
 import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
@@ -23,20 +24,14 @@ import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.settings.prompts.ChatActionsState
-import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
-import ee.carlrobert.codegpt.settings.prompts.PersonasState
-import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
+import ee.carlrobert.codegpt.settings.prompts.*
 import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.getFormState
 import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.toState
 import ee.carlrobert.codegpt.settings.prompts.form.details.*
-import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceSettingsData
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.coroutines.EdtDispatchers
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.awt.CardLayout
@@ -119,7 +114,9 @@ class PromptsForm {
             }
         }
         importButton = JButton(CodeGPTBundle.get("settingsConfigurable.prompts.import")).apply {
-            addActionListener { }
+            addActionListener {
+                importSettingsFromFile()
+            }
         }
 
         runInEdt {
@@ -522,5 +519,84 @@ class PromptsForm {
             MessageType.ERROR,
             exportButton,
         )
+    }
+
+    private fun importSettingsFromFile() {
+        val fileChooserDescriptor = FileChooserDescriptorFactory
+            .createSingleFileDescriptor("json")
+            .apply { isForcedToUseIdeaFileChooser = true }
+
+        FileChooser.chooseFile(fileChooserDescriptor, project, null)?.let { file ->
+            ReadAction.nonBlocking<PromptsSettingsState> {
+                file.canonicalPath?.let {
+                    promptsFileProvider.readFromFile(it)
+                }
+            }
+                .inSmartMode(project)
+                .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
+                    insertPersonasPrompts(settings.personas)
+                    insertChatPrompts(settings.chatActions.prompts)
+                    insertCorePrompts(settings.coreActions)
+                    reloadTreeView()
+                }
+                .submit(AppExecutorUtil.getAppExecutorService())
+                .onError { showImportErrorMessage() }
+        }
+    }
+
+    private fun showImportErrorMessage() {
+        OverlayUtil.showBalloon(
+            CodeGPTBundle.get("settingsConfigurable.prompts.importDialog.importError"),
+            MessageType.ERROR,
+            importButton,
+        )
+    }
+
+    private fun insertChatPrompts(prompts: List<ChatActionPromptDetailsState>) {
+        chatActionsNode.removeAllChildren()
+        prompts.forEachIndexed { index, prompt ->
+            val node = PromptDetailsTreeNode(
+                details = ChatActionPromptDetails(
+                    name = "${prompt.name}",
+                    instructions = prompt.instructions,
+                    id = prompt.id,
+                    code = prompt.code,
+                ),
+                category = PromptCategory.CHAT_ACTIONS,
+            )
+            treeModel.insertNodeInto(node, chatActionsNode, index)
+        }
+    }
+
+    private fun insertPersonasPrompts(state: PersonasState) {
+        personasNode.removeAllChildren()
+        state.prompts.forEachIndexed { index, prompt ->
+            val node = PromptDetailsTreeNode(
+                details = PersonaPromptDetails(
+                    name = "${prompt.name}",
+                    instructions = prompt.instructions,
+                    id = prompt.id,
+                    disabled = prompt.disabled,
+                    selected = AtomicBooleanProperty(prompt.id == state.selectedPersona.id),
+                ),
+                category = PromptCategory.PERSONAS
+            )
+            treeModel.insertNodeInto(node, personasNode, index)
+        }
+    }
+
+    private fun insertCorePrompts(prompts: CoreActionsState) {
+        coreActionsNode.removeAllChildren()
+        listOf(
+            prompts.editCode,
+            prompts.fixCompileErrors,
+            prompts.generateCommitMessage,
+            prompts.generateNameLookups,
+            prompts.reviewChanges,
+        ).forEach {
+            coreActionsNode.add(
+                PromptDetailsTreeNode(CoreActionPromptDetails(it), PromptCategory.CORE_ACTIONS)
+            )
+        }
     }
 }

@@ -28,4 +28,7 @@ class PromptsFileProvider {
             it.write(serializedFiles)
         }
     }
+
+    fun readFromFile(path: String): PromptsSettingsState =
+        objectMapper.readValue<PromptsSettingsState>(File(path))
 }
