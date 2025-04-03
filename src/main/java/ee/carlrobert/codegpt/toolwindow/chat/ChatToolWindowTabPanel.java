@@ -222,29 +222,27 @@ public class ChatToolWindowTabPanel implements Disposable {
       ConversationType conversationType,
       Set<ClassStructure> psiStructure
   ) {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      var callParameters = getCallParameters(message, conversationType, psiStructure);
-      if (callParameters.getImageDetails() != null) {
-        project.getService(ChatToolWindowContentManager.class)
-            .tryFindChatToolWindowPanel()
-            .ifPresent(panel -> panel.clearImageNotifications(project));
-      }
+    var callParameters = getCallParameters(message, conversationType, psiStructure);
+    if (callParameters.getImageDetails() != null) {
+      project.getService(ChatToolWindowContentManager.class)
+          .tryFindChatToolWindowPanel()
+          .ifPresent(panel -> panel.clearImageNotifications(project));
+    }
 
-      totalTokensPanel.updateConversationTokens(conversation);
-      if (callParameters.getReferencedFiles() != null) {
-        totalTokensPanel.updateReferencedFilesTokens(
-            callParameters.getReferencedFiles().stream().map(ReferencedFile::fileContent).toList());
-      }
+    totalTokensPanel.updateConversationTokens(conversation);
+    if (callParameters.getReferencedFiles() != null) {
+      totalTokensPanel.updateReferencedFilesTokens(
+          callParameters.getReferencedFiles().stream().map(ReferencedFile::fileContent).toList());
+    }
 
-      var userMessagePanel = createUserMessagePanel(message, callParameters);
-      var responseMessagePanel = createResponseMessagePanel(callParameters);
+    var userMessagePanel = createUserMessagePanel(message, callParameters);
+    var responseMessagePanel = createResponseMessagePanel(callParameters);
 
-      var messagePanel = toolWindowScrollablePanel.addMessage(message.getId());
-      messagePanel.add(userMessagePanel);
-      messagePanel.add(responseMessagePanel);
+    var messagePanel = toolWindowScrollablePanel.addMessage(message.getId());
+    messagePanel.add(userMessagePanel);
+    messagePanel.add(responseMessagePanel);
 
-      call(callParameters, responseMessagePanel, userMessagePanel);
-    });
+    call(callParameters, responseMessagePanel, userMessagePanel);
   }
 
   public void clearAllTags() {
@@ -348,6 +346,10 @@ public class ChatToolWindowTabPanel implements Disposable {
       return;
     }
 
+    userInputPanel.setSubmitEnabled(false);
+    userMessagePanel.disableActions(List.of("RELOAD", "DELETE"));
+    responseMessagePanel.disableActions(List.of("COPY"));
+
     requestHandler = new ToolwindowChatCompletionRequestHandler(
         project,
         new ToolWindowCompletionResponseEventListener(
@@ -361,10 +363,6 @@ public class ChatToolWindowTabPanel implements Disposable {
             call(callParameters, responseMessagePanel, userMessagePanel);
           }
         });
-    userInputPanel.setSubmitEnabled(false);
-    userMessagePanel.disableActions(List.of("RELOAD", "DELETE"));
-    responseMessagePanel.disableActions(List.of("COPY"));
-
     ApplicationManager.getApplication()
         .executeOnPooledThread(() -> requestHandler.call(callParameters));
   }
