@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.ui.textarea.header
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
@@ -181,7 +182,7 @@ class UserInputHeaderPanel(
     }
 
     private fun updateReferencedFilesTokens(tags: Set<TagDetails>) {
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.Default).launch {
             val referencedFileContents = tags.asSequence()
                 .filter { it.selected }
                 .mapNotNull { tag ->
@@ -192,7 +193,9 @@ class UserInputHeaderPanel(
                     }
                 }
                 .toList()
-            totalTokensPanel.updateReferencedFilesTokens(referencedFileContents)
+            runInEdt {
+                totalTokensPanel.updateReferencedFilesTokens(referencedFileContents)
+            }
         }
     }
 
