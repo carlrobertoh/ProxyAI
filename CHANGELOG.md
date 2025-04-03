@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1-233] - 2025-04-03
+
 ### Added
 
 - Gemini 2.5 Pro (exp) model
@@ -958,7 +960,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.0-233...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.1-233...HEAD
+[3.2.1-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.0-233...v3.2.1-233
 [3.2.0-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.1-233...v3.2.0-233
 [3.1.1-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.0-233...v3.1.1-233
 [3.1.0-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.0.0-241.1...v3.1.0-233
