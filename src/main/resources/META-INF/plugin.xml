@@ -107,7 +107,7 @@
 
         <group id="CodeGPTEditorPopup">
             <group id="action.editor.group.EditorActionGroup"
-                text="CodeGPT"
+                text="ProxyAI"
                 class="com.intellij.openapi.actionSystem.DefaultActionGroup"
                 popup="true"
                 icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
@@ -117,13 +117,6 @@
                   text="New Chat"
                   description="Creates a new chat session">
                     <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift N" replace-all="true"/>
-                </action>
-                <action
-                        id="CodeGPT.ClearTags"
-                        class="ee.carlrobert.codegpt.actions.toolwindow.ClearChatTagsAction"
-                        text="Clear Tags"
-                        description="Clear all files tags in active chat">
-                    <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift T" replace-all="true"/>
                 </action>
                 <action
                   id="CodeGPT.ContextMenuEditCodeAction"
@@ -154,7 +147,7 @@
         </action>
         <group id="CodeGPT.ProjectViewPopupMenuRootGroup">
             <group id="CodeGPT.ProjectViewPopupMenuGroup"
-              text="CodeGPT"
+              text="ProxyAI"
               class="com.intellij.openapi.actionSystem.DefaultActionGroup"
               popup="true"
               icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
@@ -260,7 +253,7 @@
         </group>
 
         <group id="CodeGPT.GenerateGitCommitMessageGroup"
-               text="CodeGPT"
+               text="ProxyAI"
                popup="true"
                icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
             <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
