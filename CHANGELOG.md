@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Gemini 2.5 Pro (exp) model
+
+### Fixed
+
+- Toolwindow ID inconsistencies
+- EDT issues when reading files on submit
+
+### Removed
+
+- Clear tags action from editor's context menu
+
 ## [3.2.0-223] - 2025-03-28
 
 ### Added
