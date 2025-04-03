@@ -17,7 +17,7 @@ class CodeCompletionProviderPresentation : InlineCompletionProviderPresentation 
         val text = if (selectedModelCode.isNotEmpty()) {
             "CodeGPT: $selectedModelCode"
         } else {
-            "CodeGPT"
+            "ProxyAI"
         }
         return JBLabel(text, Icons.DefaultSmall, SwingConstants.LEADING).withFont(JBFont.small())
     }

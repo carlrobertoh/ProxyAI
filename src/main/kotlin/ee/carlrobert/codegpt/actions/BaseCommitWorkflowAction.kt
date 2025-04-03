@@ -148,7 +148,7 @@ class CommitMessageEventListener(
         Notifications.Bus.notify(
             Notification(
                 "proxyai.notification.group",
-                "CodeGPT",
+                "ProxyAI",
                 error.message,
                 NotificationType.ERROR
             )
