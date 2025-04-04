@@ -11,6 +11,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
+import com.intellij.util.net.ssl.CertificateManager
 import com.jetbrains.rd.util.UUID
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.credentials.CredentialsStore
@@ -25,6 +26,7 @@ import ee.carlrobert.service.NextEditRequest
 import ee.carlrobert.service.NextEditResponse
 import ee.carlrobert.service.NextEditServiceImplGrpc
 import io.grpc.*
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import io.grpc.stub.StreamObserver
 import java.util.concurrent.Executor
@@ -50,7 +52,12 @@ class GrpcClientService(private val project: Project) : Disposable {
     private fun ensureConnection() {
         if (channel == null || channel?.isShutdown == true) {
             try {
-                channel = NettyChannelBuilder.forAddress(HOST, PORT).build()
+                channel = NettyChannelBuilder.forAddress(HOST, PORT)
+                    .useTransportSecurity()
+                    .sslContext(GrpcSslContexts.forClient()
+                        .trustManager(CertificateManager.getInstance().trustManager)
+                        .build())
+                    .build()
                 stub = NextEditServiceImplGrpc.newStub(channel)
                     .withCallCredentials(
                         ApiKeyCredentials(CredentialsStore.getCredential(CodeGptApiKey) ?: "")
