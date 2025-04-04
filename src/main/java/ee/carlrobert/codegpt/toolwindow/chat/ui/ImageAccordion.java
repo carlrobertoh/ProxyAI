@@ -65,8 +65,9 @@ public class ImageAccordion extends JPanel {
     accordionToggle.setSelectedIcon(General.ArrowUp);
     accordionToggle.setBorder(null);
     accordionToggle.setSelected(true);
-    accordionToggle.setHorizontalAlignment(SwingConstants.LEADING);
-    accordionToggle.setHorizontalTextPosition(SwingConstants.LEADING);
+    accordionToggle.setHorizontalAlignment(SwingConstants.LEFT);
+    accordionToggle.setHorizontalTextPosition(SwingConstants.RIGHT);
+    accordionToggle.setIconTextGap(4);
     accordionToggle.addItemListener(e ->
         contentPane.setVisible(e.getStateChange() == ItemEvent.SELECTED));
     return accordionToggle;
