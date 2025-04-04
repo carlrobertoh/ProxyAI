@@ -41,11 +41,11 @@ public class SelectedFilesAccordion extends JPanel {
 
   private JToggleButton createToggleButton(JPanel contentPane, int fileCount) {
     var accordionToggle = new JToggleButton(
-        format("Referenced files (+%d)", fileCount), General.ArrowUp);
+        format("Referenced files (+%d)", fileCount), General.ArrowDown);
     accordionToggle.setFocusPainted(false);
     accordionToggle.setContentAreaFilled(false);
     accordionToggle.setBackground(getBackground());
-    accordionToggle.setSelectedIcon(General.ArrowDown);
+    accordionToggle.setSelectedIcon(General.ArrowUp);
     accordionToggle.setBorder(null);
     accordionToggle.setSelected(true);
     accordionToggle.setHorizontalAlignment(SwingConstants.LEFT);

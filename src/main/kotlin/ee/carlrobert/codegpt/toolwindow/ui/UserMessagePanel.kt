@@ -47,7 +47,6 @@ class UserMessagePanel(
         background = ColorUtil.brighter(getBackground(), 2)
 
         setupAdditionalContext()
-        setupImageIfPresent()
         setupResponseBody()
     }
 
@@ -117,33 +116,10 @@ class UserMessagePanel(
         )
     }
 
-    fun displayImage(imageFilePath: String) {
-        try {
-            val path = Paths.get(imageFilePath)
-            body.addToTop(ImageAccordion(path.fileName.toString(), Files.readAllBytes(path)))
-        } catch (e: IOException) {
-            body.addToTop(
-                JBLabel(
-                    "<html><small>Unable to load image $imageFilePath</small></html>",
-                    AllIcons.General.Error,
-                    SwingConstants.LEFT
-                )
-            )
-        }
-    }
-
     private fun setupAdditionalContext() {
         val additionalContextPanel = getAdditionalContextPanel(project, message)
         if (additionalContextPanel != null) {
             body.addToTop(additionalContextPanel)
-        }
-    }
-
-    private fun setupImageIfPresent() {
-        message.imageFilePath?.let { imageFilePath ->
-            if (imageFilePath.isNotEmpty()) {
-                displayImage(imageFilePath)
-            }
         }
     }
 
@@ -214,6 +190,25 @@ class UserMessagePanel(
                         .toList()
                     runInEdt {
                         additionalContextPanel.add(SelectedFilesAccordion(links))
+                    }
+                }
+            }
+
+            message.imageFilePath?.let { imageFilePath ->
+                if (imageFilePath.isNotEmpty()) {
+                    try {
+                        val path = Paths.get(imageFilePath)
+                        additionalContextPanel.add(
+                            ImageAccordion(path.fileName.toString(), Files.readAllBytes(path))
+                        )
+                    } catch (e: IOException) {
+                        additionalContextPanel.add(
+                            JBLabel(
+                                "<html><small>Unable to load image $imageFilePath</small></html>",
+                                AllIcons.General.Error,
+                                SwingConstants.LEFT
+                            )
+                        )
                     }
                 }
             }

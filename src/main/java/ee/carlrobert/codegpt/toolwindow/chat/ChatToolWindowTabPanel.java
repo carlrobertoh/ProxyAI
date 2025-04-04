@@ -456,10 +456,6 @@ public class ChatToolWindowTabPanel implements Disposable {
             .build(),
         userMessagePanel));
     userMessagePanel.addDeleteAction(() -> removeMessage(message.getId(), conversation));
-    var imageFilePath = message.getImageFilePath();
-    if (imageFilePath != null && !imageFilePath.isEmpty()) {
-      userMessagePanel.displayImage(imageFilePath);
-    }
     return userMessagePanel;
   }
 
