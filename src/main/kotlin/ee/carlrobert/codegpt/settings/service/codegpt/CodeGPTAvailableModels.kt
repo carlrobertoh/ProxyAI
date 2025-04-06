@@ -16,7 +16,7 @@ object CodeGPTAvailableModels {
         return when (pricingPlan) {
             null, ANONYMOUS -> listOf(
                 CodeGPTModel("o3-mini", "o3-mini", Icons.OpenAI, INDIVIDUAL),
-                CodeGPTModel("GPT-4o", "gpt-4o", Icons.OpenAI, INDIVIDUAL),
+                CodeGPTModel("Gemini 2.5 Pro", "gemini-pro-2.5", Icons.Google, INDIVIDUAL),
                 CodeGPTModel("Claude 3.7 Sonnet", "claude-3.7-sonnet", Icons.Anthropic, INDIVIDUAL),
                 CodeGPTModel("DeepSeek R1", "deepseek-r1", Icons.DeepSeek, INDIVIDUAL),
                 CodeGPTModel("Gemini 2.0 Flash", "gemini-flash-2.0", Icons.Google, ANONYMOUS),
@@ -25,22 +25,23 @@ object CodeGPTAvailableModels {
 
             FREE -> listOf(
                 CodeGPTModel("o3-mini", "o3-mini", Icons.OpenAI, INDIVIDUAL),
-                CodeGPTModel("GPT-4o", "gpt-4o", Icons.OpenAI, INDIVIDUAL),
+                CodeGPTModel("Gemini 2.5 Pro", "gemini-pro-2.5", Icons.Google, INDIVIDUAL),
                 CodeGPTModel("Claude 3.7 Sonnet", "claude-3.7-sonnet", Icons.Anthropic, INDIVIDUAL),
                 CodeGPTModel("DeepSeek R1", "deepseek-r1", Icons.DeepSeek, INDIVIDUAL),
                 CodeGPTModel("DeepSeek V3", "deepseek-v3", Icons.DeepSeek, FREE),
                 CodeGPTModel("Qwen 2.5 Coder (32B)", "qwen-2.5-32b-chat", Icons.Qwen, FREE),
                 CodeGPTModel("Llama 3.1 (405B)", "llama-3.1-405b", Icons.Meta, FREE),
                 CodeGPTModel("Gemini 2.0 Flash", "gemini-flash-2.0", Icons.Google, ANONYMOUS),
+                CodeGPTModel("GPT-4o mini", "gpt-4o-mini", Icons.OpenAI, ANONYMOUS),
             )
 
             INDIVIDUAL -> listOf(
                 CodeGPTModel("o3-mini", "o3-mini", Icons.OpenAI, INDIVIDUAL),
                 CodeGPTModel("GPT-4o", "gpt-4o", Icons.OpenAI, INDIVIDUAL),
                 CodeGPTModel("Claude 3.7 Sonnet", "claude-3.7-sonnet", Icons.Anthropic, INDIVIDUAL),
+                CodeGPTModel("Gemini 2.5 Pro", "gemini-pro-2.5", Icons.Google, INDIVIDUAL),
                 CodeGPTModel("DeepSeek R1", "deepseek-r1", Icons.DeepSeek, INDIVIDUAL),
                 CodeGPTModel("DeepSeek V3", "deepseek-v3", Icons.DeepSeek, FREE),
-                CodeGPTModel("Gemini 2.0 Flash", "gemini-flash-2.0", Icons.Google, ANONYMOUS),
             )
         }
     }
@@ -51,7 +52,7 @@ object CodeGPTAvailableModels {
         CodeGPTModel("GPT-4o", "gpt-4o", Icons.OpenAI, INDIVIDUAL),
         CodeGPTModel("GPT-4o mini", "gpt-4o-mini", Icons.OpenAI, ANONYMOUS),
         CodeGPTModel("Claude 3.7 Sonnet", "claude-3.7-sonnet", Icons.Anthropic, INDIVIDUAL),
-        CodeGPTModel("Gemini 1.5 Pro", "gemini-pro-1.5", Icons.Google, INDIVIDUAL),
+        CodeGPTModel("Gemini 2.5 Pro", "gemini-pro-2.5", Icons.Google, INDIVIDUAL),
         CodeGPTModel("Gemini 2.0 Flash", "gemini-flash-2.0", Icons.Google, ANONYMOUS),
         CodeGPTModel("Qwen 2.5 Coder (32B)", "qwen-2.5-32b-chat", Icons.Qwen, FREE),
         CodeGPTModel("Llama 3.1 (405B)", "llama-3.1-405b", Icons.Meta, FREE),

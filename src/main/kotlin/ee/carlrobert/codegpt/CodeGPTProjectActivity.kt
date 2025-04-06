@@ -24,10 +24,7 @@ class CodeGPTProjectActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
         EditorActionsUtil.refreshActions()
 
-        val settings = service<GeneralSettings>().state
-        if (settings.selectedService == ServiceType.CODEGPT) {
-            project.service<CodeGPTService>().syncUserDetailsAsync()
-        }
+        project.service<CodeGPTService>().syncUserDetailsAsync()
 
         if (!ApplicationManager.getApplication().isUnitTestMode
             && service<ConfigurationSettings>().state.checkForNewScreenshots

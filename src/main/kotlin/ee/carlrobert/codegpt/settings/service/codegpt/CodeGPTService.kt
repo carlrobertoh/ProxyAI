@@ -11,7 +11,7 @@ import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier.Companion.CODEGPT_USER_DETAILS_TOPIC
 import kotlinx.coroutines.*
 
-@Service
+@Service(Service.Level.PROJECT)
 class CodeGPTService private constructor(val project: Project) {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -22,22 +22,26 @@ class CodeGPTService private constructor(val project: Project) {
 
     fun syncUserDetailsAsync(apiKey: String?) {
         serviceScope.launch {
-            val userDetails = withContext(Dispatchers.IO) {
-                if (apiKey.isNullOrEmpty()) null
-                else CompletionClientProvider.getCodeGPTClient().getUserDetails(apiKey)
-            }
-            if (userDetails != null && userDetails.pricingPlan != null) {
-                CODEGPT_USER_DETAILS.set(project, userDetails)
-                if (!userDetails.fullName.isNullOrEmpty()) {
-                    service<GeneralSettings>().state.run {
-                        displayName = userDetails.fullName
-                        avatarBase64 = userDetails.avatarBase64 ?: ""
+            try {
+                val userDetails = withContext(Dispatchers.IO) {
+                    if (apiKey.isNullOrEmpty()) null
+                    else CompletionClientProvider.getCodeGPTClient().getUserDetails(apiKey)
+                }
+                if (userDetails != null && userDetails.pricingPlan != null) {
+                    CODEGPT_USER_DETAILS.set(project, userDetails)
+                    if (!userDetails.fullName.isNullOrEmpty()) {
+                        service<GeneralSettings>().state.run {
+                            displayName = userDetails.fullName
+                            avatarBase64 = userDetails.avatarBase64 ?: ""
+                        }
                     }
                 }
+                project.messageBus
+                    .syncPublisher<CodeGPTUserDetailsNotifier>(CODEGPT_USER_DETAILS_TOPIC)
+                    .userDetailsObtained(userDetails)
+            } catch (ex: Exception) {
+                // ignore
             }
-            project.messageBus
-                .syncPublisher<CodeGPTUserDetailsNotifier>(CODEGPT_USER_DETAILS_TOPIC)
-                .userDetailsObtained(userDetails)
         }
     }
 }
