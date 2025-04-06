@@ -6,11 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.2.2-223] - 2025-04-04
+### Added
+
+- Gemini 2.5 Pro model for ProxyAI users
 
 ### Fixed
 
 - SSL/TLS issues when connecting to Proxy API
+- UI issues when using images
+- Next Edits manual triggering
 
 ## [3.2.1-223] - 2025-04-03
 
@@ -949,8 +953,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.2-223...HEAD
-[3.2.2-223]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.1-223...v3.2.2-223
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.1-223...HEAD
 [3.2.1-223]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.0-223...v3.2.1-223
 [3.2.0-223]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.1-223...v3.2.0-223
 [3.1.1-223]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.0-223...v3.1.1-223
