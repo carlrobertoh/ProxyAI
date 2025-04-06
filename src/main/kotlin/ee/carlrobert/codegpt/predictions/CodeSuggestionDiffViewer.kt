@@ -201,7 +201,7 @@ class CodeSuggestionDiffViewer(
         val footerText = if (isManuallyOpened) {
             CodeGPTBundle.get("shared.escToCancel")
         } else {
-            "Trigger manually: ${getShortcutText(OpenPredictionAction.ID)} · ${CodeGPTBundle.get("shared.escToCancel")}"
+            "Trigger manually: ${getShortcutText(TriggerCustomPredictionAction.ID)} · ${CodeGPTBundle.get("shared.escToCancel")}"
         }
 
         myEditor.component.add(

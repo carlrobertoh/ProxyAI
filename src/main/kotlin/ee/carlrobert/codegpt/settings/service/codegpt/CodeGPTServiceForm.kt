@@ -33,7 +33,7 @@ class CodeGPTServiceForm {
         }
 
     private val enableNextEditsEnabledCheckBox = JBCheckBox(
-        "Enable multi-line edits",
+        "Enable next edits",
         service<CodeGPTServiceSettings>().state.nextEditsEnabled
     )
 
