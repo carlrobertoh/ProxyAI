@@ -4,20 +4,40 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.observable.properties.AtomicBooleanProperty
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.DialogBuilder
+import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
+import com.intellij.openapi.ui.MessageType
+import com.intellij.openapi.ui.TextBrowseFolderListener
+import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.ui.ToolbarDecorator
+import com.intellij.ui.components.JBTextField
 import com.intellij.ui.treeStructure.SimpleTree
+import com.intellij.util.concurrency.AppExecutorUtil
+import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.components.BorderLayoutPanel
-import ee.carlrobert.codegpt.settings.prompts.ChatActionsState
-import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
-import ee.carlrobert.codegpt.settings.prompts.PersonasState
-import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
+import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.settings.prompts.*
 import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.getFormState
 import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.toState
 import ee.carlrobert.codegpt.settings.prompts.form.details.*
+import ee.carlrobert.codegpt.ui.OverlayUtil
+import ee.carlrobert.codegpt.util.coroutines.EdtDispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
+import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.tree.DefaultMutableTreeNode
@@ -42,6 +62,8 @@ class PromptDetailsTreeNode(
 }
 
 class PromptsForm {
+    private val coroutineScope = CoroutineScope(SupervisorJob() + EdtDispatchers.Default)
+
     private val cardLayout = CardLayout()
     private val promptDetailsContainer = JPanel(cardLayout)
     private val categoryPanels = mapOf(
@@ -79,7 +101,24 @@ class PromptsForm {
         }
     }
 
+    private val project = ProjectManager.getInstance().defaultProject
+    private val promptsFileProvider = PromptsFileProvider()
+
+    private val exportButton: JButton
+    private val importButton: JButton
+
     init {
+        exportButton = JButton(CodeGPTBundle.get("settingsConfigurable.prompts.export")).apply {
+            addActionListener {
+                exportSettingsToFile()
+            }
+        }
+        importButton = JButton(CodeGPTBundle.get("settingsConfigurable.prompts.import")).apply {
+            addActionListener {
+                importSettingsFromFile()
+            }
+        }
+
         runInEdt {
             expandAll()
             selectFirstPersonaNode()
@@ -88,9 +127,24 @@ class PromptsForm {
 
     fun createPanel(): JComponent {
         return BorderLayoutPanel(8, 0)
+            .addToTop(createImportExportPanel())
             .addToLeft(createToolbarDecorator().createPanel())
             .addToCenter(promptDetailsContainer)
     }
+
+    private fun createImportExportPanel() = FormBuilder.createFormBuilder()
+        .addComponent(
+            JPanel(BorderLayout()).apply {
+                add(
+                    JPanel(FlowLayout()).apply {
+                        add(importButton)
+                        add(exportButton)
+                    }, BorderLayout.WEST
+                )
+            }
+        )
+        .addVerticalGap(4)
+        .panel
 
     fun isModified(): Boolean {
         val settings = service<PromptsSettings>().state
@@ -390,5 +444,155 @@ class PromptsForm {
         personasNode -> PromptCategory.PERSONAS
         chatActionsNode -> PromptCategory.CHAT_ACTIONS
         else -> null
+    }
+
+    private fun exportSettingsToFile() {
+        val defaultSettingsFileName = "prompts.json"
+        val settings = service<PromptsSettings>().state
+
+        val fileNameTextField = JBTextField(defaultSettingsFileName).apply {
+            columns = 20
+        }
+        val fileChooserDescriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
+            isForcedToUseIdeaFileChooser = true
+        }
+        val textFieldWithBrowseButton = TextFieldWithBrowseButton().apply {
+            text = project.basePath ?: System.getProperty("user.home")
+            addBrowseFolderListener(
+                TextBrowseFolderListener(fileChooserDescriptor, project)
+            )
+        }
+
+        val result = exportSettingsDialog(
+            fileNameTextField = fileNameTextField,
+            filePathButton = textFieldWithBrowseButton
+        ).show()
+
+        val fileName = fileNameTextField.text.ifEmpty { defaultSettingsFileName }
+        val filePath = textFieldWithBrowseButton.text
+
+        if (result == OK_EXIT_CODE) {
+            val fullFilePath = "$filePath/$fileName"
+            coroutineScope.launch {
+                runCatching {
+                    promptsFileProvider.writePrompts(
+                        path = fullFilePath,
+                        data = settings,
+                    )
+                }.onFailure {
+                    showExportErrorMessage()
+                }
+            }
+        }
+    }
+
+    private fun exportSettingsDialog(
+        fileNameTextField: JBTextField,
+        filePathButton: TextFieldWithBrowseButton,
+    ): DialogBuilder {
+        val form = FormBuilder.createFormBuilder()
+            .addLabeledComponent(
+                CodeGPTBundle.get("settingsConfigurable.prompts.exportDialog.saveTo"),
+                fileNameTextField
+            )
+            .addLabeledComponent(
+                CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportDialog.saveTo"),
+                filePathButton
+            )
+            .panel
+
+        return DialogBuilder().apply {
+            CodeGPTBundle.get("settingsConfigurable.prompts.exportDialog.title")
+            centerPanel(form)
+            addOkAction()
+            addCancelAction()
+        }
+    }
+
+    private fun showExportErrorMessage() {
+        OverlayUtil.showBalloon(
+            CodeGPTBundle.get("settingsConfigurable.prompts.exportDialog.exportError"),
+            MessageType.ERROR,
+            exportButton,
+        )
+    }
+
+    private fun importSettingsFromFile() {
+        val fileChooserDescriptor = FileChooserDescriptorFactory
+            .createSingleFileDescriptor("json")
+            .apply { isForcedToUseIdeaFileChooser = true }
+
+        FileChooser.chooseFile(fileChooserDescriptor, project, null)?.let { file ->
+            ReadAction.nonBlocking<PromptsSettingsState> {
+                file.canonicalPath?.let {
+                    promptsFileProvider.readFromFile(it)
+                }
+            }
+                .inSmartMode(project)
+                .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
+                    insertPersonasPrompts(settings.personas)
+                    insertChatPrompts(settings.chatActions.prompts)
+                    insertCorePrompts(settings.coreActions)
+                    reloadTreeView()
+                }
+                .submit(AppExecutorUtil.getAppExecutorService())
+                .onError { showImportErrorMessage() }
+        }
+    }
+
+    private fun showImportErrorMessage() {
+        OverlayUtil.showBalloon(
+            CodeGPTBundle.get("settingsConfigurable.prompts.importDialog.importError"),
+            MessageType.ERROR,
+            importButton,
+        )
+    }
+
+    private fun insertChatPrompts(prompts: List<ChatActionPromptDetailsState>) {
+        chatActionsNode.removeAllChildren()
+        prompts.forEachIndexed { index, prompt ->
+            val node = PromptDetailsTreeNode(
+                details = ChatActionPromptDetails(
+                    name = "${prompt.name}",
+                    instructions = prompt.instructions,
+                    id = prompt.id,
+                    code = prompt.code,
+                ),
+                category = PromptCategory.CHAT_ACTIONS,
+            )
+            treeModel.insertNodeInto(node, chatActionsNode, index)
+        }
+    }
+
+    private fun insertPersonasPrompts(state: PersonasState) {
+        personasNode.removeAllChildren()
+        state.prompts.forEachIndexed { index, prompt ->
+            val node = PromptDetailsTreeNode(
+                details = PersonaPromptDetails(
+                    name = "${prompt.name}",
+                    instructions = prompt.instructions,
+                    id = prompt.id,
+                    disabled = prompt.disabled,
+                    selected = AtomicBooleanProperty(prompt.id == state.selectedPersona.id),
+                ),
+                category = PromptCategory.PERSONAS
+            )
+            treeModel.insertNodeInto(node, personasNode, index)
+        }
+    }
+
+    private fun insertCorePrompts(prompts: CoreActionsState) {
+        coreActionsNode.removeAllChildren()
+        listOf(
+            prompts.editCode,
+            prompts.fixCompileErrors,
+            prompts.generateCommitMessage,
+            prompts.generateNameLookups,
+            prompts.reviewChanges,
+        ).forEach {
+            coreActionsNode.add(
+                PromptDetailsTreeNode(CoreActionPromptDetails(it), PromptCategory.CORE_ACTIONS)
+            )
+        }
     }
 }
