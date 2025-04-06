@@ -277,6 +277,7 @@ class UserInputPanel(
         return when (service<GeneralSettings>().state.selectedService) {
             ServiceType.CUSTOM_OPENAI,
             ServiceType.ANTHROPIC,
+            ServiceType.GOOGLE,
             ServiceType.AZURE,
             ServiceType.OLLAMA -> true
 
@@ -284,7 +285,7 @@ class UserInputPanel(
                 listOf(
                     "gpt-4o",
                     "gpt-4o-mini",
-                    "gemini-pro-1.5",
+                    "gemini-pro-2.5",
                     "claude-3-opus",
                     "claude-3.5-sonnet",
                     "claude-3.7-sonnet"
