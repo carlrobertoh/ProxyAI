@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.toolwindow.chat.structure.data
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.AsyncFileListener
@@ -13,20 +14,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.util.io.await
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
-import ee.carlrobert.codegpt.ui.textarea.header.tag.CurrentGitChangesTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.DocumentationTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorSelectionTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.EmptyTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.SelectionTagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManagerListener
-import ee.carlrobert.codegpt.ui.textarea.header.tag.WebTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import kotlinx.coroutines.Job
@@ -45,6 +33,10 @@ class PsiStructureRepository(
     private val psiStructureProvider: PsiStructureProvider,
     private val dispatchers: CoroutineDispatchers,
 ) {
+
+    companion object {
+        private val logger = thisLogger()
+    }
 
     private val mutex = Mutex()
     private val coroutineScope = DisposableCoroutineScope(dispatchers.io())
@@ -159,7 +151,12 @@ class PsiStructureRepository(
                     tagsVirtualFiles
                         .mapNotNull { virtualFile ->
                             coroutineContext.ensureActive()
-                            PsiManager.getInstance(project).findFile(virtualFile)
+                            try {
+                                PsiManager.getInstance(project).findFile(virtualFile)
+                            } catch (exc: Exception) {
+                                logger.error("Failed to find file {}", virtualFile.name)
+                                null
+                            }
                         }
                 }
                     .inSmartMode(project)

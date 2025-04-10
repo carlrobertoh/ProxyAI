@@ -108,7 +108,9 @@ class AutoApplyAction(
                         )
                     }
                     OverlayUtil.showNotification(errorMessage, NotificationType.ERROR)
-                    resetState(mainEditor, actionsPanel)
+                    runInEdt {
+                        resetState(mainEditor, actionsPanel)
+                    }
                 })
         )
     }

@@ -12,6 +12,7 @@ import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.util.EditorDiffUtil.createDiffRequest
+import kotlin.coroutines.cancellation.CancellationException
 
 @Service
 class PredictionService {
@@ -36,6 +37,8 @@ class PredictionService {
         try {
             CompletionProgressNotifier.update(project, true)
             project.service<GrpcClientService>().getNextEdit(editor, isManuallyOpened)
+        } catch (e: CancellationException) {
+            // ignore
         } catch (ex: Exception) {
             logger.error("Error communicating with server: ${ex.message}")
         }

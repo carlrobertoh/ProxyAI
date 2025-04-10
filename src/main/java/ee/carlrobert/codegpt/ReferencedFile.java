@@ -1,6 +1,9 @@
 package ee.carlrobert.codegpt;
 
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.VirtualFile;
 import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.io.File;
@@ -46,7 +49,8 @@ public record ReferencedFile(String fileName, String filePath, String fileConten
     }
 
     var documentManager = FileDocumentManager.getInstance();
-    var document = documentManager.getDocument(virtualFile);
+    var document = ApplicationManager.getApplication()
+        .runReadAction((Computable<Document>) () -> documentManager.getDocument(virtualFile));
     if (document != null && documentManager.isDocumentUnsaved(document)) {
       return document.getText();
     }
