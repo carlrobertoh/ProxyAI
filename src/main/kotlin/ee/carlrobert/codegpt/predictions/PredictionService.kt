@@ -12,6 +12,7 @@ import com.intellij.testFramework.LightVirtualFile
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.util.EditorDiffUtil.createDiffRequest
+import kotlin.coroutines.cancellation.CancellationException
 
 @Service
 class PredictionService {
@@ -35,6 +36,8 @@ class PredictionService {
         val project = editor.project ?: return
         try {
             project.service<GrpcClientService>().getNextEdit(editor, isManuallyOpened)
+        } catch (e: CancellationException) {
+            // ignore
         } catch (ex: Exception) {
             logger.error("Error communicating with server: ${ex.message}")
         }

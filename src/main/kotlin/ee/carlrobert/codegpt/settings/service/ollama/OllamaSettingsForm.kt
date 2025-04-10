@@ -75,7 +75,6 @@ class OllamaSettingsForm {
                 getCredential(OllamaApikey)
             }
         }
-        refreshModels(settings.model)
     }
 
     fun getForm(): JPanel = FormBuilder.createFormBuilder()

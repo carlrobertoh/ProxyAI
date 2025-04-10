@@ -173,7 +173,8 @@ public class IncludeFilesInContextAction extends AnAction {
               return encodingManager.countTokens(
                   new String(file.contentsToByteArray(), file.getCharset()));
             } catch (IOException e) {
-              throw new RuntimeException("Failed to read file content", e);
+              LOG.error("Failed to read file {} content", file.getName());
+              return 0;
             }
           })
           .sum();

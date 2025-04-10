@@ -368,31 +368,36 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private Unit handleSubmit(String text) {
-    final Set<ClassStructure> psiStructure;
-    if (psiStructureRepository.getStructureState().getValue()
-        instanceof PsiStructureState.Content content) {
-      psiStructure = content.getElements();
-    } else {
-      psiStructure = new HashSet<>();
-    }
+    var application = ApplicationManager.getApplication();
+    application.executeOnPooledThread(() -> {
+      final Set<ClassStructure> psiStructure;
+      if (psiStructureRepository.getStructureState().getValue()
+          instanceof PsiStructureState.Content content) {
+        psiStructure = content.getElements();
+      } else {
+        psiStructure = new HashSet<>();
+      }
 
-    final var appliedTags = tagManager.getTags().stream()
-        .filter(TagDetails::getSelected)
-        .collect(Collectors.toList());
+      final var appliedTags = tagManager.getTags().stream()
+          .filter(TagDetails::getSelected)
+          .collect(Collectors.toList());
 
-    var messageBuilder = new MessageBuilder(project, text).withInlays(appliedTags);
+      var messageBuilder = new MessageBuilder(project, text).withInlays(appliedTags);
 
-    List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
-    if (!referencedFiles.isEmpty()) {
-      messageBuilder.withReferencedFiles(referencedFiles);
-    }
+      List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
+      if (!referencedFiles.isEmpty()) {
+        messageBuilder.withReferencedFiles(referencedFiles);
+      }
 
-    String attachedImagePath = CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project);
-    if (attachedImagePath != null) {
-      messageBuilder.withImage(attachedImagePath);
-    }
+      String attachedImagePath = CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project);
+      if (attachedImagePath != null) {
+        messageBuilder.withImage(attachedImagePath);
+      }
 
-    sendMessage(messageBuilder.build(), ConversationType.DEFAULT, psiStructure);
+      application.invokeLater(() -> {
+        sendMessage(messageBuilder.build(), ConversationType.DEFAULT, psiStructure);
+      });
+    });
     return Unit.INSTANCE;
   }
 

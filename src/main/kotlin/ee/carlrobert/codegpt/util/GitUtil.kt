@@ -30,13 +30,16 @@ object GitUtil {
             ?: repositoryManager.repositories.firstOrNull()
     }
 
-    @JvmStatic
     fun getCurrentChanges(project: Project): String? {
         return getProjectRepository(project)?.let { repository ->
             try {
                 val repoRootPath = repository.root.toNioPath()
                 val changes = ChangeListManager.getInstance(project).allChanges
+                    .filter { change ->
+                        change.virtualFile?.let { !it.fileType.isBinary } ?: false
+                    }
                     .sortedBy { it.virtualFile?.timeStamp }
+
                 val patches = IdeaTextPatchBuilder.buildPatch(
                     project, changes, repoRootPath, false, true
                 )
