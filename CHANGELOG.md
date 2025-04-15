@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.2.2-233] - 2025-04-06
+### Added
+
+- GPT-4.1 models for ProxyAI users
+- Import/Export functionality for Personas
+
+### Fixed
+
+- Duplicate chat referenced files
+- Several IDE warnings/errors
+
+## [3.2.2-241.1] - 2025-04-06
 
 ### Added
 
