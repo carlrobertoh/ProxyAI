@@ -17,7 +17,7 @@ class CodeGPTServiceSettingsState : BaseState() {
 }
 
 class CodeGPTServiceChatCompletionSettingsState : BaseState() {
-    var model by string("gpt-4o-mini")
+    var model by string("gpt-4.1-mini")
 }
 
 class CodeGPTServiceCodeCompletionSettingsState : BaseState() {
