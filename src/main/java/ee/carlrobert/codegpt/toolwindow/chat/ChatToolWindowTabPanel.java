@@ -186,6 +186,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     return tags.stream()
         .map(this::getVirtualFile)
         .filter(Objects::nonNull)
+        .distinct()
         .map(ReferencedFile::from)
         .toList();
   }
