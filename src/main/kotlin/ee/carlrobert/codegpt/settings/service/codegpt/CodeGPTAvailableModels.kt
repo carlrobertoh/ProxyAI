@@ -20,7 +20,7 @@ object CodeGPTAvailableModels {
                 CodeGPTModel("Claude 3.7 Sonnet", "claude-3.7-sonnet", Icons.Anthropic, INDIVIDUAL),
                 CodeGPTModel("DeepSeek R1", "deepseek-r1", Icons.DeepSeek, INDIVIDUAL),
                 CodeGPTModel("Gemini 2.0 Flash", "gemini-flash-2.0", Icons.Google, ANONYMOUS),
-                CodeGPTModel("GPT-4o mini", "gpt-4o-mini", Icons.OpenAI, ANONYMOUS),
+                CodeGPTModel("GPT-4.1 Mini", "gpt-4.1-mini", Icons.OpenAI, ANONYMOUS),
             )
 
             FREE -> listOf(
@@ -32,12 +32,12 @@ object CodeGPTAvailableModels {
                 CodeGPTModel("Qwen 2.5 Coder (32B)", "qwen-2.5-32b-chat", Icons.Qwen, FREE),
                 CodeGPTModel("Llama 3.1 (405B)", "llama-3.1-405b", Icons.Meta, FREE),
                 CodeGPTModel("Gemini 2.0 Flash", "gemini-flash-2.0", Icons.Google, ANONYMOUS),
-                CodeGPTModel("GPT-4o mini", "gpt-4o-mini", Icons.OpenAI, ANONYMOUS),
+                CodeGPTModel("GPT-4.1 Mini", "gpt-4.1-mini", Icons.OpenAI, ANONYMOUS),
             )
 
             INDIVIDUAL -> listOf(
                 CodeGPTModel("o3-mini", "o3-mini", Icons.OpenAI, INDIVIDUAL),
-                CodeGPTModel("GPT-4o", "gpt-4o", Icons.OpenAI, INDIVIDUAL),
+                CodeGPTModel("GPT-4.1", "gpt-4.1", Icons.OpenAI, INDIVIDUAL),
                 CodeGPTModel("Claude 3.7 Sonnet", "claude-3.7-sonnet", Icons.Anthropic, INDIVIDUAL),
                 CodeGPTModel("Gemini 2.5 Pro", "gemini-pro-2.5", Icons.Google, INDIVIDUAL),
                 CodeGPTModel("DeepSeek R1", "deepseek-r1", Icons.DeepSeek, INDIVIDUAL),
@@ -49,8 +49,8 @@ object CodeGPTAvailableModels {
     @JvmStatic
     val ALL_CHAT_MODELS: List<CodeGPTModel> = listOf(
         CodeGPTModel("o3-mini", "o3-mini", Icons.OpenAI, INDIVIDUAL),
-        CodeGPTModel("GPT-4o", "gpt-4o", Icons.OpenAI, INDIVIDUAL),
-        CodeGPTModel("GPT-4o mini", "gpt-4o-mini", Icons.OpenAI, ANONYMOUS),
+        CodeGPTModel("GPT-4.1", "gpt-4.1", Icons.OpenAI, INDIVIDUAL),
+        CodeGPTModel("GPT-4.1 Mini", "gpt-4.1-mini", Icons.OpenAI, ANONYMOUS),
         CodeGPTModel("Claude 3.7 Sonnet", "claude-3.7-sonnet", Icons.Anthropic, INDIVIDUAL),
         CodeGPTModel("Gemini 2.5 Pro", "gemini-pro-2.5", Icons.Google, INDIVIDUAL),
         CodeGPTModel("Gemini 2.0 Flash", "gemini-flash-2.0", Icons.Google, ANONYMOUS),
