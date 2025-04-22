@@ -6,6 +6,7 @@ import com.intellij.codeInsight.lookup.impl.PrefixChangeListener
 import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
@@ -48,7 +49,7 @@ class PromptTextField(
     private val onSubmit: (String) -> Unit
 ) : EditorTextField(project, FileTypes.PLAIN_TEXT), Disposable {
 
-    private val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var showSuggestionsJob: Job? = null
 
     val dispatcherId: UUID = UUID.randomUUID()
@@ -97,13 +98,7 @@ class PromptTextField(
     }
 
     private fun showGroupLookup(editor: Editor, lookupElements: Array<LookupElement>) {
-        val lookup = project.service<LookupManager>().createLookup(
-            editor,
-            lookupElements,
-            "",
-            LookupArranger.DefaultArranger()
-        ) as LookupImpl
-
+        val lookup = createLookup(editor, lookupElements, "")
         lookup.addLookupListener(object : LookupListener {
             override fun itemSelected(event: LookupEvent) {
                 val lookupString = event.item?.lookupString ?: return
@@ -155,12 +150,14 @@ class PromptTextField(
         editor: Editor,
         lookupElements: Array<LookupElement>,
         searchText: String
-    ) = LookupManager.getInstance(project).createLookup(
-        editor,
-        lookupElements,
-        searchText,
-        LookupArranger.DefaultArranger()
-    ) as LookupImpl
+    ) = runReadAction {
+        LookupManager.getInstance(project).createLookup(
+            editor,
+            lookupElements,
+            searchText,
+            LookupArranger.DefaultArranger()
+        ) as LookupImpl
+    }
 
     private fun showSuggestionLookup(
         lookupElements: Array<LookupElement>,
