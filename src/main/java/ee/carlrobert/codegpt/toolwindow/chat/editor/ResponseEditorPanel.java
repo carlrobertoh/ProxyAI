@@ -61,9 +61,10 @@ public class ResponseEditorPanel extends JPanel implements Disposable {
     group.add(new ReplaceCodeInMainEditorAction());
     String originalGroupId = ((EditorEx) editor).getContextMenuGroupId();
     if (originalGroupId != null) {
-      AnAction originalGroup = ActionManager.getInstance().getAction(originalGroupId);
+      ActionManager actionManager = ActionManager.getInstance();
+      AnAction originalGroup = actionManager.getAction(originalGroupId);
       if (originalGroup instanceof ActionGroup) {
-        group.addAll(((ActionGroup) originalGroup).getChildren(null));
+        group.addAll(((ActionGroup) originalGroup).getChildren(null, actionManager));
       }
     }
     configureEditor(
