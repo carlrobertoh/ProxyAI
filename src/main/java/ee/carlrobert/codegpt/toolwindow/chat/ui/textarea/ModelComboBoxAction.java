@@ -120,6 +120,9 @@ public class ModelComboBoxAction extends ComboBoxAction {
       var openaiGroup = DefaultActionGroup.createPopupGroup(() -> "OpenAI");
       openaiGroup.getTemplatePresentation().setIcon(Icons.OpenAI);
       List.of(
+              OpenAIChatCompletionModel.GPT_4_1,
+              OpenAIChatCompletionModel.GPT_4_1_MINI,
+              OpenAIChatCompletionModel.GPT_4_1_NANO,
               OpenAIChatCompletionModel.O_3_MINI, OpenAIChatCompletionModel.O_1_PREVIEW,
               OpenAIChatCompletionModel.O_1_MINI,
               OpenAIChatCompletionModel.GPT_4_O,
@@ -156,6 +159,8 @@ public class ModelComboBoxAction extends ComboBoxAction {
       var googleGroup = DefaultActionGroup.createPopupGroup(() -> "Google (Gemini)");
       googleGroup.getTemplatePresentation().setIcon(Icons.Google);
       List.of(
+              GoogleModel.GEMINI_2_5_PRO_PREVIEW,
+              GoogleModel.GEMINI_2_5_FLASH_PREVIEW,
               GoogleModel.GEMINI_2_5_PRO_EXP,
               GoogleModel.GEMINI_2_0_PRO_EXP,
               GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP,

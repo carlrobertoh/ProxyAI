@@ -28,6 +28,8 @@ class GoogleSettingsForm {
         completionModelComboBox = ComboBox(
             DefaultComboBoxModel(
                 arrayOf(
+                    GoogleModel.GEMINI_2_5_PRO_PREVIEW,
+                    GoogleModel.GEMINI_2_5_FLASH_PREVIEW,
                     GoogleModel.GEMINI_2_5_PRO_EXP,
                     GoogleModel.GEMINI_2_0_PRO_EXP,
                     GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP,
