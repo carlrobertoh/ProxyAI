@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- GPT-4.1 models for OpenAI provider
+
+### Fixed
+
+- Internal errors and warnings caused by recent IDE upgrade
+
 ## [3.2.3-223] - 2025-04-16
 
 ### Added
