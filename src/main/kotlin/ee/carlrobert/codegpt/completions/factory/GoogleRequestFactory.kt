@@ -31,6 +31,7 @@ class GoogleRequestFactory : BaseRequestFactory() {
                     .maxOutputTokens(configuration.maxTokens)
                     .temperature(configuration.temperature.toDouble()).build()
             )
+            .systemInstruction(buildSystemInstruction(params))
             .build()
     }
 
@@ -93,33 +94,6 @@ class GoogleRequestFactory : BaseRequestFactory() {
     private fun buildGoogleMessages(params: ChatCompletionParameters): List<GoogleCompletionContent> {
         val message = params.message
         val messages = mutableListOf<GoogleCompletionContent>()
-
-        when (params.conversationType) {
-            ConversationType.DEFAULT -> {
-                val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
-                if (!selectedPersona.disabled) {
-                    messages.add(
-                        GoogleCompletionContent(
-                            "user",
-                            listOf(PromptsSettings.getSelectedPersonaSystemPrompt())
-                        )
-                    )
-                    messages.add(GoogleCompletionContent("model", listOf("Understood.")))
-                }
-            }
-
-            ConversationType.FIX_COMPILE_ERRORS -> {
-                messages.add(
-                    GoogleCompletionContent(
-                        "user",
-                        listOf(service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions)
-                    )
-                )
-                messages.add(GoogleCompletionContent("model", listOf("Understood.")))
-            }
-
-            else -> {}
-        }
 
         for (prevMessage in params.conversation.messages) {
             if (params.retry && prevMessage.id == message.id) {
@@ -206,5 +180,24 @@ class GoogleRequestFactory : BaseRequestFactory() {
         }
 
         return updatedMessages.filterNotNull()
+    }
+
+    private fun buildSystemInstruction(params: ChatCompletionParameters): String? {
+        return when (params.conversationType) {
+            ConversationType.DEFAULT -> {
+                val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
+                return if (!selectedPersona.disabled) {
+                    PromptsSettings.getSelectedPersonaSystemPrompt();
+                } else {
+                    null
+                }
+            }
+
+            ConversationType.FIX_COMPILE_ERRORS -> service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
+
+            ConversationType.REVIEW_CHANGES -> service<PromptsSettings>().state.coreActions.reviewChanges.instructions
+
+            else -> null
+        }
     }
 }
