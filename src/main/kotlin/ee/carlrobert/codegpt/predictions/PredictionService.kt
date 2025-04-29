@@ -46,7 +46,7 @@ class PredictionService {
     fun openDirectPrediction(editor: Editor, nextRevision: String) {
         val project: Project = editor.project ?: return
         val tempDiffFile = LightVirtualFile((editor as EditorEx).virtualFile.name, nextRevision)
-        val diffRequest = createDiffRequest(project, tempDiffFile, editor)
+        val diffRequest = createDiffRequest(project, tempDiffFile, editor.virtualFile)
         runInEdt {
             service<DiffManager>().showDiff(project, diffRequest)
         }

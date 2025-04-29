@@ -3,17 +3,17 @@ package ee.carlrobert.codegpt.actions.editor;
 import static java.lang.String.format;
 
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.editor.impl.EditorImpl;
+import com.intellij.openapi.editor.ex.EditorEx;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UI;
 import ee.carlrobert.codegpt.Icons;
+import ee.carlrobert.codegpt.completions.CompletionRequestUtil;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager;
 import ee.carlrobert.codegpt.ui.UIUtil;
-import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.awt.event.ActionEvent;
 import javax.swing.AbstractAction;
 import javax.swing.JComponent;
@@ -32,13 +32,12 @@ public class AskQuestionAction extends BaseEditorAction {
   @Override
   protected void actionPerformed(Project project, Editor editor, String selectedText) {
     if (selectedText != null && !selectedText.isEmpty()) {
-      var fileExtension = FileUtil.getFileExtension(
-          ((EditorImpl) editor).getVirtualFile().getName());
       var dialog = new CustomPromptDialog(previousUserPrompt);
       if (dialog.showAndGet()) {
         previousUserPrompt = dialog.getUserPrompt();
-        var message = new Message(
-            format("%s%n```%s%n%s%n```", previousUserPrompt, fileExtension, selectedText));
+        var formattedCode =
+            CompletionRequestUtil.formatCode(selectedText, ((EditorEx)editor).getVirtualFile().getPath());
+        var message = new Message(format("%s\n\n%s", previousUserPrompt, formattedCode));
         SwingUtilities.invokeLater(() ->
             project.getService(ChatToolWindowContentManager.class).sendMessage(message));
       }

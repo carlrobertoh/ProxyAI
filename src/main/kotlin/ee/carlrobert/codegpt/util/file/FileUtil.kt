@@ -123,7 +123,7 @@ object FileUtil {
     }
 
     @JvmStatic
-    fun findLanguageExtensionMapping(language: String): Map.Entry<String, String> {
+    fun findLanguageExtensionMapping(language: String? = ""): Map.Entry<String, String> {
         val defaultValue = mapOf("Text" to ".txt").entries.first()
         val mapper = ObjectMapper()
 
@@ -217,7 +217,7 @@ object FileUtil {
     @JvmStatic
     fun findFirstExtension(
         languageFileExtensionMappings: List<LanguageFileExtensionDetails>,
-        language: String
+        language: String? = ""
     ): Optional<Map.Entry<String, String>> {
         return languageFileExtensionMappings.stream()
             .filter {

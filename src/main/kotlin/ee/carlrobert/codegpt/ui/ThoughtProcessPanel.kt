@@ -25,6 +25,8 @@ class ThoughtProcessPanel : JPanel(BorderLayout()) {
         add(contentPanel, BorderLayout.CENTER)
     }
 
+    fun isFinished(): Boolean = finished
+
     fun setFinished() {
         if (finished) return
 

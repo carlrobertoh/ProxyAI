@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt;
 import com.intellij.openapi.editor.EditorCustomElementRenderer;
 import com.intellij.openapi.editor.Inlay;
 import com.intellij.openapi.util.Key;
+import com.intellij.openapi.vfs.VirtualFile;
 import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer;
 import ee.carlrobert.llm.client.codegpt.CodeGPTUserDetails;
 
@@ -26,4 +27,6 @@ public class CodeGPTKeys {
       Key.create("codegpt.isPromptTextFieldDocument");
   public static final Key<CodeSuggestionDiffViewer> EDITOR_PREDICTION_DIFF_VIEWER =
       Key.create("codegpt.editorPredictionDiffViewer");
+  public static final Key<VirtualFile> TOOLWINDOW_EDITOR_VIRTUAL_FILE =
+      Key.create("proxyai.toolwindowEditorVirtualFile");
 }

@@ -1,19 +1,17 @@
 package ee.carlrobert.codegpt.actions.editor;
 
-import static java.lang.String.format;
-
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.editor.impl.EditorImpl;
+import com.intellij.openapi.editor.ex.EditorEx;
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.project.Project;
+import ee.carlrobert.codegpt.completions.CompletionRequestUtil;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager;
-import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.commons.text.CaseUtils;
@@ -47,14 +45,13 @@ public class EditorActionsUtil {
                     project.getService(ChatToolWindowContentManager.class);
                 toolWindowContentManager.getToolWindow().show();
 
-                var fileExtension = FileUtil.getFileExtension(
-                    ((EditorImpl) editor).getVirtualFile().getName());
                 var prompt =
                     promptDetails.getInstructions() == null ? "" : promptDetails.getInstructions();
-                var message = new Message(prompt.replace(
-                    "{SELECTION}",
-                    format("%n```%s%n%s%n```", fileExtension, selectedText)));
-                toolWindowContentManager.sendMessage(message);
+                var formattedCode = CompletionRequestUtil.formatCode(
+                    selectedText,
+                    ((EditorEx) editor).getVirtualFile().getPath());
+                toolWindowContentManager.sendMessage(
+                    new Message(prompt.replace("{SELECTION}", formattedCode)));
               }
             };
             group.add(action);

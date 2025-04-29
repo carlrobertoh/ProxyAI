@@ -19,7 +19,7 @@ import com.intellij.openapi.vcs.VcsDataKeys
 import com.intellij.openapi.vcs.changes.Change
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.completions.CompletionRequestService
-import ee.carlrobert.codegpt.toolwindow.chat.ThinkingOutputParser
+import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.GitUtil.getProjectRepository
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails

@@ -8,6 +8,7 @@ import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
+import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 
@@ -20,7 +21,7 @@ class LlamaRequestFactory : BaseRequestFactory() {
                 service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
             } else {
                 service<PromptsSettings>().state.personas.selectedPersona.let {
-                    if (it.disabled) null else it.instructions
+                    if (it.disabled) null else it.instructions?.addProjectPath()
                 }
             }
 

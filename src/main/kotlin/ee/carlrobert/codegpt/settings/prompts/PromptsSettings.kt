@@ -1,9 +1,16 @@
 package ee.carlrobert.codegpt.settings.prompts
 
+import com.intellij.ide.impl.ProjectUtil
 import com.intellij.openapi.components.*
+import com.intellij.openapi.project.guessProjectDir
 import ee.carlrobert.codegpt.actions.editor.EditorActionsUtil
+import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
+import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.persona.PersonaSettings
+import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettings
+import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
+import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTemplate
 import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 
 @Service
@@ -16,8 +23,21 @@ class PromptsSettings :
     companion object {
         @JvmStatic
         fun getSelectedPersonaSystemPrompt(): String {
-            return service<PromptsSettings>().state.personas.selectedPersona.instructions ?: ""
+            return (service<PromptsSettings>().state.personas.selectedPersona.instructions ?: "")
+                .addProjectPath()
         }
+    }
+
+    override fun initializeComponent() {
+        super.initializeComponent()
+
+        val selectedPersona = state.personas.selectedPersona
+        if (selectedPersona.id == 1L) {
+            state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
+        }
+        state.personas.prompts = state.personas.prompts.map {
+            if (it.id == 1L) PersonasState.DEFAULT_PERSONA else it 
+        }.toMutableList()
     }
 }
 
@@ -73,8 +93,8 @@ class PersonasState : BaseState() {
     companion object {
         val DEFAULT_PERSONA_PROMPT = getResourceContent("/prompts/persona/default-persona.txt")
         val DEFAULT_PERSONA = PersonaPromptDetailsState().apply {
-            id = 1L
-            name = "CodeGPT Default"
+            id = 1L  
+            name = "Default Persona"
             instructions = DEFAULT_PERSONA_PROMPT
         }
     }
@@ -194,3 +214,9 @@ class PersonaPromptDetailsState : PromptDetailsState() {
 
 @JvmRecord
 data class PersonaDetails(val id: Long, val name: String, val instructions: String)
+
+fun String.addProjectPath(): String = replace(
+    "{{project_path}}",
+    ProjectUtil.getActiveProject()?.guessProjectDir()?.path
+        ?: "UNDEFINED"
+)
