@@ -15,12 +15,15 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Key
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.JBColor
@@ -36,12 +39,14 @@ import ee.carlrobert.codegpt.completions.CompletionClientProvider
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.chat.editor.HeaderPanel
+import ee.carlrobert.codegpt.toolwindow.chat.editor.ToolWindowEditorFileDetails
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorDiffUtil.createDiffRequest
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest
 import ee.carlrobert.llm.client.codegpt.response.CodeGPTException
 import java.awt.FlowLayout
+import java.io.File
 import java.util.*
 import javax.swing.Icon
 import javax.swing.JButton
@@ -70,24 +75,13 @@ class AutoApplyAction(
             e.presentation.disableAction(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.disabledTitle"))
             return
         }
-
-        val editorVirtualFile = CodeGPTKeys.TOOLWINDOW_EDITOR_VIRTUAL_FILE.get(toolwindowEditor)
-        if (editorVirtualFile == null) {
-            e.presentation.disableAction(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.notApplicable"))
-        }
     }
 
-    override fun handleAction(event: AnActionEvent) {
-        val editorVirtualFile = CodeGPTKeys.TOOLWINDOW_EDITOR_VIRTUAL_FILE.get(toolwindowEditor)
-            ?: return
-
-        val request = AutoApplyRequest().apply {
-            suggestedChanges = toolwindowEditor.document.text
-            fileContent = FileUtil.readContent(editorVirtualFile)
-        }
-
-        val acceptLink = createDisabledActionLink(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.accept"))
-        val rejectLink = createDisabledActionLink(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.reject"))
+    private fun handleApply(request: AutoApplyRequest, editorVirtualFile: VirtualFile) {
+        val acceptLink =
+            createDisabledActionLink(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.accept"))
+        val rejectLink =
+            createDisabledActionLink(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.reject"))
 
         val newLinksPanel = JPanel(FlowLayout(FlowLayout.TRAILING, 8, 0)).apply {
             isOpaque = false
@@ -108,7 +102,9 @@ class AutoApplyAction(
                     acceptLink.isEnabled = true
                     acceptLink.addActionListener {
                         WriteCommandAction.runWriteCommandAction(project) {
-                            editorVirtualFile.setBinaryContent(modifiedFileContent.toByteArray(editorVirtualFile.charset))
+                            editorVirtualFile.setBinaryContent(
+                                modifiedFileContent.toByteArray(editorVirtualFile.charset)
+                            )
                         }
                         resetState(editorVirtualFile)
                     }
@@ -135,6 +131,25 @@ class AutoApplyAction(
                     }
                 })
         )
+    }
+
+    override fun handleAction(event: AnActionEvent) {
+        val fileDetails = CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.get(toolwindowEditor)
+            ?: return
+
+        if (fileDetails.virtualFile == null || fileDetails.virtualFile.isDirectory) {
+            showAdditionalOptionsDialog(fileDetails, toolwindowEditor.document.text)
+            return
+        }
+
+        val editorVirtualFile = fileDetails.virtualFile
+
+        val request = AutoApplyRequest().apply {
+            suggestedChanges = toolwindowEditor.document.text
+            fileContent = FileUtil.readContent(editorVirtualFile)
+        }
+
+        handleApply(request, editorVirtualFile)
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread {
@@ -182,7 +197,6 @@ class AutoApplyAction(
     }
 
     private fun resetState(virtualFile: VirtualFile) {
-        // Restore the action toolbar
         headerPanel.restoreActionToolbar()
         linksPanel = null
 
@@ -238,6 +252,95 @@ class AutoApplyAction(
             }
         }
     }
+
+    private fun createNewFile(filePath: String, content: String) {
+
+        ProgressManager.getInstance().run(object : Task.Backgroundable(
+            project,
+            CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.creatingFile"),
+            true
+        ) {
+            override fun run(indicator: ProgressIndicator) {
+                try {
+                    val file = File(filePath)
+                    file.parentFile?.mkdirs()
+
+                    WriteCommandAction.runWriteCommandAction(project) {
+                        file.writeText(content)
+
+                        val virtualFile =
+                            LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+
+                        if (virtualFile != null) {
+                            runInEdt {
+                                FileEditorManager.getInstance(project).openFile(virtualFile, true)
+                            }
+                        }
+                    }
+                } catch (ex: Exception) {
+                    runInEdt {
+                        OverlayUtil.showNotification(
+                            CodeGPTBundle.get(
+                                "toolwindow.chat.editor.action.autoApply.fileCreationError",
+                                ex.message ?: ""
+                            ),
+                            NotificationType.ERROR
+                        )
+                    }
+                }
+            }
+        })
+    }
+
+    private fun applyToExistingFile(content: String) {
+        val editor =
+            (FileEditorManager.getInstance(project).selectedTextEditor as? EditorEx) ?: return
+        val request = AutoApplyRequest().apply {
+            suggestedChanges = content
+            fileContent = FileUtil.readContent(editor.virtualFile)
+        }
+
+        handleApply(request, editor.virtualFile)
+    }
+
+    private fun showAdditionalOptionsDialog(
+        fileDetails: ToolWindowEditorFileDetails,
+        content: String
+    ) {
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        val canCreateNewFile =
+            fileDetails.virtualFile == null || !fileDetails.virtualFile.isDirectory
+
+        if (canCreateNewFile) {
+            actions.add(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.dialog.createNew") to {
+                createNewFile(fileDetails.path, content)
+            })
+        }
+        actions.add(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.dialog.applyToOpenFile") to {
+            applyToExistingFile(content)
+        })
+        actions.add(CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.dialog.cancel") to {})
+
+        val optionTexts = actions.map { it.first }.toTypedArray()
+        val defaultOptionIndex = 0
+
+        val result = Messages.showDialog(
+            project,
+            CodeGPTBundle.get(
+                "toolwindow.chat.editor.action.autoApply.dialog.message",
+                fileDetails.path
+            ),
+            CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.dialog.title"),
+            optionTexts,
+            defaultOptionIndex,
+            Messages.getQuestionIcon()
+        )
+
+        if (result >= 0 && result < actions.size) {
+            actions[result].second.invoke()
+        }
+    }
+
 }
 
 internal class ApplyChangesBackgroundTask(

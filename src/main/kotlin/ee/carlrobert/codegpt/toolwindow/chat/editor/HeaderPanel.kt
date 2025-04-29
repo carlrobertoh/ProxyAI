@@ -57,11 +57,12 @@ class HeaderPanel(
                 if (virtualFile == null) {
                     runInEdt {
                         add(createLanguageLabel(extension), BorderLayout.LINE_START)
+                        CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.set(editorEx, ToolWindowEditorFileDetails(filePath))
                     }
                 } else {
                     runInEdt {
                         add(createFileLink(virtualFile), BorderLayout.LINE_START)
-                        CodeGPTKeys.TOOLWINDOW_EDITOR_VIRTUAL_FILE.set(editorEx, virtualFile)
+                        CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.set(editorEx, ToolWindowEditorFileDetails(filePath, virtualFile))
                     }
                 }
             }
