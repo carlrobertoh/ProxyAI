@@ -11,6 +11,10 @@ public final class Icons {
       IconLoader.getIcon("/icons/codegpt-small.svg", Icons.class);
   public static final Icon CodeGPTModel =
       IconLoader.getIcon("/icons/codegpt-model.svg", Icons.class);
+  public static final Icon CollapseAll =
+      IconLoader.getIcon("/icons/collapseAll.svg", Icons.class);
+  public static final Icon ExpandAll =
+      IconLoader.getIcon("/icons/expandAll.svg", Icons.class);
   public static final Icon Anthropic = IconLoader.getIcon("/icons/anthropic.svg", Icons.class);
   public static final Icon Azure = IconLoader.getIcon("/icons/azure.svg", Icons.class);
   public static final Icon DeepSeek = IconLoader.getIcon("/icons/deepseek.png", Icons.class);

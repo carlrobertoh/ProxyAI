@@ -154,7 +154,7 @@ class PsiStructureRepository(
                             try {
                                 PsiManager.getInstance(project).findFile(virtualFile)
                             } catch (exc: Exception) {
-                                logger.error("Failed to find file {}", virtualFile.name)
+                                logger.warn("Failed to find file ${virtualFile.name}", exc)
                                 null
                             }
                         }

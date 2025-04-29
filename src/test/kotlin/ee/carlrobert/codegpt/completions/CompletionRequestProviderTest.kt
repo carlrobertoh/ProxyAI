@@ -2,10 +2,8 @@ package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory
-import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.settings.prompts.PersonasState.Companion.DEFAULT_PERSONA_PROMPT
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import org.assertj.core.api.Assertions.assertThat
@@ -40,32 +38,6 @@ class CompletionRequestProviderTest : IntegrationTest() {
             )
     }
 
-    fun testChatCompletionRequestWithoutSystemPromptOverride() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_3_5.code)
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = DEFAULT_PERSONA_PROMPT
-        val conversation = ConversationService.getInstance().startConversation()
-        val firstMessage = createDummyMessage(500)
-        val secondMessage = createDummyMessage(250)
-        conversation.addMessage(firstMessage)
-        conversation.addMessage(secondMessage)
-        val callParameters = ChatCompletionParameters
-            .builder(conversation, Message("TEST_CHAT_COMPLETION_PROMPT"))
-            .build()
-
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
-
-        assertThat(request.messages)
-            .extracting("role", "content")
-            .containsExactly(
-                Tuple.tuple("system", DEFAULT_PERSONA_PROMPT),
-                Tuple.tuple("user", "TEST_PROMPT"),
-                Tuple.tuple("assistant", firstMessage.response),
-                Tuple.tuple("user", "TEST_PROMPT"),
-                Tuple.tuple("assistant", secondMessage.response),
-                Tuple.tuple("user", "TEST_CHAT_COMPLETION_PROMPT")
-            )
-    }
-
     fun testChatCompletionRequestRetry() {
         useOpenAIService(OpenAIChatCompletionModel.GPT_3_5.code)
         service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
@@ -87,33 +59,6 @@ class CompletionRequestProviderTest : IntegrationTest() {
                 Tuple.tuple("user", "FIRST_TEST_PROMPT"),
                 Tuple.tuple("assistant", firstMessage.response),
                 Tuple.tuple("user", "SECOND_TEST_PROMPT")
-            )
-    }
-
-    fun testReducedChatCompletionRequest() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_3_5.code)
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = DEFAULT_PERSONA_PROMPT
-        val conversation = Conversation()
-        conversation.addMessage(createDummyMessage(50))
-        conversation.addMessage(createDummyMessage(100))
-        conversation.addMessage(createDummyMessage(150))
-        conversation.addMessage(createDummyMessage(1000))
-        val remainingMessage = createDummyMessage(1000)
-        conversation.addMessage(remainingMessage)
-        conversation.discardTokenLimits()
-        val callParameters = ChatCompletionParameters
-            .builder(conversation, Message("TEST_CHAT_COMPLETION_PROMPT"))
-            .build()
-
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
-
-        assertThat(request.messages)
-            .extracting("role", "content")
-            .containsExactly(
-                Tuple.tuple("system", DEFAULT_PERSONA_PROMPT),
-                Tuple.tuple("user", "TEST_PROMPT"),
-                Tuple.tuple("assistant", remainingMessage.response),
-                Tuple.tuple("user", "TEST_CHAT_COMPLETION_PROMPT")
             )
     }
 

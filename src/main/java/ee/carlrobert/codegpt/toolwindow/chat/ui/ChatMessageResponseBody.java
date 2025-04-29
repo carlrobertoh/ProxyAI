@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.toolwindow.chat.ui;
 
-import static ee.carlrobert.codegpt.toolwindow.chat.StreamResponseType.CODE;
 import static ee.carlrobert.codegpt.util.MarkdownUtil.convertMdToHtml;
 import static java.lang.String.format;
 import static javax.swing.event.HyperlinkEvent.EventType.ACTIVATED;
@@ -24,8 +23,6 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
-import com.vladsch.flexmark.ast.FencedCodeBlock;
-import com.vladsch.flexmark.parser.Parser;
 import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.actions.ActionType;
@@ -38,16 +35,17 @@ import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
-import ee.carlrobert.codegpt.toolwindow.chat.StreamParser;
-import ee.carlrobert.codegpt.toolwindow.chat.ThinkingOutputParser;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.CompleteOutputParser;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.StreamOutputParser;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.StreamParseResponse;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.StreamParseResponse.StreamResponseType;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseBodyProgressPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.WebpageList;
 import ee.carlrobert.codegpt.ui.ThoughtProcessPanel;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.util.EditorUtil;
-import ee.carlrobert.codegpt.util.MarkdownUtil;
 import java.awt.BorderLayout;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -64,8 +62,7 @@ public class ChatMessageResponseBody extends JPanel {
 
   private final Project project;
   private final Disposable parentDisposable;
-  private final StreamParser streamParser;
-  private final ThinkingOutputParser thinkingOutputParser;
+  private final StreamOutputParser streamOutputParser;
   private final boolean readOnly;
   private final DefaultListModel<WebSearchEventDetails> webpageListModel = new DefaultListModel<>();
   private final WebpageList webpageList = new WebpageList(webpageListModel);
@@ -86,8 +83,7 @@ public class ChatMessageResponseBody extends JPanel {
       Disposable parentDisposable) {
     this.project = project;
     this.parentDisposable = parentDisposable;
-    this.streamParser = new StreamParser();
-    this.thinkingOutputParser = new ThinkingOutputParser();
+    this.streamOutputParser = new StreamOutputParser();
     this.readOnly = readOnly;
     setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
     setOpaque(false);
@@ -106,8 +102,8 @@ public class ChatMessageResponseBody extends JPanel {
 
   public ChatMessageResponseBody withResponse(@NotNull String response) {
     try {
-      for (var message : MarkdownUtil.splitCodeBlocks(response)) {
-        processResponse(message, message.startsWith("```"), false);
+      for (var item : new CompleteOutputParser().parse(response)) {
+        processResponse(item, false);
 
         currentlyProcessedTextPane = null;
         currentlyProcessedEditorPanel = null;
@@ -123,13 +119,9 @@ public class ChatMessageResponseBody extends JPanel {
       return;
     }
 
-    var processedPartialMessage = processThinkingOutput(partialMessage);
-    if (processedPartialMessage.isEmpty()) {
-      return;
-    }
-
-    for (var item : streamParser.parse(processedPartialMessage)) {
-      processResponse(item.response(), CODE.equals(item.type()), true);
+    var parsedResponse = streamOutputParser.parse(partialMessage);
+    for (StreamParseResponse item : parsedResponse) {
+      processResponse(item, true);
     }
   }
 
@@ -231,7 +223,7 @@ public class ChatMessageResponseBody extends JPanel {
   public void clear() {
     removeAll();
 
-    streamParser.clear();
+    streamOutputParser.clear();
     // TODO: First message might be code block
     prepareProcessingText(true);
     currentlyProcessedTextPane.setText(
@@ -241,26 +233,17 @@ public class ChatMessageResponseBody extends JPanel {
     revalidate();
   }
 
-  private String processThinkingOutput(String partialMessage) {
-    var processedChunk = thinkingOutputParser.processChunk(partialMessage);
+  private void processThinkingOutput(String thoughtProcess) {
+    progressPanel.setVisible(false);
+
     var thoughtProcessPanel = getExistingThoughtProcessPanel();
-
-    if (thinkingOutputParser.isThinking()) {
-      progressPanel.setVisible(false);
-
-      if (thoughtProcessPanel == null) {
-        thoughtProcessPanel = new ThoughtProcessPanel();
-        add(thoughtProcessPanel);
-      } else {
-        thoughtProcessPanel.updateText(thinkingOutputParser.getThoughtProcess());
-      }
+    if (thoughtProcessPanel == null) {
+      thoughtProcessPanel = new ThoughtProcessPanel();
+      thoughtProcessPanel.updateText(thoughtProcess);
+      add(thoughtProcessPanel);
+    } else {
+      thoughtProcessPanel.updateText(thoughtProcess);
     }
-
-    if (thoughtProcessPanel != null && thinkingOutputParser.isFinished()) {
-      thoughtProcessPanel.setFinished();
-    }
-
-    return processedChunk;
   }
 
   private ThoughtProcessPanel getExistingThoughtProcessPanel() {
@@ -270,26 +253,32 @@ public class ChatMessageResponseBody extends JPanel {
         .orElse(null);
   }
 
-  private void processResponse(String markdownInput, boolean codeResponse, boolean caretVisible) {
-    if (codeResponse) {
-      processCode(markdownInput);
+  private void processResponse(StreamParseResponse item, boolean caretVisible) {
+    if (item.getType() == StreamResponseType.THINKING) {
+      processThinkingOutput(item.getContent());
+      return;
+    }
+
+    var thoughtProcessPanel = getExistingThoughtProcessPanel();
+    if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
+      thoughtProcessPanel.setFinished();
+    }
+
+    if (item.getType() == StreamResponseType.CODE_CONTENT
+        || item.getType() == StreamResponseType.CODE_HEADER) {
+      processCode(item);
     } else {
-      processText(markdownInput, caretVisible);
+      processText(item.getContent(), caretVisible);
     }
   }
 
-  private void processCode(String markdownCode) {
-    var document = Parser.builder().build().parse(markdownCode);
-    var child = document.getChildOfType(FencedCodeBlock.class);
-    if (child != null) {
-      var codeBlock = ((FencedCodeBlock) child);
-      var code = codeBlock.getContentChars().toString();
-      if (!code.isEmpty()) {
-        if (currentlyProcessedEditorPanel == null) {
-          prepareProcessingCode(code, codeBlock.getInfo().toString());
-        }
-        EditorUtil.updateEditorDocument(currentlyProcessedEditorPanel.getEditor(), code);
+  private void processCode(StreamParseResponse item) {
+    var content = item.getContent();
+    if (!content.isEmpty()) {
+      if (currentlyProcessedEditorPanel == null) {
+        prepareProcessingCode(item);
       }
+      EditorUtil.updateEditorDocument(currentlyProcessedEditorPanel.getEditor(), content);
     }
   }
 
@@ -307,11 +296,11 @@ public class ChatMessageResponseBody extends JPanel {
     add(currentlyProcessedTextPane);
   }
 
-  private void prepareProcessingCode(String code, String markdownLanguage) {
+  private void prepareProcessingCode(StreamParseResponse item) {
     hideCaret();
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel =
-        new ResponseEditorPanel(project, code, markdownLanguage, readOnly, parentDisposable);
+        new ResponseEditorPanel(project, item, readOnly, parentDisposable);
     add(currentlyProcessedEditorPanel);
   }
 

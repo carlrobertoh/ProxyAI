@@ -129,21 +129,27 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
 
                             File Path: /TEST_FILE_NAME_1
                             File Content:
-                            ```TEST_FILE_NAME_1
+                            
+                            ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
                             TEST_FILE_CONTENT_1
                             ```
                             
+                            
                             File Path: /TEST_FILE_NAME_2
                             File Content:
-                            ```TEST_FILE_NAME_2
+                            
+                            ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
                             TEST_FILE_CONTENT_2
                             ```
                             
+                            
                             File Path: /TEST_FILE_NAME_3
                             File Content:
-                            ```TEST_FILE_NAME_3
+                            
+                            ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
                             TEST_FILE_CONTENT_3
                             ```
+                            
                             
                             Question: TEST_MESSAGE""".trimIndent()
                         )
@@ -330,21 +336,27 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
 
                             File Path: /TEST_FILE_NAME_1
                             File Content:
-                            ```TEST_FILE_NAME_1
+                            
+                            ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
                             TEST_FILE_CONTENT_1
                             ```
                             
+                            
                             File Path: /TEST_FILE_NAME_2
                             File Content:
-                            ```TEST_FILE_NAME_2
+                            
+                            ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
                             TEST_FILE_CONTENT_2
                             ```
                             
+                            
                             File Path: /TEST_FILE_NAME_3
                             File Content:
-                            ```TEST_FILE_NAME_3
+                            
+                            ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
                             TEST_FILE_CONTENT_3
                             ```
+                            
                             
                             Question: TEST_MESSAGE""".trimIndent()
                         )
