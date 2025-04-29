@@ -5,7 +5,6 @@ import ee.carlrobert.codegpt.completions.llama.PromptTemplate.LLAMA
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.persona.PersonaSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.llm.client.http.RequestEntity
 import ee.carlrobert.llm.client.http.exchange.NdJsonStreamHttpExchange
@@ -19,7 +18,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testOpenAIChatCompletionCall() {
         useOpenAIService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        service<PromptsSettings>().state.personas.selectedPersona.instructions =
+            "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
@@ -58,7 +58,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testAzureChatCompletionCall() {
         useAzureService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        service<PromptsSettings>().state.personas.selectedPersona.instructions =
+            "TEST_SYSTEM_PROMPT"
         val conversationService = ConversationService.getInstance()
         val prevMessage = Message("TEST_PREV_PROMPT")
         prevMessage.response = "TEST_PREV_RESPONSE"
@@ -104,7 +105,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
     fun testLlamaChatCompletionCall() {
         useLlamaService()
         service<ConfigurationSettings>().state.maxTokens = 99
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        service<PromptsSettings>().state.personas.selectedPersona.instructions =
+            "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         conversation.addMessage(Message("Ping", "Pong"))
@@ -145,7 +147,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
     fun testOllamaChatCompletionCall() {
         useOllamaService()
         service<ConfigurationSettings>().state.maxTokens = 99
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        service<PromptsSettings>().state.personas.selectedPersona.instructions =
+            "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectOllama(NdJsonStreamHttpExchange { request: RequestEntity ->
@@ -184,7 +187,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testGoogleChatCompletionCall() {
         useGoogleService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        service<PromptsSettings>().state.personas.selectedPersona.instructions =
+            "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectGoogle(StreamHttpExchange { request: RequestEntity ->
@@ -192,16 +196,12 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.uri.query).isEqualTo("key=TEST_API_KEY&alt=sse")
             assertThat(request.body)
-                .extracting("contents")
-                .isEqualTo(
+                .extracting("contents", "systemInstruction")
+                .containsExactly(
                     listOf(
-                        mapOf(
-                            "parts" to listOf(mapOf("text" to "TEST_SYSTEM_PROMPT")),
-                            "role" to "user"
-                        ),
-                        mapOf("parts" to listOf(mapOf("text" to "Understood.")), "role" to "model"),
                         mapOf("parts" to listOf(mapOf("text" to "TEST_PROMPT")), "role" to "user"),
-                    )
+                    ),
+                    mapOf("parts" to listOf(mapOf("text" to "TEST_SYSTEM_PROMPT")))
                 )
             listOf(
                 jsonMapResponse(
@@ -229,7 +229,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testCodeGPTServiceChatCompletionCall() {
         useCodeGPTService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        service<PromptsSettings>().state.personas.selectedPersona.instructions =
+            "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectCodeGPT(StreamHttpExchange { request: RequestEntity ->
