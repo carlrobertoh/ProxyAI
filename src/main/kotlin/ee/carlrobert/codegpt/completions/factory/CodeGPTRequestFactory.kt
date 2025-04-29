@@ -58,7 +58,7 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
                         processFolder(it, children)
                         children
                     } else {
-                        listOf(ContextFile(file.fileName(), file.fileContent()))
+                        listOf(ContextFile(file.fileName(), file.filePath(), file.fileContent()))
                     }
                 }
             }
@@ -69,6 +69,7 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         val psiContext = params.psiStructure?.map { classStructure ->
             ContextFile(
                 classStructure.virtualFile.name,
+                classStructure.virtualFile.path,
                 classStructureSerializer.serialize(classStructure)
             )
         }.orEmpty()
@@ -85,7 +86,13 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         folder.children.forEach { child ->
             when {
                 child.isDirectory -> processFolder(child, contextFiles)
-                else -> contextFiles.add(ContextFile(child.name, FileUtil.readContent(child)))
+                else -> contextFiles.add(
+                    ContextFile(
+                        child.name,
+                        child.path,
+                        FileUtil.readContent(child)
+                    )
+                )
             }
         }
     }

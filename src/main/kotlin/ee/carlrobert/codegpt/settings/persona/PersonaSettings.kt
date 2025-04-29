@@ -17,7 +17,7 @@ class PersonaSettingsState : BaseState() {
 }
 
 class PersonaDetailsState : BaseState() {
-    var id by property(1L)
-    var name by string("CodeGPT Default")
-    var instructions by string(PersonasState.DEFAULT_PERSONA_PROMPT)
+    var id by property(PersonasState.DEFAULT_PERSONA.id)
+    var name by string(PersonasState.DEFAULT_PERSONA.name)
+    var instructions by string(PersonasState.DEFAULT_PERSONA.instructions)
 }

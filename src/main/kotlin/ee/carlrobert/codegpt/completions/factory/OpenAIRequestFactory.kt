@@ -1,35 +1,22 @@
 package ee.carlrobert.codegpt.completions.factory
 
+import com.intellij.ide.impl.ProjectUtil
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.guessProjectDir
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.ReferencedFile
-import ee.carlrobert.codegpt.completions.ChatCompletionParameters
-import ee.carlrobert.codegpt.completions.CommitMessageCompletionParameters
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory
-import ee.carlrobert.codegpt.completions.CompletionRequestUtil
-import ee.carlrobert.codegpt.completions.ConversationType
-import ee.carlrobert.codegpt.completions.EditCodeCompletionParameters
-import ee.carlrobert.codegpt.completions.LookupCompletionParameters
-import ee.carlrobert.codegpt.completions.TotalUsageExceededException
+import ee.carlrobert.codegpt.completions.*
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings.Companion.getState
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
+import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import ee.carlrobert.codegpt.util.file.FileUtil.getImageMediaType
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.O_1_MINI
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.O_1_PREVIEW
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.O_3_MINI
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.findByCode
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionDetailedMessage
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIImageUrl
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIMessageImageURLContent
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIMessageTextContent
+import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.*
+import ee.carlrobert.llm.client.openai.completion.request.*
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -182,13 +169,16 @@ class OpenAIRequestFactory : CompletionRequestFactory {
                 val sessionPersonaDetails = callParameters.personaDetails
                 if (sessionPersonaDetails == null) {
                     messages.add(
-                        OpenAIChatCompletionStandardMessage(role, selectedPersona.instructions)
+                        OpenAIChatCompletionStandardMessage(
+                            role,
+                            selectedPersona.instructions?.addProjectPath()
+                        )
                     )
                 } else {
                     messages.add(
                         OpenAIChatCompletionStandardMessage(
                             role,
-                            sessionPersonaDetails.instructions
+                            sessionPersonaDetails.instructions.addProjectPath()
                         )
                     )
                 }
