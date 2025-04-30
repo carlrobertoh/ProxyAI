@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor
 import com.intellij.icons.AllIcons.General
 import com.intellij.ide.actions.OpenFileAction
 import com.intellij.openapi.actionSystem.*
-import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.editor.ex.EditorEx
@@ -98,10 +97,10 @@ class HeaderPanel(
 
         val toolbar = ActionManager.getInstance()
             .createActionToolbar("NAVIGATION_BAR_TOOLBAR", actionGroup, true)
-        toolbar.layoutStrategy = ToolbarLayoutStrategy.NOWRAP_STRATEGY
+        toolbar.layoutPolicy = ActionToolbar.NOWRAP_LAYOUT_POLICY
         toolbar.targetComponent = this
         toolbar.component.border = JBUI.Borders.empty()
-        toolbar.updateActionsAsync()
+        toolbar.updateActionsImmediately()
         return toolbar
     }
 
@@ -146,7 +145,7 @@ class HeaderPanel(
             }
 
             add(actionToolbar!!.component, BorderLayout.LINE_END)
-            actionToolbar!!.updateActionsAsync()
+            actionToolbar!!.updateActionsImmediately()
             revalidate()
             repaint()
         }
