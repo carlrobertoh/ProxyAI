@@ -35,8 +35,9 @@ public class AskQuestionAction extends BaseEditorAction {
       var dialog = new CustomPromptDialog(previousUserPrompt);
       if (dialog.showAndGet()) {
         previousUserPrompt = dialog.getUserPrompt();
-        var formattedCode =
-            CompletionRequestUtil.formatCode(selectedText, ((EditorEx)editor).getVirtualFile().getPath());
+        var formattedCode = CompletionRequestUtil.formatCode(
+            selectedText,
+            ((EditorEx) editor).getVirtualFile().getPath());
         var message = new Message(format("%s\n\n%s", previousUserPrompt, formattedCode));
         SwingUtilities.invokeLater(() ->
             project.getService(ChatToolWindowContentManager.class).sendMessage(message));
