@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Apply changes even if the target file isn't open
+- Support for creating new files using the 'Apply Changes' action
+- Apply and Reject buttons to the diff toolbar
+
 ## [3.2.4-223] - 2025-04-23
 
 ### Added
