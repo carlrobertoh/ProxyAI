@@ -22,7 +22,7 @@ class InfillRequest private constructor(
     val stopTokens: List<String>,
 ) {
 
-    data class FileDetails(val fileContent: String, val fileExtension: String? = null)
+    data class FileDetails(val fileContent: String, val filePath: String? = null)
 
     class Builder {
         private val prefix: String
@@ -39,18 +39,16 @@ class InfillRequest private constructor(
             prefix: String,
             suffix: String,
             caretOffset: Int,
-            type: CompletionType = CompletionType.MULTI_LINE
         ) {
             this.prefix = prefix
             this.suffix = suffix
             this.caretOffset = caretOffset
-            this.stopTokens = getStopTokens(type)
+            this.stopTokens = getStopTokens()
         }
 
         constructor(
             document: Document,
             caretOffset: Int,
-            type: CompletionType = CompletionType.MULTI_LINE
         ) {
             prefix =
                 document.getText(TextRange(0, caretOffset))
@@ -59,7 +57,7 @@ class InfillRequest private constructor(
                 document.getText(TextRange(caretOffset, document.textLength))
                     .truncateText(MAX_PROMPT_TOKENS)
             this.caretOffset = caretOffset
-            this.stopTokens = getStopTokens(type)
+            this.stopTokens = getStopTokens()
         }
 
         fun fileDetails(fileDetails: FileDetails) = apply { this.fileDetails = fileDetails }
@@ -74,7 +72,7 @@ class InfillRequest private constructor(
 
         fun context(context: InfillContext) = apply { this.context = context }
 
-        private fun getStopTokens(type: CompletionType): List<String> {
+        private fun getStopTokens(): List<String> {
             var whitespaceCount = 0
             val lineSuffix = suffix
                 .takeWhile { char ->
@@ -82,10 +80,7 @@ class InfillRequest private constructor(
                     else if (char.isWhitespace()) whitespaceCount++ < 2
                     else whitespaceCount < 2
                 }
-            val baseTokens = when (type) {
-                CompletionType.SINGLE_LINE -> emptyList()
-                else -> listOf("\n\n")
-            }
+            val baseTokens = listOf("\n\n")
 
             return if (lineSuffix.isNotEmpty()) {
                 baseTokens + lineSuffix
@@ -116,7 +111,6 @@ class InfillRequest private constructor(
 
 class InfillContext(
     val enclosingElement: ContextElement,
-    // TODO: Add some kind of ranking, which contextElements are more important than others
     val contextElements: Set<ContextElement>
 ) {
 
@@ -132,9 +126,4 @@ class ContextElement(val psiElement: PsiElement) {
 
 fun String.truncateText(maxTokens: Int, fromStart: Boolean = true): String {
     return service<EncodingManager>().truncateText(this, maxTokens, fromStart)
-}
-
-enum class CompletionType {
-    SINGLE_LINE,
-    MULTI_LINE,
 }

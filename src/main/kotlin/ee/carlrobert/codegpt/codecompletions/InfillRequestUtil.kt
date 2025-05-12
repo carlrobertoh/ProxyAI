@@ -14,16 +14,13 @@ import ee.carlrobert.codegpt.util.GitUtil
 
 object InfillRequestUtil {
 
-    suspend fun buildInfillRequest(
-        request: InlineCompletionRequest,
-        type: CompletionType
-    ): InfillRequest {
+    suspend fun buildInfillRequest(request: InlineCompletionRequest): InfillRequest {
         val caretOffset = readAction { request.editor.caretModel.offset }
-        val infillRequestBuilder = InfillRequest.Builder(request.document, caretOffset, type)
+        val infillRequestBuilder = InfillRequest.Builder(request.document, caretOffset)
             .fileDetails(
                 InfillRequest.FileDetails(
                     request.document.text,
-                    request.file.virtualFile.extension
+                    request.file.virtualFile.path
                 )
             )
 

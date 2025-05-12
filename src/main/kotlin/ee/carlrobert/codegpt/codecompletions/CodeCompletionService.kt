@@ -2,11 +2,13 @@ package ee.carlrobert.codegpt.codecompletions
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCodeGPTRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCustomRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildLlamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOllamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOpenAIRequest
+import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.settings.GeneralSettings
@@ -20,11 +22,12 @@ import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionEventSourceListener
 import ee.carlrobert.llm.client.openai.completion.OpenAITextCompletionEventSourceListener
 import ee.carlrobert.llm.completion.CompletionEventListener
+import okhttp3.Request
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSources.createFactory
 
 @Service(Service.Level.PROJECT)
-class CodeCompletionService {
+class CodeCompletionService(private val project: Project) {
 
     // TODO: Consolidate logic in ModelComboBoxAction
     fun getSelectedModelCode(): String? {
@@ -43,6 +46,8 @@ class CodeCompletionService {
         }
     }
 
+    fun isCodeCompletionsEnabled(): Boolean = isCodeCompletionsEnabled(GeneralSettings.getSelectedService())
+
     fun isCodeCompletionsEnabled(selectedService: ServiceType): Boolean =
         when (selectedService) {
             CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
@@ -56,11 +61,8 @@ class CodeCompletionService {
     fun getCodeCompletionAsync(
         infillRequest: InfillRequest,
         eventListener: CompletionEventListener<String>
-    ): EventSource =
-        when (val selectedService = GeneralSettings.getSelectedService()) {
-            CODEGPT -> CompletionClientProvider.getCodeGPTClient()
-                .getCodeCompletionAsync(buildCodeGPTRequest(infillRequest), eventListener)
-
+    ): EventSource {
+        return when (val selectedService = GeneralSettings.getSelectedService()) {
             OPENAI -> CompletionClientProvider.getOpenAIClient()
                 .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
 
@@ -83,4 +85,5 @@ class CodeCompletionService {
 
             else -> throw IllegalArgumentException("Code completion not supported for ${selectedService.name}")
         }
+    }
 }

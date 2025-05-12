@@ -1,20 +1,16 @@
 package ee.carlrobert.codegpt
 
+import com.intellij.codeInsight.inline.completion.InlineCompletion
 import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.codeInsight.lookup.LookupEvent
 import com.intellij.codeInsight.lookup.LookupListener
 import com.intellij.codeInsight.lookup.LookupManagerListener
 import com.intellij.codeInsight.lookup.impl.LookupImpl
-import com.intellij.notification.NotificationType
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.EditorKind
-import ee.carlrobert.codegpt.predictions.PredictionService
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.ui.OverlayUtil
+import ee.carlrobert.codegpt.codecompletions.CodeCompletionService
+import ee.carlrobert.codegpt.codecompletions.LookupInlineCompletionEvent
 
 class CodeGPTLookupListener : LookupManagerListener {
     override fun activeLookupChanged(oldLookup: Lookup?, newLookup: Lookup?) {
@@ -35,25 +31,17 @@ class CodeGPTLookupListener : LookupManagerListener {
 
                 override fun itemSelected(event: LookupEvent) {
                     val editor = newLookup.editor
-                    if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT
-                        || !service<CodeGPTServiceSettings>().state.nextEditsEnabled
+                    val project = editor.project ?: return
+
+                    if (!project.service<CodeCompletionService>().isCodeCompletionsEnabled()
                         || editor.editorKind != EditorKind.MAIN_EDITOR
                     ) {
                         return
                     }
 
-                    val settings = service<CodeGPTServiceSettings>().state
-                    if (settings.codeCompletionSettings.codeCompletionsEnabled) {
-                        settings.codeCompletionSettings.codeCompletionsEnabled = false
-                        OverlayUtil.showNotification(
-                            "Code completions and multi-line edits cannot be active simultaneously.",
-                            NotificationType.WARNING
-                        )
-                    }
-
-                    ApplicationManager.getApplication().executeOnPooledThread {
-                        service<PredictionService>().displayInlineDiff(editor)
-                    }
+                    InlineCompletion.getHandlerOrNull(editor)?.invokeEvent(
+                        LookupInlineCompletionEvent(event)
+                    )
                 }
             })
         }

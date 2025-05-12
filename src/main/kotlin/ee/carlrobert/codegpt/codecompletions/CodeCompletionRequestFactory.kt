@@ -7,16 +7,15 @@ import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.Placeholder.*
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettingsState
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
-import ee.carlrobert.llm.client.codegpt.request.CodeCompletionRequest
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaParameters
 import ee.carlrobert.llm.client.openai.completion.request.OpenAITextCompletionRequest
+import ee.carlrobert.service.GrpcCodeCompletionRequest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -27,15 +26,12 @@ object CodeCompletionRequestFactory {
     private const val MAX_TOKENS = 128
 
     @JvmStatic
-    fun buildCodeGPTRequest(details: InfillRequest): CodeCompletionRequest {
-        return CodeCompletionRequest.Builder()
-            .setModel(service<CodeGPTServiceSettings>().state.codeCompletionSettings.model)
-            .setPrefix(details.prefix)
-            .setSuffix(details.suffix)
-            .setFileExtension(details.fileDetails?.fileExtension)
+    fun buildCodeGPTRequest(details: InfillRequest): GrpcCodeCompletionRequest {
+        return GrpcCodeCompletionRequest.newBuilder()
+            .setFilePath(details.fileDetails?.filePath)
             .setFileContent(details.fileDetails?.fileContent)
-            .setCursorOffset(details.caretOffset)
-            .setStop(details.stopTokens.ifEmpty { null })
+            .setGitDiff("")
+            .setCursorPosition(details.caretOffset)
             .build()
     }
 
@@ -55,7 +51,8 @@ object CodeCompletionRequestFactory {
     fun buildCustomRequest(details: InfillRequest): Request {
         val activeService = service<CustomServicesSettings>().state.active
         val settings = activeService.codeCompletionSettings
-        val credential = getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
+        val credential =
+            getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
         return buildCustomRequest(
             details,
             settings.url!!,

@@ -26,7 +26,7 @@ class TriggerCustomPredictionAction : EditorAction(Handler()), HintManagerImpl.A
             }
 
             ApplicationManager.getApplication().executeOnPooledThread {
-                service<PredictionService>().displayInlineDiff(editor, true)
+                service<PredictionService>().displayInlineDiff(editor)
             }
         }
 

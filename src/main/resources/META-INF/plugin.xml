@@ -90,11 +90,6 @@
     <resource-bundle>messages.codegpt</resource-bundle>
 
     <actions>
-        <action id="InsertInlineCompletionAction" class="ee.carlrobert.codegpt.codecompletions.CodeCompletionInsertAction" overrides="true">
-          <add-to-group group-id="InlineCompletion" anchor="first"/>
-          <keyboard-shortcut first-keystroke="TAB" keymap="$default"/>
-        </action>
-
         <action
           id="codegpt.acceptNextPrediction"
           text="Accept Prediction"
@@ -236,22 +231,6 @@
             <override-text place="popup" use-text-of-place="MainMenu"/>
         </action>
         <action
-          id="statusbar.enableNextEdits"
-          class="ee.carlrobert.codegpt.actions.EnableNextEditsAction">
-            <keyboard-shortcut first-keystroke="ctrl shift alt a" keymap="$default"/>
-
-            <override-text place="MainMenu"/>
-            <override-text place="popup" use-text-of-place="MainMenu"/>
-        </action>
-        <action
-          id="statusbar.disableNextEdits"
-          class="ee.carlrobert.codegpt.actions.DisableNextEditsAction">
-            <keyboard-shortcut first-keystroke="ctrl shift alt a" keymap="$default"/>
-
-            <override-text place="MainMenu"/>
-            <override-text place="popup" use-text-of-place="MainMenu"/>
-        </action>
-        <action
           id="statusbar.startServer"
           class="ee.carlrobert.codegpt.actions.StartServerAction">
             <keyboard-shortcut first-keystroke="ctrl shift alt s" keymap="$default"/>
@@ -273,8 +252,6 @@
             <separator/>
             <reference id="statusbar.stopServer" />
             <reference id="statusbar.startServer" />
-            <reference id="statusbar.disableNextEdits" />
-            <reference id="statusbar.enableNextEdits" />
             <reference id="statusbar.disableCompletions" />
             <reference id="statusbar.enableCompletions" />
         </group>

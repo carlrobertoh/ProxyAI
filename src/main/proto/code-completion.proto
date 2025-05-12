@@ -1,0 +1,31 @@
+// src/main/proto/code-completion.proto
+syntax = "proto3";
+option java_multiple_files = true;
+option java_package = "ee.carlrobert.service";
+
+import "google/protobuf/empty.proto";
+
+service CodeCompletionServiceImpl {
+  rpc GetCodeCompletion (GrpcCodeCompletionRequest) returns (stream PartialCodeCompletionResponse);
+  rpc AcceptCodeCompletion (AcceptCodeCompletionRequest) returns (google.protobuf.Empty);
+}
+
+message GrpcCodeCompletionRequest {
+  string model = 1;
+  string file_content = 2;
+  string file_path = 3;
+  int32 cursor_position = 4;
+  string git_diff = 5;
+  bool enable_telemetry = 6;
+}
+
+message PartialCodeCompletionResponse {
+  string id = 1;
+  string partial_completion = 2;
+  bool done = 3;
+}
+
+message AcceptCodeCompletionRequest {
+  string response_id = 1;
+  string accepted_completion = 2;
+}

@@ -19,7 +19,6 @@ class CodeCompletionServiceTest : IntegrationTest() {
     fun `test code completion with ProxyAI provider`() {
         useCodeGPTService()
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
-        service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
@@ -60,7 +59,6 @@ class CodeCompletionServiceTest : IntegrationTest() {
     fun `test code completion with OpenAI provider`() {
         useOpenAIService()
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
-        service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
@@ -98,10 +96,64 @@ class CodeCompletionServiceTest : IntegrationTest() {
         }
     }
 
+    fun `test apply next partial completion word`() {
+        useLlamaService(true)
+        service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
+        myFixture.configureByText(
+            "CompletionTest.java",
+            FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
+        )
+        myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(3, 0))
+        val expectedCompletion = "public void main"
+        val prefix = """
+             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+             zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+             [INPUT]
+             c
+             """.trimIndent()
+        val suffix = """
+             
+             [\INPUT]
+             zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+             """.trimIndent()
+        expectLlama(StreamHttpExchange { request: RequestEntity ->
+            assertThat(request.uri.path).isEqualTo("/completion")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(request.body)
+                .extracting("prompt")
+                .isEqualTo(
+                    InfillPromptTemplate.CODE_LLAMA.buildPrompt(
+                        InfillRequest.Builder(prefix, suffix, 0).build()
+                    )
+                )
+            listOf(
+                jsonMapResponse(
+                    e("content", expectedCompletion),
+                    e("stop", true)
+                )
+            )
+        })
+        myFixture.type('c')
+        assertInlineSuggestion("Failed to display initial inline suggestion.") {
+            expectedCompletion == it
+        }
+        val offsetBeforeApply = myFixture.editor.caretModel.offset
+
+        myFixture.performEditorAction(AcceptNextWordInlayAction.ID)
+
+        assertInlineSuggestion("Failed to display next partial inline suggestion.") {
+            myFixture.run {
+                val appliedText =
+                    editor.document.getText(TextRange(offsetBeforeApply, editor.caretModel.offset))
+                "public" == appliedText && " void main" == it
+            }
+        }
+    }
+
     fun `_test apply inline suggestions without initial following text`() {
         useCodeGPTService()
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
-        service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             "class Node {\n  "
@@ -219,7 +271,6 @@ class CodeCompletionServiceTest : IntegrationTest() {
     fun `_test apply inline suggestions with initial following text`() {
         useCodeGPTService()
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
-        service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             "if () {\n   \n} else {\n}"
@@ -288,10 +339,9 @@ class CodeCompletionServiceTest : IntegrationTest() {
         }
     }
 
-    fun `test adjust completion line whitespaces`() {
+    fun `_test adjust completion line whitespaces`() {
         useCodeGPTService()
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
-        service<ConfigurationSettings>().state.codeCompletionSettings.multiLineEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             "class Node {\n" +

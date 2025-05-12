@@ -11,6 +11,7 @@ class CodeCompletionTextElement(
     val textRange: TextRange,
     val offsetDelta: Int = 0,
     val originalText: String = text,
+    val isDone: Boolean = false,
 ) : InlineCompletionElement {
 
     override fun toPresentable(): InlineCompletionElement.Presentable =
