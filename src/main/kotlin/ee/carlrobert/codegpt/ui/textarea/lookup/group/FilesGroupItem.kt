@@ -18,6 +18,8 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupUtil
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class FilesGroupItem(
     private val project: Project,
@@ -28,13 +30,16 @@ class FilesGroupItem(
     override val icon = AllIcons.FileTypes.Any_type
 
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
-        project.service<ProjectFileIndex>().iterateContent {
-            if (!it.isDirectory && !containsTag(it)) {
-                runInEdt {
-                    LookupUtil.addLookupItem(lookup, FileActionItem(project, it))
+        withContext(Dispatchers.Default) {
+            project.service<ProjectFileIndex>().iterateContent {
+                if (!it.isDirectory && !containsTag(it)) {
+                    val actionItem = FileActionItem(project, it)
+                    runInEdt {
+                        LookupUtil.addLookupItem(lookup, actionItem)
+                    }
                 }
+                true
             }
-            true
         }
     }
 
