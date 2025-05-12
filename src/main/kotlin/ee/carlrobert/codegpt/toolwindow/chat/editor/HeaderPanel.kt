@@ -19,6 +19,7 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.*
 import java.awt.BorderLayout
+import javax.swing.JComponent
 import javax.swing.JPanel
 
 class HeaderPanel(
@@ -54,21 +55,23 @@ class HeaderPanel(
             application.executeOnPooledThread {
                 val virtualFile = LocalFileSystem.getInstance().findFileByPath(filePath)
                 if (virtualFile == null) {
-                    runInEdt {
-                        add(createLanguageLabel(extension), BorderLayout.LINE_START)
-                        CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.set(editorEx, ToolWindowEditorFileDetails(filePath))
-                    }
+                    addComponent(createLanguageLabel(extension))
                 } else {
-                    runInEdt {
-                        add(createFileLink(virtualFile), BorderLayout.LINE_START)
-                        CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.set(editorEx, ToolWindowEditorFileDetails(filePath, virtualFile))
-                    }
+                    addComponent(createFileLink(virtualFile))
                 }
+                CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.set(
+                    editorEx,
+                    ToolWindowEditorFileDetails(filePath, virtualFile)
+                )
             }
         } else {
-            runInEdt {
-                add(createLanguageLabel(extension), BorderLayout.LINE_START)
-            }
+            addComponent(createLanguageLabel(extension))
+        }
+    }
+
+    private fun addComponent(component: JComponent) {
+        runInEdt {
+            add(component, BorderLayout.LINE_START)
         }
     }
 

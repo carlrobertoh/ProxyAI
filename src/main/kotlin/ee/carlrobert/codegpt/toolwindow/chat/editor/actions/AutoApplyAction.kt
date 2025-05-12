@@ -171,7 +171,7 @@ class AutoApplyAction(
             val acceptAction = createContextActionButton(
                 CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.accept"),
                 Icons.GreenCheckmark,
-                JBColor.GREEN
+                JBColor(0x2E7D32, 0x4CAF50)
             ) {
                 WriteCommandAction.runWriteCommandAction(project) {
                     virtualFile.setBinaryContent(modifiedFileContent.toByteArray(virtualFile.charset))
@@ -182,7 +182,7 @@ class AutoApplyAction(
             val rejectAction = createContextActionButton(
                 CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.reject"),
                 AllIcons.Actions.Close,
-                JBColor.RED
+                JBColor(0xB71C1C, 0xF44336)
             ) {
                 resetState(virtualFile)
             }

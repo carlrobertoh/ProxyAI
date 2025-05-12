@@ -45,13 +45,14 @@ class PromptTextField(
     private val onTextChanged: (String) -> Unit,
     private val onBackSpace: () -> Unit,
     private val onLookupAdded: (LookupActionItem) -> Unit,
-    private val onSubmit: (String) -> Unit
+    private val onSubmit: (String) -> Unit,
 ) : EditorTextField(project, FileTypes.PLAIN_TEXT), Disposable {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var showSuggestionsJob: Job? = null
 
     val dispatcherId: UUID = UUID.randomUUID()
+    var lookup: LookupImpl? = null
 
     init {
         isOneLineMode = false
@@ -61,8 +62,14 @@ class PromptTextField(
 
     override fun onEditorAdded(editor: Editor) {
         IdeEventQueue.getInstance().addDispatcher(
-            PromptTextFieldEventDispatcher(dispatcherId, onBackSpace) {
+            PromptTextFieldEventDispatcher(dispatcherId, onBackSpace, lookup) {
+                val shown = lookup?.let { it.isShown && !it.isLookupDisposed } == true
+                if (shown) {
+                    return@PromptTextFieldEventDispatcher
+                }
+
                 onSubmit(text)
+                it.consume()
             },
             this
         )
@@ -96,8 +103,8 @@ class PromptTextField(
     }
 
     private fun showGroupLookup(editor: Editor, lookupElements: Array<LookupElement>) {
-        val lookup = createLookup(editor, lookupElements, "")
-        lookup.addLookupListener(object : LookupListener {
+        lookup = createLookup(editor, lookupElements, "")
+        lookup?.addLookupListener(object : LookupListener {
             override fun itemSelected(event: LookupEvent) {
                 val lookupString = event.item?.lookupString ?: return
                 val suggestion =
@@ -122,8 +129,8 @@ class PromptTextField(
                 }
             }
         })
-        lookup.refreshUi(false, true)
-        lookup.showLookup()
+        lookup?.refreshUi(false, true)
+        lookup?.showLookup()
     }
 
     private fun findAtSymbolPosition(editor: Editor): Int {
@@ -163,8 +170,8 @@ class PromptTextField(
         filterText: String = "",
     ) {
         editor?.let {
-            val lookup = createLookup(it, lookupElements, filterText)
-            lookup.addLookupListener(object : LookupListener {
+            lookup = createLookup(it, lookupElements, filterText)
+            lookup?.addLookupListener(object : LookupListener {
                 override fun itemSelected(event: LookupEvent) {
                     val lookupItem = event.item?.getUserData(LookupItem.KEY) ?: return
                     if (lookupItem !is LookupActionItem) return
@@ -202,14 +209,14 @@ class PromptTextField(
                 }
             })
 
-            lookup.addPrefixChangeListener(object : PrefixChangeListener {
+            lookup?.addPrefixChangeListener(object : PrefixChangeListener {
                 override fun afterAppend(c: Char) {
                     showSuggestionsJob?.cancel()
                     showSuggestionsJob = coroutineScope.launch {
                         if (parentGroup is DynamicLookupGroupItem) {
                             val searchText = getSearchText()
                             if (searchText.length == 2) {
-                                parentGroup.updateLookupList(lookup, searchText)
+                                parentGroup.updateLookupList(lookup!!, searchText)
                             }
                         }
                     }
@@ -231,8 +238,8 @@ class PromptTextField(
 
             }, this)
 
-            lookup.refreshUi(false, true)
-            lookup.showLookup()
+            lookup?.refreshUi(false, true)
+            lookup?.showLookup()
         }
     }
 

@@ -20,9 +20,11 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.components.BorderLayoutPanel;
 import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.actions.ActionType;
@@ -52,6 +54,7 @@ import java.util.stream.Stream;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 import javax.swing.JEditorPane;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
 import org.jetbrains.annotations.NotNull;
@@ -67,12 +70,20 @@ public class ChatMessageResponseBody extends JPanel {
   private final DefaultListModel<WebSearchEventDetails> webpageListModel = new DefaultListModel<>();
   private final WebpageList webpageList = new WebpageList(webpageListModel);
   private final ResponseBodyProgressPanel progressPanel = new ResponseBodyProgressPanel();
+  private final JPanel loadingLabel = createLoadingPanel();
+  private final JPanel contentPanel = new JPanel();
   private ResponseEditorPanel currentlyProcessedEditorPanel;
   private JEditorPane currentlyProcessedTextPane;
   private JPanel webpageListPanel;
 
+  private JPanel createLoadingPanel() {
+    return new BorderLayoutPanel()
+        .addToLeft(new JBLabel(CodeGPTBundle.get("toolwindow.chat.loading"), new AnimatedIcon.Default(), JLabel.LEFT))
+        .withBorder(JBUI.Borders.empty(4, 0));
+  }
+
   public ChatMessageResponseBody(Project project, Disposable parentDisposable) {
-    this(project, false, false, false, parentDisposable);
+    this(project, false, false, false, false, parentDisposable);
   }
 
   public ChatMessageResponseBody(
@@ -80,22 +91,31 @@ public class ChatMessageResponseBody extends JPanel {
       boolean readOnly,
       boolean webSearchIncluded,
       boolean withProgress,
+      boolean withLoading,
       Disposable parentDisposable) {
     this.project = project;
     this.parentDisposable = parentDisposable;
     this.streamOutputParser = new StreamOutputParser();
     this.readOnly = readOnly;
-    setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+
+    setLayout(new BorderLayout());
     setOpaque(false);
+
+    contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+    contentPanel.setOpaque(false);
+    add(contentPanel, BorderLayout.NORTH);
+
+    loadingLabel.setVisible(withLoading);
+    add(loadingLabel, BorderLayout.SOUTH);
 
     if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT) {
       if (withProgress) {
-        add(progressPanel);
+        contentPanel.add(progressPanel);
       }
 
       if (webSearchIncluded) {
         webpageListPanel = createWebpageListPanel(webpageList);
-        add(webpageListPanel);
+        contentPanel.add(webpageListPanel);
       }
     }
   }
@@ -114,6 +134,10 @@ public class ChatMessageResponseBody extends JPanel {
     return this;
   }
 
+  public void stopLoading() {
+    loadingLabel.setVisible(false);
+  }
+
   public void updateMessage(String partialMessage) {
     if (partialMessage.isEmpty()) {
       return;
@@ -127,63 +151,91 @@ public class ChatMessageResponseBody extends JPanel {
 
   public void displayMissingCredential() {
     ApplicationManager.getApplication().invokeLater(() -> {
-      var message = "API key not provided. Open <a href=\"#\">Settings</a> to set one.";
-      currentlyProcessedTextPane.setText(
-          format("<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>", message));
-      currentlyProcessedTextPane.addHyperlinkListener(e -> {
-        if (e.getEventType() == ACTIVATED) {
-          ShowSettingsUtil.getInstance()
-              .showSettingsDialog(project, GeneralSettingsConfigurable.class);
-        }
-      });
-      hideCaret();
+      if (loadingLabel.isVisible()) {
+        loadingLabel.setVisible(false);
+      }
 
       if (webpageListPanel != null) {
         webpageListPanel.setVisible(false);
       }
+
+      var message = "API key not provided. Open <a href=\"#\">Settings</a> to set one.";
+      if (currentlyProcessedTextPane != null) {
+        currentlyProcessedTextPane.setVisible(true);
+        currentlyProcessedTextPane.setText(
+            format("<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>",
+                message));
+        currentlyProcessedTextPane.addHyperlinkListener(e -> {
+          if (e.getEventType() == ACTIVATED) {
+            ShowSettingsUtil.getInstance()
+                .showSettingsDialog(project, GeneralSettingsConfigurable.class);
+          }
+        });
+        hideCaret();
+      }
+
+      revalidate();
+      repaint();
     });
   }
 
   public void displayQuotaExceeded() {
     ApplicationManager.getApplication().invokeLater(() -> {
-      currentlyProcessedTextPane.setText("<html>"
-          + "<p style=\"margin-top: 4px; margin-bottom: 8px;\">"
-          + "You exceeded your current quota, please check your plan and billing details, "
-          + "or <a href=\"#CHANGE_PROVIDER\">change</a> to a different LLM provider.</p>"
-          + "</html>");
-
-      currentlyProcessedTextPane.addHyperlinkListener(e -> {
-        if (e.getEventType() == ACTIVATED) {
-          ShowSettingsUtil.getInstance()
-              .showSettingsDialog(project, GeneralSettingsConfigurable.class);
-          TelemetryAction.IDE_ACTION.createActionMessage()
-              .property("action", ActionType.CHANGE_PROVIDER.name())
-              .send();
-        }
-      });
-      hideCaret();
+      if (loadingLabel.isVisible()) {
+        loadingLabel.setVisible(false);
+      }
 
       if (webpageListPanel != null) {
         webpageListPanel.setVisible(false);
       }
+
+      if (currentlyProcessedTextPane != null) {
+        currentlyProcessedTextPane.setVisible(true);
+        currentlyProcessedTextPane.setText("<html>"
+            + "<p style=\"margin-top: 4px; margin-bottom: 8px;\">"
+            + "You exceeded your current quota, please check your plan and billing details, "
+            + "or <a href=\"#CHANGE_PROVIDER\">change</a> to a different LLM provider.</p>"
+            + "</html>");
+
+        currentlyProcessedTextPane.addHyperlinkListener(e -> {
+          if (e.getEventType() == ACTIVATED) {
+            ShowSettingsUtil.getInstance()
+                .showSettingsDialog(project, GeneralSettingsConfigurable.class);
+            TelemetryAction.IDE_ACTION.createActionMessage()
+                .property("action", ActionType.CHANGE_PROVIDER.name())
+                .send();
+          }
+        });
+        hideCaret();
+      }
+
+      revalidate();
+      repaint();
     });
   }
 
   public void displayError(String message) {
     ApplicationManager.getApplication().invokeLater(() -> {
+      if (loadingLabel.isVisible()) {
+        loadingLabel.setVisible(false);
+      }
+      if (webpageListPanel != null) {
+        webpageListPanel.setVisible(false);
+      }
+
       var errorText = format(
           "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>",
           message);
       if (currentlyProcessedTextPane == null) {
-        add(createTextPane(errorText));
+        contentPanel.add(createTextPane(errorText));
       } else {
+        currentlyProcessedTextPane.setVisible(true);
         currentlyProcessedTextPane.setText(errorText);
       }
       hideCaret();
 
-      if (webpageListPanel != null) {
-        webpageListPanel.setVisible(false);
-      }
+      revalidate();
+      repaint();
     });
   }
 
@@ -221,9 +273,10 @@ public class ChatMessageResponseBody extends JPanel {
   }
 
   public void clear() {
-    removeAll();
-
+    contentPanel.removeAll();
     streamOutputParser.clear();
+    loadingLabel.setVisible(false);
+
     // TODO: First message might be code block
     prepareProcessingText(true);
     currentlyProcessedTextPane.setText(
@@ -240,14 +293,14 @@ public class ChatMessageResponseBody extends JPanel {
     if (thoughtProcessPanel == null) {
       thoughtProcessPanel = new ThoughtProcessPanel();
       thoughtProcessPanel.updateText(thoughtProcess);
-      add(thoughtProcessPanel);
+      contentPanel.add(thoughtProcessPanel);
     } else {
       thoughtProcessPanel.updateText(thoughtProcess);
     }
   }
 
   private ThoughtProcessPanel getExistingThoughtProcessPanel() {
-    return (ThoughtProcessPanel) Stream.of(getComponents())
+    return (ThoughtProcessPanel) Stream.of(contentPanel.getComponents())
         .filter(it -> it instanceof ThoughtProcessPanel)
         .findFirst()
         .orElse(null);
@@ -293,7 +346,7 @@ public class ChatMessageResponseBody extends JPanel {
   private void prepareProcessingText(boolean caretVisible) {
     currentlyProcessedEditorPanel = null;
     currentlyProcessedTextPane = createTextPane("", caretVisible);
-    add(currentlyProcessedTextPane);
+    contentPanel.add(currentlyProcessedTextPane);
   }
 
   private void prepareProcessingCode(StreamParseResponse item) {
@@ -301,7 +354,7 @@ public class ChatMessageResponseBody extends JPanel {
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel =
         new ResponseEditorPanel(project, item, readOnly, parentDisposable);
-    add(currentlyProcessedEditorPanel);
+    contentPanel.add(currentlyProcessedEditorPanel);
   }
 
   private void displayWebSearchItem(WebSearchEventDetails details) {

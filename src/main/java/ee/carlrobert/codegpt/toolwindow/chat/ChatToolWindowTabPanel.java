@@ -287,6 +287,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         false,
         message.isWebSearchIncluded(),
         fileContextIncluded || message.getDocumentationDetails() != null,
+        true,
         this));
     return panel;
   }

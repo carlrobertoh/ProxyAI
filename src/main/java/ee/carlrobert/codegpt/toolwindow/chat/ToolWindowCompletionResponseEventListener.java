@@ -162,6 +162,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
     textArea.setSubmitEnabled(true);
     userMessagePanel.enableAllActions(true);
     responsePanel.enableAllActions(true);
+    responseContainer.stopLoading();
     responseContainer.hideCaret();
     CompletionProgressNotifier.update(project, false);
   }
