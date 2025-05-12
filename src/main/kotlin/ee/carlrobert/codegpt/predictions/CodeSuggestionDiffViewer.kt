@@ -8,6 +8,7 @@ import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.diff.tools.fragmented.UnifiedDiffChange
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.util.DiffUtil
+import com.intellij.diff.util.Side
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.application.runReadAction
@@ -72,6 +73,12 @@ class CodeSuggestionDiffViewer(
 
     override fun onAfterRediff() {
         val change = getClosestChange() ?: return
+        val changeContent = getChangeContent(change)
+
+        if (normalizeString(getDocument(Side.LEFT).text).contains(normalizeString(changeContent))) {
+            popup.dispose()
+            return
+        }
 
         myEditor.component.preferredSize =
             Dimension(
@@ -157,6 +164,16 @@ class CodeSuggestionDiffViewer(
         mainEditor.putUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER, null)
         mainEditor.scrollingModel.removeVisibleAreaListener(visibleAreaListener)
         mainEditor.document.removeDocumentListener(documentListener)
+    }
+
+    private fun normalizeString(text: String): String {
+        return text.replace("\\s+".toRegex(), "").lowercase()
+    }
+
+    private fun getChangeContent(change: UnifiedDiffChange): String {
+        val startOffset = change.lineFragment.startOffset2
+        val endOffset = change.lineFragment.endOffset2
+        return getDocument(Side.RIGHT).getText(TextRange(startOffset, endOffset))
     }
 
     private fun getClosestChange(): UnifiedDiffChange? {
