@@ -302,7 +302,7 @@ public enum LlamaModel {
   }
 
   public static String getDownloadedMarker(boolean downloaded) {
-    return downloaded ? "✓" : "\u2001";
+    return downloaded ? "✓" : "⤓";
   }
 
   public static @NotNull Path getLlamaModelsPath() {
