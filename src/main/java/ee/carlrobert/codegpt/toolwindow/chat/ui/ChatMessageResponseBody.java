@@ -78,7 +78,10 @@ public class ChatMessageResponseBody extends JPanel {
 
   private JPanel createLoadingPanel() {
     return new BorderLayoutPanel()
-        .addToLeft(new JBLabel(CodeGPTBundle.get("toolwindow.chat.loading"), new AnimatedIcon.Default(), JLabel.LEFT))
+        .addToLeft(new JBLabel(
+            CodeGPTBundle.get("toolwindow.chat.loading"),
+            new AnimatedIcon.Default(),
+            JLabel.LEFT))
         .withBorder(JBUI.Borders.empty(4, 0));
   }
 
@@ -157,6 +160,11 @@ public class ChatMessageResponseBody extends JPanel {
 
       if (webpageListPanel != null) {
         webpageListPanel.setVisible(false);
+      }
+
+      if (currentlyProcessedTextPane == null) {
+        currentlyProcessedTextPane = createTextPane("");
+        contentPanel.add(currentlyProcessedTextPane);
       }
 
       var message = "API key not provided. Open <a href=\"#\">Settings</a> to set one.";
