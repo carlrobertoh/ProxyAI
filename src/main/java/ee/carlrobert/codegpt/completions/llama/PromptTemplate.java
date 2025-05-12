@@ -289,6 +289,33 @@ public enum PromptTemplate {
           .append("### Response:\n")
           .toString();
     }
+  },
+  GRANITE("Granite") {
+    @Override
+    public String buildPrompt(String systemPrompt, String userPrompt, List<Message> history) {
+      var prompt = new StringBuilder();
+      if (systemPrompt != null && !systemPrompt.isBlank()) {
+        prompt
+            .append("<|start_of_role|>system<|end_of_role|>")
+            .append(systemPrompt)
+            .append("<|end_of_text|>\n");
+      }
+
+      for (var message : history) {
+        prompt
+            .append("<|start_of_role|>user<|end_of_role|>")
+            .append(message.getPrompt())
+            .append("<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>")
+            .append(message.getResponse())
+            .append("<|end_of_text|>\n");
+      }
+
+      return prompt
+          .append("<|start_of_role|>user<|end_of_role|>")
+          .append(userPrompt)
+          .append("<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>")
+          .toString();
+    }
   };
 
   private final String label;
