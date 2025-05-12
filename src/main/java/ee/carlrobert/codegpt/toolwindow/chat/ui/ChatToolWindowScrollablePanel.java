@@ -15,6 +15,7 @@ import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.util.ApplicationUtil;
+import java.awt.Rectangle;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -87,6 +88,10 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
     visibleMessagePanels.clear();
     removeAll();
     update();
+  }
+
+  public void scrollToBottom() {
+    scrollRectToVisible(new Rectangle(0, getHeight(), 1, 1));
   }
 
   public void update() {

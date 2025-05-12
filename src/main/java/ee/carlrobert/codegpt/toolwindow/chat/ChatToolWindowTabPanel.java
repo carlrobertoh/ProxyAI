@@ -369,6 +369,8 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private Unit handleSubmit(String text) {
+    toolWindowScrollablePanel.scrollToBottom();
+
     var application = ApplicationManager.getApplication();
     application.executeOnPooledThread(() -> {
       final Set<ClassStructure> psiStructure;
