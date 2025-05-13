@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support for both Autocomplete and Next Edits
+- o4-mini model for ProxyAI provider
+- Auto-scroll down when submitting a message
+- Loading animation during output generation and several other UI improvements
+
+### Fixed
+
+- NPEs on different types of error messages in chat UI
+- Other IDE warnings/errors
+
 ## [3.2.5-233] - 2025-04-30
 
 ### Added
