@@ -202,7 +202,7 @@ class ResponseEditorPanel(
 
             if (!isExpanded) {
                 val visibleLines = lineCount.coerceAtMost(MAX_VISIBLE_LINES)
-                val desiredHeight = (lineHeight * visibleLines)
+                val desiredHeight = (lineHeight * visibleLines).coerceAtLeast(20)
 
                 editor.component.preferredSize = Dimension(editor.component.width, desiredHeight)
             }
