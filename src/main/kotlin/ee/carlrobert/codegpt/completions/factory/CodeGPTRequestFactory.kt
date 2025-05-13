@@ -33,7 +33,7 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
                     )
                 )
 
-        if ("o3-mini" == model) {
+        if ("o4-mini" == model) {
             requestBuilder
                 .setMaxTokens(null)
                 .setTemperature(null)
@@ -104,7 +104,7 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         stream: Boolean
     ): ChatCompletionRequest {
         val model = service<CodeGPTServiceSettings>().state.chatCompletionSettings.model
-        if (model == "o3-mini") {
+        if (model == "o4-mini") {
             return buildBasicO1Request(model, userPrompt, systemPrompt, maxTokens, stream = stream)
         }
 
