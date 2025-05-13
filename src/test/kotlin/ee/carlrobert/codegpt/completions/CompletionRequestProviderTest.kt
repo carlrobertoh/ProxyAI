@@ -13,7 +13,7 @@ import testsupport.IntegrationTest
 class CompletionRequestProviderTest : IntegrationTest() {
 
     fun testChatCompletionRequestWithSystemPromptOverride() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_3_5.code)
+        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
         service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
         val conversation = ConversationService.getInstance().startConversation()
         val firstMessage = createDummyMessage(500)
@@ -39,7 +39,7 @@ class CompletionRequestProviderTest : IntegrationTest() {
     }
 
     fun testChatCompletionRequestRetry() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_3_5.code)
+        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
         service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
         val conversation = ConversationService.getInstance().startConversation()
         val firstMessage = createDummyMessage("FIRST_TEST_PROMPT", 500)

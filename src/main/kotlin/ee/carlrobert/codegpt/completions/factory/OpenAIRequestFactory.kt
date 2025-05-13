@@ -1,8 +1,6 @@
 package ee.carlrobert.codegpt.completions.factory
 
-import com.intellij.ide.impl.ProjectUtil
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.guessProjectDir
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.completions.*

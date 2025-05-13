@@ -57,6 +57,7 @@ import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
+import javax.swing.event.HyperlinkListener;
 import org.jetbrains.annotations.NotNull;
 
 public class ChatMessageResponseBody extends JPanel {
@@ -153,98 +154,31 @@ public class ChatMessageResponseBody extends JPanel {
   }
 
   public void displayMissingCredential() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (loadingLabel.isVisible()) {
-        loadingLabel.setVisible(false);
+    String message = "API key not provided. Open <a href=\"#\">Settings</a> to set one.";
+    displayErrorMessage(message, e -> {
+      if (e.getEventType() == ACTIVATED) {
+        ShowSettingsUtil.getInstance()
+            .showSettingsDialog(project, GeneralSettingsConfigurable.class);
       }
-
-      if (webpageListPanel != null) {
-        webpageListPanel.setVisible(false);
-      }
-
-      if (currentlyProcessedTextPane == null) {
-        currentlyProcessedTextPane = createTextPane("");
-        contentPanel.add(currentlyProcessedTextPane);
-      }
-
-      var message = "API key not provided. Open <a href=\"#\">Settings</a> to set one.";
-      if (currentlyProcessedTextPane != null) {
-        currentlyProcessedTextPane.setVisible(true);
-        currentlyProcessedTextPane.setText(
-            format("<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>",
-                message));
-        currentlyProcessedTextPane.addHyperlinkListener(e -> {
-          if (e.getEventType() == ACTIVATED) {
-            ShowSettingsUtil.getInstance()
-                .showSettingsDialog(project, GeneralSettingsConfigurable.class);
-          }
-        });
-        hideCaret();
-      }
-
-      revalidate();
-      repaint();
     });
   }
 
   public void displayQuotaExceeded() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (loadingLabel.isVisible()) {
-        loadingLabel.setVisible(false);
+    String message = "You exceeded your current quota, please check your plan and billing details, "
+        + "or <a href=\"#CHANGE_PROVIDER\">change</a> to a different LLM provider.";
+    displayErrorMessage(message, e -> {
+      if (e.getEventType() == ACTIVATED) {
+        ShowSettingsUtil.getInstance()
+            .showSettingsDialog(project, GeneralSettingsConfigurable.class);
+        TelemetryAction.IDE_ACTION.createActionMessage()
+            .property("action", ActionType.CHANGE_PROVIDER.name())
+            .send();
       }
-
-      if (webpageListPanel != null) {
-        webpageListPanel.setVisible(false);
-      }
-
-      if (currentlyProcessedTextPane != null) {
-        currentlyProcessedTextPane.setVisible(true);
-        currentlyProcessedTextPane.setText("<html>"
-            + "<p style=\"margin-top: 4px; margin-bottom: 8px;\">"
-            + "You exceeded your current quota, please check your plan and billing details, "
-            + "or <a href=\"#CHANGE_PROVIDER\">change</a> to a different LLM provider.</p>"
-            + "</html>");
-
-        currentlyProcessedTextPane.addHyperlinkListener(e -> {
-          if (e.getEventType() == ACTIVATED) {
-            ShowSettingsUtil.getInstance()
-                .showSettingsDialog(project, GeneralSettingsConfigurable.class);
-            TelemetryAction.IDE_ACTION.createActionMessage()
-                .property("action", ActionType.CHANGE_PROVIDER.name())
-                .send();
-          }
-        });
-        hideCaret();
-      }
-
-      revalidate();
-      repaint();
     });
   }
 
   public void displayError(String message) {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      if (loadingLabel.isVisible()) {
-        loadingLabel.setVisible(false);
-      }
-      if (webpageListPanel != null) {
-        webpageListPanel.setVisible(false);
-      }
-
-      var errorText = format(
-          "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>",
-          message);
-      if (currentlyProcessedTextPane == null) {
-        contentPanel.add(createTextPane(errorText));
-      } else {
-        currentlyProcessedTextPane.setVisible(true);
-        currentlyProcessedTextPane.setText(errorText);
-      }
-      hideCaret();
-
-      revalidate();
-      repaint();
-    });
+    displayErrorMessage(message, null);
   }
 
   public void handleCodeGPTEvent(CodeGPTEvent codegptEvent) {
@@ -292,6 +226,39 @@ public class ChatMessageResponseBody extends JPanel {
 
     repaint();
     revalidate();
+  }
+
+  private void displayErrorMessage(String message, HyperlinkListener hyperlinkListener) {
+    ApplicationManager.getApplication().invokeLater(() -> {
+      if (loadingLabel.isVisible()) {
+        loadingLabel.setVisible(false);
+      }
+      if (webpageListPanel != null) {
+        webpageListPanel.setVisible(false);
+      }
+
+      if (currentlyProcessedTextPane == null) {
+        currentlyProcessedTextPane = createTextPane("");
+        contentPanel.add(currentlyProcessedTextPane);
+      }
+
+      String formattedMessage = format(
+          "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>", message);
+      currentlyProcessedTextPane.setVisible(true);
+      currentlyProcessedTextPane.setText(formattedMessage);
+
+      if (hyperlinkListener != null) {
+        for (HyperlinkListener listener : currentlyProcessedTextPane.getHyperlinkListeners()) {
+          currentlyProcessedTextPane.removeHyperlinkListener(listener);
+        }
+        currentlyProcessedTextPane.addHyperlinkListener(hyperlinkListener);
+      }
+
+      hideCaret();
+
+      revalidate();
+      repaint();
+    });
   }
 
   private void processThinkingOutput(String thoughtProcess) {
