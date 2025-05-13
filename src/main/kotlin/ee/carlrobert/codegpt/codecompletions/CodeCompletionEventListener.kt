@@ -122,25 +122,17 @@ class CodeCompletionEventListener(
 
                 val parsedContent = parseOutput(firstLine + remainingContent)
                 if (parsedContent.isNotEmpty()) {
-                    cache?.setCache(prefix, suffix, firstLine + parsedContent)
+                    cache?.setCache(prefix, suffix, parsedContent)
 
                     CodeGPTKeys.REMAINING_CODE_COMPLETION.set(
                         editor,
                         PartialCodeCompletionResponse.newBuilder()
-                            .setPartialCompletion(remainingContent)
+                            .setPartialCompletion(parsedContent.removePrefix(firstLine ?: ""))
                             .build()
                     )
                 }
             } else {
                 val formattedLine = CodeCompletionFormatter(editor).format(finalResult.toString())
-                if (formattedLine.isEmpty()) {
-                    editor.project?.service<GrpcClientService>()?.getNextEdit(
-                        editor,
-                        prefix + suffix,
-                        runReadAction { editor.caretModel.offset })
-                    return
-                }
-
                 if (isNotAllowed(formattedLine)) {
                     return
                 }
@@ -181,6 +173,13 @@ class CodeCompletionEventListener(
 
     private fun handleCompleted() {
         setLoading(false)
+
+        if (messageBuilder.isEmpty()) {
+            editor.project?.service<GrpcClientService>()?.getNextEdit(
+                editor,
+                prefix + suffix,
+                runReadAction { editor.caretModel.offset })
+        }
     }
 
     private fun setLoading(loading: Boolean) {
@@ -196,7 +195,7 @@ class CodeCompletionEventListener(
 
         return CodeCompletionParserFactory
             .getParserForFileExtension(editor.virtualFile.extension)
-            .parse(prefix, suffix, (firstLine ?: "") + input)
+            .parse(prefix, suffix, input)
             .trimEnd()
     }
 }
