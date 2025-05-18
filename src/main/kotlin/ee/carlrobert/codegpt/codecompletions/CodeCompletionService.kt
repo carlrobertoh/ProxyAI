@@ -41,7 +41,7 @@ class CodeCompletionService(private val project: Project) {
                 .getOrDefault("model", null) as String
 
             LLAMA_CPP -> LlamaModel.findByHuggingFaceModel(LlamaSettings.getCurrentState().huggingFaceModel).label
-            OLLAMA -> service<OllamaSettings>().state.model
+            OLLAMA -> service<OllamaSettings>().state.codeCompletionModel
             else -> null
         }
     }
