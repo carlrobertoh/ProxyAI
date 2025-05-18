@@ -60,6 +60,9 @@ interface ShortcutsTestMixin {
     setCredential(OllamaApikey, "TEST_API_KEY")
     service<OllamaSettings>().state.apply {
       model = HuggingFaceModel.LLAMA_3_8B_Q6_K.code
+      codeCompletionModel = HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code
+      codeCompletionsEnabled = true
+      fimOverride = false
       host = null
     }
   }
