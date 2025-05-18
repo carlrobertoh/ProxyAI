@@ -12,6 +12,7 @@ import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.service.ModelRole.CODECOMPLETION_ROLE
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
@@ -46,7 +47,7 @@ class CodeCompletionService(private val project: Project) {
         }
     }
 
-    fun isCodeCompletionsEnabled(): Boolean = isCodeCompletionsEnabled(GeneralSettings.getSelectedService())
+    fun isCodeCompletionsEnabled(): Boolean = isCodeCompletionsEnabled(GeneralSettings.getSelectedService(CODECOMPLETION_ROLE))
 
     fun isCodeCompletionsEnabled(selectedService: ServiceType): Boolean =
         when (selectedService) {
@@ -62,7 +63,7 @@ class CodeCompletionService(private val project: Project) {
         infillRequest: InfillRequest,
         eventListener: CompletionEventListener<String>
     ): EventSource {
-        return when (val selectedService = GeneralSettings.getSelectedService()) {
+        return when (val selectedService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)) {
             OPENAI -> CompletionClientProvider.getOpenAIClient()
                 .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
 

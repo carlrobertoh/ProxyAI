@@ -19,6 +19,8 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OllamaAp
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.service.CodeCompletionConfigurationForm
+import ee.carlrobert.codegpt.settings.service.ModelRole
+import ee.carlrobert.codegpt.settings.service.ModelRole.*
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.ui.URLTextField
@@ -35,12 +37,6 @@ import javax.swing.JButton
 import javax.swing.JPanel
 
 class OllamaSettingsForm {
-
-    enum class ModelRole {
-        CHAT_ROLE, CODECOMPLETION_ROLE
-    }
-    private val CHAT_ROLE = ModelRole.CHAT_ROLE
-    private val CODECOMPLETION_ROLE = ModelRole.CODECOMPLETION_ROLE
 
     private val refreshModelsButton =
         JButton(CodeGPTBundle.get("settingsConfigurable.service.ollama.models.refresh"))

@@ -1,14 +1,18 @@
 package ee.carlrobert.codegpt.settings;
 
 import com.intellij.openapi.application.ApplicationManager;
+import ee.carlrobert.codegpt.settings.service.ModelRole;
 import ee.carlrobert.codegpt.settings.service.ProviderChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
+
+import static ee.carlrobert.codegpt.settings.service.ModelRole.*;
 
 public class GeneralSettingsState {
 
   private String displayName = "";
   private String avatarBase64 = "";
   private ServiceType selectedService = ServiceType.CODEGPT;
+  private ServiceType codeCompletionService = ServiceType.CODEGPT;
 
   public String getDisplayName() {
     if (displayName == null || displayName.isEmpty()) {
@@ -33,16 +37,35 @@ public class GeneralSettingsState {
     this.avatarBase64 = avatarBase64;
   }
 
+  public ServiceType getSelectedService(ModelRole role) {
+    switch (role) {
+      case CHAT_ROLE -> {return selectedService;}
+      case CODECOMPLETION_ROLE -> {return codeCompletionService;}
+      default -> {throw new AssertionError();}
+    }
+  }
   public ServiceType getSelectedService() {
-    return selectedService;
+    return getSelectedService(CHAT_ROLE);
+  }
+
+  public void setSelectedService(ModelRole role, ServiceType selectedService) {
+    switch (role) {
+      case CHAT_ROLE -> {
+        this.selectedService = selectedService;
+
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(ProviderChangeNotifier.getTOPIC())
+                .providerChanged(selectedService);
+      }
+      case CODECOMPLETION_ROLE -> {
+        this.codeCompletionService = selectedService;
+      }
+      default -> {throw new AssertionError();}
+    }
   }
 
   public void setSelectedService(ServiceType selectedService) {
-    this.selectedService = selectedService;
-
-    ApplicationManager.getApplication()
-        .getMessageBus()
-        .syncPublisher(ProviderChangeNotifier.getTOPIC())
-        .providerChanged(selectedService);
+    setSelectedService(CHAT_ROLE, selectedService);
   }
 }

@@ -8,6 +8,7 @@ import ee.carlrobert.codegpt.CodeGPTKeys;
 import ee.carlrobert.codegpt.completions.HuggingFaceModel;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
 import ee.carlrobert.codegpt.conversations.Conversation;
+import ee.carlrobert.codegpt.settings.service.ModelRole;
 import ee.carlrobert.codegpt.settings.service.ProviderChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings;
@@ -20,6 +21,8 @@ import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings;
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings;
 import ee.carlrobert.codegpt.util.ApplicationUtil;
 import org.jetbrains.annotations.NotNull;
+
+import static ee.carlrobert.codegpt.settings.service.ModelRole.CHAT_ROLE;
 
 @State(name = "CodeGPT_GeneralSettings_270", storages = @Storage("CodeGPT_GeneralSettings_270.xml"))
 public class GeneralSettings implements PersistentStateComponent<GeneralSettingsState> {
@@ -46,11 +49,19 @@ public class GeneralSettings implements PersistentStateComponent<GeneralSettings
   }
 
   public static ServiceType getSelectedService() {
-    return getCurrentState().getSelectedService();
+    return getCurrentState().getSelectedService(CHAT_ROLE);
+  }
+
+  public static ServiceType getSelectedService(ModelRole role) {
+    return getCurrentState().getSelectedService(role);
   }
 
   public static boolean isSelected(ServiceType serviceType) {
     return getSelectedService() == serviceType;
+  }
+
+  public static boolean isSelected(ModelRole role, ServiceType serviceType) {
+    return getSelectedService(role) == serviceType;
   }
 
   public void sync(Conversation conversation) {
@@ -95,7 +106,7 @@ public class GeneralSettings implements PersistentStateComponent<GeneralSettings
       default:
         break;
     }
-    state.setSelectedService(provider);
+    state.setSelectedService(CHAT_ROLE, provider);
     if (project != null) {
       project.getMessageBus()
           .syncPublisher(ProviderChangeNotifier.getTOPIC())

@@ -7,6 +7,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.testFramework.PlatformTestUtil
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_EDITOR_COMPLETION
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.service.ModelRole.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.http.RequestEntity
@@ -18,7 +19,7 @@ import testsupport.IntegrationTest
 class CodeCompletionServiceTest : IntegrationTest() {
 
     fun `test code completion with ProxyAI provider`() {
-        useCodeGPTService()
+        useCodeGPTService(CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -58,7 +59,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
     }
 
     fun `test code completion with OpenAI provider`() {
-        useOpenAIService()
+        useOpenAIService("gpt-4", CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -98,7 +99,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
     }
 
     fun `test apply next partial completion word`() {
-        useLlamaService(true)
+        useLlamaService(true, CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -153,7 +154,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
     }
 
     fun `_test apply inline suggestions without initial following text`() {
-        useCodeGPTService()
+        useCodeGPTService(CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -270,7 +271,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
     }
 
     fun `_test apply inline suggestions with initial following text`() {
-        useCodeGPTService()
+        useCodeGPTService(CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -341,7 +342,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
     }
 
     fun `_test adjust completion line whitespaces`() {
-        useCodeGPTService()
+        useCodeGPTService(CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
