@@ -471,8 +471,6 @@ public class ChatToolWindowTabPanel implements Disposable {
     var messageResponseBody =
         new ChatMessageResponseBody(project, this).withResponse(response);
 
-    messageResponseBody.hideCaret();
-
     var responseMessagePanel = new ResponseMessagePanel();
     responseMessagePanel.addContent(messageResponseBody);
     responseMessagePanel.addCopyAction(() -> CopyAction.copyToClipboard(message.getResponse()));

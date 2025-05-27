@@ -1,218 +1,163 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor
 
+import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.ActionGroup
-import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
-import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.BulkAwareDocumentListener
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.editor.impl.ContextMenuPopupHandler
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
-import com.intellij.openapi.util.text.StringUtil
-import com.intellij.ui.ColorUtil
-import com.intellij.ui.IdeBorderFactory
-import com.intellij.ui.JBColor
-import com.intellij.ui.components.ActionLink
 import com.intellij.util.ui.JBUI
-import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.actions.toolwindow.ReplaceCodeInMainEditorAction
-import ee.carlrobert.codegpt.toolwindow.chat.parser.StreamParseResponse
-import ee.carlrobert.codegpt.util.EditorUtil
-import ee.carlrobert.codegpt.util.file.FileUtil.findLanguageExtensionMapping
-import java.awt.BorderLayout
-import java.awt.Dimension
-import java.awt.FlowLayout
-import javax.swing.JPanel
-import javax.swing.SwingConstants
+import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
+import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory
+import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.EXPANDED_KEY
+import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.MIN_LINES_FOR_EXPAND
+import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorState
+import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
+import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
+import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
 
 class ResponseEditorPanel(
     project: Project,
-    item: StreamParseResponse,
+    item: Segment,
     readOnly: Boolean,
-    disposableParent: Disposable
-) : JPanel(BorderLayout()), Disposable {
+    disposableParent: Disposable,
+) : BorderLayoutPanel(), Disposable {
 
     companion object {
-        private val EXPANDED_KEY = Key.create<Boolean>("toolwindow.editor.isExpanded")
-        private const val MAX_VISIBLE_LINES = 10
-        private const val MIN_LINES_FOR_EXPAND = 8
+        val RESPONSE_EDITOR_DIFF_VIEWER_KEY =
+            Key.create<UnifiedDiffViewer?>("proxyai.responseEditorDiffViewer")
+        val RESPONSE_EDITOR_DIFF_VIEWER_VALUE_PAIR_KEY =
+            Key.create<Pair<String, String>>("proxyai.responseEditorDiffViewerValuePair")
+        val RESPONSE_EDITOR_STATE_KEY = Key.create<EditorState>("proxyai.responseEditorState")
     }
 
-    val editor: Editor
-    private val expandLinkPanel: JPanel
-    private var expandLinkAdded = false
+    private val stateManager = project.service<EditorStateManager>()
+    private var searchReplaceHandler: SearchReplaceHandler
 
     init {
         border = JBUI.Borders.empty(8, 0)
         isOpaque = false
 
-        val languageMapping = findLanguageExtensionMapping(item.language)
-        editor = EditorUtil.createEditor(
-            project,
-            languageMapping.value,
-            StringUtil.convertLineSeparators(item.content)
-        )
-
-        val group = DefaultActionGroup().apply {
-            add(ReplaceCodeInMainEditorAction())
-
-            (editor as EditorEx).contextMenuGroupId?.let { groupId ->
-                val actionManager = ActionManager.getInstance()
-                val originalGroup = actionManager.getAction(groupId)
-                if (originalGroup is ActionGroup) {
-                    addAll(originalGroup.getChildren(null, actionManager).toList())
-                }
-            }
+        val state = stateManager.createFromSegment(item, readOnly)
+        val editor = state.editor
+        configureEditor(editor)
+        searchReplaceHandler = SearchReplaceHandler(stateManager) { oldEditor, newEditor ->
+            replaceEditor(oldEditor, newEditor)
         }
 
-        configureEditor(
-            project,
-            editor as EditorEx,
-            readOnly,
-            ContextMenuPopupHandler.Simple(group),
-            item.filePath ?: "",
-            languageMapping.key
-        )
+        addToCenter(editor.component)
+        updateEditorUI()
 
-        add(editor.component, BorderLayout.CENTER)
-
-        expandLinkPanel = JPanel(FlowLayout(FlowLayout.CENTER)).apply {
-            isOpaque = false
-            border = JBUI.Borders.compound(
-                JBUI.Borders.customLine(ColorUtil.fromHex("#48494b"), 0, 1, 1, 1),
-                JBUI.Borders.empty(0)
-            )
-            add(createLink(editor))
-        }
-
-        editor.document.addDocumentListener(object : BulkAwareDocumentListener.Simple {
-            override fun documentChanged(event: DocumentEvent) {
-                updateEditorHeightAndUI()
-                scrollToEnd()
-            }
-        })
-
-        if (editor.document.text.lines().size >= MIN_LINES_FOR_EXPAND) {
-            updateEditorHeightAndUI()
-        }
         Disposer.register(disposableParent, this)
     }
 
-    override fun dispose() {
-        EditorFactory.getInstance().releaseEditor(editor)
-    }
-
-    private fun configureEditor(
-        project: Project,
-        editorEx: EditorEx,
-        readOnly: Boolean,
-        popupHandler: ContextMenuPopupHandler,
-        filePath: String,
-        language: String
-    ) {
-        EXPANDED_KEY.set(editorEx, false)
-
-        editorEx.installPopupHandler(popupHandler)
-        editorEx.colorsScheme = EditorColorsManager.getInstance().schemeForCurrentUITheme
-
-        editorEx.settings.apply {
-            additionalColumnsCount = 0
-            additionalLinesCount = 0
-            isAdditionalPageAtBottom = false
-            isVirtualSpace = false
-            isUseSoftWraps = false
-            isLineMarkerAreaShown = false
-            isLineNumbersShown = false
-        }
-
-        editorEx.gutterComponentEx.apply {
-            isVisible = true
-            parent.isVisible = false
-        }
-
-        editorEx.contentComponent.border = JBUI.Borders.emptyLeft(4)
-        editorEx.setBorder(IdeBorderFactory.createBorder(ColorUtil.fromHex("#48494b")))
-        editorEx.permanentHeaderComponent =
-            HeaderPanel(project, editorEx, filePath, language, readOnly)
-        editorEx.headerComponent = null
-    }
-
-    private fun getLinkText(expanded: Boolean): String {
-        return if (expanded) {
-            CodeGPTBundle.get("toolwindow.chat.editor.action.collapse")
-        } else {
-            CodeGPTBundle.get("toolwindow.chat.editor.action.expand")
-        }
-    }
-
-    private fun createLink(editorEx: EditorEx): ActionLink {
-        val isExpanded = EXPANDED_KEY.get(editorEx) ?: false
-        val linkText = getLinkText(isExpanded)
-
-        return ActionLink(linkText) { event ->
-            val currentState = EXPANDED_KEY.get(editorEx) ?: false
-            val newState = !currentState
-            EXPANDED_KEY.set(editorEx, newState)
-
-            val source = event.source as ActionLink
-            source.text = getLinkText(newState)
-            source.icon = if (newState) Icons.CollapseAll else Icons.ExpandAll
-
-            if (newState) {
-                editorEx.component.preferredSize = null
-            } else {
-                updateEditorHeightAndUI()
+    private fun configureEditor(editor: EditorEx) {
+        editor.document.addDocumentListener(object : BulkAwareDocumentListener.Simple {
+            override fun documentChanged(event: DocumentEvent) {
+                runInEdt {
+                    updateEditorUI()
+                    if (editor.editorKind != EditorKind.DIFF) {
+                        scrollToEnd()
+                    }
+                }
             }
+        })
+    }
 
-            editorEx.component.revalidate()
-            editorEx.component.repaint()
-        }.apply {
-            icon = if (isExpanded) Icons.CollapseAll else Icons.ExpandAll
-            font = JBUI.Fonts.smallFont()
-            foreground = JBColor.GRAY
-            horizontalAlignment = SwingConstants.CENTER
+    private fun updateEditorUI() {
+        updateEditorHeightAndUI()
+        updateExpandLinkVisibility()
+    }
+
+    override fun dispose() {
+        val state = stateManager.getCurrentState()
+        val editor = state?.editor ?: return
+        val filePath = state.segment.filePath
+        if (filePath != null) {
+            DiffSyncManager.unregisterEditor(filePath, editor)
         }
+    }
+
+    fun handleSearchReplace(item: SearchReplace, partialResponse: Boolean) {
+        searchReplaceHandler.handleSearchReplace(item, partialResponse)
+    }
+
+    fun handleReplace(item: ReplaceWaiting) {
+        searchReplaceHandler.handleReplace(item)
+    }
+
+    fun getEditor(): EditorEx? {
+        return stateManager.getCurrentState()?.editor
+    }
+
+    fun replaceEditor(oldEditor: EditorEx, newEditor: EditorEx) {
+        runInEdt {
+            val expanded = oldEditor.getUserData(EXPANDED_KEY) == true
+            EXPANDED_KEY.set(newEditor, expanded)
+
+            removeAll()
+
+            configureEditor(newEditor)
+            addToCenter(newEditor.component)
+
+            ComponentFactory.updateEditorPreferredSize(newEditor, expanded)
+            updateEditorUI()
+
+            revalidate()
+            repaint()
+        }
+    }
+
+    fun removeEditorAndAuxiliaryPanels() {
+        removeAll()
+        revalidate()
+        repaint()
     }
 
     private fun updateEditorHeightAndUI() {
-        (editor as? EditorEx)?.let { editorEx ->
-            val lineHeight = editorEx.lineHeight
-            val lineCount = editor.document.lineCount
-            val isExpanded = EXPANDED_KEY.get(editorEx) ?: false
+        val editor = stateManager.getCurrentState()?.editor ?: return
+        ComponentFactory.updateEditorPreferredSize(
+            editor,
+            editor.getUserData(EXPANDED_KEY) == true
+        )
+    }
 
-            if (lineCount > MIN_LINES_FOR_EXPAND && !expandLinkAdded) {
-                add(expandLinkPanel, BorderLayout.SOUTH)
-                expandLinkAdded = true
+    private fun updateExpandLinkVisibility() {
+        val editor = stateManager.getCurrentState()?.editor ?: return
+        if (componentCount == 0 || getComponent(0) !== editor.component) {
+            return
+        }
+
+        val lineCount = editor.document.lineCount
+        val shouldShowExpandLink = lineCount >= MIN_LINES_FOR_EXPAND
+
+        val hasExpandLink = componentCount > 1 && getComponent(1) != null
+
+        if (shouldShowExpandLink && !hasExpandLink) {
+            val expandLinkPanel = ComponentFactory.createExpandLinkPanel(editor)
+            addToBottom(expandLinkPanel)
+            revalidate()
+            repaint()
+        } else if (!shouldShowExpandLink && hasExpandLink) {
+            if (componentCount > 1) {
+                remove(getComponent(1))
                 revalidate()
                 repaint()
             }
-
-            if (lineCount <= MIN_LINES_FOR_EXPAND) {
-                return
-            }
-
-            if (!isExpanded) {
-                val visibleLines = lineCount.coerceAtMost(MAX_VISIBLE_LINES)
-                val desiredHeight = (lineHeight * visibleLines).coerceAtLeast(20)
-
-                editor.component.preferredSize = Dimension(editor.component.width, desiredHeight)
-            }
-
-            editor.component.revalidate()
-            editor.component.repaint()
         }
     }
 
     private fun scrollToEnd() {
+        val editor = stateManager.getCurrentState()?.editor ?: return
         val textLength = editor.document.textLength
         if (textLength > 0) {
             val logicalPosition = editor.offsetToLogicalPosition(textLength - 1)

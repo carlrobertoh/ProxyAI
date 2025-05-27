@@ -9,6 +9,11 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 
 class ChatCompletionConfigurationForm {
 
+    private val retryOnFailedDiffSearchCheckBox = JBCheckBox(
+        CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.retryOnFailedDiffSearch.title"),
+        service<ConfigurationSettings>().state.chatCompletionSettings.retryOnFailedDiffSearchEnabled
+    )
+
     private val editorContextTagCheckBox = JBCheckBox(
         CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.editorContextTag.title"),
         service<ConfigurationSettings>().state.chatCompletionSettings.editorContextTagEnabled
@@ -22,6 +27,10 @@ class ChatCompletionConfigurationForm {
     fun createPanel(): DialogPanel {
         return panel {
             row {
+                cell(retryOnFailedDiffSearchCheckBox)
+                    .comment(CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.retryOnFailedDiffSearch.description"))
+            }
+            row {
                 cell(editorContextTagCheckBox)
                     .comment(CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.editorContextTag.description"))
             }
@@ -33,12 +42,14 @@ class ChatCompletionConfigurationForm {
     }
 
     fun resetForm(prevState: ChatCompletionSettingsState) {
+        retryOnFailedDiffSearchCheckBox.isSelected = prevState.retryOnFailedDiffSearchEnabled
         editorContextTagCheckBox.isSelected = prevState.editorContextTagEnabled
         psiStructureCheckBox.isSelected = prevState.psiStructureEnabled
     }
 
     fun getFormState(): ChatCompletionSettingsState {
         return ChatCompletionSettingsState().apply {
+            this.retryOnFailedDiffSearchEnabled = retryOnFailedDiffSearchCheckBox.isSelected
             this.editorContextTagEnabled = editorContextTagCheckBox.isSelected
             this.psiStructureEnabled = psiStructureCheckBox.isSelected
         }

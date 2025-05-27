@@ -32,7 +32,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4",
+                    "gpt-4o",
                     listOf(
                         mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")

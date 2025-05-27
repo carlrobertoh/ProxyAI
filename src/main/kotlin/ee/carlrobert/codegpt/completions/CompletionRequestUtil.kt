@@ -21,16 +21,13 @@ object CompletionRequestUtil {
     """.trimIndent()
 
     @JvmStatic
-    fun formatCode(code: String, filePath: String?): String {
-        val language = filePath?.let { "${FileUtil.getFileExtension(it)}:$it" } ?: ""
-
-        return """
-        
-        ```$language
-        $code
-        ```
-        
-    """.trimIndent()
+    fun formatCode(code: String, filePath: String? = null): String {
+        val header = filePath?.let { "${FileUtil.getFileExtension(it)}:$it" } ?: ""
+        return buildString {
+            append("```${header}\n")
+            append("$code\n")
+            append("```\n")
+        }
     }
 
     @JvmStatic
@@ -43,12 +40,7 @@ object CompletionRequestUtil {
         val repeatableContext = includedFilesSettings.repeatableContext
         val fileContext = referencedFiles.stream()
             .map { item: ReferencedFile ->
-                repeatableContext
-                    .replace("{FILE_PATH}", item.filePath())
-                    .replace(
-                        "{FILE_CONTENT}",
-                        formatCode(item.fileContent(), item.filePath())
-                    )
+                formatCode(item.fileContent(), item.filePath())
             }
             .collect(Collectors.joining("\n\n"))
 

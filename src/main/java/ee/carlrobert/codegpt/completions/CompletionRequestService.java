@@ -70,6 +70,15 @@ public final class CompletionRequestService {
     return getChatCompletion(request);
   }
 
+  public EventSource getCodeEditsAsync(
+      AutoApplyParameters params,
+      CompletionEventListener<String> eventListener) {
+    var request = CompletionRequestFactory
+        .getFactory(GeneralSettings.getSelectedService())
+        .createAutoApplyRequest(params);
+    return getChatCompletionAsync(request, eventListener);
+  }
+
   public EventSource getCommitMessageAsync(
       CommitMessageCompletionParameters params,
       CompletionEventListener<String> eventListener) {

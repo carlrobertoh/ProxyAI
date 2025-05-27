@@ -28,7 +28,7 @@ interface ShortcutsTestMixin {
     }
   }
 
-  fun useOpenAIService(chatModel: String? = "gpt-4") {
+  fun useOpenAIService(chatModel: String? = "gpt-4o") {
     service<GeneralSettings>().state.selectedService = ServiceType.OPENAI
     setCredential(OpenaiApiKey, "TEST_API_KEY")
     service<OpenAISettings>().state.run {

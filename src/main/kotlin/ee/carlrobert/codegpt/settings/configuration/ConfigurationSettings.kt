@@ -41,6 +41,7 @@ class ConfigurationSettingsState : BaseState() {
 }
 
 class ChatCompletionSettingsState : BaseState() {
+    var retryOnFailedDiffSearchEnabled by property(true)
     var editorContextTagEnabled by property(true)
     var psiStructureEnabled by property(true)
 }

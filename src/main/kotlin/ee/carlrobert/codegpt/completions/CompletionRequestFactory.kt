@@ -1,14 +1,8 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
-import ee.carlrobert.codegpt.completions.factory.AzureRequestFactory
-import ee.carlrobert.codegpt.completions.factory.ClaudeRequestFactory
-import ee.carlrobert.codegpt.completions.factory.CodeGPTRequestFactory
-import ee.carlrobert.codegpt.completions.factory.CustomOpenAIRequestFactory
-import ee.carlrobert.codegpt.completions.factory.GoogleRequestFactory
-import ee.carlrobert.codegpt.completions.factory.LlamaRequestFactory
-import ee.carlrobert.codegpt.completions.factory.OllamaRequestFactory
-import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory
+import com.intellij.openapi.vfs.readText
+import ee.carlrobert.codegpt.completions.factory.*
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
@@ -18,6 +12,7 @@ import ee.carlrobert.llm.completion.CompletionRequest
 interface CompletionRequestFactory {
     fun createChatRequest(params: ChatCompletionParameters): CompletionRequest
     fun createEditCodeRequest(params: EditCodeCompletionParameters): CompletionRequest
+    fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest
     fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest
     fun createLookupRequest(params: LookupCompletionParameters): CompletionRequest
 
@@ -57,6 +52,22 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                 ?: CoreActionsState.DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT,
             params.prompt,
             512
+        )
+    }
+
+    override fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest {
+        val prompt = buildString {
+            append("Source:\n")
+            append("${CompletionRequestUtil.formatCode(params.source)}\n\n")
+            append("Destination:\n")
+            val destination = params.destination
+            append(
+                "${CompletionRequestUtil.formatCode(destination.readText(), destination.path)}\n"
+            )
+        }
+        return createBasicCompletionRequest(
+            service<PromptsSettings>().state.coreActions.autoApply.instructions
+                ?: CoreActionsState.DEFAULT_AUTO_APPLY_PROMPT, prompt, 8192, true
         )
     }
 

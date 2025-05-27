@@ -17,6 +17,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.VerticalFlowLayout;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -39,10 +40,18 @@ import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
-import ee.carlrobert.codegpt.toolwindow.chat.parser.CompleteOutputParser;
-import ee.carlrobert.codegpt.toolwindow.chat.parser.StreamOutputParser;
-import ee.carlrobert.codegpt.toolwindow.chat.parser.StreamParseResponse;
-import ee.carlrobert.codegpt.toolwindow.chat.parser.StreamParseResponse.StreamResponseType;
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DefaultHeaderPanel;
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Code;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.CodeEnd;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.CompleteMessageParser;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchWaiting;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.SseMessageParser;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Text;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Thinking;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseBodyProgressPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.WebpageList;
 import ee.carlrobert.codegpt.ui.ThoughtProcessPanel;
@@ -51,13 +60,13 @@ import ee.carlrobert.codegpt.util.EditorUtil;
 import java.awt.BorderLayout;
 import java.util.Objects;
 import java.util.stream.Stream;
-import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
 import javax.swing.event.HyperlinkListener;
+import kotlin.jvm.Synchronized;
 import org.jetbrains.annotations.NotNull;
 
 public class ChatMessageResponseBody extends JPanel {
@@ -66,13 +75,15 @@ public class ChatMessageResponseBody extends JPanel {
 
   private final Project project;
   private final Disposable parentDisposable;
-  private final StreamOutputParser streamOutputParser;
+  private final SseMessageParser streamOutputParser;
   private final boolean readOnly;
   private final DefaultListModel<WebSearchEventDetails> webpageListModel = new DefaultListModel<>();
   private final WebpageList webpageList = new WebpageList(webpageListModel);
   private final ResponseBodyProgressPanel progressPanel = new ResponseBodyProgressPanel();
   private final JPanel loadingLabel = createLoadingPanel();
-  private final JPanel contentPanel = new JPanel();
+  private final JPanel contentPanel =
+      new JPanel(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, 4, true, false));
+
   private ResponseEditorPanel currentlyProcessedEditorPanel;
   private JEditorPane currentlyProcessedTextPane;
   private JPanel webpageListPanel;
@@ -99,13 +110,12 @@ public class ChatMessageResponseBody extends JPanel {
       Disposable parentDisposable) {
     this.project = project;
     this.parentDisposable = parentDisposable;
-    this.streamOutputParser = new StreamOutputParser();
+    this.streamOutputParser = new SseMessageParser();
     this.readOnly = readOnly;
 
     setLayout(new BorderLayout());
     setOpaque(false);
 
-    contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
     contentPanel.setOpaque(false);
     add(contentPanel, BorderLayout.NORTH);
 
@@ -126,9 +136,8 @@ public class ChatMessageResponseBody extends JPanel {
 
   public ChatMessageResponseBody withResponse(@NotNull String response) {
     try {
-      for (var item : new CompleteOutputParser().parse(response)) {
-        processResponse(item, false);
-
+      for (var item : new CompleteMessageParser().parse(response)) {
+        processResponse(item, false, false);
         currentlyProcessedTextPane = null;
         currentlyProcessedEditorPanel = null;
       }
@@ -148,8 +157,8 @@ public class ChatMessageResponseBody extends JPanel {
     }
 
     var parsedResponse = streamOutputParser.parse(partialMessage);
-    for (StreamParseResponse item : parsedResponse) {
-      processResponse(item, true);
+    for (Segment item : parsedResponse) {
+      processResponse(item, true, true);
     }
   }
 
@@ -182,30 +191,26 @@ public class ChatMessageResponseBody extends JPanel {
   }
 
   public void handleCodeGPTEvent(CodeGPTEvent codegptEvent) {
-    ApplicationManager.getApplication()
-        .invokeLater(() -> {
-          var event = codegptEvent.getEvent();
-          if (event.getDetails() instanceof WebSearchEventDetails webSearchEventDetails) {
-            displayWebSearchItem(webSearchEventDetails);
-            return;
+    ApplicationManager.getApplication().invokeLater(() -> {
+      var event = codegptEvent.getEvent();
+      if (event.getDetails() instanceof WebSearchEventDetails webSearchEventDetails) {
+        displayWebSearchItem(webSearchEventDetails);
+        return;
+      }
+      switch (event.getType()) {
+        case WEB_SEARCH_ITEM -> {
+          if (event.getDetails() instanceof WebSearchEventDetails details) {
+            displayWebSearchItem(details);
           }
-
-          switch (event.getType()) {
-            case WEB_SEARCH_ITEM -> {
-              if (event.getDetails() != null
-                  && event.getDetails() instanceof WebSearchEventDetails eventDetails) {
-                displayWebSearchItem(eventDetails);
-              }
-            }
-
-            case ANALYZE_WEB_DOC_STARTED -> showWebDocsProgress();
-            case ANALYZE_WEB_DOC_COMPLETED -> completeWebDocsProgress(event.getDetails());
-            case ANALYZE_WEB_DOC_FAILED -> failWebDocsProgress(event.getDetails());
-            case PROCESS_CONTEXT -> progressPanel.updateProgressDetails(event.getDetails());
-            default -> {
-            }
-          }
-        });
+        }
+        case ANALYZE_WEB_DOC_STARTED -> showWebDocsProgress();
+        case ANALYZE_WEB_DOC_COMPLETED -> completeWebDocsProgress(event.getDetails());
+        case ANALYZE_WEB_DOC_FAILED -> failWebDocsProgress(event.getDetails());
+        case PROCESS_CONTEXT -> progressPanel.updateProgressDetails(event.getDetails());
+        default -> {
+        }
+      }
+    });
   }
 
   public void hideCaret() {
@@ -219,7 +224,7 @@ public class ChatMessageResponseBody extends JPanel {
     streamOutputParser.clear();
     loadingLabel.setVisible(false);
 
-    // TODO: First message might be code block
+    // Reset for the next incoming message
     prepareProcessingText(true);
     currentlyProcessedTextPane.setText(
         "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">&#8205;</p></html>");
@@ -237,13 +242,14 @@ public class ChatMessageResponseBody extends JPanel {
         webpageListPanel.setVisible(false);
       }
 
+      String formattedMessage = format(
+          "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>", message);
+
       if (currentlyProcessedTextPane == null) {
-        currentlyProcessedTextPane = createTextPane("");
+        currentlyProcessedTextPane = createTextPane(formattedMessage, false);
         contentPanel.add(currentlyProcessedTextPane);
       }
 
-      String formattedMessage = format(
-          "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>", message);
       currentlyProcessedTextPane.setVisible(true);
       currentlyProcessedTextPane.setText(formattedMessage);
 
@@ -281,8 +287,8 @@ public class ChatMessageResponseBody extends JPanel {
         .orElse(null);
   }
 
-  private void processResponse(StreamParseResponse item, boolean caretVisible) {
-    if (item.getType() == StreamResponseType.THINKING) {
+  private void processResponse(Segment item, boolean caretVisible, boolean partialResponse) {
+    if (item instanceof Thinking) {
       processThinkingOutput(item.getContent());
       return;
     }
@@ -292,25 +298,60 @@ public class ChatMessageResponseBody extends JPanel {
       thoughtProcessPanel.setFinished();
     }
 
-    if (item.getType() == StreamResponseType.CODE_CONTENT
-        || item.getType() == StreamResponseType.CODE_HEADER) {
+    if (item instanceof CodeEnd) {
+      if (currentlyProcessedEditorPanel != null) {
+        handleHeaderOnCompletion(currentlyProcessedEditorPanel);
+      }
+      currentlyProcessedEditorPanel = null;
+      return;
+    }
+
+    if (item instanceof SearchReplace searchReplace) {
+      if (currentlyProcessedEditorPanel == null) {
+        prepareProcessingCode(searchReplace);
+      }
+      if (currentlyProcessedEditorPanel != null) {
+        currentlyProcessedEditorPanel.handleSearchReplace(searchReplace, partialResponse);
+        handleHeaderOnCompletion(currentlyProcessedEditorPanel);
+        return;
+      }
+    }
+
+    if (item instanceof ReplaceWaiting replaceWaiting) {
+      if (currentlyProcessedEditorPanel != null) {
+        currentlyProcessedEditorPanel.handleReplace(replaceWaiting);
+        return;
+      }
+    }
+
+    if (item instanceof Code || item instanceof SearchWaiting) {
       processCode(item);
-    } else {
+      return;
+    }
+
+    if (item instanceof Text) {
       processText(item.getContent(), caretVisible);
     }
   }
 
-  private void processCode(StreamParseResponse item) {
+  private void processCode(Segment item) {
     var content = item.getContent();
-    if (!content.isEmpty()) {
-      if (currentlyProcessedEditorPanel == null) {
-        prepareProcessingCode(item);
-      }
-      EditorUtil.updateEditorDocument(currentlyProcessedEditorPanel.getEditor(), content);
+    if (currentlyProcessedEditorPanel == null) {
+      prepareProcessingCode(item);
+      return;
+    }
+
+    var editor = currentlyProcessedEditorPanel.getEditor();
+    if (item instanceof Code && editor != null) {
+      EditorUtil.updateEditorDocument(editor, content);
     }
   }
 
   private void processText(String markdownText, boolean caretVisible) {
+    if (markdownText == null || markdownText.isEmpty()) {
+      return;
+    }
+
     var html = convertMdToHtml(markdownText);
     if (currentlyProcessedTextPane == null) {
       prepareProcessingText(caretVisible);
@@ -318,18 +359,36 @@ public class ChatMessageResponseBody extends JPanel {
     currentlyProcessedTextPane.setText(html);
   }
 
+  @Synchronized
   private void prepareProcessingText(boolean caretVisible) {
     currentlyProcessedEditorPanel = null;
     currentlyProcessedTextPane = createTextPane("", caretVisible);
     contentPanel.add(currentlyProcessedTextPane);
+    contentPanel.revalidate();
+    contentPanel.repaint();
   }
 
-  private void prepareProcessingCode(StreamParseResponse item) {
+  @Synchronized
+  private void prepareProcessingCode(Segment item) {
     hideCaret();
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel =
         new ResponseEditorPanel(project, item, readOnly, parentDisposable);
     contentPanel.add(currentlyProcessedEditorPanel);
+    contentPanel.revalidate();
+    contentPanel.repaint();
+  }
+
+  private void handleHeaderOnCompletion(ResponseEditorPanel editorPanel) {
+    var editor = editorPanel.getEditor();
+    if (editor != null) {
+      var header = editor.getPermanentHeaderComponent();
+      if (header instanceof DiffHeaderPanel diffHeaderPanel) {
+        diffHeaderPanel.handleDone();
+      } else if (header instanceof DefaultHeaderPanel defaultHeaderPanel) {
+        defaultHeaderPanel.handleDone();
+      }
+    }
   }
 
   private void displayWebSearchItem(WebSearchEventDetails details) {
@@ -357,10 +416,6 @@ public class ChatMessageResponseBody extends JPanel {
     if (eventDetails instanceof AnalysisFailedEventDetails failedEventDetails) {
       progressPanel.updateProgressContainer(failedEventDetails.getError(), General.Error);
     }
-  }
-
-  private JTextPane createTextPane(String text) {
-    return createTextPane(text, false);
   }
 
   private JTextPane createTextPane(String text, boolean caretVisible) {
