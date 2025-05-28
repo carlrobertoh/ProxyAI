@@ -3,17 +3,12 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 import com.intellij.diff.tools.fragmented.UnifiedDiffChange
 import com.intellij.openapi.application.runInEdt
 import com.intellij.ui.AnimatedIcon
-import com.intellij.ui.JBColor
-import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
-import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffAcceptedPanel
-import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffStatsComponent
 import java.awt.BorderLayout
-import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JPanel
 
@@ -34,19 +29,14 @@ class DiffHeaderPanel(
         AnimatedIcon.Default(),
         JBLabel.LEFT
     )
+
     private val actionLinksPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.X_AXIS)
         isVisible = false
         add(ActionLink("View Diff") { actions.onOpenDiff() })
-        add(Box.createHorizontalStrut(4))
-        add(JBLabel("·").apply {
-            font = JBUI.Fonts.smallFont()
-            foreground = JBColor.GRAY
-        })
-        add(Box.createHorizontalStrut(4))
+        add(separator())
         add(ActionLink(CodeGPTBundle.get("shared.acceptAll")) { actions.onAcceptAll() })
     }
-    private val statsComponent: SimpleColoredComponent = SimpleColoredComponent()
 
     init {
         setupUI()
@@ -56,8 +46,6 @@ class DiffHeaderPanel(
         if (config.readOnly) return
 
         rightPanel.apply {
-            add(statsComponent)
-            add(separator())
             add(actionLinksPanel)
             add(loadingLabel)
         }
@@ -86,19 +74,7 @@ class DiffHeaderPanel(
                 container.add(diffAcceptedPanel, BorderLayout.CENTER)
                 container.revalidate()
                 container.repaint()
-            } else {
-                setRightPanelComponent(diffAcceptedPanel)
-                revalidate()
-                repaint()
             }
-        }
-    }
-
-    fun updateDiffStats(changes: List<UnifiedDiffChange>) {
-        runInEdt {
-            DiffStatsComponent.updateStatsComponent(statsComponent, changes)
-            revalidate()
-            repaint()
         }
     }
 

@@ -1,22 +1,24 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 
+import com.intellij.diff.tools.fragmented.UnifiedDiffChange
 import com.intellij.icons.AllIcons
 import com.intellij.ide.actions.OpenFileAction
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.ui.ColorUtil
-import com.intellij.ui.JBColor
-import com.intellij.ui.SeparatorComponent
-import com.intellij.ui.SeparatorOrientation
+import com.intellij.openapi.vfs.writeText
+import com.intellij.ui.*
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffStatsComponent
+import java.awt.BorderLayout
+import java.awt.Dimension
 import java.io.File
 import javax.swing.BoxLayout
 import javax.swing.JComponent
@@ -37,6 +39,10 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
         private val logger = thisLogger()
     }
 
+    private val statsComponent = SimpleColoredComponent().apply {
+        font = JBUI.Fonts.smallFont()
+    }
+
     protected var virtualFile: VirtualFile? = config.filePath?.let {
         try {
             LocalFileSystem.getInstance().refreshAndFindFileByIoFile(File(it))
@@ -48,25 +54,39 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
 
     private val rightPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.X_AXIS)
+        alignmentY = 0.5f
         isOpaque = false
     }
 
     protected abstract fun initializeRightPanel(rightPanel: JPanel)
+
+    fun updateDiffStats(changes: List<UnifiedDiffChange>) {
+        runInEdt {
+            DiffStatsComponent.updateStatsComponent(statsComponent, changes)
+            revalidate()
+            repaint()
+        }
+    }
 
     protected fun setupUI() {
         setupPanelAppearance()
         setupFilePathOrLanguageLabel(virtualFile)
         rightPanel.removeAll()
         initializeRightPanel(rightPanel)
-        addToRight(rightPanel)
+
+        val rightCenteringPanel = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            add(rightPanel, BorderLayout.CENTER)
+        }
+        addToRight(rightCenteringPanel)
     }
 
     protected fun setRightPanelComponent(component: JComponent?) {
         if (component != null) {
             rightPanel.removeAll()
             rightPanel.add(component)
-            revalidate()
-            repaint()
+            rightPanel.revalidate()
+            rightPanel.repaint()
         }
     }
 
@@ -83,27 +103,30 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
             JBUI.Borders.customLine(ColorUtil.fromHex("#48494b"), 1, 1, 0, 1),
             JBUI.Borders.empty(4)
         )
+        preferredSize = Dimension(preferredSize.width, 32)
+        minimumSize = Dimension(preferredSize.width, 32)
     }
 
     protected fun setupFilePathOrLanguageLabel(virtualFile: VirtualFile?) {
         val filePath = config.filePath
         if (filePath != null) {
-            ApplicationManager.getApplication().executeOnPooledThread {
-                if (virtualFile == null) {
-                    addComponent(createNewFileLink(filePath, config.editorEx))
-                } else {
-                    virtualFile.refresh(true, false)
-                    addComponent(createFileLink(virtualFile))
-                }
+            if (virtualFile == null) {
+                val newFileLink = createNewFileLink(filePath, config.editorEx)
+                addToLeft(newFileLink)
+            } else {
+                addToLeft(JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.X_AXIS)
+                    isOpaque = false
+                    add(ActionLink(virtualFile.name) {
+                        OpenFileAction.openFile(virtualFile, config.project)
+                    }.apply {
+                        setExternalLinkIcon()
+                    })
+                    add(statsComponent)
+                })
             }
         } else {
-            addComponent(createLanguageLabel())
-        }
-    }
-
-    private fun addComponent(component: JComponent) {
-        runInEdt {
-            addToLeft(component)
+            addToLeft(createLanguageLabel())
         }
     }
 
@@ -122,7 +145,6 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
                 if (!created) {
                     return@ActionLink
                 }
-                file.writeText(content)
             } catch (ex: Exception) {
                 logger.error(ex)
                 return@ActionLink
@@ -130,19 +152,18 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
 
             LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)?.let { newFile ->
                 runInEdt {
-                    OpenFileAction.openFile(newFile, config.project)
+                    runUndoTransparentWriteAction {
+                        newFile.writeText(content)
+                    }
+
                     remove(actionLink)
                     setupFilePathOrLanguageLabel(newFile)
+
+                    OpenFileAction.openFile(newFile, config.project)
                 }
             }
         }.apply { icon = AllIcons.General.InlineAdd }
         return actionLink
-    }
-
-    private fun createFileLink(virtualFile: VirtualFile): ActionLink {
-        return ActionLink(virtualFile.name) {
-            OpenFileAction.openFile(virtualFile, config.project)
-        }.apply { setExternalLinkIcon() }
     }
 
     private fun createLanguageLabel(): JBLabel {
