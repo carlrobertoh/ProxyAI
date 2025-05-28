@@ -27,6 +27,7 @@ import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
+import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.LikeAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody;
@@ -282,6 +283,16 @@ public class ChatToolWindowTabPanel implements Disposable {
 
     var panel = new ResponseMessagePanel();
     panel.addCopyAction(() -> CopyAction.copyToClipboard(message.getResponse()));
+    panel.addLikeAction(() -> {
+      LikeAction.likeResponse(message);
+      panel.disableActions(List.of("LIKE"));
+      panel.disableActions(List.of("DISLIKE"));
+    });
+    panel.addDislikeAction(() -> {
+      LikeAction.likeResponse(message);
+      panel.disableActions(List.of("LIKE"));
+      panel.disableActions(List.of("DISLIKE"));
+    });
     panel.addContent(new ChatMessageResponseBody(
         project,
         false,
@@ -350,6 +361,8 @@ public class ChatToolWindowTabPanel implements Disposable {
     userInputPanel.setSubmitEnabled(false);
     userMessagePanel.disableActions(List.of("RELOAD", "DELETE"));
     responseMessagePanel.disableActions(List.of("COPY"));
+    responseMessagePanel.disableActions(List.of("LIKE"));
+    responseMessagePanel.disableActions(List.of("DISLIKE"));
 
     requestHandler = new ToolwindowChatCompletionRequestHandler(
         project,

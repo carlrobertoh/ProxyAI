@@ -22,6 +22,7 @@ class CodeCompletionInsertHandler : InlineCompletionInsertHandler {
         environment: InlineCompletionInsertEnvironment,
         elements: List<InlineCompletionElement>
     ) {
+        println("!!! CODE COMPLETION WAS ACCEPTED")
         val editor = environment.editor
         val remainingCompletion = CodeGPTKeys.REMAINING_CODE_COMPLETION.get(editor)
         if (remainingCompletion != null && remainingCompletion.partialCompletion.isNotEmpty()) {

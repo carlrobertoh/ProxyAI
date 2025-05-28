@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.toolwindow.ui
 
+import com.intellij.icons.AllIcons.Ide
 import com.intellij.icons.AllIcons.Actions
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -60,6 +61,42 @@ abstract class BaseMessagePanel : BorderLayoutPanel() {
                 },
                 "COPY"
             )
+        )
+    }
+
+    fun addLikeAction(onLike: Runnable) {
+        addIconActionButton(
+                IconActionButton(
+                        object : AnAction(
+                                "Like",
+                                "Like",
+                                Ide.Like
+                        ) {
+                            override fun actionPerformed(event: AnActionEvent) {
+                                onLike.run()
+                                // CopyAction.showCopyBalloon(event)
+                            }
+                        },
+                        "LIKE"
+                )
+        )
+    }
+
+    fun addDislikeAction(onDislike: Runnable) {
+        addIconActionButton(
+                IconActionButton(
+                        object : AnAction(
+                                "Dislike",
+                                "Dislik",
+                                Ide.Dislike
+                        ) {
+                            override fun actionPerformed(event: AnActionEvent) {
+                                onDislike.run()
+//                                CopyAction.showCopyBalloon(event)
+                            }
+                        },
+                        "DISLIKE"
+                )
         )
     }
 
