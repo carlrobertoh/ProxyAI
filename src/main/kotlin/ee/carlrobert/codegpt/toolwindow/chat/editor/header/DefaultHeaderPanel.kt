@@ -3,11 +3,14 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
+import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
+import com.intellij.openapi.vfs.readText
+import com.intellij.openapi.vfs.writeText
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
@@ -15,6 +18,7 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.*
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.util.EditorUtil
+import ee.carlrobert.codegpt.util.StringUtil
 import javax.swing.JPanel
 
 class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
@@ -68,6 +72,15 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         val file = virtualFile
             ?: EditorUtil.getSelectedEditor(project)?.virtualFile
             ?: throw IllegalStateException("Virtual file is null")
+
+        val directApplyThreshold = 0.85
+        val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
+        if (coefficient > directApplyThreshold) {
+            runUndoTransparentWriteAction {
+                file.writeText(editor.document.text)
+            }
+            return
+        }
 
         setLoading()
         project.service<EditorStateManager>()
