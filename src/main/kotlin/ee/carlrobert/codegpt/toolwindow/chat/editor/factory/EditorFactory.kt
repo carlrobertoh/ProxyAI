@@ -61,18 +61,19 @@ object EditorFactory {
         editor.permanentHeaderComponent = headerComponent
         editor.headerComponent = null
 
+        val diffKind = editor.editorKind == EditorKind.DIFF
         editor.settings.apply {
             additionalColumnsCount = 0
             additionalLinesCount = 0
             isAdditionalPageAtBottom = false
             isVirtualSpace = false
             isUseSoftWraps = false
-            isLineNumbersShown = false
-            isLineMarkerAreaShown = editor.editorKind == EditorKind.DIFF
+            isLineNumbersShown = diffKind
+            isLineMarkerAreaShown = diffKind
         }
         editor.gutterComponentEx.apply {
-            isVisible = editor.editorKind == EditorKind.DIFF
-            parent.isVisible = editor.editorKind == EditorKind.DIFF
+            isVisible = diffKind
+            parent.isVisible = diffKind
         }
 
         editor.contentComponent.border = JBUI.Borders.emptyLeft(4)
