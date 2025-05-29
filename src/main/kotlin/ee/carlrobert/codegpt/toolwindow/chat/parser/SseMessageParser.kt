@@ -1,239 +1,332 @@
 package ee.carlrobert.codegpt.toolwindow.chat.parser
 
-enum class State { OUTSIDE, CODE_HEADER_WAITING, IN_CODE, IN_SEARCH, IN_REPLACE, IN_THINKING }
-
 class SseMessageParser : MessageParser {
 
-    var state = State.OUTSIDE
-    private val buffer = StringBuilder()
-    private val parsedSegments = mutableListOf<Segment>()
-
-    private var currentCodeHeader: CodeHeader? = null
-    private val codeBuilder = StringBuilder()
-    private val headerBuilder = StringBuilder()
-    private val searchBuilder = StringBuilder()
-    private val replaceBuilder = StringBuilder()
-    private val thinkingBuilder = StringBuilder()
-
-    fun clear() {
-        state = State.OUTSIDE
-        buffer.clear()
-        parsedSegments.clear()
-        currentCodeHeader = null
-        codeBuilder.clear()
-        headerBuilder.clear()
-        searchBuilder.clear()
-        replaceBuilder.clear()
-        thinkingBuilder.clear()
+    private companion object {
+        const val CODE_FENCE = "```"
+        const val THINK_START = "<think>"
+        const val THINK_END = "</think>"
+        const val SEARCH_MARKER = "<<<<<<< SEARCH"
+        const val SEPARATOR_MARKER = "======="
+        const val REPLACE_MARKER = ">>>>>>> REPLACE"
+        const val NEWLINE = "\n"
+        const val HEADER_DELIMITER = ":"
+        const val HEADER_PARTS_LIMIT = 2
     }
 
-    /**
-     * Parse incoming partial text and return any completed segments.
-     * Leftover text remains in buffer until more input arrives.
-     */
+    private var parserState: ParserState = ParserState.Outside
+    private val buffer = StringBuilder()
+
+    fun clear() {
+        parserState = ParserState.Outside
+        buffer.clear()
+    }
+
     override fun parse(input: String): List<Segment> {
         buffer.append(input)
-        val output = mutableListOf<Segment>()
+        val segments = mutableListOf<Segment>()
 
-        loop@ while (true) {
-            when (state) {
-                State.OUTSIDE -> {
-                    val fenceIdx = buffer.indexOf("```")
-                    val thinkStartIdx = buffer.indexOf("<think>")
+        while (processNextSegment(segments)) {
+            // Continue processing until no more complete segments can be extracted
+        }
 
-                    when {
-                        fenceIdx != -1 && (thinkStartIdx == -1 || fenceIdx < thinkStartIdx) -> {
-                            if (fenceIdx > 0) {
-                                output += Text(buffer.substring(0, fenceIdx))
-                            }
-                            buffer.delete(0, fenceIdx + 3)
-                            state = State.CODE_HEADER_WAITING
-                            headerBuilder.clear()
-                            continue@loop
-                        }
+        segments.addAll(getPendingSegments())
 
-                        thinkStartIdx != -1 -> {
-                            if (thinkStartIdx > 0) {
-                                output += Text(buffer.substring(0, thinkStartIdx))
-                            }
-                            buffer.delete(0, thinkStartIdx + "<think>".length)
-                            state = State.IN_THINKING
-                            thinkingBuilder.clear()
-                            continue@loop
-                        }
+        return segments
+    }
 
-                        else -> break@loop
-                    }
+    private fun processNextSegment(segments: MutableList<Segment>): Boolean {
+        return when (val state = parserState) {
+            is ParserState.Outside -> processOutsideState(segments)
+            is ParserState.CodeHeaderWaiting -> processCodeHeaderState(segments, state)
+            is ParserState.InCode -> processInCodeState(segments, state)
+            is ParserState.InSearch -> processInSearchState(segments, state)
+            is ParserState.InReplace -> processInReplaceState(segments, state)
+            is ParserState.InThinking -> processInThinkingState(segments, state)
+        }
+    }
+
+    private fun processOutsideState(segments: MutableList<Segment>): Boolean {
+        val fenceIdx = buffer.indexOf(CODE_FENCE)
+        val thinkStartIdx = buffer.indexOf(THINK_START)
+
+        return when {
+            shouldProcessCodeFence(fenceIdx, thinkStartIdx) -> {
+                extractTextBeforeIndex(fenceIdx)?.let { segments.add(it) }
+                consumeFromBuffer(fenceIdx + CODE_FENCE.length)
+                parserState = ParserState.CodeHeaderWaiting()
+                true
+            }
+
+            thinkStartIdx != -1 -> {
+                extractTextBeforeIndex(thinkStartIdx)?.let { segments.add(it) }
+                consumeFromBuffer(thinkStartIdx + THINK_START.length)
+                parserState = ParserState.InThinking()
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    private fun processCodeHeaderState(
+        segments: MutableList<Segment>,
+        state: ParserState.CodeHeaderWaiting
+    ): Boolean {
+        val nlIdx = buffer.indexOf(NEWLINE)
+        if (nlIdx < 0) return false
+
+        val headerLine = buffer.substring(0, nlIdx).trim()
+        consumeFromBuffer(nlIdx + 1)
+
+        val updatedHeader = state.content + headerLine
+        val header = parseCodeHeader(updatedHeader)
+
+        return if (header != null) {
+            segments.add(header)
+            parserState = ParserState.InCode(header)
+            true
+        } else {
+            segments.add(CodeHeaderWaiting(updatedHeader))
+            parserState = ParserState.CodeHeaderWaiting(updatedHeader)
+            false
+        }
+    }
+
+    private fun processInCodeState(
+        segments: MutableList<Segment>,
+        state: ParserState.InCode
+    ): Boolean {
+        val nlIdx = buffer.indexOf(NEWLINE)
+        if (nlIdx < 0) return false
+
+        val line = buffer.substring(0, nlIdx)
+        consumeFromBuffer(nlIdx + 1)
+
+        return when {
+            line.trim() == CODE_FENCE -> {
+                if (state.content.isNotEmpty()) {
+                    segments.add(Code(state.content, state.header.language, state.header.filePath))
                 }
+                segments.add(CodeEnd(""))
+                parserState = ParserState.Outside
+                true
+            }
 
-                State.CODE_HEADER_WAITING -> {
-                    val nlIdx = buffer.indexOf("\n")
-                    if (nlIdx < 0) break@loop
-                    val headerLine = buffer.substring(0, nlIdx).trim()
-                    buffer.delete(0, nlIdx + 1)
-                    headerBuilder.append(headerLine)
+            line.trimStart().startsWith(SEARCH_MARKER) -> {
+                segments.add(SearchWaiting("", state.header.language, state.header.filePath))
+                parserState = ParserState.InSearch(state.header, "")
+                true
+            }
 
-                    val headerText = headerBuilder.toString()
-                    val parts = headerText.split(":", limit = 2)
-
-                    val language = parts.getOrNull(0) ?: ""
-                    val fileName = parts.getOrNull(1)
-
-                    if (parts.size > 0) {
-                        currentCodeHeader = CodeHeader(language, fileName)
-                        output += currentCodeHeader!!
-                        state = State.IN_CODE
-                        codeBuilder.clear()
-                        headerBuilder.clear()
-                    } else {
-                        output += CodeHeaderWaiting(headerText)
-                    }
-                }
-
-                State.IN_CODE -> {
-                    val idx = buffer.indexOf("\n")
-                    if (idx < 0) break@loop
-                    val line = buffer.substring(0, idx)
-                    buffer.delete(0, idx + 1)
-                    when {
-                        line.trim() == "```" -> {
-                            if (codeBuilder.isNotEmpty()) {
-                                output += Code(
-                                    codeBuilder.toString(),
-                                    currentCodeHeader!!.language,
-                                    currentCodeHeader!!.filePath
-                                )
-                            }
-                            output += CodeEnd("")
-                            state = State.OUTSIDE
-                        }
-
-                        line.trimStart().startsWith("<<<<<<< SEARCH") -> {
-                            state = State.IN_SEARCH
-                            searchBuilder.clear()
-                            output += SearchWaiting(
-                                "",
-                                currentCodeHeader!!.language,
-                                currentCodeHeader!!.filePath
-                            )
-                        }
-
-                        else -> codeBuilder.appendLine(line)
-                    }
-                }
-
-                State.IN_SEARCH -> {
-                    val idx = buffer.indexOf("\n")
-                    if (idx < 0) break@loop
-                    val line = buffer.substring(0, idx)
-                    buffer.delete(0, idx + 1)
-                    if (line.trim() == "=======") {
-                        state = State.IN_REPLACE
-                        replaceBuilder.clear()
-                        output += ReplaceWaiting(
-                            searchBuilder.toString(),
-                            "",
-                            currentCodeHeader!!.language,
-                            currentCodeHeader!!.filePath
-                        )
-                    } else {
-                        searchBuilder.appendLine(line)
-                        output += SearchWaiting(
-                            searchBuilder.toString(),
-                            currentCodeHeader!!.language,
-                            currentCodeHeader!!.filePath
-                        )
-                    }
-                }
-
-                State.IN_REPLACE -> {
-                    val idx = buffer.indexOf("\n")
-                    if (idx < 0) break@loop
-                    val line = buffer.substring(0, idx)
-                    buffer.delete(0, idx + 1)
-                    if (line.trim().startsWith(">>>>>>> REPLACE")) {
-                        output += SearchReplace(
-                            search = searchBuilder.toString(),
-                            replace = replaceBuilder.toString(),
-                            language = currentCodeHeader!!.language,
-                            filePath = currentCodeHeader!!.filePath
-                        )
-                        state = State.IN_CODE
-                    } else {
-                        replaceBuilder.appendLine(line)
-                        output += ReplaceWaiting(
-                            searchBuilder.toString(),
-                            replaceBuilder.toString(),
-                            currentCodeHeader!!.language,
-                            currentCodeHeader!!.filePath
-                        )
-                    }
-                }
-
-                State.IN_THINKING -> {
-                    val thinkEndIdx = buffer.indexOf("</think>")
-                    if (thinkEndIdx < 0) {
-                        if (buffer.isNotEmpty()) {
-                            thinkingBuilder.append(buffer)
-                            output += Thinking(thinkingBuilder.toString())
-                            buffer.clear()
-                        }
-                        break@loop
-                    }
-
-                    thinkingBuilder.append(buffer.substring(0, thinkEndIdx))
-                    output += Thinking(thinkingBuilder.toString())
-                    buffer.delete(0, thinkEndIdx + "</think>".length)
-                    state = State.OUTSIDE
-                    thinkingBuilder.clear()
-                    continue@loop
-                }
+            else -> {
+                val newContent =
+                    if (state.content.isEmpty()) line else state.content + NEWLINE + line
+                parserState = ParserState.InCode(state.header, newContent)
+                false
             }
         }
+    }
 
-        when (state) {
-            State.OUTSIDE ->
-                if (buffer.isNotBlank())
-                    output += Text(buffer.toString())
+    private fun processInSearchState(
+        segments: MutableList<Segment>,
+        state: ParserState.InSearch
+    ): Boolean {
+        val nlIdx = buffer.indexOf(NEWLINE)
+        if (nlIdx < 0) return false
 
-            State.CODE_HEADER_WAITING ->
-                if (headerBuilder.isNotBlank())
-                    output += CodeHeaderWaiting(headerBuilder.toString())
+        val line = buffer.substring(0, nlIdx)
+        consumeFromBuffer(nlIdx + 1)
 
-            State.IN_CODE ->
-                if (codeBuilder.isNotBlank())
-                    output += Code(
-                        codeBuilder.toString(),
-                        currentCodeHeader!!.language,
-                        currentCodeHeader!!.filePath
-                    )
-
-            State.IN_SEARCH ->
-                if (searchBuilder.isNotBlank())
-                    output += SearchWaiting(
-                        searchBuilder.toString(),
-                        currentCodeHeader!!.language,
-                        currentCodeHeader!!.filePath
-                    )
-
-            State.IN_REPLACE ->
-                if (replaceBuilder.isNotBlank())
-                    output += ReplaceWaiting(
-                        searchBuilder.toString(),
-                        replaceBuilder.toString(),
-                        currentCodeHeader!!.language,
-                        currentCodeHeader!!.filePath
-                    )
-
-            State.IN_THINKING ->
-                if (thinkingBuilder.isNotBlank() || buffer.isNotBlank()) {
-                    thinkingBuilder.append(buffer)
-                    buffer.clear()
-                    output += Thinking(thinkingBuilder.toString())
-                }
+        return if (line.trim() == SEPARATOR_MARKER) {
+            segments.add(
+                ReplaceWaiting(
+                    state.searchContent,
+                    "",
+                    state.header.language,
+                    state.header.filePath
+                )
+            )
+            parserState = ParserState.InReplace(state.header, state.searchContent, "")
+            true
+        } else {
+            val newSearch =
+                if (state.searchContent.isEmpty()) line else state.searchContent + NEWLINE + line
+            segments.add(SearchWaiting(newSearch, state.header.language, state.header.filePath))
+            parserState = ParserState.InSearch(state.header, newSearch)
+            false
         }
+    }
 
-        parsedSegments.addAll(output)
-        return output
+    private fun processInReplaceState(
+        segments: MutableList<Segment>,
+        state: ParserState.InReplace
+    ): Boolean {
+        val nlIdx = buffer.indexOf(NEWLINE)
+        if (nlIdx < 0) return false
+
+        val line = buffer.substring(0, nlIdx)
+        consumeFromBuffer(nlIdx + 1)
+
+        return when {
+            line.trim().startsWith(REPLACE_MARKER) -> {
+                segments.add(
+                    SearchReplace(
+                        search = state.searchContent,
+                        replace = state.replaceContent,
+                        language = state.header.language,
+                        filePath = state.header.filePath
+                    )
+                )
+                parserState = ParserState.InCode(state.header)
+                true
+            }
+            line.trim() == CODE_FENCE -> {
+                // Invalid search/replace block - missing REPLACE marker
+                // Mark done
+                segments.add(CodeEnd(""))
+                parserState = ParserState.Outside
+                true
+            }
+            else -> {
+                val newReplace =
+                    if (state.replaceContent.isEmpty()) line else state.replaceContent + NEWLINE + line
+                segments.add(
+                    ReplaceWaiting(
+                        state.searchContent,
+                        newReplace,
+                        state.header.language,
+                        state.header.filePath
+                    )
+                )
+                parserState = ParserState.InReplace(state.header, state.searchContent, newReplace)
+                false
+            }
+        }
+    }
+
+    private fun processInThinkingState(
+        segments: MutableList<Segment>,
+        state: ParserState.InThinking
+    ): Boolean {
+        val thinkEndIdx = buffer.indexOf(THINK_END)
+
+        return if (thinkEndIdx >= 0) {
+            val thinkingContent = state.content + buffer.substring(0, thinkEndIdx)
+            segments.add(Thinking(thinkingContent))
+            consumeFromBuffer(thinkEndIdx + THINK_END.length)
+            parserState = ParserState.Outside
+            true
+        } else {
+            if (buffer.isNotEmpty()) {
+                val newContent = state.content + buffer.toString()
+                segments.add(Thinking(newContent))
+                buffer.clear()
+                parserState = ParserState.InThinking(newContent)
+            }
+            false
+        }
+    }
+
+    private fun getPendingSegments(): List<Segment> {
+        return when (val state = parserState) {
+            is ParserState.Outside -> {
+                if (buffer.isNotBlank()) listOf(Text(buffer.toString()))
+                else emptyList()
+            }
+
+            is ParserState.CodeHeaderWaiting -> {
+                if (state.content.isNotBlank()) listOf(CodeHeaderWaiting(state.content))
+                else emptyList()
+            }
+
+            is ParserState.InCode -> {
+                if (state.content.isNotBlank()) {
+                    listOf(Code(state.content, state.header.language, state.header.filePath))
+                } else emptyList()
+            }
+
+            is ParserState.InSearch -> {
+                if (state.searchContent.isNotBlank()) {
+                    listOf(
+                        SearchWaiting(
+                            state.searchContent,
+                            state.header.language,
+                            state.header.filePath
+                        )
+                    )
+                } else emptyList()
+            }
+
+            is ParserState.InReplace -> {
+                if (state.replaceContent.isNotBlank()) {
+                    listOf(
+                        ReplaceWaiting(
+                            state.searchContent,
+                            state.replaceContent,
+                            state.header.language,
+                            state.header.filePath
+                        )
+                    )
+                } else emptyList()
+            }
+
+            is ParserState.InThinking -> {
+                val fullContent = state.content + buffer.toString()
+                buffer.clear()
+                if (fullContent.isNotBlank()) listOf(Thinking(fullContent))
+                else emptyList()
+            }
+        }
+    }
+
+    private fun shouldProcessCodeFence(fenceIdx: Int, thinkStartIdx: Int): Boolean {
+        return fenceIdx != -1 && (thinkStartIdx == -1 || fenceIdx < thinkStartIdx)
+    }
+
+    private fun extractTextBeforeIndex(index: Int): Text? {
+        return if (index > 0) Text(buffer.substring(0, index)) else null
+    }
+
+    private fun consumeFromBuffer(length: Int) {
+        buffer.delete(0, length)
+    }
+
+    private fun parseCodeHeader(headerText: String): CodeHeader? {
+        val parts = headerText.split(HEADER_DELIMITER, limit = HEADER_PARTS_LIMIT)
+        return if (parts.isNotEmpty()) {
+            CodeHeader(
+                language = parts.getOrNull(0) ?: "",
+                filePath = parts.getOrNull(1)
+            )
+        } else null
+    }
+
+    private sealed class ParserState {
+        object Outside : ParserState()
+
+        data class CodeHeaderWaiting(
+            val content: String = ""
+        ) : ParserState()
+
+        data class InCode(
+            val header: CodeHeader,
+            val content: String = ""
+        ) : ParserState()
+
+        data class InSearch(
+            val header: CodeHeader,
+            val searchContent: String = ""
+        ) : ParserState()
+
+        data class InReplace(
+            val header: CodeHeader,
+            val searchContent: String,
+            val replaceContent: String = ""
+        ) : ParserState()
+
+        data class InThinking(
+            val content: String = ""
+        ) : ParserState()
     }
 }

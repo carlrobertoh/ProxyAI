@@ -39,4 +39,4 @@ data class SearchReplace(
     val replace: String,
     override val language: String,
     override val filePath: String?
-) : Segment(search, language, filePath)
+) : Segment(replace, language, filePath)

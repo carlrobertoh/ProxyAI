@@ -7,18 +7,15 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.readText
-import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.completions.AutoApplyParameters
 import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel.Companion.RESPONSE_EDITOR_STATE_KEY
-import ee.carlrobert.codegpt.toolwindow.chat.editor.RetryListener
+import ee.carlrobert.codegpt.toolwindow.chat.editor.AutoApplyListener
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffEditorManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.EditorFactory
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
-import ee.carlrobert.codegpt.toolwindow.chat.parser.SseMessageParser
 
 @Service(Service.Level.PROJECT)
 class EditorStateManager(private val project: Project) {
@@ -42,22 +39,13 @@ class EditorStateManager(private val project: Project) {
         return state
     }
 
-    fun handleRetryForFailedSearch(replaceContent: String) {
-        val editor = currentState?.editor ?: return
-        val virtualFile =
-            CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.get(editor)?.virtualFile ?: return
-
-        getCodeEditsAsync(replaceContent, virtualFile, editor)
-    }
-
     fun getCodeEditsAsync(
         content: String,
         virtualFile: VirtualFile,
         editor: EditorEx,
     ) {
         val params = AutoApplyParameters(content, virtualFile)
-        val messageParser = SseMessageParser()
-        val listener = RetryListener(project, messageParser, this) { newEditor ->
+        val listener = AutoApplyListener(project, this) { newEditor ->
             val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
                 ?: throw IllegalStateException("Expected parent to be ResponseEditorPanel")
             responseEditorPanel.replaceEditor(editor, newEditor)
