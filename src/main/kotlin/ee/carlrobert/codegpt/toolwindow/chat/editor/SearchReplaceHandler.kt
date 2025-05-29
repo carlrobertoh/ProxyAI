@@ -12,6 +12,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
+import ee.carlrobert.codegpt.ui.OverlayUtil
 
 class SearchReplaceHandler(
     private val stateManager: EditorStateManager,
