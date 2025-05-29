@@ -1,16 +1,13 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor
 
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel.Companion.RESPONSE_EDITOR_DIFF_VIEWER_VALUE_PAIR_KEY
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
-import ee.carlrobert.codegpt.toolwindow.chat.editor.state.FailedDiffEditorState
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
@@ -28,12 +25,6 @@ class SearchReplaceHandler(
 
         RESPONSE_EDITOR_DIFF_VIEWER_VALUE_PAIR_KEY.set(editor, Pair(item.search, item.replace))
         handleReplace(item, item.filePath, item.search, item.replace)
-
-        val retryAllowed =
-            service<ConfigurationSettings>().state.chatCompletionSettings.retryOnFailedDiffSearchEnabled
-        if (retryAllowed && stateManager.getCurrentState() is FailedDiffEditorState && partialResponse) {
-            stateManager.handleRetryForFailedSearch(item.replace)
-        }
     }
 
     fun handleReplace(item: ReplaceWaiting) {

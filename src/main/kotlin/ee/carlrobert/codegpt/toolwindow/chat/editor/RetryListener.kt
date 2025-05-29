@@ -11,15 +11,15 @@ import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 import ee.carlrobert.llm.completion.CompletionEventListener
 import okhttp3.sse.EventSource
 
-class RetryListener(
+class AutoApplyListener(
     private val project: Project,
-    private val messageParser: SseMessageParser,
     private val stateManager: EditorStateManager,
     private val onEditorReplaced: (EditorEx) -> Unit
 ) : CompletionEventListener<String> {
 
-    private val logger = logger<RetryListener>()
+    private val logger = logger<AutoApplyListener>()
     private var editorReplaced: Boolean = false
+    private val messageParser = SseMessageParser()
 
     override fun onOpen() {
         CompletionProgressNotifier.update(project, true)
