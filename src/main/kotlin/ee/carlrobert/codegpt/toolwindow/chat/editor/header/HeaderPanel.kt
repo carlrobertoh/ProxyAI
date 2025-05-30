@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 import com.intellij.diff.tools.fragmented.UnifiedDiffChange
 import com.intellij.icons.AllIcons
 import com.intellij.ide.actions.OpenFileAction
+import com.intellij.ide.projectView.ProjectView
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.diagnostic.thisLogger
@@ -18,6 +19,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffStatsComponent
 import ee.carlrobert.codegpt.util.file.FileUtil
+import org.jetbrains.kotlin.idea.projectView.KotlinSelectInProjectViewProvider
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.io.File
@@ -153,6 +155,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
                     setupFileLinkOrLanguageLabel(newFile)
 
                     OpenFileAction.openFile(newFile, config.project)
+                    ProjectView.getInstance(config.project).select(null, newFile, true)
                 }
             }
         }.apply { icon = AllIcons.General.InlineAdd }
