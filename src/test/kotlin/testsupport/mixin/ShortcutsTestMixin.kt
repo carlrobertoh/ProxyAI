@@ -7,7 +7,6 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.azure.AzureSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
@@ -35,15 +34,6 @@ interface ShortcutsTestMixin {
       model = chatModel
       isCodeCompletionsEnabled = true
     }
-  }
-
-  fun useAzureService() {
-    GeneralSettings.getCurrentState().selectedService = ServiceType.AZURE
-    setCredential(AzureOpenaiApiKey, "TEST_API_KEY")
-    val azureSettings = AzureSettings.getCurrentState()
-    azureSettings.resourceName = "TEST_RESOURCE_NAME"
-    azureSettings.apiVersion = "TEST_API_VERSION"
-    azureSettings.deploymentId = "TEST_DEPLOYMENT_ID"
   }
 
   fun useLlamaService(codeCompletionsEnabled: Boolean = false) {

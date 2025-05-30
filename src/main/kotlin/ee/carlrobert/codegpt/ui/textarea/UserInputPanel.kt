@@ -278,7 +278,6 @@ class UserInputPanel(
             ServiceType.CUSTOM_OPENAI,
             ServiceType.ANTHROPIC,
             ServiceType.GOOGLE,
-            ServiceType.AZURE,
             ServiceType.OLLAMA -> true
 
             ServiceType.CODEGPT -> {

@@ -56,52 +56,6 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         waitExpecting { "Hello!" == message.response }
     }
 
-    fun testAzureChatCompletionCall() {
-        useAzureService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
-        val conversationService = ConversationService.getInstance()
-        val prevMessage = Message("TEST_PREV_PROMPT")
-        prevMessage.response = "TEST_PREV_RESPONSE"
-        val conversation = conversationService.startConversation()
-        conversation.addMessage(prevMessage)
-        conversationService.saveConversation(conversation)
-        expectAzure(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo(
-                "/openai/deployments/TEST_DEPLOYMENT_ID/chat/completions"
-            )
-            assertThat(request.uri.query).isEqualTo("api-version=TEST_API_VERSION")
-            assertThat(request.headers["Api-key"]!![0]).isEqualTo("TEST_API_KEY")
-            assertThat(request.headers["X-llm-application-tag"]!![0]).isEqualTo("codegpt")
-            assertThat(request.body)
-                .extracting("messages")
-                .isEqualTo(
-                    listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
-                        mapOf("role" to "user", "content" to "TEST_PREV_PROMPT"),
-                        mapOf("role" to "assistant", "content" to "TEST_PREV_RESPONSE"),
-                        mapOf("role" to "user", "content" to "TEST_PROMPT")
-                    )
-                )
-            listOf(
-                jsonMapResponse(
-                    "choices",
-                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
-                ),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
-            )
-        })
-        val message = Message("TEST_PROMPT")
-        val requestHandler =
-            ToolwindowChatCompletionRequestHandler(project, getRequestEventListener(message))
-
-        requestHandler.call(ChatCompletionParameters.builder(conversation, message).build())
-
-        waitExpecting { "Hello!" == message.response }
-    }
-
     fun testLlamaChatCompletionCall() {
         useLlamaService()
         service<ConfigurationSettings>().state.maxTokens = 99

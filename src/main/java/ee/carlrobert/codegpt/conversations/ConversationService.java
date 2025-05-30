@@ -7,7 +7,6 @@ import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings;
-import ee.carlrobert.codegpt.settings.service.azure.AzureSettings;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings;
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings;
@@ -197,7 +196,6 @@ public final class ConversationService {
       case OPENAI -> OpenAISettings.getCurrentState().getModel();
       case CUSTOM_OPENAI -> "CustomService";
       case ANTHROPIC -> AnthropicSettings.getCurrentState().getModel();
-      case AZURE -> AzureSettings.getCurrentState().getDeploymentId();
       case LLAMA_CPP -> {
         var llamaSettings = LlamaSettings.getCurrentState();
         yield llamaSettings.isUseCustomModel()

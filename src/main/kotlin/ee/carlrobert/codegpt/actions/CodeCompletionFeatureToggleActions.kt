@@ -29,7 +29,6 @@ abstract class CodeCompletionFeatureToggleActions(
         CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings::codeCompletionsEnabled::set
 
         ANTHROPIC,
-        AZURE,
         GOOGLE,
         null -> { _: Boolean -> Unit } // no-op for these services
     }(enableFeatureAction)
@@ -48,7 +47,6 @@ abstract class CodeCompletionFeatureToggleActions(
             OLLAMA -> true
 
             ANTHROPIC,
-            AZURE,
             GOOGLE,
             null -> false
         }
