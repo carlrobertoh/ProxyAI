@@ -54,13 +54,12 @@ class AutoApplyAction(
         }
 
         val selectedEditor = EditorUtil.getSelectedEditor(project)
-        anActionLink.text = if (selectedEditor?.virtualFile == null) {
-            "Apply"
-        } else {
-            "Apply to ${selectedEditor.virtualFile.name}"
-        }
-        anActionLink.isEnabled = selectedEditor != null
-        anActionLink.isVisible = true
+        val selectedEditorFile = selectedEditor?.virtualFile
+        val canApply = selectedEditorFile != null && selectedEditorFile.isWritable
+
+        anActionLink.text = if (canApply) "Apply to ${selectedEditorFile.name}" else "Apply"
+        anActionLink.isEnabled = canApply
+        anActionLink.isVisible = canApply
     }
 
     override fun createCustomComponent(presentation: Presentation, place: String): JComponent {

@@ -17,6 +17,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffStatsComponent
+import ee.carlrobert.codegpt.util.file.FileUtil
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.io.File
@@ -43,14 +44,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
         font = JBUI.Fonts.smallFont()
     }
 
-    protected var virtualFile: VirtualFile? = config.filePath?.let {
-        try {
-            LocalFileSystem.getInstance().refreshAndFindFileByIoFile(File(it))
-        } catch (t: Throwable) {
-            logger.error(t)
-            null
-        }
-    }
+    protected var virtualFile: VirtualFile? = FileUtil.resolveVirtualFile(config.filePath)
 
     private val rightPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.X_AXIS)
@@ -70,7 +64,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
 
     protected fun setupUI() {
         setupPanelAppearance()
-        setupFilePathOrLanguageLabel(virtualFile)
+        setupFileLinkOrLanguageLabel(virtualFile)
         rightPanel.removeAll()
         initializeRightPanel(rightPanel)
 
@@ -107,26 +101,25 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
         minimumSize = Dimension(preferredSize.width, 32)
     }
 
-    protected fun setupFilePathOrLanguageLabel(virtualFile: VirtualFile?) {
+    private fun setupFileLinkOrLanguageLabel(virtualFile: VirtualFile?) {
         val filePath = config.filePath
-        if (filePath != null) {
-            if (virtualFile == null) {
-                val newFileLink = createNewFileLink(filePath, config.editorEx)
-                addToLeft(newFileLink)
-            } else {
-                addToLeft(JPanel().apply {
-                    layout = BoxLayout(this, BoxLayout.X_AXIS)
-                    isOpaque = false
-                    add(ActionLink(virtualFile.name) {
-                        OpenFileAction.openFile(virtualFile, config.project)
-                    }.apply {
-                        setExternalLinkIcon()
-                    })
-                    add(statsComponent)
-                })
-            }
-        } else {
-            addToLeft(createLanguageLabel())
+        when {
+            filePath == null -> addToLeft(createLanguageLabel())
+            virtualFile == null -> addToLeft(createNewFileLink(filePath, config.editorEx))
+            else -> addToLeft(createFileLinkPanel(virtualFile))
+        }
+    }
+
+    private fun createFileLinkPanel(virtualFile: VirtualFile): JPanel {
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            isOpaque = false
+            add(ActionLink(virtualFile.name) {
+                OpenFileAction.openFile(virtualFile, config.project)
+            }.apply {
+                setExternalLinkIcon()
+            })
+            add(statsComponent)
         }
     }
 
@@ -157,7 +150,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
                     }
 
                     remove(actionLink)
-                    setupFilePathOrLanguageLabel(newFile)
+                    setupFileLinkOrLanguageLabel(newFile)
 
                     OpenFileAction.openFile(newFile, config.project)
                 }
