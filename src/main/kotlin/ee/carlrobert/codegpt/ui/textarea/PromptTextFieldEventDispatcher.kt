@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.ui.textarea
 
-import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.util.TextRange
@@ -16,7 +15,6 @@ import java.util.*
 class PromptTextFieldEventDispatcher(
     private val dispatcherId: UUID,
     private val onBackSpace: () -> Unit,
-    private val lookup: LookupImpl?,
     private val onSubmit: (KeyEvent) -> Unit
 ) : IdeEventQueue.EventDispatcher {
 

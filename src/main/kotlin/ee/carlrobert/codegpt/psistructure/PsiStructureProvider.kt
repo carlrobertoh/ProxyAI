@@ -5,13 +5,9 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.psi.PsiFile
 import com.intellij.util.io.await
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asExecutor
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
+import ee.carlrobert.codegpt.util.coroutines.runCatchingCancellable
+import kotlinx.coroutines.*
 import org.jetbrains.kotlin.psi.KtFile
-import kotlin.coroutines.cancellation.CancellationException
 
 class PsiStructureProvider {
 
@@ -26,7 +22,7 @@ class PsiStructureProvider {
 
         while (result == null && attempts < maxAttempts) {
             attempts++
-            try {
+            runCatchingCancellable {
                 val project = psiFiles
                     .map { it.project }
                     .firstOrNull { !it.isDisposed } ?: error("Project not available")
@@ -60,9 +56,7 @@ class PsiStructureProvider {
                     .submit(Dispatchers.Default.asExecutor())
 
                 result = future.await()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
+            }.onFailure {
                 delay(DELAY_RESTART_READ_ACTION)
             }
         }

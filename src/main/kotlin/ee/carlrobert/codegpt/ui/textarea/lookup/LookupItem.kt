@@ -2,7 +2,7 @@ package ee.carlrobert.codegpt.ui.textarea.lookup
 
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementPresentation
-import com.intellij.codeInsight.lookup.impl.LookupImpl
+
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
@@ -27,7 +27,7 @@ interface LookupGroupItem : LookupItem {
 }
 
 interface DynamicLookupGroupItem : LookupGroupItem {
-    suspend fun updateLookupList(lookup: LookupImpl, searchText: String)
+    suspend fun updateLookupItems(searchText: String): List<LookupItem>
 }
 
 interface LookupActionItem : LookupItem {
