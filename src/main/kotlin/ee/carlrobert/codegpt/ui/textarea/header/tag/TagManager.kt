@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.ui.textarea.header.tag
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
-import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import java.util.concurrent.CopyOnWriteArraySet
@@ -35,21 +34,6 @@ class TagManager(parentDisposable: Disposable) {
     }
 
     fun getTags(): Set<TagDetails> = synchronized(this) { tags.toSet() }
-
-    fun containsTag(file: VirtualFile): Boolean = tags.any {
-        // TODO: refactor
-        if (it is SelectionTagDetails) {
-            it.virtualFile == file
-        } else if (it is FileTagDetails) {
-            it.virtualFile == file
-        } else if (it is EditorSelectionTagDetails) {
-            it.virtualFile == file
-        } else if (it is EditorTagDetails) {
-            it.virtualFile == file
-        } else {
-            false
-        }
-    }
 
     fun addTag(tagDetails: TagDetails) {
         val wasAdded = synchronized(this) {
