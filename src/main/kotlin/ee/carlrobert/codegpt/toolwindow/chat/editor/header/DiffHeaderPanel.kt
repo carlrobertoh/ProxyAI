@@ -70,7 +70,7 @@ class DiffHeaderPanel(
         runInEdt {
             val container = config.editorEx.component.parent
             if (container is ResponseEditorPanel) {
-                container.removeEditorAndAuxiliaryPanels()
+                container.removeAll()
                 container.add(diffAcceptedPanel, BorderLayout.CENTER)
                 container.revalidate()
                 container.repaint()

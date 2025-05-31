@@ -311,7 +311,7 @@ public class ChatMessageResponseBody extends JPanel {
         prepareProcessingCode(searchReplace);
       }
       if (currentlyProcessedEditorPanel != null) {
-        currentlyProcessedEditorPanel.handleSearchReplace(searchReplace, partialResponse);
+        currentlyProcessedEditorPanel.handleSearchReplace(searchReplace);
         handleHeaderOnCompletion(currentlyProcessedEditorPanel);
         return;
       }

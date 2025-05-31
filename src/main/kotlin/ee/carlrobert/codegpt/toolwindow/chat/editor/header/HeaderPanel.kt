@@ -19,10 +19,11 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffStatsComponent
 import ee.carlrobert.codegpt.util.file.FileUtil
-import org.jetbrains.kotlin.idea.projectView.KotlinSelectInProjectViewProvider
 import java.awt.BorderLayout
 import java.awt.Dimension
+import java.awt.FlowLayout
 import java.io.File
+import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -33,6 +34,7 @@ data class HeaderConfig(
     val filePath: String?,
     val language: String,
     val readOnly: Boolean,
+    val error: String? = null,
     val loading: Boolean = false
 )
 
@@ -45,14 +47,17 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
     private val statsComponent = SimpleColoredComponent().apply {
         font = JBUI.Fonts.smallFont()
     }
-
-    protected var virtualFile: VirtualFile? = FileUtil.resolveVirtualFile(config.filePath)
-
+    private val errorLabel = JBLabel(AllIcons.General.Error).apply {
+        isVisible = config.error != null
+        border = JBUI.Borders.emptyRight(4)
+    }
     private val rightPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.X_AXIS)
         alignmentY = 0.5f
         isOpaque = false
     }
+
+    protected var virtualFile: VirtualFile? = FileUtil.resolveVirtualFile(config.filePath)
 
     protected abstract fun initializeRightPanel(rightPanel: JPanel)
 
@@ -66,7 +71,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
 
     protected fun setupUI() {
         setupPanelAppearance()
-        setupFileLinkOrLanguageLabel(virtualFile)
+        addToLeft(createLeftPanel(virtualFile))
         rightPanel.removeAll()
         initializeRightPanel(rightPanel)
 
@@ -103,13 +108,26 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
         minimumSize = Dimension(preferredSize.width, 32)
     }
 
-    private fun setupFileLinkOrLanguageLabel(virtualFile: VirtualFile?) {
+    private fun createLeftPanel(virtualFile: VirtualFile?): JComponent {
         val filePath = config.filePath
-        when {
-            filePath == null -> addToLeft(createLanguageLabel())
-            virtualFile == null -> addToLeft(createNewFileLink(filePath, config.editorEx))
-            else -> addToLeft(createFileLinkPanel(virtualFile))
+        val linkOrLabel = when {
+            filePath == null -> createLanguageLabel()
+            virtualFile == null -> createNewFileLink(filePath, config.editorEx)
+            else -> createFileLinkPanel(virtualFile)
         }
+
+        if (config.error != null) {
+            errorLabel.isVisible = true
+            errorLabel.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+            ErrorPopoverHandler(config.project, errorLabel, config.error).install()
+
+            return JPanel(FlowLayout(FlowLayout.LEADING, 0, 0)).apply {
+                isOpaque = false
+                add(errorLabel)
+                add(linkOrLabel)
+            }
+        }
+        return linkOrLabel
     }
 
     private fun createFileLinkPanel(virtualFile: VirtualFile): JPanel {
@@ -152,7 +170,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
                     }
 
                     remove(actionLink)
-                    setupFileLinkOrLanguageLabel(newFile)
+                    addToLeft(createLeftPanel(newFile))
 
                     OpenFileAction.openFile(newFile, config.project)
                     ProjectView.getInstance(config.project).select(null, newFile, true)
@@ -165,7 +183,6 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
     private fun createLanguageLabel(): JBLabel {
         return JBLabel(config.language).apply {
             foreground = JBColor.GRAY
-            border = JBUI.Borders.emptyLeft(4)
         }
     }
 }

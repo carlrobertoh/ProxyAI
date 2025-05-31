@@ -69,7 +69,7 @@ public final class CompletionRequestService {
     return getChatCompletion(request);
   }
 
-  public EventSource getCodeEditsAsync(
+  public EventSource autoApplyAsync(
       AutoApplyParameters params,
       CompletionEventListener<String> eventListener) {
     var request = CompletionRequestFactory

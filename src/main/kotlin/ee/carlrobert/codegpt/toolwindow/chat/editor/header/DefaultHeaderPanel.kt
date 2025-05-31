@@ -3,8 +3,8 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
@@ -15,8 +15,8 @@ import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.*
-import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.StringUtil
 import javax.swing.JPanel
@@ -43,12 +43,17 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         }
     }
 
-    fun setLoading() {
-        setRightPanelComponent(loadingLabel)
+    fun setLoading(label: String = "Loading...") {
+        runInEdt {
+            loadingLabel.text = label
+            setRightPanelComponent(loadingLabel)
+        }
     }
 
     fun handleDone() {
-        setRightPanelComponent(createHeaderActions().component)
+        runInEdt {
+            setRightPanelComponent(createHeaderActions().component)
+        }
     }
 
     private fun createHeaderActions(): ActionToolbar {
@@ -82,9 +87,10 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
             return
         }
 
-        setLoading()
-        project.service<EditorStateManager>()
-            .getCodeEditsAsync(editor.document.text, file, editor)
+        val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
+            ?: throw IllegalStateException("Could not find corresponding ResponseEditorPanel")
+        responseEditorPanel.applyCodeAsync(editor.document.text, file, editor)
+        setLoading("Editing...")
     }
 
     private fun createToolbar(actionGroup: ActionGroup): ActionToolbar {
@@ -93,7 +99,6 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         toolbar.layoutStrategy = ToolbarLayoutStrategy.NOWRAP_STRATEGY
         toolbar.targetComponent = this
         toolbar.component.border = JBUI.Borders.empty()
-        toolbar.updateActionsAsync()
         return toolbar
     }
 

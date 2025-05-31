@@ -14,7 +14,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffManagerUtil.replaceContent
-import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 
 class DiffEditorManager(
     private val project: Project,
@@ -29,13 +28,19 @@ class DiffEditorManager(
         runInEdt {
             document.replaceContent(
                 project,
-                currentText.replaceFirst(searchContent.trim(), replaceContent.trim())
+                currentText.replaceLast(searchContent.trim(), replaceContent.trim())
             )
 
             diffViewer.rediff(true)
             scrollToLastChange(diffViewer)
         }
         return true
+    }
+
+    fun String.replaceLast(search: String, replacement: String): String {
+        val index = lastIndexOf(search)
+        return if (index < 0) this else
+            substring(0, index) + replacement + substring(index + search.length)
     }
 
     fun applyAllChanges(): List<UnifiedDiffChange> {
@@ -56,7 +61,9 @@ class DiffEditorManager(
                 DiffBundle.message("message.replace.change.command")
             ) {
                 diffViewer.replaceChange(change, Side.RIGHT)
-                diffViewer.scheduleRediff()
+                runInEdt {
+                    diffViewer.scheduleRediff()
+                }
             }
             diffViewer.rediff(true)
 

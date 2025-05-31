@@ -6,7 +6,6 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DefaultHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.HeaderConfig
-import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
 import ee.carlrobert.codegpt.util.file.FileUtil
 import javax.swing.JComponent
@@ -27,18 +26,14 @@ class RegularEditorState(
 
     override fun createHeaderComponent(readOnly: Boolean): JComponent? {
         val languageMapping = FileUtil.findLanguageExtensionMapping(segment.language)
-        return if (segment is Code) {
-            DefaultHeaderPanel(
-                HeaderConfig(
-                    project,
-                    editor,
-                    segment.filePath,
-                    languageMapping.key,
-                    readOnly
-                ),
-            )
-        } else {
-            null
-        }
+        return DefaultHeaderPanel(
+            HeaderConfig(
+                project,
+                editor,
+                segment.filePath,
+                languageMapping.key,
+                readOnly
+            ),
+        )
     }
 }
