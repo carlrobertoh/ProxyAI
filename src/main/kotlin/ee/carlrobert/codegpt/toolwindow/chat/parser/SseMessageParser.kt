@@ -23,13 +23,19 @@ class SseMessageParser : MessageParser {
     }
 
     override fun parse(input: String): List<Segment> {
-        buffer.append(input)
         val segments = mutableListOf<Segment>()
+        var position = 0
 
-        while (processNextSegment(segments)) {
-            // Continue processing until no more complete segments can be extracted
+        while (position < input.length) {
+            val endPosition = minOf(position + 16, input.length)
+            val chunk = input.substring(position, endPosition)
+            buffer.append(chunk)
+
+            while (processNextSegment(segments)) {
+            }
+
+            position = endPosition
         }
-
         segments.addAll(getPendingSegments())
 
         return segments
@@ -181,6 +187,7 @@ class SseMessageParser : MessageParser {
                 parserState = ParserState.InCode(state.header)
                 true
             }
+
             line.trim() == CODE_FENCE -> {
                 // Invalid search/replace block - missing REPLACE marker
                 // Mark done
@@ -188,6 +195,7 @@ class SseMessageParser : MessageParser {
                 parserState = ParserState.Outside
                 true
             }
+
             else -> {
                 val newReplace =
                     if (state.replaceContent.isEmpty()) line else state.replaceContent + NEWLINE + line
@@ -241,9 +249,20 @@ class SseMessageParser : MessageParser {
             }
 
             is ParserState.InCode -> {
-                if (state.content.isNotBlank()) {
-                    listOf(Code(state.content, state.header.language, state.header.filePath))
-                } else emptyList()
+                val segments = mutableListOf<Segment>()
+
+                if (buffer.toString().trim() == CODE_FENCE) {
+                    if (state.content.isNotBlank()) {
+                        segments.add(
+                            Code(state.content, state.header.language, state.header.filePath)
+                        )
+                    }
+                    segments.add(CodeEnd(""))
+                } else if (state.content.isNotBlank()) {
+                    segments.add(Code(state.content, state.header.language, state.header.filePath))
+                }
+
+                segments
             }
 
             is ParserState.InSearch -> {
