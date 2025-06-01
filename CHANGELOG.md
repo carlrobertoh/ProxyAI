@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ability to edit files while streaming
+- Auto Apply functionality now available for every provider and model
+- Claude Sonnet 4 and Gemini Flash 2.5 models
+
 ## [3.3.0-233] - 2025-05-13
 
 ### Added
