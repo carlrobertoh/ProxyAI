@@ -33,13 +33,6 @@ class AutoApplyAction(
     }
 
     override fun update(e: AnActionEvent) {
-        if (virtualFile == null && filePath != null) {
-            anActionLink.isEnabled = false
-            anActionLink.isVisible = false
-            anActionLink.toolTipText = "No file created"
-            return
-        }
-
         if (virtualFile != null) {
             anActionLink.text = "Apply"
             anActionLink.isEnabled = true
