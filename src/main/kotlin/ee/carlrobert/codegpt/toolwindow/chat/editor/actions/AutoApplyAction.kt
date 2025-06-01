@@ -20,7 +20,7 @@ class AutoApplyAction(
     private val toolwindowEditor: EditorEx,
     private val filePath: String?,
     private val virtualFile: VirtualFile?,
-    private val onApply: () -> Unit,
+    private val onApply: (AnActionLink) -> Unit,
 ) : CustomComponentAction, AnAction() {
 
     private val anActionLink: AnActionLink = AnActionLink("Apply", this).apply {
@@ -29,7 +29,7 @@ class AutoApplyAction(
     }
 
     override fun actionPerformed(e: AnActionEvent) {
-        onApply()
+        onApply(anActionLink)
     }
 
     override fun update(e: AnActionEvent) {
