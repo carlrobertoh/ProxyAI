@@ -44,6 +44,39 @@ abstract class DiffEditorState(
 
     companion object {
         private val DIFF_REQUEST_KEY = Key.create<String>("codegpt.autoApply.diffRequest")
+
+        fun createContextActionButton(
+            text: String,
+            icon: Icon,
+            textColor: JBColor? = null,
+            onAction: (() -> Unit)
+        ): AnAction {
+            return object : AnAction(text, null, icon), CustomComponentAction {
+                override fun actionPerformed(e: AnActionEvent) {
+                    onAction()
+                }
+
+                override fun createCustomComponent(
+                    presentation: Presentation,
+                    place: String
+                ): JComponent {
+                    val button = JButton(presentation.text).apply {
+                        font = JBUI.Fonts.smallFont()
+                        isFocusable = false
+                        isOpaque = true
+                        if (textColor != null) {
+                            foreground = textColor
+                        }
+                        preferredSize = JBUI.size(preferredSize.width, 26)
+                        maximumSize = JBUI.size(Int.MAX_VALUE, 26)
+                        addActionListener {
+                            onAction()
+                        }
+                    }
+                    return button
+                }
+            }
+        }
     }
 
     private lateinit var diffRequestId: UUID
@@ -131,37 +164,6 @@ abstract class DiffEditorState(
         }
         if (diffFile != null) {
             fileEditorManager.closeFile(diffFile)
-        }
-    }
-
-    private fun createContextActionButton(
-        text: String,
-        icon: Icon,
-        textColor: JBColor,
-        onAction: (() -> Unit)
-    ): AnAction {
-        return object : AnAction(text, null, icon), CustomComponentAction {
-            override fun actionPerformed(e: AnActionEvent) {
-                onAction()
-            }
-
-            override fun createCustomComponent(
-                presentation: Presentation,
-                place: String
-            ): JComponent {
-                val button = JButton(presentation.text).apply {
-                    font = JBUI.Fonts.smallFont()
-                    isFocusable = false
-                    isOpaque = true
-                    foreground = textColor
-                    preferredSize = JBUI.size(preferredSize.width, 26)
-                    maximumSize = JBUI.size(Int.MAX_VALUE, 26)
-                    addActionListener {
-                        onAction()
-                    }
-                }
-                return button
-            }
         }
     }
 }
