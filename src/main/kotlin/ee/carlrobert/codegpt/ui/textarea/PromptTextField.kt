@@ -25,7 +25,9 @@ import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.scale.JBUIScale
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
@@ -39,10 +41,7 @@ import ee.carlrobert.codegpt.ui.textarea.popup.LookupListCellRenderer
 import ee.carlrobert.codegpt.ui.textarea.popup.LookupListModel
 import ee.carlrobert.codegpt.util.coroutines.runCatchingCancellable
 import kotlinx.coroutines.*
-import java.awt.BorderLayout
-import java.awt.Dimension
-import java.awt.GraphicsEnvironment
-import java.awt.Point
+import java.awt.*
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseAdapter
@@ -128,6 +127,9 @@ class PromptTextField(
             .setResizable(true)
             .setCancelOnClickOutside(true)
             .setCancelOnWindowDeactivation(true)
+            .setShowBorder(true)
+            .setShowShadow(true)
+            .setBorderColor(JBColor.border())
             .createPopup()
 
         val relativePoint = calculateOptimalPopupPosition(editor, popupPanel)
@@ -169,6 +171,17 @@ class PromptTextField(
                 cellRenderer = LookupListCellRenderer()
                 selectionMode = ListSelectionModel.SINGLE_SELECTION
                 if (model.size > 0) selectedIndex = 0
+
+                background = UIUtil.getListBackground()
+                foreground = UIUtil.getListForeground()
+                selectionBackground = UIUtil.getListSelectionBackground(true)
+                selectionForeground = UIUtil.getListSelectionForeground(true)
+
+                fixedCellHeight = JBUIScale.scale(20)
+                border = JBUI.Borders.empty()
+
+                isFocusTraversalPolicyProvider = false
+                setFocusTraversalKeysEnabled(false)
 
                 addKeyListener(object : KeyAdapter() {
                     override fun keyPressed(e: KeyEvent) {
@@ -227,8 +240,22 @@ class PromptTextField(
         }
 
         private fun setupLayout() {
-            border = JBUI.Borders.empty(5)
-            add(JBScrollPane(itemsList), BorderLayout.CENTER)
+            background = UIUtil.getListBackground()
+            border = JBUI.Borders.empty(4)
+
+            isFocusTraversalPolicyProvider = false
+            setFocusTraversalKeysEnabled(false)
+
+            val scrollPane = JBScrollPane(itemsList).apply {
+                border = JBUI.Borders.empty()
+                viewport.background = UIUtil.getListBackground()
+                verticalScrollBarPolicy = JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                isFocusTraversalPolicyProvider = false
+                setFocusTraversalKeysEnabled(false)
+            }
+
+            add(scrollPane, BorderLayout.CENTER)
 
             addKeyListener(object : KeyAdapter() {
                 override fun keyPressed(e: KeyEvent) {
@@ -255,6 +282,18 @@ class PromptTextField(
                     }
                 }
             })
+        }
+
+        override fun paintComponent(g: Graphics) {
+            val g2 = g.create() as Graphics2D
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+
+                g2.color = UIUtil.getListBackground()
+                g2.fillRoundRect(0, 0, width, height, JBUIScale.scale(8), JBUIScale.scale(8))
+            } finally {
+                g2.dispose()
+            }
         }
 
         private fun redirectKeyToEditor(e: KeyEvent) {
@@ -284,19 +323,35 @@ class PromptTextField(
         }
 
         override fun getPreferredSize(): Dimension {
-            val maxWidth = 450
-            val minWidth = 300
-            val minHeight = 150
-            val maxHeight = 400
+            val maxWidth = JBUIScale.scale(450)
+            val minWidth = JBUIScale.scale(300)
+            val minHeight = JBUIScale.scale(120)
+            val maxHeight = JBUIScale.scale(300)
 
-            val listSize = itemsList.preferredSize
-            val contentWidth = listSize.width + 10
-            val contentHeight = listSize.height + 10
+            val itemCount = itemsList.model.size
+            val itemHeight = JBUIScale.scale(20)
+            val contentHeight = (itemCount * itemHeight) + 8
+            val contentWidth = calculateOptimalWidth()
 
             val width = minOf(maxOf(contentWidth, minWidth), maxWidth)
             val height = minOf(maxOf(contentHeight, minHeight), maxHeight)
 
             return Dimension(width, height)
+        }
+
+        private fun calculateOptimalWidth(): Int {
+            var maxWidth = JBUIScale.scale(200)
+            val fontMetrics = itemsList.getFontMetrics(itemsList.font)
+
+            for (i in 0 until itemsList.model.size) {
+                val item = itemsList.model.getElementAt(i)
+                val textWidth = fontMetrics.stringWidth(item.displayName)
+                val iconWidth = item.icon?.iconWidth ?: 0
+                val totalWidth = textWidth + iconWidth + JBUIScale.scale(32)
+                maxWidth = maxOf(maxWidth, totalWidth)
+            }
+
+            return maxWidth
         }
 
         fun updateSearchFromEditor() {
