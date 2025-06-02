@@ -30,7 +30,7 @@ class DiffAcceptedPanel(
     before: String,
     after: String,
     changes: List<UnifiedDiffChange>,
-) : InlineBanner() {
+) : InlineBanner("", EditorNotificationPanel.Status.Success) {
 
     init {
         isOpaque = false
@@ -44,7 +44,6 @@ class DiffAcceptedPanel(
             .addToRight(createRightPanel(project, before, after, virtualFile))
 
         add(contentPanel)
-        status = EditorNotificationPanel.Status.Success
         showCloseButton(false)
     }
 

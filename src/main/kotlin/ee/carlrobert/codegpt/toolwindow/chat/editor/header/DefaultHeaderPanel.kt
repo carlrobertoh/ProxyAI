@@ -2,7 +2,6 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
-import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.ex.EditorEx
@@ -112,7 +111,6 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
     private fun createToolbar(actionGroup: ActionGroup): ActionToolbar {
         val toolbar = ActionManager.getInstance()
             .createActionToolbar("NAVIGATION_BAR_TOOLBAR", actionGroup, true)
-        toolbar.layoutStrategy = ToolbarLayoutStrategy.NOWRAP_STRATEGY
         toolbar.targetComponent = this
         toolbar.component.border = JBUI.Borders.empty()
         return toolbar
