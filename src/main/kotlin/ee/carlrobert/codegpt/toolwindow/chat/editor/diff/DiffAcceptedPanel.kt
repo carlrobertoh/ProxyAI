@@ -9,6 +9,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.writeText
@@ -82,7 +83,7 @@ class DiffAcceptedPanel(
                 val revertAllButton =
                     DiffEditorState.createContextActionButton("Revert All", AllIcons.Actions.Redo) {
                         runWriteAction {
-                            virtualFile.writeText(before)
+                            virtualFile.writeText(StringUtil.convertLineSeparators(before))
                         }
                     }
 

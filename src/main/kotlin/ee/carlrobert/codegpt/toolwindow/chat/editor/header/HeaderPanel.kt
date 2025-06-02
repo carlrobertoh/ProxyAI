@@ -9,6 +9,7 @@ import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.writeText
@@ -171,7 +172,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
             LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)?.let { newFile ->
                 runInEdt {
                     runUndoTransparentWriteAction {
-                        newFile.writeText(content)
+                        newFile.writeText(StringUtil.convertLineSeparators(content))
                     }
 
                     remove(actionLink)

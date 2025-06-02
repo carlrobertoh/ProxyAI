@@ -85,7 +85,11 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
         if (coefficient > directApplyThreshold) {
             runUndoTransparentWriteAction {
-                file.writeText(editor.document.text)
+                file.writeText(
+                    com.intellij.openapi.util.text.StringUtil.convertLineSeparators(
+                        editor.document.text
+                    )
+                )
             }
             val balloon = JBPopupFactory.getInstance()
                 .createHtmlTextBalloonBuilder(

@@ -5,11 +5,13 @@ import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.util.DiffUtil
 import com.intellij.diff.util.Side
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.diff.DiffBundle
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
 import com.intellij.util.concurrency.annotations.RequiresEdt
@@ -21,8 +23,8 @@ class DiffEditorManager(
     private val virtualFile: VirtualFile?
 ) {
 
-    fun updateDiffContent(searchContent: String, replaceContent: String): Boolean {
-        val currentText = virtualFile?.readText() ?: return false
+    fun updateDiffContent(searchContent: String, replaceContent: String) {
+        val currentText = virtualFile?.readText() ?: return
         val document = diffViewer.getDocument(Side.RIGHT)
 
         runInEdt {
@@ -31,10 +33,9 @@ class DiffEditorManager(
                 currentText.replaceLast(searchContent.trim(), replaceContent.trim())
             )
 
-            diffViewer.rediff(true)
+            diffViewer.rediff()
             scrollToLastChange(diffViewer)
         }
-        return true
     }
 
     fun String.replaceLast(search: String, replacement: String): String {
@@ -88,7 +89,7 @@ object DiffManagerUtil {
     fun Document.replaceContent(project: Project, replaceContent: String) {
         ensureDocumentWritable(project, this)
         DiffUtil.executeWriteCommand(this, project, "Updating document") {
-            setText(replaceContent)
+            setText(StringUtil.convertLineSeparators(replaceContent))
         }
     }
 

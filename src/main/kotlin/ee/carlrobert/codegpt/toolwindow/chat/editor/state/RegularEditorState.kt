@@ -4,6 +4,7 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DefaultHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.HeaderConfig
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
@@ -19,7 +20,7 @@ class RegularEditorState(
     override fun updateContent(segment: Segment) {
         runInEdt {
             runWriteAction {
-                editor.document.setText(segment.content)
+                editor.document.setText(StringUtil.convertLineSeparators(segment.content))
             }
         }
     }
