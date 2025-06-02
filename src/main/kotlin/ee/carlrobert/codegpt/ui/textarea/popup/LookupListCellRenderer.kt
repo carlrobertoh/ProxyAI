@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.ui.textarea.popup
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.JBColor
 import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
@@ -30,20 +31,21 @@ class LookupListCellRenderer : ListCellRenderer<LookupItem> {
         }
 
         val component = SimpleColoredComponent().apply {
-            icon = value.icon
+            icon = if (value.enabled) value.icon else value.icon?.let { IconLoader.getDisabledIcon(it) }
             iconTextGap = ICON_TEXT_GAP
             isOpaque = false
             ipad = JBUI.insets(TOP_BOTTOM_MARGIN, LEFT_MARGIN, TOP_BOTTOM_MARGIN, 0)
 
-            when (value) {
-                is LoadingLookupItem -> {
+            when {
+                !value.enabled -> {
+                    append(value.displayName, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                }
+                value is LoadingLookupItem -> {
                     append(value.displayName, SimpleTextAttributes.GRAYED_ITALIC_ATTRIBUTES)
                 }
-
-                is LookupGroupItem -> {
+                value is LookupGroupItem -> {
                     append(value.displayName, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
                 }
-
                 else -> {
                     append(value.displayName, SimpleTextAttributes.REGULAR_ATTRIBUTES)
                 }
@@ -54,16 +56,16 @@ class LookupListCellRenderer : ListCellRenderer<LookupItem> {
 
         if (value is LookupGroupItem) {
             val arrowLabel = JLabel().apply {
-                icon = AllIcons.Icons.Ide.NextStep
+                icon = if (value.enabled) AllIcons.Icons.Ide.NextStep else IconLoader.getDisabledIcon(AllIcons.Icons.Ide.NextStep)
                 horizontalAlignment = SwingConstants.CENTER
                 verticalAlignment = SwingConstants.CENTER
                 border = JBUI.Borders.empty(0, JBUIScale.scale(4), 0, RIGHT_MARGIN)
                 isOpaque = false
 
-                if (isSelected) {
+                if (isSelected && value.enabled) {
                     foreground = UIUtil.getListSelectionForeground(true)
                 } else {
-                    foreground = UIUtil.getListForeground()
+                    foreground = if (value.enabled) UIUtil.getListForeground() else JBUI.CurrentTheme.Label.disabledForeground()
                 }
             }
             panel.add(arrowLabel, BorderLayout.EAST)
@@ -72,13 +74,14 @@ class LookupListCellRenderer : ListCellRenderer<LookupItem> {
             panel.add(spacer, BorderLayout.EAST)
         }
 
-        if (isSelected) {
+        if (isSelected && value.enabled) {
             panel.background = UIUtil.getListSelectionBackground(true)
             component.foreground = UIUtil.getListSelectionForeground(true)
         } else {
             panel.background = UIUtil.getListBackground()
-            component.foreground = when (value) {
-                is LoadingLookupItem -> JBColor.GRAY
+            component.foreground = when {
+                !value.enabled -> JBUI.CurrentTheme.Label.disabledForeground()
+                value is LoadingLookupItem -> JBColor.GRAY
                 else -> UIUtil.getListForeground()
             }
         }

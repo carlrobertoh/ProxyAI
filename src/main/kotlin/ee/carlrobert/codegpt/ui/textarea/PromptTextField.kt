@@ -106,7 +106,7 @@ class PromptTextField(
             DocsGroupItem(tagManager),
             MCPGroupItem(),
             WebActionItem(tagManager)
-        ).filter { it.enabled }
+        )
 
         withContext(Dispatchers.EDT) {
             editor?.let { showPopupLookup(it, lookupItems) }
@@ -197,19 +197,35 @@ class PromptTextField(
                             }
 
                             KeyEvent.VK_UP -> {
-                                if (selectedIndex > 0) {
-                                    selectedIndex -= 1
-                                } else if (selectedIndex == 0 && model.size > 0) {
-                                    selectedIndex = model.size - 1
+                                var newIndex = selectedIndex - 1
+                                while (newIndex >= 0 && !listModel.getElementAt(newIndex).enabled) {
+                                    newIndex--
+                                }
+                                if (newIndex < 0) {
+                                    newIndex = model.size - 1
+                                    while (newIndex >= 0 && !listModel.getElementAt(newIndex).enabled) {
+                                        newIndex--
+                                    }
+                                }
+                                if (newIndex >= 0) {
+                                    selectedIndex = newIndex
                                 }
                                 e.consume()
                             }
 
                             KeyEvent.VK_DOWN -> {
-                                if (selectedIndex < model.size - 1) {
-                                    selectedIndex += 1
-                                } else if (selectedIndex == model.size - 1) {
-                                    selectedIndex = 0
+                                var newIndex = selectedIndex + 1
+                                while (newIndex < model.size && !listModel.getElementAt(newIndex).enabled) {
+                                    newIndex++
+                                }
+                                if (newIndex >= model.size) {
+                                    newIndex = 0
+                                    while (newIndex < model.size && !listModel.getElementAt(newIndex).enabled) {
+                                        newIndex++
+                                    }
+                                }
+                                if (newIndex < model.size) {
+                                    selectedIndex = newIndex
                                 }
                                 e.consume()
                             }
@@ -453,7 +469,7 @@ class PromptTextField(
             if (selectedIndex >= 0) {
                 val selectedItem = (itemsList.model as LookupListModel).getElementAt(selectedIndex)
 
-                if (selectedItem is LoadingLookupItem) {
+                if (selectedItem is LoadingLookupItem || !selectedItem.enabled) {
                     return
                 }
 

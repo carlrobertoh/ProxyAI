@@ -14,6 +14,7 @@ class MCPGroupItem : AbstractLookupGroupItem() {
 
     override val displayName: String = CodeGPTBundle.get("suggestionGroupItem.mcp.displayName")
     override val icon: Icon = Icons.MCP
+    override val enabled: Boolean = false
 
     override fun setPresentation(element: LookupElement, presentation: LookupElementPresentation) {
         super.setPresentation(element, presentation)
