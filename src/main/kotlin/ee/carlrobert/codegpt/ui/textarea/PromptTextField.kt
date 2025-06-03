@@ -42,11 +42,10 @@ import ee.carlrobert.codegpt.ui.textarea.popup.LookupListModel
 import ee.carlrobert.codegpt.util.coroutines.runCatchingCancellable
 import kotlinx.coroutines.*
 import java.awt.*
-import java.awt.event.KeyAdapter
-import java.awt.event.KeyEvent
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
+import java.awt.event.*
 import java.util.*
+import javax.swing.AbstractAction
+import javax.swing.KeyStroke
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
 import kotlin.math.min
@@ -183,6 +182,47 @@ class PromptTextField(
                 isFocusTraversalPolicyProvider = false
                 setFocusTraversalKeysEnabled(false)
 
+                inputMap.get(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0))?.also { actionUp ->
+                    actionMap.put(actionUp, object : AbstractAction() {
+                        override fun actionPerformed(e: ActionEvent?) {
+                            var newIndex = selectedIndex - 1
+                            while (newIndex >= 0 && !listModel.getElementAt(newIndex).enabled) {
+                                newIndex--
+                            }
+                            if (newIndex < 0) {
+                                newIndex = model.size - 1
+                                while (newIndex >= 0 && !listModel.getElementAt(newIndex).enabled) {
+                                    newIndex--
+                                }
+                            }
+                            println("sssssss VK_UP $newIndex")
+                            if (newIndex >= 0) {
+                                selectedIndex = newIndex
+                            }
+                        }
+                    })
+                }
+                inputMap.get(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0))?.also { actionDown ->
+                    actionMap.put(actionDown, object : AbstractAction() {
+                        override fun actionPerformed(e: ActionEvent?) {
+                            var newIndex = selectedIndex + 1
+                            while (newIndex < model.size && !listModel.getElementAt(newIndex).enabled) {
+                                newIndex++
+                            }
+                            if (newIndex >= model.size) {
+                                newIndex = 0
+                                while (newIndex < model.size && !listModel.getElementAt(newIndex).enabled) {
+                                    newIndex++
+                                }
+                            }
+                            println("sssssss VK_DOWN $newIndex")
+                            if (newIndex < model.size) {
+                                selectedIndex = newIndex
+                            }
+                        }
+                    })
+                }
+
                 addKeyListener(object : KeyAdapter() {
                     override fun keyPressed(e: KeyEvent) {
                         when (e.keyCode) {
@@ -193,40 +233,6 @@ class PromptTextField(
 
                             KeyEvent.VK_ESCAPE -> {
                                 currentPopup?.cancel()
-                                e.consume()
-                            }
-
-                            KeyEvent.VK_UP -> {
-                                var newIndex = selectedIndex - 1
-                                while (newIndex >= 0 && !listModel.getElementAt(newIndex).enabled) {
-                                    newIndex--
-                                }
-                                if (newIndex < 0) {
-                                    newIndex = model.size - 1
-                                    while (newIndex >= 0 && !listModel.getElementAt(newIndex).enabled) {
-                                        newIndex--
-                                    }
-                                }
-                                if (newIndex >= 0) {
-                                    selectedIndex = newIndex
-                                }
-                                e.consume()
-                            }
-
-                            KeyEvent.VK_DOWN -> {
-                                var newIndex = selectedIndex + 1
-                                while (newIndex < model.size && !listModel.getElementAt(newIndex).enabled) {
-                                    newIndex++
-                                }
-                                if (newIndex >= model.size) {
-                                    newIndex = 0
-                                    while (newIndex < model.size && !listModel.getElementAt(newIndex).enabled) {
-                                        newIndex++
-                                    }
-                                }
-                                if (newIndex < model.size) {
-                                    selectedIndex = newIndex
-                                }
                                 e.consume()
                             }
 
