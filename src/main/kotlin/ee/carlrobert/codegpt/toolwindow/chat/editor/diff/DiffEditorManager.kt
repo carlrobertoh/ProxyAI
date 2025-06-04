@@ -27,13 +27,14 @@ class DiffEditorManager(
 
         application.executeOnPooledThread {
             runInEdt {
-                ensureDocumentWritable(project, document)
                 if (DiffUtil.executeWriteCommand(document, project, "Updating document") {
                         document.setText(
                             StringUtil.convertLineSeparators(
                                 currentText.replaceLast(searchContent.trim(), replaceContent.trim())
                             )
                         )
+
+                        diffViewer.scheduleRediff()
                     }) {
                     diffViewer.rediff()
                     scrollToLastChange(diffViewer)
@@ -50,8 +51,6 @@ class DiffEditorManager(
 
     fun applyAllChanges(): List<UnifiedDiffChange> {
         val document = diffViewer.getDocument(Side.LEFT)
-        ensureDocumentWritable(project, document)
-
         val allChanges = mutableListOf<UnifiedDiffChange>()
 
         while (true) {
@@ -66,9 +65,7 @@ class DiffEditorManager(
                 DiffBundle.message("message.replace.change.command")
             ) {
                 diffViewer.replaceChange(change, Side.RIGHT)
-                runInEdt {
-                    diffViewer.scheduleRediff()
-                }
+                diffViewer.scheduleRediff()
             }
             diffViewer.rediff(true)
 
