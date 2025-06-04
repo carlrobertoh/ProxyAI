@@ -258,8 +258,8 @@ class UserInputHeaderPanel(
     private inner class FileSelectionListener : FileEditorManagerListener {
         override fun selectionChanged(event: FileEditorManagerEvent) {
             event.newFile?.let { newFile ->
-                val containsTag = tagManager.getTags()
-                    .none { it is EditorTagDetails && it.virtualFile == newFile }
+                val tags = tagManager.getTags()
+                val containsTag = !tags.contains(EditorTagDetails(newFile))
                 if (containsTag) {
                     tagManager.addTag(EditorTagDetails(newFile).apply { selected = false })
                 }
