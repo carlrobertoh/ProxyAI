@@ -30,6 +30,7 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
@@ -89,7 +90,8 @@ class PromptTextField(
             PersonasGroupItem(tagManager),
             DocsGroupItem(tagManager),
             MCPGroupItem(),
-            WebActionItem(tagManager)
+            CodeAnalyzeActionItem(tagManager),
+            WebActionItem(tagManager),
         )
             .filter { it.enabled }
             .map { it.createLookupElement() }
@@ -117,8 +119,8 @@ class PromptTextField(
                     }
                 }
 
-                if (suggestion is WebActionItem) {
-                    onLookupAdded(suggestion)
+                if (suggestion::class in lookupActionItemListClasses) {
+                    onLookupAdded(suggestion as LookupActionItem)
                 }
 
                 if (suggestion !is LookupGroupItem) return
@@ -291,4 +293,9 @@ class PromptTextField(
         return project.service<ToolWindowManager>()
             .getToolWindow("ProxyAI")?.component?.visibleRect?.height ?: 400
     }
+
+    private val lookupActionItemListClasses = listOf(
+        WebActionItem::class,
+        CodeAnalyzeActionItem::class,
+    )
 }

@@ -120,3 +120,5 @@ data class FolderTagDetails(var folder: VirtualFile) :
 class WebTagDetails : TagDetails("Web", AllIcons.General.Web)
 
 class EmptyTagDetails : TagDetails("")
+
+class CodeAnalyzeTagDetails : TagDetails("Code Analyze", AllIcons.Actions.DependencyAnalyzer)

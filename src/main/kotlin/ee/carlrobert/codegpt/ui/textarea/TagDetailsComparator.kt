@@ -8,12 +8,14 @@ internal class TagDetailsComparator : Comparator<TagDetails> {
     }
 
     private fun getPriority(tag: TagDetails): Int {
-        if (!tag.selected) {
+        if (!tag.selected && tag !is CodeAnalyzeTagDetails) {
             return Int.MAX_VALUE
         }
 
         return when (tag) {
+            is CodeAnalyzeTagDetails,
             is EditorSelectionTagDetails -> 0
+
             is SelectionTagDetails -> 5
             is DocumentationTagDetails,
             is PersonaTagDetails,

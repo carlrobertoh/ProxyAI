@@ -26,6 +26,7 @@ object TagProcessorFactory {
             is EditorSelectionTagDetails -> EditorSelectionTagProcessor(tagDetails)
             is EditorTagDetails -> EditorTagProcessor(tagDetails)
             is EmptyTagDetails -> TagProcessor { _, _ -> }
+            is CodeAnalyzeTagDetails -> TagProcessor { _, _ -> }
         }
     }
 }
