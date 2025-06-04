@@ -3,20 +3,23 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
+import com.intellij.openapi.ui.MessageType
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.readText
 import com.intellij.openapi.vfs.writeText
 import com.intellij.ui.AnimatedIcon
+import com.intellij.ui.components.AnActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.*
-import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.StringUtil
 import javax.swing.JPanel
@@ -43,12 +46,17 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         }
     }
 
-    fun setLoading() {
-        setRightPanelComponent(loadingLabel)
+    fun setLoading(label: String = "Loading...") {
+        runInEdt {
+            loadingLabel.text = label
+            setRightPanelComponent(loadingLabel)
+        }
     }
 
     fun handleDone() {
-        setRightPanelComponent(createHeaderActions().component)
+        runInEdt {
+            setRightPanelComponent(createHeaderActions().component)
+        }
     }
 
     private fun createHeaderActions(): ActionToolbar {
@@ -59,7 +67,7 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
             actionGroup.add(CopyAction(editor))
         } else {
             actionGroup.add(AutoApplyAction(project, editor, config.filePath, virtualFile) {
-                handleApply(project, editor)
+                handleApply(project, editor, it)
             })
             actionGroup.add(CopyAction(editor))
             actionGroup.addSeparator()
@@ -68,7 +76,7 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         return createToolbar(actionGroup)
     }
 
-    private fun handleApply(project: Project, editor: EditorEx) {
+    private fun handleApply(project: Project, editor: EditorEx, link: AnActionLink) {
         val file = virtualFile
             ?: EditorUtil.getSelectedEditor(project)?.virtualFile
             ?: throw IllegalStateException("Virtual file is null")
@@ -77,14 +85,28 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
         if (coefficient > directApplyThreshold) {
             runUndoTransparentWriteAction {
-                file.writeText(editor.document.text)
+                file.writeText(
+                    com.intellij.openapi.util.text.StringUtil.convertLineSeparators(
+                        editor.document.text
+                    )
+                )
             }
+            val balloon = JBPopupFactory.getInstance()
+                .createHtmlTextBalloonBuilder(
+                    CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.successMessage"),
+                    MessageType.INFO,
+                    null
+                )
+                .setFadeoutTime(3000)
+                .createBalloon()
+            balloon.showInCenterOf(link)
             return
         }
 
-        setLoading()
-        project.service<EditorStateManager>()
-            .getCodeEditsAsync(editor.document.text, file, editor)
+        val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
+            ?: throw IllegalStateException("Could not find corresponding ResponseEditorPanel")
+        responseEditorPanel.applyCodeAsync(editor.document.text, file, editor)
+        setLoading("Editing...")
     }
 
     private fun createToolbar(actionGroup: ActionGroup): ActionToolbar {
@@ -93,7 +115,6 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         toolbar.layoutStrategy = ToolbarLayoutStrategy.NOWRAP_STRATEGY
         toolbar.targetComponent = this
         toolbar.component.border = JBUI.Borders.empty()
-        toolbar.updateActionsAsync()
         return toolbar
     }
 

@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
@@ -13,8 +12,11 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.completions.AutoApplyParameters
+import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.EXPANDED_KEY
@@ -26,7 +28,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
 
 class ResponseEditorPanel(
-    project: Project,
+    private val project: Project,
     item: Segment,
     readOnly: Boolean,
     disposableParent: Disposable,
@@ -40,7 +42,7 @@ class ResponseEditorPanel(
         val RESPONSE_EDITOR_STATE_KEY = Key.create<EditorState>("proxyai.responseEditorState")
     }
 
-    private val stateManager = project.service<EditorStateManager>()
+    private val stateManager = EditorStateManager(project)
     private var searchReplaceHandler: SearchReplaceHandler
 
     init {
@@ -60,35 +62,8 @@ class ResponseEditorPanel(
         Disposer.register(disposableParent, this)
     }
 
-    private fun configureEditor(editor: EditorEx) {
-        editor.document.addDocumentListener(object : BulkAwareDocumentListener.Simple {
-            override fun documentChanged(event: DocumentEvent) {
-                runInEdt {
-                    updateEditorUI()
-                    if (editor.editorKind != EditorKind.DIFF) {
-                        scrollToEnd()
-                    }
-                }
-            }
-        })
-    }
-
-    private fun updateEditorUI() {
-        updateEditorHeightAndUI()
-        updateExpandLinkVisibility()
-    }
-
-    override fun dispose() {
-        val state = stateManager.getCurrentState()
-        val editor = state?.editor ?: return
-        val filePath = state.segment.filePath
-        if (filePath != null) {
-            DiffSyncManager.unregisterEditor(filePath, editor)
-        }
-    }
-
-    fun handleSearchReplace(item: SearchReplace, partialResponse: Boolean) {
-        searchReplaceHandler.handleSearchReplace(item, partialResponse)
+    fun handleSearchReplace(item: SearchReplace) {
+        searchReplaceHandler.handleSearchReplace(item)
     }
 
     fun handleReplace(item: ReplaceWaiting) {
@@ -117,10 +92,41 @@ class ResponseEditorPanel(
         }
     }
 
-    fun removeEditorAndAuxiliaryPanels() {
-        removeAll()
-        revalidate()
-        repaint()
+    fun applyCodeAsync(content: String, virtualFile: VirtualFile, editor: EditorEx) {
+        CompletionRequestService.getInstance().autoApplyAsync(
+            AutoApplyParameters(content, virtualFile),
+            AutoApplyListener(project, stateManager, virtualFile) { oldEditor, newEditor ->
+                val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
+                    ?: throw IllegalStateException("Expected parent to be ResponseEditorPanel")
+                responseEditorPanel.replaceEditor(oldEditor, newEditor)
+            })
+    }
+
+    override fun dispose() {
+        val state = stateManager.getCurrentState()
+        val editor = state?.editor ?: return
+        val filePath = state.segment.filePath
+        if (filePath != null) {
+            DiffSyncManager.unregisterEditor(filePath, editor)
+        }
+    }
+
+    private fun configureEditor(editor: EditorEx) {
+        editor.document.addDocumentListener(object : BulkAwareDocumentListener.Simple {
+            override fun documentChanged(event: DocumentEvent) {
+                runInEdt {
+                    updateEditorUI()
+                    if (editor.editorKind != EditorKind.DIFF) {
+                        scrollToEnd()
+                    }
+                }
+            }
+        })
+    }
+
+    private fun updateEditorUI() {
+        updateEditorHeightAndUI()
+        updateExpandLinkVisibility()
     }
 
     private fun updateEditorHeightAndUI() {

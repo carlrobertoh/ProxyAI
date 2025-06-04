@@ -55,7 +55,6 @@ class ServiceConfigurableComponent {
             "ProxyAI" to CodeGPTServiceConfigurable::class.java,
             "OpenAI" to OpenAIServiceConfigurable::class.java,
             "Custom OpenAI" to CustomServiceConfigurable::class.java,
-            "Azure" to AzureServiceConfigurable::class.java,
             "Anthropic" to AnthropicServiceConfigurable::class.java,
             "Google" to GoogleSettingsConfigurable::class.java,
             "LLaMA C/C++ (Local)" to LlamaServiceConfigurable::class.java,

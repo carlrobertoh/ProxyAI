@@ -20,7 +20,7 @@ class AutoApplyAction(
     private val toolwindowEditor: EditorEx,
     private val filePath: String?,
     private val virtualFile: VirtualFile?,
-    private val onApply: () -> Unit,
+    private val onApply: (AnActionLink) -> Unit,
 ) : CustomComponentAction, AnAction() {
 
     private val anActionLink: AnActionLink = AnActionLink("Apply", this).apply {
@@ -29,17 +29,10 @@ class AutoApplyAction(
     }
 
     override fun actionPerformed(e: AnActionEvent) {
-        onApply()
+        onApply(anActionLink)
     }
 
     override fun update(e: AnActionEvent) {
-        if (virtualFile == null && filePath != null) {
-            anActionLink.isEnabled = false
-            anActionLink.isVisible = false
-            anActionLink.toolTipText = "No file created"
-            return
-        }
-
         if (virtualFile != null) {
             anActionLink.text = "Apply"
             anActionLink.isEnabled = true
@@ -54,13 +47,12 @@ class AutoApplyAction(
         }
 
         val selectedEditor = EditorUtil.getSelectedEditor(project)
-        anActionLink.text = if (selectedEditor?.virtualFile == null) {
-            "Apply"
-        } else {
-            "Apply to ${selectedEditor.virtualFile.name}"
-        }
-        anActionLink.isEnabled = selectedEditor != null
-        anActionLink.isVisible = true
+        val selectedEditorFile = selectedEditor?.virtualFile
+        val canApply = selectedEditorFile != null && selectedEditorFile.isWritable
+
+        anActionLink.text = if (canApply) "Apply to ${selectedEditorFile.name}" else "Apply"
+        anActionLink.isEnabled = canApply
+        anActionLink.isVisible = canApply
     }
 
     override fun createCustomComponent(presentation: Presentation, place: String): JComponent {

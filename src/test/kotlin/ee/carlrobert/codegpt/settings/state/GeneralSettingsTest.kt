@@ -36,17 +36,6 @@ class GeneralSettingsTest : BasePlatformTestCase() {
     assertThat(settings.state.selectedService).isEqualTo(ServiceType.CUSTOM_OPENAI)
   }
 
-  fun testAzureSettingsSync() {
-    val settings = GeneralSettings.getInstance()
-    val conversation = Conversation()
-    conversation.model = "gpt-4"
-    conversation.clientCode = "azure.chat.completion"
-
-    settings.sync(conversation)
-
-    assertThat(settings.state.selectedService).isEqualTo(ServiceType.AZURE)
-  }
-
   fun testLlamaSettingsModelPathSync() {
     val llamaSettings = LlamaSettings.getCurrentState()
     llamaSettings.huggingFaceModel = HuggingFaceModel.WIZARD_CODER_PYTHON_7B_Q3

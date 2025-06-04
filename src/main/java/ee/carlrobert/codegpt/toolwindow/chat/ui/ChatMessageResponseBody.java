@@ -137,7 +137,7 @@ public class ChatMessageResponseBody extends JPanel {
   public ChatMessageResponseBody withResponse(@NotNull String response) {
     try {
       for (var item : new CompleteMessageParser().parse(response)) {
-        processResponse(item, false, false);
+        processResponse(item, false);
         currentlyProcessedTextPane = null;
         currentlyProcessedEditorPanel = null;
       }
@@ -158,7 +158,7 @@ public class ChatMessageResponseBody extends JPanel {
 
     var parsedResponse = streamOutputParser.parse(partialMessage);
     for (Segment item : parsedResponse) {
-      processResponse(item, true, true);
+      processResponse(item, true);
     }
   }
 
@@ -287,7 +287,7 @@ public class ChatMessageResponseBody extends JPanel {
         .orElse(null);
   }
 
-  private void processResponse(Segment item, boolean caretVisible, boolean partialResponse) {
+  private void processResponse(Segment item, boolean caretVisible) {
     if (item instanceof Thinking) {
       processThinkingOutput(item.getContent());
       return;
@@ -311,7 +311,7 @@ public class ChatMessageResponseBody extends JPanel {
         prepareProcessingCode(searchReplace);
       }
       if (currentlyProcessedEditorPanel != null) {
-        currentlyProcessedEditorPanel.handleSearchReplace(searchReplace, partialResponse);
+        currentlyProcessedEditorPanel.handleSearchReplace(searchReplace);
         handleHeaderOnCompletion(currentlyProcessedEditorPanel);
         return;
       }

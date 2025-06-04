@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 
 import com.intellij.diff.tools.fragmented.UnifiedDiffChange
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.editor.Document
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
@@ -60,20 +61,20 @@ class DiffHeaderPanel(
         }
     }
 
-    fun handleChangesApplied(
-        patches: List<UnifiedDiffChange>
-    ) {
+    fun handleChangesApplied(before: String, after: String, patches: List<UnifiedDiffChange>) {
         actionLinksPanel.isVisible = false
         loadingLabel.isVisible = false
 
-        val diffAcceptedPanel = DiffAcceptedPanel(config.project, patches, config.filePath!!) { }
-        runInEdt {
-            val container = config.editorEx.component.parent
-            if (container is ResponseEditorPanel) {
-                container.removeEditorAndAuxiliaryPanels()
-                container.add(diffAcceptedPanel, BorderLayout.CENTER)
-                container.revalidate()
-                container.repaint()
+        virtualFile?.let {
+            val diffAcceptedPanel = DiffAcceptedPanel(config.project, it, before, after, patches)
+            runInEdt {
+                val container = config.editorEx.component.parent
+                if (container is ResponseEditorPanel) {
+                    container.removeAll()
+                    container.add(diffAcceptedPanel, BorderLayout.CENTER)
+                    container.revalidate()
+                    container.repaint()
+                }
             }
         }
     }

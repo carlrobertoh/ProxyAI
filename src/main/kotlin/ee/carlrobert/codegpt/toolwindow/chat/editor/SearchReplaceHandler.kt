@@ -1,6 +1,6 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor
 
-import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.vfs.readText
@@ -17,9 +17,14 @@ class SearchReplaceHandler(
     private val stateManager: EditorStateManager,
     private val onEditorReplaced: (EditorEx, EditorEx) -> Unit
 ) {
+
+    companion object {
+        private val logger = thisLogger()
+    }
+
     private var searchFailed = false
 
-    fun handleSearchReplace(item: SearchReplace, partialResponse: Boolean) {
+    fun handleSearchReplace(item: SearchReplace) {
         val editor = stateManager.getCurrentState()?.editor ?: return
         (editor.permanentHeaderComponent as? DiffHeaderPanel)?.handleDone()
 
@@ -58,7 +63,6 @@ class SearchReplaceHandler(
         val containsText = currentText.contains(searchContent.trim())
 
         if (searchContent.isNotEmpty() && editor.editorKind == EditorKind.DIFF && !containsText && !searchFailed) {
-            searchFailed = true
             handleFailedDiffSearch(searchContent, replaceContent)
             return
         }
@@ -67,25 +71,26 @@ class SearchReplaceHandler(
     }
 
     private fun handleNonExistentFile(replaceContent: String) {
+        logger.debug("Could not find file to replace in, falling back to untyped editor")
+
         val state = stateManager.getCurrentState() ?: return
         val oldEditor = state.editor
         val segment = Code(replaceContent, state.segment.language, state.segment.filePath)
 
         val newState = stateManager.createFromSegment(segment)
-        val newEditor = newState.editor
+        onEditorReplaced(oldEditor, newState.editor)
 
-        onEditorReplaced(oldEditor, newEditor)
         searchFailed = true
     }
 
     private fun handleFailedDiffSearch(searchContent: String, replaceContent: String) {
+        logger.debug("Could not map diff search to file, falling back to untyped editor")
+
         val oldEditor = stateManager.getCurrentState()?.editor ?: return
-        val newState = stateManager.transitionToFailedDiffState(searchContent, replaceContent)
-        if (newState != null) {
-            val newEditor = newState.editor
-            runInEdt {
-                onEditorReplaced(oldEditor, newEditor)
-            }
+        stateManager.transitionToFailedDiffState(searchContent, replaceContent)?.let {
+            onEditorReplaced(oldEditor, it.editor)
         }
+
+        searchFailed = true
     }
 }

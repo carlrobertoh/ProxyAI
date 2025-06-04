@@ -8,7 +8,6 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore;
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.settings.service.azure.AzureSettings;
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
 import ee.carlrobert.llm.client.DeserializationUtil;
 import ee.carlrobert.llm.client.anthropic.completion.ClaudeCompletionRequest;
@@ -70,7 +69,7 @@ public final class CompletionRequestService {
     return getChatCompletion(request);
   }
 
-  public EventSource getCodeEditsAsync(
+  public EventSource autoApplyAsync(
       AutoApplyParameters params,
       CompletionEventListener<String> eventListener) {
     var request = CompletionRequestFactory
@@ -103,8 +102,6 @@ public final class CompletionRequestService {
     if (request instanceof OpenAIChatCompletionRequest completionRequest) {
       return switch (GeneralSettings.getSelectedService()) {
         case OPENAI -> CompletionClientProvider.getOpenAIClient()
-            .getChatCompletionAsync(completionRequest, eventListener);
-        case AZURE -> CompletionClientProvider.getAzureClient()
             .getChatCompletionAsync(completionRequest, eventListener);
         case OLLAMA -> CompletionClientProvider.getOllamaClient()
             .getChatCompletionAsync(completionRequest, eventListener);
@@ -144,8 +141,6 @@ public final class CompletionRequestService {
     if (request instanceof OpenAIChatCompletionRequest completionRequest) {
       var response = switch (GeneralSettings.getSelectedService()) {
         case OPENAI -> CompletionClientProvider.getOpenAIClient()
-            .getChatCompletion(completionRequest);
-        case AZURE -> CompletionClientProvider.getAzureClient()
             .getChatCompletion(completionRequest);
         case OLLAMA -> CompletionClientProvider.getOllamaClient()
             .getChatCompletion(completionRequest);
@@ -207,10 +202,6 @@ public final class CompletionRequestService {
   private static boolean isRequestAllowed(ServiceType serviceType) {
     return switch (serviceType) {
       case OPENAI -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.OpenaiApiKey.INSTANCE);
-      case AZURE -> CredentialsStore.INSTANCE.isCredentialSet(
-          AzureSettings.getCurrentState().isUseAzureApiKeyAuthentication()
-              ? CredentialKey.AzureOpenaiApiKey.INSTANCE
-              : CredentialKey.AzureActiveDirectoryToken.INSTANCE);
       case ANTHROPIC -> CredentialsStore.INSTANCE.isCredentialSet(
           CredentialKey.AnthropicApiKey.INSTANCE
       );

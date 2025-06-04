@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor.state
 
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
+import com.intellij.diff.util.Side
 import com.intellij.ide.actions.OpenFileAction
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.editor.EditorKind
@@ -24,9 +25,12 @@ class StandardDiffEditorState(
 ) : DiffEditorState(editor, segment, project, diffViewer, virtualFile) {
 
     override fun applyAllChanges() {
+        val before = diffViewer?.getDocument(Side.LEFT)?.text ?: return
+        val after = diffViewer.getDocument(Side.RIGHT).text
         val changes = diffEditorManager.applyAllChanges()
         if (changes.isNotEmpty()) {
-            (editor.permanentHeaderComponent as? DiffHeaderPanel)?.handleChangesApplied(changes)
+            (editor.permanentHeaderComponent as? DiffHeaderPanel)
+                ?.handleChangesApplied(before, after, changes)
             virtualFile?.let { OpenFileAction.openFile(it, project) }
         }
     }

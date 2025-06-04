@@ -3,6 +3,8 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
@@ -14,7 +16,8 @@ import okhttp3.sse.EventSource
 class AutoApplyListener(
     private val project: Project,
     private val stateManager: EditorStateManager,
-    private val onEditorReplaced: (EditorEx) -> Unit
+    private val virtualFile: VirtualFile,
+    private val onEditorReplaced: (EditorEx, EditorEx) -> Unit
 ) : CompletionEventListener<String> {
 
     private val logger = logger<AutoApplyListener>()
@@ -61,9 +64,22 @@ class AutoApplyListener(
                     if (!editorReplaced) {
                         editorReplaced = true
 
-                        val newState = stateManager.createFromSegment(segment)
-                        onEditorReplaced(newState.editor)
+                        val oldEditor = stateManager.getCurrentState()?.editor ?: return
+                        val currentText = virtualFile.readText()
+                        val containsText = currentText.contains(segment.search.trim())
+                        val newState = if (containsText) {
+                            stateManager.createFromSegment(segment)
+                        } else {
+                            stateManager.transitionToFailedDiffState(
+                                segment.search,
+                                segment.replace,
+                                virtualFile
+                            ) ?: return
+                        }
+
+                        onEditorReplaced(oldEditor, newState.editor)
                     }
+
                     handleReplace(segment)
                 }
 

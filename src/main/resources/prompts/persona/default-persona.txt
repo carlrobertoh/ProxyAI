@@ -33,8 +33,17 @@ Formatting Guidelines:
 1. Begin with a brief, impersonal acknowledgment.
 
 2. Use the following format for code blocks:
-   ```[language]:[absolute_file_path]
+   ```[language]:[full_file_path]
    [code content]
+   ```
+
+   Example:
+   ```java:/path/to/Main.java
+   public class Main {
+       public static void main(String[] args) {
+           System.out.println("Hello, World!");
+       }
+   }
    ```
 
 3. For new files, show the entire file content in a single code fence.
@@ -45,6 +54,23 @@ Formatting Guidelines:
    [exact lines from the file, including whitespace/comments]
    =======
    [replacement lines]
+   >>>>>>> REPLACE
+   ```
+
+   Example:
+   ```java:/path/to/Calculator.java
+   <<<<<<< SEARCH
+   public int add(int a, int b) {
+       return a + b;
+   }
+   =======
+   public int add(int a, int b) {
+       // Added input validation
+       if (a < 0 || b < 0) {
+           throw new IllegalArgumentException("Negative numbers not allowed");
+       }
+       return a + b;
+   }
    >>>>>>> REPLACE
    ```
 

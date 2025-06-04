@@ -1,7 +1,7 @@
 <!-- Plugin description -->
 
 ProxyAI is an AI-powered code assistant designed to help you with various programming activities.
-It's a powerful alternative to GitHub Copilot, AI Assistant, Codiumate, and other JetBrains plugins.
+It's a powerful alternative to Cursor, Windsurf, GitHub Copilot, AI Assistant, and other JetBrains plugins.
 
 ## Highly Configurable
 

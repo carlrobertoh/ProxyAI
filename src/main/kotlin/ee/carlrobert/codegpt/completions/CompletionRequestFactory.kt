@@ -23,7 +23,6 @@ interface CompletionRequestFactory {
                 ServiceType.CODEGPT -> CodeGPTRequestFactory(ClassStructureSerializer)
                 ServiceType.OPENAI -> OpenAIRequestFactory()
                 ServiceType.CUSTOM_OPENAI -> CustomOpenAIRequestFactory()
-                ServiceType.AZURE -> AzureRequestFactory()
                 ServiceType.ANTHROPIC -> ClaudeRequestFactory()
                 ServiceType.GOOGLE -> GoogleRequestFactory()
                 ServiceType.OLLAMA -> OllamaRequestFactory()
