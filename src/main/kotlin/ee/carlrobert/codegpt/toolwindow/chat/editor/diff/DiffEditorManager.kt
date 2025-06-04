@@ -6,7 +6,6 @@ import com.intellij.diff.util.DiffUtil
 import com.intellij.diff.util.Side
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.diff.DiffBundle
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.project.Project
@@ -81,12 +80,5 @@ class DiffEditorManager(
             LogicalPosition(change.lineFragment.startLine2, 0),
             ScrollType.CENTER
         )
-    }
-
-    private fun ensureDocumentWritable(project: Project, document: Document) {
-        if (!document.isWritable) {
-            DiffUtil.makeWritable(project, document)
-            document.setReadOnly(false)
-        }
     }
 }

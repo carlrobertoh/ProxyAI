@@ -193,8 +193,6 @@ class SseMessageParser : MessageParser {
             }
 
             line.trim() == CODE_FENCE -> {
-                // Invalid search/replace block - missing REPLACE marker
-                // Mark done
                 segments.add(CodeEnd(""))
                 parserState = ParserState.Outside
                 true
@@ -212,25 +210,7 @@ class SseMessageParser : MessageParser {
                     )
                 )
                 parserState = ParserState.InReplace(state.header, state.searchContent, newReplace)
-
-                val nlIdx = buffer.indexOf(NEWLINE)
-                if (nlIdx < 0) return false
-
-                val line = buffer.substring(0, nlIdx)
-                if (line.trim().startsWith(REPLACE_MARKER)) {
-                    consumeFromBuffer(nlIdx + 1)
-                    segments.add(
-                        SearchReplace(
-                            state.searchContent,
-                            newReplace,
-                            state.header.language,
-                            state.header.filePath
-                        )
-                    )
-                    return true
-                }
-
-                false
+                true
             }
         }
     }
