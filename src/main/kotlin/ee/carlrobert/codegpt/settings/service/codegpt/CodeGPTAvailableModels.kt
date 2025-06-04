@@ -8,7 +8,7 @@ import javax.swing.Icon
 object CodeGPTAvailableModels {
 
     val DEFAULT_CHAT_MODEL = CodeGPTModel("GPT-4.1 Mini", "gpt-4.1-mini", Icons.Google, ANONYMOUS)
-    val DEFAULT_CODE_MODEL = CodeGPTModel("Codestral", "codestral", Icons.Mistral, ANONYMOUS)
+    val DEFAULT_CODE_MODEL = CodeGPTModel("Qwen 2.5 Coder", "qwen-2.5-32b-code", Icons.Qwen, ANONYMOUS)
 
     @JvmStatic
     fun getToolWindowModels(pricingPlan: PricingPlan?): List<CodeGPTModel> {
