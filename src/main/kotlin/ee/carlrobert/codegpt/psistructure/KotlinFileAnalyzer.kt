@@ -20,7 +20,7 @@ import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 
 class KotlinFileAnalyzer(
-    private val psiFileQueue: PsiFileQueue,
+    private val psiFileQueue: PsiFileDepthQueue,
     private val ktFile: KtFile,
 ) {
 
@@ -324,7 +324,7 @@ class KotlinFileAnalyzer(
             }
 
         foundKtFiles.forEach { psiFile ->
-            psiFileQueue.put(psiFile)
+            psiFileQueue.put(psiFile, ktFile.name)
         }
     }
 }
