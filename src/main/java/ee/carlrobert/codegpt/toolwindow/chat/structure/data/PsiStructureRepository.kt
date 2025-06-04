@@ -99,6 +99,8 @@ class PsiStructureRepository(
         }
     }
 
+    private var analyzePsiDepth = Int.MAX_VALUE
+
     init {
         Disposer.register(parentDisposable, coroutineScope)
         tagManager.addListener(tagsListener)
@@ -114,6 +116,7 @@ class PsiStructureRepository(
             ConfigurationStateListener.TOPIC,
             ConfigurationStateListener { newState ->
                 if (newState.chatCompletionSettings.psiStructureEnabled) {
+                    analyzePsiDepth = newState.chatCompletionSettings.psiStructureAnalyzeDepth
                     enable()
                 } else {
                     disable()
@@ -164,7 +167,7 @@ class PsiStructureRepository(
                     .await()
 
                 val virtualFilesToRemoveFromStructure = tags.getExcludedVirtualFiles()
-                val result = psiStructureProvider.get(psiFiles)
+                val result = psiStructureProvider.get(psiFiles, analyzePsiDepth)
                     .filter { classStructure ->
                         !virtualFilesToRemoveFromStructure.contains(classStructure.virtualFile)
                     }

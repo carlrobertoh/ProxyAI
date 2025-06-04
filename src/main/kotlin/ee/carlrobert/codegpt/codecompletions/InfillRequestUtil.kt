@@ -40,7 +40,8 @@ object InfillRequestUtil {
         }
 
         if (service<ConfigurationSettings>().state.codeCompletionSettings.collectDependencyStructure) {
-            val psiStructure = PsiStructureProvider().get(listOf(request.file))
+            val depth = service<ConfigurationSettings>().state.codeCompletionSettings.psiStructureAnalyzeDepth
+            val psiStructure = PsiStructureProvider().get(listOf(request.file), depth)
             if (psiStructure.isNotEmpty()) {
                 infillRequestBuilder.addDependenciesStructure(psiStructure)
                 infillRequestBuilder.addRepositoryName(psiStructure.first().repositoryName)
