@@ -6,10 +6,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Invalid line separators exception on Windows
-
 ## [3.4.0-233] - 2025-06-02
 
 ### Added
