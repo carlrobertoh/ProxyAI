@@ -120,6 +120,10 @@ class SseMessageParser : MessageParser {
             }
 
             line.trimStart().startsWith(SEARCH_MARKER) -> {
+                // Emit accumulated code content before transitioning
+                if (state.content.isNotEmpty()) {
+                    segments.add(Code(state.content, state.header.language, state.header.filePath))
+                }
                 segments.add(SearchWaiting("", state.header.language, state.header.filePath))
                 parserState = ParserState.InSearch(state.header, "")
                 true
@@ -129,7 +133,7 @@ class SseMessageParser : MessageParser {
                 val newContent =
                     if (state.content.isEmpty()) line else state.content + NEWLINE + line
                 parserState = ParserState.InCode(state.header, newContent)
-                false
+                true
             }
         }
     }
