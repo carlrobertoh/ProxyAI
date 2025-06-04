@@ -63,6 +63,8 @@ public class TotalTokensPanel extends JPanel {
           if (ConfigurationSettings.getState().getChatCompletionSettings()
               .getPsiStructureEnabled()) {
             updatePsiTokenCount(psiTokens);
+          } else {
+            updatePsiTokenCount(0);
           }
           return Unit.INSTANCE;
         }
