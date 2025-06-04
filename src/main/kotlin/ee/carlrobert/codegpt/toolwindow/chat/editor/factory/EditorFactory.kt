@@ -11,6 +11,7 @@ import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.impl.ContextMenuPopupHandler
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
@@ -99,7 +100,8 @@ object EditorFactory {
         }.get() ?: return null
         val leftContent = DiffContentFactory.getInstance().create(project, virtualFile)
 
-        val rightContentDoc = EditorFactory.getInstance().createDocument(virtualFile.readText())
+        val rightContentDoc = EditorFactory.getInstance()
+            .createDocument(StringUtil.convertLineSeparators(virtualFile.readText()))
         rightContentDoc.setReadOnly(false)
 
         val rightContent =

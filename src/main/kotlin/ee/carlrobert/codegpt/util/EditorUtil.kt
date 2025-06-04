@@ -36,7 +36,7 @@ object EditorUtil {
             code
         )
         val editorFactory = EditorFactory.getInstance()
-        val document = editorFactory.createDocument(code)
+        val document = editorFactory.createDocument(StringUtil.convertLineSeparators(code))
         val editor = editorFactory
             .createEditor(document, project, lightVirtualFile, true, EditorKind.UNTYPED)
         (editor as EditorEx).backgroundColor =
