@@ -15,7 +15,10 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class PsiStructureProvider {
 
-    suspend fun get(psiFiles: List<PsiFile>): Set<ClassStructure> {
+    suspend fun get(
+        psiFiles: List<PsiFile>,
+        analyzeDepth: Int,
+    ): Set<ClassStructure> {
         var result: Set<ClassStructure>? = null
         var attempts = 0
         val maxAttempts = 5
@@ -35,17 +38,23 @@ class PsiStructureProvider {
                 val future = ReadAction.nonBlocking<Set<ClassStructure>> {
                     val classStructureSet = mutableSetOf<ClassStructure>()
                     val processedPsiFiles = mutableSetOf<PsiFile?>()
-                    val psiFileQueue = PsiFileQueue(psiFiles)
+                    val psiFileDepthQueue = PsiFileDepthQueue(psiFiles, analyzeDepth)
 
                     while (true) {
                         coroutineContext.ensureActive()
 
-                        val psiFile = psiFileQueue.pop()
+                        val psiFile = psiFileDepthQueue.pop()
+
                         when {
                             processedPsiFiles.contains(psiFile) -> Unit
 
                             kotlinFileAnalyzerAvailable && psiFile is KtFile -> {
-                                classStructureSet.addAll(KotlinFileAnalyzer(psiFileQueue, psiFile).analyze())
+                                classStructureSet.addAll(
+                                    KotlinFileAnalyzer(
+                                        psiFileQueue = psiFileDepthQueue,
+                                        ktFile = psiFile,
+                                    ).analyze()
+                                )
                                 processedPsiFiles.add(psiFile)
                             }
 

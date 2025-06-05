@@ -17,26 +17,15 @@ import ee.carlrobert.codegpt.psistructure.models.MethodStructure
 import ee.carlrobert.codegpt.psistructure.models.ParameterInfo
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.lexer.KtTokens
-import org.jetbrains.kotlin.psi.KtClass
-import org.jetbrains.kotlin.psi.KtClassBody
-import org.jetbrains.kotlin.psi.KtClassOrObject
-import org.jetbrains.kotlin.psi.KtConstructor
-import org.jetbrains.kotlin.psi.KtEnumEntry
-import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtFunction
-import org.jetbrains.kotlin.psi.KtModifierListOwner
-import org.jetbrains.kotlin.psi.KtNamedFunction
-import org.jetbrains.kotlin.psi.KtObjectDeclaration
-import org.jetbrains.kotlin.psi.KtParameter
-import org.jetbrains.kotlin.psi.KtProperty
-import org.jetbrains.kotlin.psi.KtVariableDeclaration
+import org.jetbrains.kotlin.psi.*
 
 class KotlinFileAnalyzer(
-    private val psiFileQueue: PsiFileQueue,
+    private val psiFileQueue: PsiFileDepthQueue,
     private val ktFile: KtFile,
 ) {
 
     private val psiManager = PsiManager.getInstance(ktFile.project)
+    private val kotlinPropertyAnalyzer = KotlinPropertyAnalyzer()
 
     private val filePackageTypes: Map<String, String> by lazy {
         val types = mutableListOf<String>()
@@ -259,7 +248,7 @@ class KotlinFileAnalyzer(
     }
 
     private fun analyzeProperty(property: KtProperty): FieldStructure {
-        val type = property.typeReference?.text ?: "TypeUnknown"
+        val type = property.typeReference?.text ?: kotlinPropertyAnalyzer.resolveInferredType(property)
         val resolvedType = resolveType(type)
         val modifierList = getModifiers(property)
         return FieldStructure(property.name ?: "", resolvedType, modifierList)
@@ -335,7 +324,7 @@ class KotlinFileAnalyzer(
             }
 
         foundKtFiles.forEach { psiFile ->
-            psiFileQueue.put(psiFile)
+            psiFileQueue.put(psiFile, ktFile.name)
         }
     }
 }
