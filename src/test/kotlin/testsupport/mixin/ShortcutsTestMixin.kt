@@ -9,7 +9,6 @@ import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ModelRole
 import ee.carlrobert.codegpt.settings.service.ModelRole.*
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.azure.AzureSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
@@ -30,22 +29,13 @@ interface ShortcutsTestMixin {
     }
   }
 
-  fun useOpenAIService(chatModel: String? = "gpt-4", role: ModelRole = CHAT_ROLE) {
+  fun useOpenAIService(chatModel: String? = "gpt-4o", role: ModelRole = CHAT_ROLE) {
     service<GeneralSettings>().state.setSelectedService(role, ServiceType.OPENAI)
     setCredential(OpenaiApiKey, "TEST_API_KEY")
     service<OpenAISettings>().state.run {
       model = chatModel
       isCodeCompletionsEnabled = true
     }
-  }
-
-  fun useAzureService(role: ModelRole = CHAT_ROLE) {
-    GeneralSettings.getCurrentState().setSelectedService(role, ServiceType.AZURE)
-    setCredential(AzureOpenaiApiKey, "TEST_API_KEY")
-    val azureSettings = AzureSettings.getCurrentState()
-    azureSettings.resourceName = "TEST_RESOURCE_NAME"
-    azureSettings.apiVersion = "TEST_API_VERSION"
-    azureSettings.deploymentId = "TEST_DEPLOYMENT_ID"
   }
 
   fun useLlamaService(codeCompletionsEnabled: Boolean = false, role: ModelRole = CHAT_ROLE) {

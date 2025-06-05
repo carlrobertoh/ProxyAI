@@ -42,7 +42,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4",
+                    "gpt-4o",
                     listOf(
                         mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
                         mapOf("role" to "user", "content" to "Hello!")
@@ -119,7 +119,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4",
+                    "gpt-4o",
                     listOf(
                         mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
                         mapOf(
@@ -127,24 +127,15 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                             "content" to """
                             Use the following context to answer question at the end:
 
-                            File Path: /TEST_FILE_NAME_1
-                            File Content:
-                            
                             ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
                             TEST_FILE_CONTENT_1
                             ```
                             
                             
-                            File Path: /TEST_FILE_NAME_2
-                            File Content:
-                            
                             ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
                             TEST_FILE_CONTENT_2
                             ```
                             
-                            
-                            File Path: /TEST_FILE_NAME_3
-                            File Content:
                             
                             ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
                             TEST_FILE_CONTENT_3
@@ -323,7 +314,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4",
+                    "gpt-4o",
                     listOf(
                         mapOf(
                             "role" to "system",
@@ -334,24 +325,15 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                             "content" to """
                             Use the following context to answer question at the end:
 
-                            File Path: /TEST_FILE_NAME_1
-                            File Content:
-                            
                             ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
                             TEST_FILE_CONTENT_1
                             ```
                             
                             
-                            File Path: /TEST_FILE_NAME_2
-                            File Content:
-                            
                             ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
                             TEST_FILE_CONTENT_2
                             ```
                             
-                            
-                            File Path: /TEST_FILE_NAME_3
-                            File Content:
                             
                             ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
                             TEST_FILE_CONTENT_3

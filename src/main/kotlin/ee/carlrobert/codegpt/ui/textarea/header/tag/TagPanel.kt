@@ -116,6 +116,7 @@ abstract class TagPanel(
 
         fun update(name: String, icon: Icon? = null, selected: Boolean = true) {
             text = name
+            cursor = Cursor(Cursor.HAND_CURSOR)
             font = JBUI.Fonts.miniFont()
             foreground = if (selected) {
                 service<EditorColorsManager>().globalScheme.defaultForeground

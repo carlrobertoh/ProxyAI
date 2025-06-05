@@ -1,3 +1,4 @@
+/*
 package ee.carlrobert.codegpt.codecompletions.psi
 
 import com.intellij.openapi.project.Project
@@ -15,10 +16,12 @@ import ee.carlrobert.codegpt.codecompletions.InfillContext
 
 class PythonContextFinder : LanguageContextFinder {
 
-    /**
+    */
+/**
      * Finds enclosing [PyFunction] or [PyClass] of [psiElement] and
      * determines source code elements of all used [PyReferenceExpression]s for the context.
-     */
+     *//*
+
     override fun findContext(psiElement: PsiElement): InfillContext {
         val enclosingElement = findEnclosingElement(psiElement)
         val referenceExpressions = findRelevantElements(enclosingElement, enclosingElement)
@@ -50,10 +53,12 @@ class PythonContextFinder : LanguageContextFinder {
         psiElement.map { findRelevantElements(it, rootElement) }.flatten().distinctBy { it.name }
             .toSet()
 
-    /**
+    */
+/**
      * Finds [PyReferenceExpression]s inside of [psiElement].
      * If [psiElement] is a [PyFunction] inside of a [PyClass] it also adds all [PyReferenceExpression] of any class/instance fields.
-     */
+     *//*
+
     fun findRelevantElements(
         psiElement: PsiElement,
         rootElement: PsiElement
@@ -136,3 +141,4 @@ class PythonContextFinder : LanguageContextFinder {
 
     }
 }
+*/

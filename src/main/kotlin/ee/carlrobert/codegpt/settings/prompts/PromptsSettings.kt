@@ -4,13 +4,8 @@ import com.intellij.ide.impl.ProjectUtil
 import com.intellij.openapi.components.*
 import com.intellij.openapi.project.guessProjectDir
 import ee.carlrobert.codegpt.actions.editor.EditorActionsUtil
-import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
-import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.persona.PersonaSettings
-import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettings
-import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
-import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTemplate
 import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 
 @Service
@@ -50,6 +45,8 @@ class PromptsSettingsState : BaseState() {
 class CoreActionsState : BaseState() {
 
     companion object {
+        val DEFAULT_AUTO_APPLY_PROMPT =
+            getResourceContent("/prompts/core/auto-apply.txt")
         val DEFAULT_EDIT_CODE_PROMPT = getResourceContent("/prompts/core/edit-code.txt")
         val DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT =
             getResourceContent("/prompts/core/generate-commit-message.txt")
@@ -61,6 +58,11 @@ class CoreActionsState : BaseState() {
             getResourceContent("/prompts/core/review-changes.txt")
     }
 
+    var autoApply by property(CoreActionPromptDetailsState().apply {
+        name = "Auto Apply"
+        code = "AUTO_APPLY"
+        instructions = DEFAULT_AUTO_APPLY_PROMPT
+    })
     var editCode by property(CoreActionPromptDetailsState().apply {
         name = "Edit Code"
         code = "EDIT_CODE"

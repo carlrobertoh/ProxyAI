@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.1-241.1] - 2025-06-04
+
+### Fixed
+
+- Invalid line separators exception on Windows
+
+## [3.4.0-241.1] - 2025-06-02
+
+### Added
+
+- Ability to edit files while streaming
+- Auto Apply functionality now available for every provider and model
+- Claude Sonnet 4, Sonnet 4 Thinking and Gemini Flash 2.5 models
+
+## [3.3.0-241.1] - 2025-05-13
+
+### Added
+
+- Support for both Autocomplete and Next Edits
+- o4-mini model for ProxyAI provider
+- Auto-scroll down when submitting a message
+- Loading animation during output generation and several other UI improvements
+
+### Fixed
+
+- NPEs on different types of error messages in chat UI
+- Other IDE warnings/errors
+
 ## [3.2.5-241.1] - 2025-04-30
 
 ### Added
@@ -1008,7 +1036,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.5-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.1-241.1...HEAD
+[3.4.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.0-241.1...v3.4.1-241.1
+[3.4.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.3.0-241.1...v3.4.0-241.1
+[3.3.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.5-241.1...v3.3.0-241.1
 [3.2.5-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.4-241.1...v3.2.5-241.1
 [3.2.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.3-241.1...v3.2.4-241.1
 [3.2.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.2-241.1...v3.2.3-241.1

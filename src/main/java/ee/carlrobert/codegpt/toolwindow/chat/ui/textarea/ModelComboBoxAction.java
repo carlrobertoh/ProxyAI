@@ -1,7 +1,6 @@
 package ee.carlrobert.codegpt.toolwindow.chat.ui.textarea;
 
 import static ee.carlrobert.codegpt.settings.service.ServiceType.ANTHROPIC;
-import static ee.carlrobert.codegpt.settings.service.ServiceType.AZURE;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.CODEGPT;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.CUSTOM_OPENAI;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.GOOGLE;
@@ -174,10 +173,6 @@ public class ModelComboBoxAction extends ComboBoxAction {
           Icons.Anthropic,
           presentation));
     }
-    if (availableProviders.contains(AZURE)) {
-      actionGroup.add(
-          createModelAction(AZURE, "Azure OpenAI", Icons.Azure, presentation));
-    }
     if (availableProviders.contains(GOOGLE)) {
       var googleGroup = DefaultActionGroup.createPopupGroup(() -> "Google (Gemini)");
       googleGroup.getTemplatePresentation().setIcon(Icons.Google);
@@ -259,10 +254,6 @@ public class ModelComboBoxAction extends ComboBoxAction {
       case ANTHROPIC:
         templatePresentation.setIcon(Icons.Anthropic);
         templatePresentation.setText("Anthropic (Claude)");
-        break;
-      case AZURE:
-        templatePresentation.setIcon(Icons.Azure);
-        templatePresentation.setText("Azure OpenAI");
         break;
       case LLAMA_CPP:
         templatePresentation.setText(getLlamaCppPresentationText());

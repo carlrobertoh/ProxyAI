@@ -12,7 +12,6 @@ import ee.carlrobert.codegpt.settings.service.ModelRole;
 import ee.carlrobert.codegpt.settings.service.ProviderChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings;
-import ee.carlrobert.codegpt.settings.service.azure.AzureSettings;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTService;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings;
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
@@ -125,8 +124,6 @@ public class GeneralSettings implements PersistentStateComponent<GeneralSettings
         return OpenAISettings.getCurrentState().getModel();
       case ANTHROPIC:
         return AnthropicSettings.getCurrentState().getModel();
-      case AZURE:
-        return AzureSettings.getCurrentState().getDeploymentId();
       case LLAMA_CPP:
         var llamaSettings = LlamaSettings.getCurrentState();
         if (llamaSettings.isUseCustomModel()) {

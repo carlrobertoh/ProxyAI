@@ -6,8 +6,8 @@
     <depends>com.intellij.modules.lang</depends>
     <depends optional="true" config-file="plugin-kotlin.xml">org.jetbrains.kotlin</depends>
     <depends optional="true" config-file="plugin-java.xml">com.intellij.modules.java</depends>
-    <depends optional="true" config-file="plugin-python.xml">com.intellij.modules.python</depends>
 <!--    TODO-->
+<!--    <depends optional="true" config-file="plugin-python.xml">com.intellij.modules.python</depends>-->
 <!--    <depends optional="true" config-file="plugin-js.xml">JavaScript</depends>-->
 <!--    <depends optional="true" config-file="plugin-go.xml">org.jetbrains.plugins.go</depends>-->
 <!--    <depends optional="true" config-file="plugin-ruby.xml">com.intellij.modules.ruby</depends>-->
@@ -25,6 +25,8 @@
     </projectListeners>
 
     <extensions defaultExtensionNs="com.intellij">
+        <supportsKotlinPluginMode supportsK2="true" />
+
         <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTProjectActivity"/>
         <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTUpdateActivity"/>
         <editorFactoryListener implementation="ee.carlrobert.codegpt.CodeGPTEditorFactoryListener"/>
@@ -38,8 +40,6 @@
           instance="ee.carlrobert.codegpt.settings.service.OpenAIServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.custom" parentId="settings.codegpt.services" displayName="Custom OpenAI"
           instance="ee.carlrobert.codegpt.settings.service.custom.CustomServiceConfigurable"/>
-        <applicationConfigurable id="settings.codegpt.services.azure" parentId="settings.codegpt.services" displayName="Azure"
-          instance="ee.carlrobert.codegpt.settings.service.AzureServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.anthropic" parentId="settings.codegpt.services" displayName="Anthropic"
           instance="ee.carlrobert.codegpt.settings.service.AnthropicServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.google" parentId="settings.codegpt.services" displayName="Google"
@@ -65,7 +65,6 @@
         <applicationService
           serviceImplementation="ee.carlrobert.codegpt.telemetry.core.service.TelemetryServiceFactory"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.GeneralSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.azure.AzureSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.openai.OpenAISettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.you.YouSettings"/>

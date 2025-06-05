@@ -2,50 +2,43 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.actions;
 
 import static com.intellij.openapi.application.ActionsKt.runUndoTransparentWriteAction;
 
-import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.ex.EditorEx;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
-import ee.carlrobert.codegpt.actions.ActionType;
-import ee.carlrobert.codegpt.actions.TrackableAction;
 import ee.carlrobert.codegpt.ui.OverlayUtil;
 import java.awt.Point;
+import java.awt.event.ActionEvent;
 import java.util.Optional;
+import javax.swing.AbstractAction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class InsertAtCaretAction extends TrackableAction {
+public class InsertAtCaretAction extends AbstractAction {
 
   private final @NotNull Editor toolwindowEditor;
+  private final @Nullable Point locationOnScreen;
 
-  public InsertAtCaretAction(@NotNull Editor toolwindowEditor) {
+  public InsertAtCaretAction(
+      @NotNull EditorEx toolwindowEditor,
+      @Nullable Point locationOnScreen) {
     super(
         CodeGPTBundle.get("toolwindow.chat.editor.action.insertAtCaret.title"),
-        CodeGPTBundle.get("toolwindow.chat.editor.action.insertAtCaret.description"),
-        Icons.SendToTheLeft,
-        ActionType.INSERT_AT_CARET);
+        Icons.SendToTheLeft);
     this.toolwindowEditor = toolwindowEditor;
+    this.locationOnScreen = locationOnScreen;
   }
 
   @Override
-  public void handleAction(@NotNull AnActionEvent event) {
-    Point locationOnScreen = getLocationOnScreen(event);
+  public void actionPerformed(ActionEvent e) {
     Editor mainEditor = getSelectedTextEditor();
-
     if (mainEditor == null) {
       OverlayUtil.showWarningBalloon("Active editor not found", locationOnScreen);
       return;
     }
 
     insertTextAtCaret(mainEditor);
-  }
-
-  @Nullable
-  private Point getLocationOnScreen(AnActionEvent event) {
-    return Optional.ofNullable(event.getInputEvent())
-        .map(inputEvent -> inputEvent.getComponent().getLocationOnScreen())
-        .orElse(null);
   }
 
   @Nullable

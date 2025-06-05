@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.completions
 
+import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
@@ -97,6 +98,8 @@ data class CommitMessageCompletionParameters(
 ) : CompletionParameters
 
 data class LookupCompletionParameters(val prompt: String) : CompletionParameters
+
+data class AutoApplyParameters(val source: String, val destination: VirtualFile)
 
 data class EditCodeCompletionParameters(
     val prompt: String,

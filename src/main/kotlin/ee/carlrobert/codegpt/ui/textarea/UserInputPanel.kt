@@ -278,7 +278,7 @@ class UserInputPanel(
             ServiceType.CUSTOM_OPENAI,
             ServiceType.ANTHROPIC,
             ServiceType.GOOGLE,
-            ServiceType.AZURE,
+            ServiceType.OPENAI,
             ServiceType.OLLAMA -> true
 
             ServiceType.CODEGPT -> {
@@ -286,23 +286,15 @@ class UserInputPanel(
                     "gpt-4.1",
                     "gpt-4.1-mini",
                     "gemini-pro-2.5",
-                    "claude-3-opus",
-                    "claude-3.5-sonnet",
-                    "claude-3.7-sonnet"
+                    "gemini-flash-2.5",
+                    "claude-4-sonnet",
+                    "claude-4-sonnet-thinking"
                 ).contains(
                     service<CodeGPTServiceSettings>()
                         .state
                         .chatCompletionSettings
                         .model
                 )
-            }
-
-            ServiceType.OPENAI -> {
-                listOf(
-                    OpenAIChatCompletionModel.GPT_4_VISION_PREVIEW.code,
-                    OpenAIChatCompletionModel.GPT_4_O.code,
-                    OpenAIChatCompletionModel.GPT_4_O_MINI.code
-                ).contains(service<OpenAISettings>().state.model)
             }
 
             else -> false

@@ -10,19 +10,11 @@ import javax.swing.SwingConstants;
 public class ModelIconLabel extends JBLabel {
 
   public ModelIconLabel(String clientCode, String modelCode) {
-    if ("you.chat.completion".equals(clientCode)) {
-      setIcon(Icons.You);
-      return;
-    }
-
     if ("chat.completion".equals(clientCode)) {
       setIcon(Icons.OpenAI);
     }
     if ("anthropic.chat.completion".equals(clientCode)) {
       setIcon(Icons.Anthropic);
-    }
-    if ("azure.chat.completion".equals(clientCode)) {
-      setIcon(Icons.Azure);
     }
     if ("llama.chat.completion".equals(clientCode)) {
       setIcon(Icons.Llama);

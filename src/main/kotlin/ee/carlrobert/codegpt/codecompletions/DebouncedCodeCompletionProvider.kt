@@ -112,7 +112,6 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             ServiceType.LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             ServiceType.OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
             ServiceType.ANTHROPIC,
-            ServiceType.AZURE,
             ServiceType.GOOGLE,
             null -> false
         }

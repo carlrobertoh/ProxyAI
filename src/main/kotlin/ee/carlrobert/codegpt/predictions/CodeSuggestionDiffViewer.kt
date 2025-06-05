@@ -262,7 +262,7 @@ class CodeSuggestionDiffViewer(
         myEditor.component.repaint()
     }
 
-    private class MyDiffContext(private val project: Project?) : DiffContext() {
+    class MyDiffContext(private val project: Project?) : DiffContext() {
         private val ownContext: UserDataHolder = UserDataHolderBase()
 
         override fun getProject() = project

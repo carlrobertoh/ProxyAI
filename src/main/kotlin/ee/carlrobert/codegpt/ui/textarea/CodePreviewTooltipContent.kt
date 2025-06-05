@@ -10,6 +10,7 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.JBColor
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
@@ -95,6 +96,7 @@ class CodePreviewTooltipContent(
             fileContent
         )
         val existingDocument = service<FileDocumentManager>().getDocument(lightVirtualFile)
-        return existingDocument ?: service<EditorFactory>().createDocument(fileContent)
+        return existingDocument
+            ?: service<EditorFactory>().createDocument(StringUtil.convertLineSeparators(fileContent))
     }
 }
