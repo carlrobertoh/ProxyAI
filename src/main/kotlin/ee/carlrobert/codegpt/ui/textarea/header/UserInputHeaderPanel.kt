@@ -109,18 +109,18 @@ class UserInputHeaderPanel(
 
         val allTags = tagManager.getTags()
 
-        val editorVirtualFilesSet = allTags
-            .filterIsInstance<EditorTagDetails>()
+        val filesVirtualFilesSet = allTags
+            .filterIsInstance<FileTagDetails>()
             .map { it.virtualFile }
             .toSet()
 
         /**
-         * Filter the tags collection to prioritize EditorTagDetails over FileTagDetails
-         * Keep all tags except FileTagDetails that have a corresponding EditorTagDetails
+         * Filter the tags collection to prioritize FileTagDetails over EditorTagDetails
+         * Keep all tags except EditorTagDetails that have a corresponding FileTagDetails
          */
         val tags = allTags.filter { tag ->
-            if (tag is FileTagDetails) {
-                !editorVirtualFilesSet.contains(tag.virtualFile)
+            if (tag is EditorTagDetails) {
+                !filesVirtualFilesSet.contains(tag.virtualFile)
             } else {
                 true
             }
