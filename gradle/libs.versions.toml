@@ -5,14 +5,14 @@ changelog = "2.2.1"
 checkstyle = "10.15.0"
 commons-text = "1.13.0"
 flexmark = "0.64.8"
-gradle-intellij-plugin-version = "1.17.4"
+gradle-intellij-plugin-version = "2.6.0"
 gson = "2.12.1"
 jackson = "2.18.3"
 jsoup = "1.19.1"
 jtokkit = "1.1.0"
 junit = "5.12.1"
 kotlin = "2.1.20"
-llm-client = "0.8.41"
+llm-client = "0.8.43"
 okio = "3.10.2"
 tree-sitter = "0.24.5"
 grpc = "1.71.0"
@@ -24,7 +24,7 @@ analytics = { module = "com.rudderstack.sdk.java.analytics:analytics", version.r
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 commons-text = { module = "org.apache.commons:commons-text", version.ref = "commons-text" }
 flexmark-all = { module = "com.vladsch.flexmark:flexmark-all", version.ref = "flexmark" }
-gradle-intellij-plugin = { module = "org.jetbrains.intellij.plugins:gradle-intellij-plugin", version.ref = "gradle-intellij-plugin-version" }
+gradle-intellij-plugin = { module = "org.jetbrains.intellij.platform:intellij-platform-gradle-plugin", version.ref = "gradle-intellij-plugin-version" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }

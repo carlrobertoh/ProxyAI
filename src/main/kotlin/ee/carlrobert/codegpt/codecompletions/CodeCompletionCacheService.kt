@@ -1,28 +1,19 @@
 package ee.carlrobert.codegpt.codecompletions
 
+import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
-import com.google.common.cache.CacheLoader
-import com.google.common.cache.LoadingCache
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.project.Project
 import java.util.concurrent.ConcurrentHashMap
 
 @Service(Service.Level.PROJECT)
 class CodeCompletionCacheService() {
     private val cacheCounter = ConcurrentHashMap<String, Int>()
-    private val cache: LoadingCache<String, String?> = CacheBuilder.newBuilder()
+    private val cache: Cache<String, String> = CacheBuilder.newBuilder()
         .maximumSize(10)
         .recordStats()
-        .build(object : CacheLoader<String, String?>() {
-            override fun load(key: String): String? = null
-        })
-
-    fun getAll(): Map<String, String?> {
-        return ConcurrentHashMap(cache.asMap())
-    }
+        .build()
 
     fun get(key: String): String? {
         val value = cache.getIfPresent(key)
@@ -82,12 +73,5 @@ class CodeCompletionCacheService() {
     fun setCache(prefix: String, suffix: String, completion: String) {
         val key = getKey(prefix, suffix)
         set(key, completion)
-    }
-
-    companion object {
-        @JvmStatic
-        fun <T> getInstance(project: Project): CodeCompletionCacheService {
-            return project.service<CodeCompletionCacheService>()
-        }
     }
 }

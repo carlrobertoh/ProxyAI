@@ -43,7 +43,7 @@ object ComponentFactory {
                 val actionManager = ActionManager.getInstance()
                 val originalGroup = actionManager.getAction(groupId)
                 if (originalGroup is ActionGroup) {
-                    addAll(originalGroup.getChildren(null, actionManager).toList())
+                    addAll(originalGroup.getChildren(null).toList())
                 }
             }
         }
