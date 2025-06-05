@@ -44,8 +44,12 @@ public class GeneralSettingsState {
       default -> {throw new AssertionError();}
     }
   }
+
   public ServiceType getSelectedService() {
     return getSelectedService(CHAT_ROLE);
+  }
+  public ServiceType getSelectedCodeCompletionService() {
+    return getSelectedService(CODECOMPLETION_ROLE);
   }
 
   public void setSelectedService(ModelRole role, ServiceType selectedService) {
@@ -67,5 +71,8 @@ public class GeneralSettingsState {
 
   public void setSelectedService(ServiceType selectedService) {
     setSelectedService(CHAT_ROLE, selectedService);
+  }
+  public void setSelectedCodeCompletionService(ServiceType selectedService) {
+    setSelectedService(CODECOMPLETION_ROLE, selectedService);
   }
 }
