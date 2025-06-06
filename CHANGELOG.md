@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Compatibility issues with the latest IDEs
+
+### Added
+
+- Global context search (users can now perform a speed search without selecting a group first)
+
 ## [3.4.1-233] - 2025-06-04
 
 ### Fixed
