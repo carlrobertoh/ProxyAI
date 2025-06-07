@@ -6,6 +6,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAwareAction
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionService
 import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.service.ModelRole.CODECOMPLETION_ROLE
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -17,7 +18,7 @@ abstract class CodeCompletionFeatureToggleActions(
     private val enableFeatureAction: Boolean
 ) : DumbAwareAction() {
 
-    override fun actionPerformed(e: AnActionEvent) = when (GeneralSettings.getSelectedService()) {
+    override fun actionPerformed(e: AnActionEvent) = when (GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)) {
         CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings::codeCompletionsEnabled::set
 
         OPENAI -> OpenAISettings.getCurrentState()::setCodeCompletionsEnabled
@@ -34,7 +35,7 @@ abstract class CodeCompletionFeatureToggleActions(
     }(enableFeatureAction)
 
     override fun update(e: AnActionEvent) {
-        val selectedService = GeneralSettings.getSelectedService()
+        val selectedService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)
         val codeCompletionEnabled =
             e.project?.service<CodeCompletionService>()?.isCodeCompletionsEnabled(selectedService)
                 ?: false

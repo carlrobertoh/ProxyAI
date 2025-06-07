@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.settings.service
 
+import ee.carlrobert.codegpt.settings.service.ModelRole.*
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import ee.carlrobert.codegpt.conversations.ConversationsState
@@ -23,24 +24,28 @@ class ServiceConfigurable : Configurable {
     }
 
     override fun isModified(): Boolean {
-        return component.getSelectedService() != service<GeneralSettings>().state.selectedService
+        return component.getSelectedService(CHAT_ROLE) != service<GeneralSettings>().state.getSelectedService(CHAT_ROLE)
+                || component.getSelectedService(CODECOMPLETION_ROLE) != service<GeneralSettings>().state.getSelectedService(CODECOMPLETION_ROLE)
     }
 
     override fun apply() {
         val state = service<GeneralSettings>().state
-        state.selectedService = component.getSelectedService()
+        state.setSelectedService(CHAT_ROLE, component.getSelectedService(CHAT_ROLE))
 
-        val serviceChanged = component.getSelectedService() != state.selectedService
+        val serviceChanged = component.getSelectedService(CHAT_ROLE) != state.selectedService
         if (serviceChanged) {
             resetActiveTab()
             TelemetryAction.SETTINGS_CHANGED.createActionMessage()
-                .property("service", component.getSelectedService().code.lowercase())
+                .property("service", component.getSelectedService(CHAT_ROLE).code.lowercase())
                 .send()
         }
+
+        state.setSelectedService(CODECOMPLETION_ROLE, component.getSelectedService(CODECOMPLETION_ROLE))
     }
 
     override fun reset() {
-        component.setSelectedService(service<GeneralSettings>().state.selectedService)
+        component.setSelectedService(CHAT_ROLE,service<GeneralSettings>().state.getSelectedService(CHAT_ROLE))
+        component.setSelectedService(CODECOMPLETION_ROLE,service<GeneralSettings>().state.getSelectedService(CODECOMPLETION_ROLE))
     }
 
     private fun resetActiveTab() {

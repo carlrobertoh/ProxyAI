@@ -10,6 +10,7 @@ import com.intellij.platform.workspace.storage.impl.cache.cache
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_CODE_COMPLETION
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.service.ModelRole.*
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -74,7 +75,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
                 var eventListener = CodeCompletionEventListener(request.editor, this)
 
-                if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT) {
+                if (GeneralSettings.getSelectedService(CODECOMPLETION_ROLE) == ServiceType.CODEGPT) {
                     project.service<GrpcClientService>().getCodeCompletionAsync(eventListener, request, this)
                     return@channelFlow
                 }
@@ -103,7 +104,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
     }
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
-        val selectedService = GeneralSettings.getSelectedService()
+        val selectedService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)
         val codeCompletionsEnabled = when (selectedService) {
             ServiceType.CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             ServiceType.OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled

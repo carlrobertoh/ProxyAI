@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.settings.service
 
+import ee.carlrobert.codegpt.settings.service.ModelRole.*
 import com.intellij.ide.DataManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.ex.Settings
@@ -23,21 +24,35 @@ class ServiceConfigurableComponent {
 
     private var serviceComboBox: ComboBox<ServiceType> =
         ComboBox(EnumComboBoxModel(ServiceType::class.java)).apply {
-            selectedItem = service<GeneralSettings>().state.selectedService
+            selectedItem = service<GeneralSettings>().state.getSelectedService(CHAT_ROLE)
+        }
+    private var codeCompletionServiceComboBox: ComboBox<ServiceType> =
+        ComboBox(EnumComboBoxModel(ServiceType::class.java)).apply {
+            selectedItem = service<GeneralSettings>().state.getSelectedService(CODECOMPLETION_ROLE)
         }
 
-    fun getSelectedService(): ServiceType {
-        return serviceComboBox.selectedItem as ServiceType
+    fun getSelectedService(role: ModelRole): ServiceType {
+        return when(role) {
+            CHAT_ROLE -> serviceComboBox
+            CODECOMPLETION_ROLE -> codeCompletionServiceComboBox
+        }.selectedItem as ServiceType
     }
 
-    fun setSelectedService(serviceType: ServiceType) {
-        serviceComboBox.selectedItem = serviceType
+    fun setSelectedService(role: ModelRole, serviceType: ServiceType) {
+        when(role) {
+            CHAT_ROLE -> serviceComboBox
+            CODECOMPLETION_ROLE -> codeCompletionServiceComboBox
+        }.selectedItem = serviceType
     }
 
     fun getPanel(): JPanel = FormBuilder.createFormBuilder()
         .addLabeledComponent(
             CodeGPTBundle.get("settingsConfigurable.service.label"),
             serviceComboBox
+        )
+        .addLabeledComponent(
+            CodeGPTBundle.get("settingsConfigurable.service.codeCompletion.label"),
+            codeCompletionServiceComboBox
         )
         .addVerticalGap(8)
         .addComponent(JBLabel("All available providers that can be used with CodeGPT:"))
