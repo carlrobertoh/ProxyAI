@@ -1,5 +1,7 @@
 package ee.carlrobert.codegpt.settings;
 
+import static ee.carlrobert.codegpt.settings.service.ModelRole.CHAT_ROLE;
+
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
@@ -20,8 +22,6 @@ import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings;
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings;
 import ee.carlrobert.codegpt.util.ApplicationUtil;
 import org.jetbrains.annotations.NotNull;
-
-import static ee.carlrobert.codegpt.settings.service.ModelRole.CHAT_ROLE;
 
 @State(name = "CodeGPT_GeneralSettings_270", storages = @Storage("CodeGPT_GeneralSettings_270.xml"))
 public class GeneralSettings implements PersistentStateComponent<GeneralSettingsState> {

@@ -1,11 +1,12 @@
 package ee.carlrobert.codegpt.settings;
 
+import static ee.carlrobert.codegpt.settings.service.ModelRole.CHAT_ROLE;
+import static ee.carlrobert.codegpt.settings.service.ModelRole.CODECOMPLETION_ROLE;
+
 import com.intellij.openapi.application.ApplicationManager;
 import ee.carlrobert.codegpt.settings.service.ModelRole;
 import ee.carlrobert.codegpt.settings.service.ProviderChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
-
-import static ee.carlrobert.codegpt.settings.service.ModelRole.*;
 
 public class GeneralSettingsState {
 
@@ -39,15 +40,22 @@ public class GeneralSettingsState {
 
   public ServiceType getSelectedService(ModelRole role) {
     switch (role) {
-      case CHAT_ROLE -> {return selectedService;}
-      case CODECOMPLETION_ROLE -> {return codeCompletionService;}
-      default -> {throw new AssertionError();}
+      case CHAT_ROLE -> {
+        return selectedService;
+      }
+      case CODECOMPLETION_ROLE -> {
+        return codeCompletionService;
+      }
+      default -> {
+        throw new AssertionError();
+      }
     }
   }
 
   public ServiceType getSelectedService() {
     return getSelectedService(CHAT_ROLE);
   }
+
   public ServiceType getSelectedCodeCompletionService() {
     return getSelectedService(CODECOMPLETION_ROLE);
   }
@@ -65,13 +73,16 @@ public class GeneralSettingsState {
       case CODECOMPLETION_ROLE -> {
         this.codeCompletionService = selectedService;
       }
-      default -> {throw new AssertionError();}
+      default -> {
+        throw new AssertionError();
+      }
     }
   }
 
   public void setSelectedService(ServiceType selectedService) {
     setSelectedService(CHAT_ROLE, selectedService);
   }
+
   public void setSelectedCodeCompletionService(ServiceType selectedService) {
     setSelectedService(CODECOMPLETION_ROLE, selectedService);
   }
