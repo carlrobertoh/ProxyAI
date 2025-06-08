@@ -76,7 +76,7 @@
           id="CodeGPTInlineCompletionProvider"
           implementation="ee.carlrobert.codegpt.codecompletions.DebouncedCodeCompletionProvider"/>
         <toolWindow id="ProxyAI" icon="ee.carlrobert.codegpt.Icons.DefaultSmall" anchor="right"
-            factoryClass="ee.carlrobert.codegpt.toolwindow.ProjectToolWindowFactory"/>
+            factoryClass="ee.carlrobert.codegpt.toolwindow.ProxyAIToolWindowFactory"/>
         <notificationGroup id="proxyai.notification.group" displayType="BALLOON" key="notification.group.name"/>
         <notificationGroup id="proxyai.notification.sticky.group" displayType="STICKY_BALLOON" key="notification.group.sticky.name"/>
         <statusBarWidgetFactory order="first" id="ee.carlrobert.codegpt.statusbar.widget"
