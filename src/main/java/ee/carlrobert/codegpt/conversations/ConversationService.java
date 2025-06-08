@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.conversations;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.diagnostic.Logger;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.settings.GeneralSettings;
@@ -23,6 +24,8 @@ import org.jetbrains.annotations.NotNull;
 
 @Service
 public final class ConversationService {
+
+  private static final Logger LOG = Logger.getInstance(ConversationService.class);
 
   private final ConversationsState conversationState = ConversationsState.getInstance();
 
@@ -111,7 +114,13 @@ public final class ConversationService {
   }
 
   public Conversation startConversation() {
-    var completionCode = GeneralSettings.getSelectedService().getCompletionCode();
+    var selectedService = GeneralSettings.getSelectedService();
+    if (selectedService == null) {
+      LOG.warn("Selected service is not defined, falling back to ProxyAI.");
+      selectedService = ServiceType.CODEGPT;
+    }
+
+    var completionCode = selectedService.getCompletionCode();
     var conversation = createConversation(completionCode);
     conversationState.setCurrentConversation(conversation);
     addConversation(conversation);
