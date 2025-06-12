@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.toolwindow.chat.structure.data
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -13,6 +14,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.util.io.await
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
@@ -23,6 +25,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -54,8 +57,27 @@ class PsiStructureRepository(
         }
 
         override fun onTagSelectionChanged(tag: TagDetails) {
+            (tag as? CodeAnalyzeTagDetails)?.let {
+                handleCodeAnalyzeTag(it)
+            }
+
             val tags = tagManager.getTags().getPsiAnalyzedTags()
             update(tags)
+        }
+
+        private fun handleCodeAnalyzeTag(tag: CodeAnalyzeTagDetails) {
+            if (!tag.selected) {
+                _structureState.value = PsiStructureState.Content(emptySet(), emptySet())
+                service<ConfigurationSettings>().state
+                    .chatCompletionSettings
+                    .psiStructureEnabled = false
+                disable()
+            } else {
+                service<ConfigurationSettings>().state
+                    .chatCompletionSettings
+                    .psiStructureEnabled = true
+                enable()
+            }
         }
 
         private fun updatePsiStructureIfNeeded() {
@@ -99,6 +121,8 @@ class PsiStructureRepository(
         }
     }
 
+    private var analyzePsiDepth = Int.MAX_VALUE
+
     init {
         Disposer.register(parentDisposable, coroutineScope)
         tagManager.addListener(tagsListener)
@@ -113,7 +137,17 @@ class PsiStructureRepository(
         connection.subscribe(
             ConfigurationStateListener.TOPIC,
             ConfigurationStateListener { newState ->
+                tagManager.getTags()
+                    .filterIsInstance<CodeAnalyzeTagDetails>()
+                    .forEach { tagManager.remove(it) }
+
+                tagManager.addTag(
+                    CodeAnalyzeTagDetails().apply {
+                        selected = newState.chatCompletionSettings.psiStructureEnabled
+                    }
+                )
                 if (newState.chatCompletionSettings.psiStructureEnabled) {
+                    analyzePsiDepth = newState.chatCompletionSettings.psiStructureAnalyzeDepth
                     enable()
                 } else {
                     disable()
@@ -164,7 +198,7 @@ class PsiStructureRepository(
                     .await()
 
                 val virtualFilesToRemoveFromStructure = tags.getExcludedVirtualFiles()
-                val result = psiStructureProvider.get(psiFiles)
+                val result = psiStructureProvider.get(psiFiles, analyzePsiDepth)
                     .filter { classStructure ->
                         !virtualFilesToRemoveFromStructure.contains(classStructure.virtualFile)
                     }
@@ -195,6 +229,7 @@ class PsiStructureRepository(
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is CodeAnalyzeTagDetails -> null
                 }
             }
         }
@@ -217,6 +252,7 @@ class PsiStructureRepository(
                 is PersonaTagDetails -> false
                 is EmptyTagDetails -> false
                 is WebTagDetails -> false
+                is CodeAnalyzeTagDetails -> false
             }
         }
             .toSet()
@@ -241,6 +277,7 @@ class PsiStructureRepository(
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is CodeAnalyzeTagDetails -> null
                 }
             }
         }
