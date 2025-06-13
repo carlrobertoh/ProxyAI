@@ -96,6 +96,7 @@ class CustomServiceListForm(
     private val tabbedPane: JTabbedPane
     private val exportButton: JButton
     private val importButton: JButton
+    private var disableTemplateSelectionHandler = false
 
     init {
         val selectedItem = formState.value.services.first()
@@ -112,6 +113,9 @@ class CustomServiceListForm(
         }
         nameField.text = selectedItem.name
         templateComboBox.addItemListener {
+            if (disableTemplateSelectionHandler) {
+                return@addItemListener
+            }
             val template = it.item as CustomServiceTemplate
             updateTemplateHelpTextTooltip(template)
             chatCompletionsForm.run {
@@ -161,7 +165,9 @@ class CustomServiceListForm(
         }
         apiKeyField.text = selectedItem.apiKey
         nameField.text = selectedItem.name
+        disableTemplateSelectionHandler = true
         templateComboBox.selectedItem = selectedItem.template
+        disableTemplateSelectionHandler = false
         updateTemplateHelpTextTooltip(selectedItem.template)
     }
 
