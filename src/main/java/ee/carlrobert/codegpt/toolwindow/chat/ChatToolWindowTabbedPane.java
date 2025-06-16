@@ -105,7 +105,6 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
       var conversation = toolWindowPanel.getConversation();
       if (conversation != null) {
         ConversationsState.getInstance().setCurrentConversation(conversation);
-        GeneralSettings.getInstance().sync(conversation);
       }
     }
   }

@@ -246,14 +246,6 @@ class UserInputPanel(
             project,
             {
                 imageActionSupported.set(isImageActionSupported())
-                // TODO: Implement a proper session management
-                val conversationService = service<ConversationService>()
-                if (conversation.messages.isNotEmpty()) {
-                    conversationService.startConversation()
-                    project.service<ChatToolWindowContentManager>().createNewTabPanel()
-                } else {
-                    conversation.model = conversationService.getModelForSelectedService(it)
-                }
             },
             service<GeneralSettings>().state.selectedService
         ).createCustomComponent(ActionPlaces.UNKNOWN)

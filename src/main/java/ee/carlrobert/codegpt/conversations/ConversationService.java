@@ -5,19 +5,9 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.conversations.message.Message;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
-import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings;
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings;
-import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
-import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings;
-import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings;
-import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Optional;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
@@ -37,32 +27,22 @@ public final class ConversationService {
   }
 
   public List<Conversation> getSortedConversations() {
-    return conversationState.getConversationsMapping()
-        .values()
+    return conversationState.conversations
         .stream()
-        .flatMap(List::stream)
         .sorted(Comparator.comparing(Conversation::getUpdatedOn).reversed())
         .toList();
   }
 
-  public Conversation createConversation(String clientCode) {
+  public Conversation createConversation() {
     var conversation = new Conversation();
     conversation.setId(UUID.randomUUID());
-    conversation.setClientCode(clientCode);
     conversation.setCreatedOn(LocalDateTime.now());
     conversation.setUpdatedOn(LocalDateTime.now());
-    conversation.setModel(getModelForSelectedService(GeneralSettings.getSelectedService()));
     return conversation;
   }
 
   public void addConversation(Conversation conversation) {
-    var conversationsMapping = conversationState.getConversationsMapping();
-    var conversations = conversationsMapping.get(conversation.getClientCode());
-    if (conversations == null) {
-      conversations = new ArrayList<>();
-    }
-    conversations.add(conversation);
-    conversationsMapping.put(conversation.getClientCode(), conversations);
+    conversationState.conversations.add(conversation);
   }
 
   public void saveMessage(String response, ChatCompletionParameters callParameters) {
@@ -85,62 +65,28 @@ public final class ConversationService {
 
   public void saveMessage(@NotNull Conversation conversation, @NotNull Message message) {
     conversation.setUpdatedOn(LocalDateTime.now());
-    var iterator = getIterator(conversation.getClientCode());
-    while (iterator.hasNext()) {
-      var next = iterator.next();
-      next.setMessages(
-          next.getMessages().stream().map(item -> {
-            if (item.getId() == message.getId()) {
-              return message;
-            }
-            return item;
-          }).toList());
-      if (next.getId().equals(conversation.getId())) {
-        iterator.set(conversation);
-      }
-    }
+    conversation.addMessage(message);
   }
 
   public void saveConversation(Conversation conversation) {
     conversation.setUpdatedOn(LocalDateTime.now());
-    var iterator = getIterator(conversation.getClientCode());
-    while (iterator.hasNext()) {
-      var next = iterator.next();
-      if (next.getId().equals(conversation.getId())) {
-        iterator.set(conversation);
-      }
-    }
     conversationState.setCurrentConversation(conversation);
   }
 
   public Conversation startConversation() {
-    var selectedService = GeneralSettings.getSelectedService();
-    if (selectedService == null) {
-      LOG.warn("Selected service is not defined, falling back to ProxyAI.");
-      selectedService = ServiceType.CODEGPT;
-    }
-
-    var completionCode = selectedService.getCompletionCode();
-    var conversation = createConversation(completionCode);
+    var conversation = createConversation();
     conversationState.setCurrentConversation(conversation);
     addConversation(conversation);
     return conversation;
   }
 
   public void clearAll() {
-    conversationState.getConversationsMapping().clear();
+    conversationState.conversations.clear();
     conversationState.setCurrentConversation(null);
   }
 
   public void deleteConversation(Conversation conversation) {
-    var iterator = getIterator(conversation.getClientCode());
-    while (iterator.hasNext()) {
-      var next = iterator.next();
-      if (next.getId().equals(conversation.getId())) {
-        iterator.remove();
-        break;
-      }
-    }
+    conversationState.conversations.removeIf(it -> it.getId() == conversation.getId());
   }
 
   public void deleteSelectedConversation() {
@@ -171,12 +117,6 @@ public final class ConversationService {
     return tryGetNextOrPreviousConversation(false);
   }
 
-  private ListIterator<Conversation> getIterator(String clientCode) {
-    return conversationState.getConversationsMapping()
-        .get(clientCode)
-        .listIterator();
-  }
-
   private Optional<Conversation> tryGetNextOrPreviousConversation(boolean isPrevious) {
     var currentConversation = ConversationsState.getCurrentConversation();
     if (currentConversation != null) {
@@ -193,30 +133,5 @@ public final class ConversationService {
       }
     }
     return Optional.empty();
-  }
-
-  public String getModelForSelectedService(ServiceType serviceType) {
-    var application = ApplicationManager.getApplication();
-    return switch (serviceType) {
-      case CODEGPT -> application.getService(CodeGPTServiceSettings.class)
-          .getState()
-          .getChatCompletionSettings()
-          .getModel();
-      case OPENAI -> OpenAISettings.getCurrentState().getModel();
-      case CUSTOM_OPENAI -> "CustomService";
-      case ANTHROPIC -> AnthropicSettings.getCurrentState().getModel();
-      case LLAMA_CPP -> {
-        var llamaSettings = LlamaSettings.getCurrentState();
-        yield llamaSettings.isUseCustomModel()
-            ? llamaSettings.getCustomLlamaModelPath()
-            : llamaSettings.getHuggingFaceModel().getCode();
-      }
-      case OLLAMA -> application.getService(OllamaSettings.class)
-          .getState()
-          .getModel();
-      case GOOGLE -> application.getService(GoogleSettings.class)
-          .getState()
-          .getModel();
-    };
   }
 }

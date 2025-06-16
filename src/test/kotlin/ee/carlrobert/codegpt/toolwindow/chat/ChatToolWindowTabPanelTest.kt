@@ -81,13 +81,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -179,13 +174,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -269,13 +259,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -377,13 +362,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -459,13 +439,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         }
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])

@@ -8,10 +8,8 @@ import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.actions.toolwindow.DeleteConversationAction;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationsState;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager;
 import ee.carlrobert.codegpt.ui.IconActionButton;
-import ee.carlrobert.codegpt.ui.ModelIconLabel;
 import java.awt.BorderLayout;
 import java.awt.Cursor;
 import java.awt.GridBagConstraints;
@@ -42,7 +40,6 @@ class ConversationPanel extends JPanel {
     addMouseListener(new MouseAdapter() {
       @Override
       public void mouseClicked(MouseEvent e) {
-        GeneralSettings.getInstance().sync(conversation);
         toolWindowContentManager.displayConversation(conversation);
       }
     });
@@ -92,11 +89,6 @@ class ConversationPanel extends JPanel {
     var bottomPanel = new JPanel(new BorderLayout());
     bottomPanel.add(new JLabel(conversation.getUpdatedOn()
         .format(DateTimeFormatter.ofPattern("M/d/yyyy, h:mm:ss a"))), BorderLayout.WEST);
-    if (conversation.getModel() != null) {
-      bottomPanel.add(
-          new ModelIconLabel(conversation.getClientCode(), conversation.getModel()),
-          BorderLayout.EAST);
-    }
 
     var textPanel = new JPanel(new BorderLayout());
     textPanel.add(headerPanel, BorderLayout.NORTH);
