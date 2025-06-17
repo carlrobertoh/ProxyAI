@@ -278,6 +278,7 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   private ResponseMessagePanel createResponseMessagePanel(ChatCompletionParameters callParameters) {
     var message = callParameters.getMessage();
+    System.out.println("Checking if the request_id has reched the code block for sending feedback?");
     var fileContextIncluded =
         hasReferencedFilePaths(message) || hasReferencedFilePaths(conversation);
 

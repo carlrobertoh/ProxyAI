@@ -22,6 +22,7 @@ class ChatCompletionParameters private constructor(
     var referencedFiles: List<ReferencedFile>?,
     var personaDetails: PersonaDetails?,
     var psiStructure: Set<ClassStructure>?,
+    var requestId: UUID?,
 ) : CompletionParameters {
 
     fun toBuilder(): Builder {
@@ -33,6 +34,7 @@ class ChatCompletionParameters private constructor(
             referencedFiles(this@ChatCompletionParameters.referencedFiles)
             personaDetails(this@ChatCompletionParameters.personaDetails)
             psiStructure(this@ChatCompletionParameters.psiStructure)
+            requestId(this@ChatCompletionParameters.requestId)
         }
     }
 
@@ -45,6 +47,7 @@ class ChatCompletionParameters private constructor(
         private var personaDetails: PersonaDetails? = null
         private var psiStructure: Set<ClassStructure>? = null
         private var gitDiff: String = ""
+        private var requestId: UUID? = null
 
         fun sessionId(sessionId: UUID?) = apply { this.sessionId = sessionId }
         fun conversationType(conversationType: ConversationType) =
@@ -70,6 +73,8 @@ class ChatCompletionParameters private constructor(
 
         fun psiStructure(psiStructure: Set<ClassStructure>?) = apply { this.psiStructure = psiStructure }
 
+        fun requestId(requestId: UUID?) = apply { this.requestId = requestId }
+
         fun build(): ChatCompletionParameters {
             return ChatCompletionParameters(
                 conversation,
@@ -81,6 +86,7 @@ class ChatCompletionParameters private constructor(
                 referencedFiles,
                 personaDetails,
                 psiStructure,
+                requestId,
             )
         }
     }

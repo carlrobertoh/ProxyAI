@@ -69,6 +69,8 @@ public class ChatCompletionEventListener implements CompletionEventListener<Stri
   }
 
   private void handleCompleted(StringBuilder messageBuilder) {
+    System.out.println("Chat completion completed: " + messageBuilder.toString());
+    System.out.println("Chat completion request ID: " + callParameters.getRequestId());
     CompletionProgressNotifier.Companion.update(project, false);
     eventListener.handleCompleted(messageBuilder.toString(), callParameters);
   }
