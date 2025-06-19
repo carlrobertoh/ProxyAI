@@ -23,6 +23,7 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
         val activeService = service<CustomServicesSettings>()
             .state
             .active
+        activeService.chatCompletionSettings.headers["request_id"] = params.requestId.toString()
         val request = buildCustomOpenAIChatCompletionRequest(
             activeService.chatCompletionSettings,
             OpenAIRequestFactory.buildOpenAIMessages(null, params, params.referencedFiles, params.psiStructure),

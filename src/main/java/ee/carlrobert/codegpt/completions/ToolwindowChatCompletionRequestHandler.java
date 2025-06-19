@@ -31,8 +31,6 @@ public class ToolwindowChatCompletionRequestHandler {
           callParameters.getConversation(),
           callParameters.getMessage());
     } finally {
-      System.out.println("Printing request ID:");
-      System.out.println(callParameters.getRequestId());
       sendInfo(callParameters);
     }
   }

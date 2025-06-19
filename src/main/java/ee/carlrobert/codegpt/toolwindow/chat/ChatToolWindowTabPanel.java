@@ -27,6 +27,7 @@ import ee.carlrobert.codegpt.settings.GeneralSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
+import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.DislikeAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.LikeAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState;
@@ -278,19 +279,18 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   private ResponseMessagePanel createResponseMessagePanel(ChatCompletionParameters callParameters) {
     var message = callParameters.getMessage();
-    System.out.println("Checking if the request_id has reched the code block for sending feedback?");
     var fileContextIncluded =
         hasReferencedFilePaths(message) || hasReferencedFilePaths(conversation);
 
     var panel = new ResponseMessagePanel();
     panel.addCopyAction(() -> CopyAction.copyToClipboard(message.getResponse()));
     panel.addLikeAction(() -> {
-      LikeAction.likeResponse(message);
+      LikeAction.likeResponse(callParameters);
       panel.disableActions(List.of("LIKE"));
       panel.disableActions(List.of("DISLIKE"));
     });
     panel.addDislikeAction(() -> {
-      LikeAction.likeResponse(message);
+      DislikeAction.dislikeResponse(callParameters);
       panel.disableActions(List.of("LIKE"));
       panel.disableActions(List.of("DISLIKE"));
     });
