@@ -29,6 +29,7 @@ class SearchManager(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
         GitGroupItem(project),
+        HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
         MCPGroupItem(),

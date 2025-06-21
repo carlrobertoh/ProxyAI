@@ -20,6 +20,7 @@ class ChatCompletionParameters private constructor(
     var sessionId: UUID?,
     var retry: Boolean,
     var imageDetails: ImageDetails?,
+    var history: List<Conversation>?,
     var referencedFiles: List<ReferencedFile>?,
     var personaDetails: PersonaDetails?,
     var psiStructure: Set<ClassStructure>?,
@@ -42,6 +43,7 @@ class ChatCompletionParameters private constructor(
         private var conversationType: ConversationType = ConversationType.DEFAULT
         private var retry: Boolean = false
         private var imageDetails: ImageDetails? = null
+        private var history: List<Conversation>? = null
         private var referencedFiles: List<ReferencedFile>? = null
         private var personaDetails: PersonaDetails? = null
         private var psiStructure: Set<ClassStructure>? = null
@@ -64,6 +66,8 @@ class ChatCompletionParameters private constructor(
 
         fun gitDiff(gitDiff: String) = apply { this.gitDiff = gitDiff }
 
+        fun history(history: List<Conversation>?) = apply { this.history = history }
+
         fun referencedFiles(referencedFiles: List<ReferencedFile>?) =
             apply { this.referencedFiles = referencedFiles }
 
@@ -79,6 +83,7 @@ class ChatCompletionParameters private constructor(
                 sessionId,
                 retry,
                 imageDetails,
+                history,
                 referencedFiles,
                 personaDetails,
                 psiStructure,

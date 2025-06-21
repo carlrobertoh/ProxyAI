@@ -37,11 +37,13 @@ import ee.carlrobert.codegpt.toolwindow.ui.ChatToolWindowLandingPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
 import ee.carlrobert.codegpt.toolwindow.ui.UserMessagePanel;
 import ee.carlrobert.codegpt.ui.OverlayUtil;
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor;
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails;
+import ee.carlrobert.codegpt.ui.textarea.header.tag.HistoryTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
@@ -169,6 +171,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         .conversationType(conversationType)
         .imageDetailsFromPath(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project))
         .referencedFiles(getReferencedFiles(selectedTags))
+        .history(getHistory(getSelectedTags()))
         .psiStructure(psiStructure);
 
     findTagOfType(selectedTags, PersonaTagDetails.class)
@@ -186,6 +189,32 @@ public class ChatToolWindowTabPanel implements Disposable {
         .filter(Objects::nonNull)
         .distinct()
         .map(ReferencedFile::from)
+        .toList();
+  }
+
+  private List<UUID> getConversationHistoryIds(List<? extends TagDetails> tags) {
+    return tags.stream()
+        .map(it -> {
+          if (it instanceof HistoryTagDetails tagDetails) {
+            return tagDetails.getConversationId();
+          }
+          return null;
+        })
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  private List<Conversation> getHistory(List<? extends TagDetails> tags) {
+    return tags.stream()
+        .map(it -> {
+          if (it instanceof HistoryTagDetails tagDetails) {
+            return ConversationTagProcessor.Companion.getConversation(
+                tagDetails.getConversationId());
+          }
+          return null;
+        })
+        .filter(Objects::nonNull)
+        .distinct()
         .toList();
   }
 
@@ -390,6 +419,11 @@ public class ChatToolWindowTabPanel implements Disposable {
       List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
       if (!referencedFiles.isEmpty()) {
         messageBuilder.withReferencedFiles(referencedFiles);
+      }
+
+      List<UUID> conversationHistoryIds = getConversationHistoryIds(appliedTags);
+      if (!conversationHistoryIds.isEmpty()) {
+        messageBuilder.withConversationHistoryIds(conversationHistoryIds);
       }
 
       String attachedImagePath = CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project);

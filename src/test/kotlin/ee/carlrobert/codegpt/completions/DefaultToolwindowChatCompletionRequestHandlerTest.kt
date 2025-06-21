@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
+import ee.carlrobert.codegpt.completions.HuggingFaceModel
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate.LLAMA
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
@@ -34,7 +35,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )
@@ -117,7 +118,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     HuggingFaceModel.LLAMA_3_8B_Q6_K.code,
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )
@@ -199,7 +200,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     "TEST_MODEL",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )

@@ -5,6 +5,7 @@ import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.completions.*
+import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
@@ -13,6 +14,7 @@ import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.file.FileUtil.getImageMediaType
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.*
 import ee.carlrobert.llm.client.openai.completion.request.*
@@ -135,12 +137,14 @@ class OpenAIRequestFactory : CompletionRequestFactory {
             model: String?,
             callParameters: ChatCompletionParameters,
             referencedFiles: List<ReferencedFile>? = null,
+            conversationsHistory: List<Conversation>? = null,
             psiStructure: Set<ClassStructure>? = null
         ): List<OpenAIChatCompletionMessage> {
             val messages = buildOpenAIChatMessages(
                 model = model,
                 callParameters = callParameters,
                 referencedFiles = referencedFiles ?: callParameters.referencedFiles,
+                conversationsHistory = conversationsHistory ?: callParameters.history,
                 psiStructure = psiStructure,
             )
 
@@ -178,6 +182,7 @@ class OpenAIRequestFactory : CompletionRequestFactory {
             model: String?,
             callParameters: ChatCompletionParameters,
             referencedFiles: List<ReferencedFile>? = null,
+            conversationsHistory: List<Conversation>? = null,
             psiStructure: Set<ClassStructure>? = null
         ): MutableList<OpenAIChatCompletionMessage> {
             val message = callParameters.message
@@ -187,20 +192,18 @@ class OpenAIRequestFactory : CompletionRequestFactory {
             val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
             if (callParameters.conversationType == ConversationType.DEFAULT && !selectedPersona.disabled) {
                 val sessionPersonaDetails = callParameters.personaDetails
-                if (sessionPersonaDetails == null) {
-                    messages.add(
-                        OpenAIChatCompletionStandardMessage(
-                            role,
-                            selectedPersona.instructions?.addProjectPath()
-                        )
-                    )
+                val instructions = sessionPersonaDetails?.instructions?.addProjectPath()
+                    ?: selectedPersona.instructions?.addProjectPath()
+                val history = if (conversationsHistory.isNullOrEmpty()) {
+                    ""
                 } else {
-                    messages.add(
-                        OpenAIChatCompletionStandardMessage(
-                            role,
-                            sessionPersonaDetails.instructions.addProjectPath()
-                        )
-                    )
+                    conversationsHistory.joinToString("\n\n") {
+                        ConversationTagProcessor.formatConversation(it)
+                    }
+                }
+
+                if (instructions != null) {
+                    messages.add(OpenAIChatCompletionStandardMessage(role, instructions + "\n" + history))
                 }
             }
             if (callParameters.conversationType == ConversationType.REVIEW_CHANGES) {

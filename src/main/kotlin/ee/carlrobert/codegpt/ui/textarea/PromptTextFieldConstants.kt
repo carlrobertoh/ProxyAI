@@ -13,6 +13,8 @@ object PromptTextFieldConstants {
         "files", "file", "f",
         "folders", "folder", "fold",
         "git", "g",
+        "conversations", "conversation", "conv", "c",
+        "history", "hist", "h",
         "personas", "persona", "p",
         "docs", "doc", "d",
         "mcp", "m",

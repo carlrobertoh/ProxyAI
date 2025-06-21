@@ -20,6 +20,7 @@ class OllamaRequestFactory : BaseRequestFactory() {
                     model = model,
                     callParameters = params,
                     referencedFiles = params.referencedFiles,
+                    conversationsHistory = params.history,
                     psiStructure = params.psiStructure,
                 )
             )

@@ -5,6 +5,7 @@ import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
+import java.util.*
 
 class MessageBuilder(private val project: Project, private val text: String) {
     private val message = Message("")
@@ -20,6 +21,13 @@ class MessageBuilder(private val project: Project, private val text: String) {
     fun withReferencedFiles(referencedFiles: List<ReferencedFile>): MessageBuilder {
         if (referencedFiles.isNotEmpty()) {
             message.referencedFilePaths = referencedFiles.map { it.filePath() }
+        }
+        return this
+    }
+
+    fun withConversationHistoryIds(conversationHistoryIds: List<UUID>): MessageBuilder {
+        if (conversationHistoryIds.isNotEmpty()) {
+            message.conversationsHistoryIds = conversationHistoryIds
         }
         return this
     }

@@ -44,7 +44,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "Hello!")
                     )
                 )
@@ -116,7 +116,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf(
                             "role" to "user",
                             "content" to """
@@ -211,7 +211,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     .containsExactly(
                         "gpt-4-vision-preview",
                         listOf(
-                            mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                            mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                             mapOf(
                                 "role" to "user", "content" to listOf(
                                     mapOf(

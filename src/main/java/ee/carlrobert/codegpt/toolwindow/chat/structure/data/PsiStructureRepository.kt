@@ -188,6 +188,7 @@ class PsiStructureRepository(
                     // Maybe need recursive find all files
                     is FolderTagDetails -> null
 
+                    is HistoryTagDetails -> null
                     is EditorSelectionTagDetails -> null
                     is DocumentationTagDetails -> null
                     is CurrentGitChangesTagDetails -> null
@@ -211,6 +212,7 @@ class PsiStructureRepository(
                 // Maybe need recursive find all files
                 is FolderTagDetails -> false
 
+                is HistoryTagDetails -> false
                 is DocumentationTagDetails -> false
                 is CurrentGitChangesTagDetails -> false
                 is GitCommitTagDetails -> false
@@ -235,6 +237,7 @@ class PsiStructureRepository(
                     // Maybe need recursive find all files
                     is FolderTagDetails -> null
 
+                    is HistoryTagDetails -> null
                     is DocumentationTagDetails -> null
                     is CurrentGitChangesTagDetails -> null
                     is GitCommitTagDetails -> null

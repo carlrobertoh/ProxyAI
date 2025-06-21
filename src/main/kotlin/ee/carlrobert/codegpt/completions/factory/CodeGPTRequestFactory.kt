@@ -11,6 +11,7 @@ import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.codegpt.request.chat.*
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
@@ -22,7 +23,9 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         val model = service<CodeGPTServiceSettings>().state.chatCompletionSettings.model
         val configuration = service<ConfigurationSettings>().state
         val requestBuilder: ChatCompletionRequest.Builder =
-            ChatCompletionRequest.Builder(buildOpenAIMessages(model, params, emptyList()))
+            ChatCompletionRequest.Builder(
+                buildOpenAIMessages(model, params, emptyList(), emptyList())
+            )
                 .setModel(model)
                 .setSessionId(params.sessionId)
                 .setStream(true)
@@ -74,11 +77,15 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
             )
         }.orEmpty()
 
-        val contextFilesWithPsi = contextFiles + psiContext
-        if (contextFilesWithPsi.isNotEmpty()) {
-            requestBuilder.setContext(AdditionalRequestContext(contextFilesWithPsi))
+        val conversationsHistory = params.history?.joinToString("\n\n") {
+            ConversationTagProcessor.formatConversation(it)
         }
-
+        requestBuilder.setContext(
+            AdditionalRequestContext(
+                contextFiles + psiContext,
+                conversationsHistory
+            )
+        )
         return requestBuilder.build()
     }
 
