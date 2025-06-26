@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Conversations tag support
+- Support for changing models/providers in mid-conversation
+
+### Fixed
+
+- Issues where plugin silently connected to a wrong provider (related to a model/provider dep)
+- NPE issues with old Azure settings state
+
 ## [3.4.2-233] - 2025-06-06
 
 ### Fixed
