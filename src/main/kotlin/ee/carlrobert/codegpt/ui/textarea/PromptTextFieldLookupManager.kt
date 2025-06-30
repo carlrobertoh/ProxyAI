@@ -56,6 +56,7 @@ class PromptTextFieldLookupManager(
                 when (suggestion) {
                     is WebActionItem -> onWebActionSelected(suggestion)
                     is LookupGroupItem -> onGroupSelected(suggestion, searchText)
+                    is LookupActionItem -> onLookupAdded(suggestion)
                 }
             }
         })

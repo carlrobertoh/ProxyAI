@@ -11,6 +11,7 @@ import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings.Companion.getState
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
+import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
@@ -49,8 +50,7 @@ class OpenAIRequestFactory : CompletionRequestFactory {
     override fun createEditCodeRequest(params: EditCodeCompletionParameters): OpenAIChatCompletionRequest {
         val model = service<OpenAISettings>().state.model
         val prompt = "Code to modify:\n${params.selectedText}\n\nInstructions: ${params.prompt}"
-        val systemPrompt = service<PromptsSettings>().state.coreActions.editCode.instructions
-            ?: CoreActionsState.DEFAULT_EDIT_CODE_PROMPT
+        val systemPrompt = service<FilteredPromptsService>().getFilteredEditCodePrompt(params.chatMode)
         if (isReasoningModel(model)) {
             return buildBasicO1Request(model, prompt, systemPrompt, stream = true)
         }
@@ -59,18 +59,11 @@ class OpenAIRequestFactory : CompletionRequestFactory {
 
     override fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest {
         val model = service<OpenAISettings>().state.model
-        val systemPrompt = service<PromptsSettings>().state.coreActions.autoApply.instructions
-            ?: CoreActionsState.DEFAULT_AUTO_APPLY_PROMPT
+        val systemPrompt = service<FilteredPromptsService>().getFilteredAutoApplyPrompt(params.chatMode)
+            .replace("{{changes_to_merge}}", CompletionRequestUtil.formatCode(params.source))
+            .replace("{{destination_file}}", CompletionRequestUtil.formatCode(params.destination.readText(), params.destination.path))
+        val prompt = "Merge the following changes to the destination file."
 
-        val prompt = buildString {
-            append("Source:\n")
-            append("${CompletionRequestUtil.formatCode(params.source)}\n\n")
-            append("Destination:\n")
-            val destination = params.destination
-            append(
-                "${CompletionRequestUtil.formatCode(destination.readText(), destination.path)}\n"
-            )
-        }
         if (isReasoningModel(model)) {
             return buildBasicO1Request(model, prompt, systemPrompt, stream = true)
         }
@@ -193,7 +186,7 @@ class OpenAIRequestFactory : CompletionRequestFactory {
             if (callParameters.conversationType == ConversationType.DEFAULT && !selectedPersona.disabled) {
                 val sessionPersonaDetails = callParameters.personaDetails
                 val instructions = sessionPersonaDetails?.instructions?.addProjectPath()
-                    ?: selectedPersona.instructions?.addProjectPath()
+                    ?: service<FilteredPromptsService>().getFilteredPersonaPrompt(callParameters.chatMode).addProjectPath()
                 val history = if (conversationsHistory.isNullOrEmpty()) {
                     ""
                 } else {
@@ -202,7 +195,7 @@ class OpenAIRequestFactory : CompletionRequestFactory {
                     }
                 }
 
-                if (instructions != null) {
+                if (instructions.isNotEmpty()) {
                     messages.add(OpenAIChatCompletionStandardMessage(role, instructions + "\n" + history))
                 }
             }

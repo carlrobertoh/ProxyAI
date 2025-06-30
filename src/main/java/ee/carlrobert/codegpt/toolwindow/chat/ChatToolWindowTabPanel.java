@@ -172,7 +172,8 @@ public class ChatToolWindowTabPanel implements Disposable {
         .imageDetailsFromPath(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project))
         .referencedFiles(getReferencedFiles(selectedTags))
         .history(getHistory(getSelectedTags()))
-        .psiStructure(psiStructure);
+        .psiStructure(psiStructure)
+        .chatMode(userInputPanel.getChatMode());
 
     findTagOfType(selectedTags, PersonaTagDetails.class)
         .ifPresent(tag -> builder.personaDetails(tag.getPersonaDetails()));
@@ -494,6 +495,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     userMessagePanel.addReloadAction(() -> reloadMessage(
         ChatCompletionParameters.builder(conversation, message)
             .conversationType(ConversationType.DEFAULT)
+            .chatMode(userInputPanel.getChatMode())
             .build(),
         userMessagePanel));
     userMessagePanel.addDeleteAction(() -> removeMessage(message.getId(), conversation));

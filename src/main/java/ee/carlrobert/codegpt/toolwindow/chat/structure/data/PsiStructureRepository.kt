@@ -196,6 +196,7 @@ class PsiStructureRepository(
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is ImageTagDetails -> null
                 }
             }
         }
@@ -219,6 +220,7 @@ class PsiStructureRepository(
                 is PersonaTagDetails -> false
                 is EmptyTagDetails -> false
                 is WebTagDetails -> false
+                is ImageTagDetails -> false
             }
         }
             .toSet()
@@ -244,6 +246,7 @@ class PsiStructureRepository(
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is ImageTagDetails -> null
                 }
             }
         }

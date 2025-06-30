@@ -4,6 +4,7 @@ import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import org.assertj.core.api.Assertions.assertThat
@@ -15,7 +16,12 @@ class CompletionRequestProviderTest : IntegrationTest() {
 
     fun testChatCompletionRequestWithSystemPromptOverride() {
         useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        val customPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Test Persona"
+            instructions = "TEST_SYSTEM_PROMPT"
+        }
+        service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val conversation = ConversationService.getInstance().startConversation()
         val firstMessage = createDummyMessage(500)
         val secondMessage = createDummyMessage(250)
@@ -41,7 +47,12 @@ class CompletionRequestProviderTest : IntegrationTest() {
 
     fun testChatCompletionRequestRetry() {
         useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
+        val customPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Test Persona"
+            instructions = "TEST_SYSTEM_PROMPT"
+        }
+        service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val conversation = ConversationService.getInstance().startConversation()
         val firstMessage = createDummyMessage("FIRST_TEST_PROMPT", 500)
         val secondMessage = createDummyMessage("SECOND_TEST_PROMPT", 250)

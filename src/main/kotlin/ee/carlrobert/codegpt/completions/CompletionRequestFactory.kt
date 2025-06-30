@@ -5,8 +5,10 @@ import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.completions.factory.*
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
+import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.completion.CompletionRequest
 
 interface CompletionRequestFactory {
@@ -36,8 +38,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
     override fun createEditCodeRequest(params: EditCodeCompletionParameters): CompletionRequest {
         val prompt = "Code to modify:\n${params.selectedText}\n\nInstructions: ${params.prompt}"
         return createBasicCompletionRequest(
-            service<PromptsSettings>().state.coreActions.editCode.instructions
-                ?: CoreActionsState.DEFAULT_EDIT_CODE_PROMPT, prompt, 8192, true
+            service<FilteredPromptsService>().getFilteredEditCodePrompt(params.chatMode), prompt, 8192, true
         )
     }
 
@@ -55,19 +56,18 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
     }
 
     override fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest {
-        val prompt = buildString {
-            append("Source:\n")
-            append("${CompletionRequestUtil.formatCode(params.source)}\n\n")
-            append("Destination:\n")
-            val destination = params.destination
-            append(
-                "${CompletionRequestUtil.formatCode(destination.readText(), destination.path)}\n"
-            )
-        }
-        return createBasicCompletionRequest(
-            service<PromptsSettings>().state.coreActions.autoApply.instructions
-                ?: CoreActionsState.DEFAULT_AUTO_APPLY_PROMPT, prompt, 8192, true
-        )
+        val destination = params.destination
+        val language = FileUtil.getFileExtension(destination.path)
+        
+        val formattedSource = CompletionRequestUtil.formatCodeWithLanguage(params.source, language)
+        val formattedDestination = CompletionRequestUtil.formatCode(destination.readText(), destination.path)
+        
+        val systemPromptTemplate = service<FilteredPromptsService>().getFilteredAutoApplyPrompt(params.chatMode, params.destination)
+        val systemPrompt = systemPromptTemplate
+            .replace("{{changes_to_merge}}", formattedSource)
+            .replace("{{destination_file}}", formattedDestination)
+        
+        return createBasicCompletionRequest(systemPrompt, "", 8192, true)
     }
 
     abstract fun createBasicCompletionRequest(

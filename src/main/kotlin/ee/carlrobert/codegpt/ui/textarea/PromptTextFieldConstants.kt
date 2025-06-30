@@ -18,7 +18,8 @@ object PromptTextFieldConstants {
         "personas", "persona", "p",
         "docs", "doc", "d",
         "mcp", "m",
-        "web", "w"
+        "web", "w",
+        "image", "img", "i"
     )
 
     const val AT_SYMBOL = "@"

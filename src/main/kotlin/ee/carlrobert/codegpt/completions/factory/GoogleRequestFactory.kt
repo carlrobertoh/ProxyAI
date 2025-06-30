@@ -8,6 +8,7 @@ import ee.carlrobert.codegpt.completions.ConversationType
 import ee.carlrobert.codegpt.completions.TotalUsageExceededException
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
 import ee.carlrobert.codegpt.util.file.FileUtil
@@ -187,7 +188,7 @@ class GoogleRequestFactory : BaseRequestFactory() {
             ConversationType.DEFAULT -> {
                 val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
                 return if (!selectedPersona.disabled) {
-                    PromptsSettings.getSelectedPersonaSystemPrompt();
+                    service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode)
                 } else {
                     null
                 }

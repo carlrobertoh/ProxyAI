@@ -121,6 +121,9 @@ data class FolderTagDetails(var folder: VirtualFile) :
 
 class WebTagDetails : TagDetails("Web", AllIcons.General.Web)
 
+data class ImageTagDetails(val imagePath: String) : 
+    TagDetails(imagePath.substringAfterLast('/'), AllIcons.FileTypes.Image)
+
 data class HistoryTagDetails(
     val conversationId: UUID,
     val title: String,

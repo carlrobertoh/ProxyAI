@@ -2,9 +2,12 @@ package ee.carlrobert.codegpt.settings.prompts
 
 import com.intellij.ide.impl.ProjectUtil
 import com.intellij.openapi.components.*
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.actions.editor.EditorActionsUtil
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.persona.PersonaDetailsState
 import ee.carlrobert.codegpt.settings.persona.PersonaSettings
 import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 
@@ -15,24 +18,18 @@ import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 )
 class PromptsSettings :
     SimplePersistentStateComponent<PromptsSettingsState>(PromptsSettingsState()) {
+
     companion object {
         @JvmStatic
         fun getSelectedPersonaSystemPrompt(): String {
-            return (service<PromptsSettings>().state.personas.selectedPersona.instructions ?: "")
+            val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
+            return (selectedPersona.instructions ?: "")
                 .addProjectPath()
         }
     }
 
     override fun initializeComponent() {
         super.initializeComponent()
-
-        val selectedPersona = state.personas.selectedPersona
-        if (selectedPersona.id == 1L) {
-            state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
-        }
-        state.personas.prompts = state.personas.prompts.map {
-            if (it.id == 1L) PersonasState.DEFAULT_PERSONA else it 
-        }.toMutableList()
     }
 }
 
@@ -45,58 +42,78 @@ class PromptsSettingsState : BaseState() {
 class CoreActionsState : BaseState() {
 
     companion object {
-        val DEFAULT_AUTO_APPLY_PROMPT =
-            getResourceContent("/prompts/core/auto-apply.txt")
-        val DEFAULT_EDIT_CODE_PROMPT = getResourceContent("/prompts/core/edit-code.txt")
-        val DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT =
-            getResourceContent("/prompts/core/generate-commit-message.txt")
-        val DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT =
-            getResourceContent("/prompts/core/generate-name-lookups.txt")
-        val DEFAULT_FIX_COMPILE_ERRORS_PROMPT =
-            getResourceContent("/prompts/core/fix-compile-errors.txt")
-        val DEFAULT_REVIEW_CHANGES_PROMPT =
-            getResourceContent("/prompts/core/review-changes.txt")
+        private const val PROMPTS_BASE_PATH = "/prompts/core/"
+
+        val DEFAULT_AUTO_APPLY_PROMPT = loadPrompt("auto-apply.txt")
+        val DEFAULT_EDIT_CODE_PROMPT = loadPrompt("edit-code.txt")
+        val DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT = loadPrompt("generate-commit-message.txt")
+        val DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT = loadPrompt("generate-name-lookups.txt")
+        val DEFAULT_FIX_COMPILE_ERRORS_PROMPT = loadPrompt("fix-compile-errors.txt")
+        val DEFAULT_REVIEW_CHANGES_PROMPT = loadPrompt("review-changes.txt")
+
+        private fun loadPrompt(fileName: String) =
+            getResourceContent(PROMPTS_BASE_PATH + fileName)
     }
 
-    var autoApply by property(CoreActionPromptDetailsState().apply {
-        name = "Auto Apply"
-        code = "AUTO_APPLY"
-        instructions = DEFAULT_AUTO_APPLY_PROMPT
-    })
-    var editCode by property(CoreActionPromptDetailsState().apply {
-        name = "Edit Code"
-        code = "EDIT_CODE"
-        instructions = DEFAULT_EDIT_CODE_PROMPT
-    })
-    var fixCompileErrors by property(CoreActionPromptDetailsState().apply {
-        name = "Fix Compile Errors"
-        code = "FIX_COMPILE_ERRORS"
-        instructions = DEFAULT_FIX_COMPILE_ERRORS_PROMPT
-    })
-    var generateCommitMessage by property(CoreActionPromptDetailsState().apply {
-        name = "Generate Commit Message"
-        code = "GENERATE_COMMIT_MESSAGE"
-        instructions = service<ConfigurationSettings>().state.commitMessagePrompt
-    })
-    var generateNameLookups by property(CoreActionPromptDetailsState().apply {
-        name = "Generate Name Lookups"
-        code = "GENERATE_NAME_LOOKUPS"
-        instructions = DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT
-    })
-    var reviewChanges by property(CoreActionPromptDetailsState().apply {
-        name = "Review Changes"
-        code = "REVIEW_CHANGES"
-        instructions = DEFAULT_REVIEW_CHANGES_PROMPT
-    })
+    var autoApply by property(
+        createCoreAction(
+            "Auto Apply", "AUTO_APPLY", DEFAULT_AUTO_APPLY_PROMPT
+        )
+    )
+
+    var editCode by property(
+        createCoreAction(
+            "Edit Code", "EDIT_CODE", DEFAULT_EDIT_CODE_PROMPT
+        )
+    )
+
+    var fixCompileErrors by property(
+        createCoreAction(
+            "Fix Compile Errors", "FIX_COMPILE_ERRORS", DEFAULT_FIX_COMPILE_ERRORS_PROMPT
+        )
+    )
+
+    var generateCommitMessage by property(
+        createCoreAction(
+            "Generate Commit Message",
+            "GENERATE_COMMIT_MESSAGE",
+            service<ConfigurationSettings>().state.commitMessagePrompt
+        )
+    )
+
+    var generateNameLookups by property(
+        createCoreAction(
+            "Generate Name Lookups", "GENERATE_NAME_LOOKUPS", DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT
+        )
+    )
+
+    var reviewChanges by property(
+        createCoreAction(
+            "Review Changes", "REVIEW_CHANGES", DEFAULT_REVIEW_CHANGES_PROMPT
+        )
+    )
+
+    private fun createCoreAction(name: String, code: String, instructions: String?) =
+        CoreActionPromptDetailsState().apply {
+            this.name = name
+            this.code = code
+            this.instructions = instructions
+        }
 }
 
 class PersonasState : BaseState() {
 
     companion object {
-        val DEFAULT_PERSONA_PROMPT = getResourceContent("/prompts/persona/default-persona.txt")
-        val DEFAULT_PERSONA = PersonaPromptDetailsState().apply {
-            id = 1L  
-            name = "Default Persona"
+        const val DEFAULT_PERSONA_ID = 1L
+        const val DEFAULT_PERSONA_NAME = "Default Persona"
+        private const val DEFAULT_PERSONA_PROMPT_PATH = "/prompts/persona/default-persona.txt"
+
+        val DEFAULT_PERSONA_PROMPT = getResourceContent(DEFAULT_PERSONA_PROMPT_PATH)
+        val DEFAULT_PERSONA = createDefaultPersona()
+
+        private fun createDefaultPersona() = PersonaPromptDetailsState().apply {
+            id = DEFAULT_PERSONA_ID
+            name = DEFAULT_PERSONA_NAME
             instructions = DEFAULT_PERSONA_PROMPT
         }
     }
@@ -105,27 +122,39 @@ class PersonasState : BaseState() {
     var prompts by list<PersonaPromptDetailsState>()
 
     init {
-        prompts.add(DEFAULT_PERSONA)
-        prompts.add(PersonaPromptDetailsState().apply {
-            id = 2L
-            name = "Rubber Duck"
-            instructions = getResourceContent("/prompts/persona/rubber-duck.txt")
-        })
-
-        // migrate old personas
-        var nextPersonaIndex = 3L
-        prompts.addAll(
-            service<PersonaSettings>().state.userCreatedPersonas
-                .map {
-                    val newState = PersonaPromptDetailsState().apply {
-                        id = nextPersonaIndex
-                        name = it.name
-                        instructions = it.instructions
-                    }
-                    nextPersonaIndex++
-                    newState
-                })
+        addDefaultPersonas()
+        migrateOldPersonas()
     }
+
+    private fun addDefaultPersonas() {
+        prompts.addAll(
+            listOf(
+                DEFAULT_PERSONA,
+                createRubberDuckPersona()
+            )
+        )
+    }
+
+    private fun createRubberDuckPersona() = PersonaPromptDetailsState().apply {
+        id = 2L
+        name = "Rubber Duck"
+        instructions = getResourceContent("/prompts/persona/rubber-duck.txt")
+    }
+
+    private fun migrateOldPersonas() {
+        var nextId = 3L
+        val migratedPersonas = service<PersonaSettings>().state.userCreatedPersonas
+            .map { oldPersona -> createMigratedPersona(nextId++, oldPersona) }
+
+        prompts.addAll(migratedPersonas)
+    }
+
+    private fun createMigratedPersona(id: Long, oldPersona: PersonaDetailsState) =
+        PersonaPromptDetailsState().apply {
+            this.id = id
+            this.name = oldPersona.name
+            this.instructions = oldPersona.instructions
+        }
 }
 
 class ChatActionsState : BaseState() {
@@ -133,62 +162,64 @@ class ChatActionsState : BaseState() {
     var startInNewWindow by property(false)
 
     companion object {
-        val DEFAULT_FIND_BUGS_PROMPT = getResourceContent("/prompts/chat/find-bugs.txt")
-        val DEFAULT_WRITE_TESTS_PROMPT = getResourceContent("/prompts/chat/write-tests.txt")
-        val DEFAULT_EXPLAIN_PROMPT = getResourceContent("/prompts/chat/explain.txt")
-        val DEFAULT_REFACTOR_PROMPT = getResourceContent("/prompts/chat/refactor.txt")
-        val DEFAULT_OPTIMIZE_PROMPT = getResourceContent("/prompts/chat/optimize.txt")
+        private const val PROMPTS_BASE_PATH = "/prompts/chat/"
+
+        val DEFAULT_FIND_BUGS_PROMPT = loadPrompt("find-bugs.txt")
+        val DEFAULT_WRITE_TESTS_PROMPT = loadPrompt("write-tests.txt")
+        val DEFAULT_EXPLAIN_PROMPT = loadPrompt("explain.txt")
+        val DEFAULT_REFACTOR_PROMPT = loadPrompt("refactor.txt")
+        val DEFAULT_OPTIMIZE_PROMPT = loadPrompt("optimize.txt")
+
+        private fun loadPrompt(fileName: String) =
+            getResourceContent(PROMPTS_BASE_PATH + fileName)
     }
 
     init {
-        prompts.add(ChatActionPromptDetailsState().apply {
-            id = 1L
-            code = "FIND_BUGS"
-            name = "Find Bugs"
-            instructions = DEFAULT_FIND_BUGS_PROMPT
-        })
-        prompts.add(ChatActionPromptDetailsState().apply {
-            id = 2L
-            code = "WRITE_TESTS"
-            name = "Write Tests"
-            instructions = DEFAULT_WRITE_TESTS_PROMPT
-        })
-        prompts.add(ChatActionPromptDetailsState().apply {
-            id = 3L
-            code = "EXPLAIN"
-            name = "Explain"
-            instructions = DEFAULT_EXPLAIN_PROMPT
-        })
-        prompts.add(ChatActionPromptDetailsState().apply {
-            id = 4L
-            code = "REFACTOR"
-            name = "Refactor"
-            instructions = DEFAULT_REFACTOR_PROMPT
-        })
-        prompts.add(ChatActionPromptDetailsState().apply {
-            id = 5L
-            code = "OPTIMIZE"
-            name = "Optimize"
-            instructions = DEFAULT_OPTIMIZE_PROMPT
-        })
-
-        // migrate old chat actions
-        var nextChatActionIndex = 6L
-        prompts.addAll(
-            service<ConfigurationSettings>().state.tableData
-                .filterNot { entry ->
-                    EditorActionsUtil.DEFAULT_ACTIONS.any { it.key == entry.key && it.value == entry.value }
-                }
-                .map {
-                    val newState = ChatActionPromptDetailsState().apply {
-                        id = nextChatActionIndex
-                        name = it.key
-                        instructions = it.value
-                    }
-                    nextChatActionIndex++
-                    newState
-                })
+        addDefaultChatActions()
+        migrateOldChatActions()
     }
+
+    private fun addDefaultChatActions() {
+        prompts.addAll(
+            listOf(
+                createChatAction(1L, "FIND_BUGS", "Find Bugs", DEFAULT_FIND_BUGS_PROMPT),
+                createChatAction(2L, "WRITE_TESTS", "Write Tests", DEFAULT_WRITE_TESTS_PROMPT),
+                createChatAction(3L, "EXPLAIN", "Explain", DEFAULT_EXPLAIN_PROMPT),
+                createChatAction(4L, "REFACTOR", "Refactor", DEFAULT_REFACTOR_PROMPT),
+                createChatAction(5L, "OPTIMIZE", "Optimize", DEFAULT_OPTIMIZE_PROMPT)
+            )
+        )
+    }
+
+    private fun createChatAction(id: Long, code: String, name: String, instructions: String) =
+        ChatActionPromptDetailsState().apply {
+            this.id = id
+            this.code = code
+            this.name = name
+            this.instructions = instructions
+        }
+
+
+    private fun migrateOldChatActions() {
+        var nextId = 6L
+        val migratedActions = service<ConfigurationSettings>().state.tableData
+            .filterNot { entry -> isDefaultAction(entry) }
+            .map { entry -> createMigratedAction(nextId++, entry) }
+
+        prompts.addAll(migratedActions)
+    }
+
+    private fun isDefaultAction(entry: Map.Entry<String, String>) =
+        EditorActionsUtil.DEFAULT_ACTIONS.any {
+            it.key == entry.key && it.value == entry.value
+        }
+
+    private fun createMigratedAction(id: Long, entry: Map.Entry<String, String>) =
+        ChatActionPromptDetailsState().apply {
+            this.id = id
+            this.name = entry.key
+            this.instructions = entry.value
+        }
 }
 
 abstract class PromptDetailsState : BaseState() {
@@ -217,8 +248,15 @@ class PersonaPromptDetailsState : PromptDetailsState() {
 @JvmRecord
 data class PersonaDetails(val id: Long, val name: String, val instructions: String)
 
-fun String.addProjectPath(): String = replace(
-    "{{project_path}}",
-    ProjectUtil.getActiveProject()?.guessProjectDir()?.path
-        ?: "UNDEFINED"
-)
+fun String.addProjectPath(virtualFile: VirtualFile? = null): String {
+    val projectPath = virtualFile?.let { file ->
+        ProjectManager.getInstance().openProjects
+            .firstOrNull { project ->
+                project.projectFile?.parent?.path?.let { projectDir ->
+                    file.path.startsWith(projectDir)
+                } == true
+            }?.guessProjectDir()?.path
+    } ?: ProjectUtil.getActiveProject()?.guessProjectDir()?.path ?: "UNDEFINED"
+
+    return replace("{{project_path}}", projectPath)
+}

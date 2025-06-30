@@ -30,6 +30,7 @@ object TagProcessorFactory {
             is CurrentGitChangesTagDetails -> CurrentGitChangesTagProcessor(project)
             is EditorSelectionTagDetails -> EditorSelectionTagProcessor(tagDetails)
             is EditorTagDetails -> EditorTagProcessor(tagDetails)
+            is ImageTagDetails -> ImageTagProcessor(tagDetails)
             is EmptyTagDetails -> TagProcessor { _, _ -> }
         }
     }
@@ -199,6 +200,14 @@ class CurrentGitChangesTagProcessor(
             true,
             project
         )
+    }
+}
+
+class ImageTagProcessor(
+    private val tagDetails: ImageTagDetails
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        message.imageFilePath = tagDetails.imagePath
     }
 }
 

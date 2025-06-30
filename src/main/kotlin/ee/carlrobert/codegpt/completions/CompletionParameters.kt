@@ -5,6 +5,7 @@ import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.util.file.FileUtil
 import java.nio.file.Files
@@ -24,6 +25,7 @@ class ChatCompletionParameters private constructor(
     var referencedFiles: List<ReferencedFile>?,
     var personaDetails: PersonaDetails?,
     var psiStructure: Set<ClassStructure>?,
+    var chatMode: ChatMode = ChatMode.ASK,
 ) : CompletionParameters {
 
     fun toBuilder(): Builder {
@@ -35,6 +37,7 @@ class ChatCompletionParameters private constructor(
             referencedFiles(this@ChatCompletionParameters.referencedFiles)
             personaDetails(this@ChatCompletionParameters.personaDetails)
             psiStructure(this@ChatCompletionParameters.psiStructure)
+            chatMode(this@ChatCompletionParameters.chatMode)
         }
     }
 
@@ -48,6 +51,7 @@ class ChatCompletionParameters private constructor(
         private var personaDetails: PersonaDetails? = null
         private var psiStructure: Set<ClassStructure>? = null
         private var gitDiff: String = ""
+        private var chatMode: ChatMode = ChatMode.ASK
 
         fun sessionId(sessionId: UUID?) = apply { this.sessionId = sessionId }
         fun conversationType(conversationType: ConversationType) =
@@ -75,6 +79,8 @@ class ChatCompletionParameters private constructor(
 
         fun psiStructure(psiStructure: Set<ClassStructure>?) = apply { this.psiStructure = psiStructure }
 
+        fun chatMode(chatMode: ChatMode) = apply { this.chatMode = chatMode }
+
         fun build(): ChatCompletionParameters {
             return ChatCompletionParameters(
                 conversation,
@@ -87,6 +93,7 @@ class ChatCompletionParameters private constructor(
                 referencedFiles,
                 personaDetails,
                 psiStructure,
+                chatMode,
             )
         }
     }
@@ -104,11 +111,16 @@ data class CommitMessageCompletionParameters(
 
 data class LookupCompletionParameters(val prompt: String) : CompletionParameters
 
-data class AutoApplyParameters(val source: String, val destination: VirtualFile)
+data class AutoApplyParameters(
+    val source: String, 
+    val destination: VirtualFile,
+    val chatMode: ChatMode = ChatMode.ASK
+)
 
 data class EditCodeCompletionParameters(
     val prompt: String,
-    val selectedText: String
+    val selectedText: String,
+    val chatMode: ChatMode = ChatMode.ASK
 ) : CompletionParameters
 
 data class ImageDetails(

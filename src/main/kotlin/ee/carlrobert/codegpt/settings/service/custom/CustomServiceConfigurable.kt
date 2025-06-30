@@ -24,9 +24,7 @@ class CustomServiceConfigurable : Configurable {
         return component.getForm()
     }
 
-    override fun isModified(): Boolean {
-        return component.isModified()
-    }
+    override fun isModified(): Boolean = component.isModified()
 
     override fun apply() {
         component.applyChanges()

@@ -53,9 +53,7 @@ class AutoApplyListener(
         for (segment in segments) {
             when (segment) {
                 is SearchReplace -> {
-                    stateManager.getCurrentState()?.updateContent(segment)
-                    eventSource?.cancel()
-                    return
+                    updateContent(segment)
                 }
 
                 is SearchWaiting -> {}
@@ -63,41 +61,40 @@ class AutoApplyListener(
                 is ReplaceWaiting -> {
                     if (!editorReplaced) {
                         editorReplaced = true
-
-                        val oldEditor = stateManager.getCurrentState()?.editor ?: return
-                        val currentText = virtualFile.readText()
-                        val containsText = currentText.contains(segment.search.trim())
-                        val newState = if (containsText) {
-                            stateManager.createFromSegment(segment)
-                        } else {
-                            stateManager.transitionToFailedDiffState(
-                                segment.search,
-                                segment.replace,
-                                virtualFile
-                            ) ?: return
-                        }
-
-                        onEditorReplaced(oldEditor, newState.editor)
+                        createDiffEditor(segment)
                     }
 
-                    handleReplace(segment)
+                    updateContent(segment)
                 }
 
-                is CodeEnd -> {
-                    eventSource?.cancel()
-                }
+                is CodeEnd -> {}
 
-                else -> return
+                else -> {}
             }
         }
     }
 
-    private fun handleReplace(item: ReplaceWaiting) {
-        val currentState = stateManager.getCurrentState() ?: return
-        val editor = currentState.editor
-        (editor.permanentHeaderComponent as? DiffHeaderPanel)?.editing()
+    private fun updateContent(segment: Segment) {
+        val currentState = stateManager.getCurrentState()
+        currentState?.updateContent(segment)
+    }
 
-        currentState.updateContent(item)
+    private fun createDiffEditor(segment: ReplaceWaiting) {
+        val oldEditor = stateManager.getCurrentState()?.editor ?: return
+        val currentText = virtualFile.readText()
+        val containsText = currentText.contains(segment.search.trim())
+
+        val newState = if (containsText) {
+            stateManager.createFromSegment(segment)
+        } else {
+            stateManager.transitionToFailedDiffState(
+                segment.search,
+                segment.replace,
+                virtualFile
+            ) ?: return
+        }
+
+        onEditorReplaced(oldEditor, newState.editor)
     }
 
     private fun handleComplete() {

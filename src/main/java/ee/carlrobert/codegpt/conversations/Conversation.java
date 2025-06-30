@@ -11,10 +11,18 @@ import java.util.UUID;
 public class Conversation {
 
   private UUID id;
-  private List<Message> messages = new ArrayList<>();
+  private List<Message> messages;
   private LocalDateTime createdOn;
   private LocalDateTime updatedOn;
   private boolean discardTokenLimit;
+
+  public Conversation() {
+    this.messages = new ArrayList<>();
+    this.id = UUID.randomUUID();
+    this.createdOn = LocalDateTime.now();
+    this.updatedOn = LocalDateTime.now();
+    this.discardTokenLimit = false;
+  }
 
   public UUID getId() {
     return id;

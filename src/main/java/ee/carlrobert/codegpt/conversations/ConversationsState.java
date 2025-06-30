@@ -7,6 +7,7 @@ import com.intellij.openapi.components.Storage;
 import com.intellij.util.xmlb.XmlSerializerUtil;
 import com.intellij.util.xmlb.annotations.OptionTag;
 import ee.carlrobert.codegpt.conversations.converter.ConversationConverter;
+import ee.carlrobert.codegpt.conversations.converter.ConversationListConverter;
 import ee.carlrobert.codegpt.conversations.converter.ConversationsConverter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,6 +28,7 @@ public class ConversationsState implements PersistentStateComponent<Conversation
   @OptionTag(converter = ConversationConverter.class)
   public Conversation currentConversation;
 
+  @OptionTag(converter = ConversationListConverter.class)
   public List<Conversation> conversations = new ArrayList<>();
 
   public boolean discardAllTokenLimits;
