@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.4-241.1] - 2025-07-04
+
+### Added
+
+- Chat modes Ask/Edit/Agent
+- Support for conversation renaming
+
+### Fixed
+
+- NPE when loading state with null conversations
+- Internal error when virtual file is invalid
+- Auto Apply logic for larger files
+
+## [3.4.3-241.1] - 2025-06-26
+
+### Added
+
+- Conversations tag support
+- Support for changing models/providers in mid-conversation
+
+### Fixed
+
+- Issues where plugin silently connected to a wrong provider (related to a model/provider dep)
+- NPE issues with old Azure settings state
+
+## [3.4.2-241.1] - 2025-06-06
+
+### Fixed
+
+- Compatibility issues with the latest IDEs
+
+### Added
+
+- Global context search (users can now perform a speed search without selecting a group first)
+
 ## [3.4.1-241.1] - 2025-06-04
 
 ### Fixed
@@ -1036,7 +1071,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.1-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.4-241.1...HEAD
+[3.4.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.3-241.1...v3.4.4-241.1
+[3.4.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.2-241.1...v3.4.3-241.1
+[3.4.2-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.1-241.1...v3.4.2-241.1
 [3.4.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.0-241.1...v3.4.1-241.1
 [3.4.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.3.0-241.1...v3.4.0-241.1
 [3.3.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.5-241.1...v3.3.0-241.1

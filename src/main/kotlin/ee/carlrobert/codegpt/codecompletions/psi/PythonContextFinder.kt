@@ -1,4 +1,3 @@
-/*
 package ee.carlrobert.codegpt.codecompletions.psi
 
 import com.intellij.openapi.project.Project
@@ -16,22 +15,23 @@ import ee.carlrobert.codegpt.codecompletions.InfillContext
 
 class PythonContextFinder : LanguageContextFinder {
 
-    */
-/**
+    /**
      * Finds enclosing [PyFunction] or [PyClass] of [psiElement] and
      * determines source code elements of all used [PyReferenceExpression]s for the context.
-     *//*
-
+     */
     override fun findContext(psiElement: PsiElement): InfillContext {
         val enclosingElement = findEnclosingElement(psiElement)
         val referenceExpressions = findRelevantElements(enclosingElement, enclosingElement)
         val declarations =
-            referenceExpressions.map { findDeclarations(it, psiElement.containingFile.project) }.flatten().distinct()
+            referenceExpressions.map { findDeclarations(it, psiElement.containingFile.project) }
+                .flatten().distinct()
                 .filter {
                     // Filter out elements whose source code is inside the enclosingElement
                     // e.g. for something like this: [i for i in range(10)]  findRelevantElements()
                     // would return a "PyReferenceExpression: i" which is irrelevant
-                    !it.containingFile.equals(enclosingElement.containingFile) || !enclosingElement.textRange.contains(it.textRange)
+                    !it.containingFile.equals(enclosingElement.containingFile) || !enclosingElement.textRange.contains(
+                        it.textRange
+                    )
                 }
         val sourceElements = declarations.mapNotNull { findSourceElement(it) }
         return InfillContext(
@@ -53,12 +53,10 @@ class PythonContextFinder : LanguageContextFinder {
         psiElement.map { findRelevantElements(it, rootElement) }.flatten().distinctBy { it.name }
             .toSet()
 
-    */
-/**
+    /**
      * Finds [PyReferenceExpression]s inside of [psiElement].
      * If [psiElement] is a [PyFunction] inside of a [PyClass] it also adds all [PyReferenceExpression] of any class/instance fields.
-     *//*
-
+     */
     fun findRelevantElements(
         psiElement: PsiElement,
         rootElement: PsiElement
@@ -122,7 +120,9 @@ class PythonContextFinder : LanguageContextFinder {
                 )
             )
         )?.let {
-            if (PyBuiltinCache.getInstance(pyReference).isBuiltin(it) || it.filePath().contains("/stdlib/")) {
+            if (PyBuiltinCache.getInstance(pyReference).isBuiltin(it) || it.filePath()
+                    .contains("/stdlib/")
+            ) {
                 null
             } else {
                 setOf(it)
@@ -141,4 +141,3 @@ class PythonContextFinder : LanguageContextFinder {
 
     }
 }
-*/

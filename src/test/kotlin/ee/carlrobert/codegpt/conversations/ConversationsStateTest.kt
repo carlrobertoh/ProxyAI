@@ -11,20 +11,14 @@ import org.assertj.core.api.Assertions.assertThat
 class ConversationsStateTest : BasePlatformTestCase() {
 
   fun testStartNewDefaultConversation() {
-    GeneralSettings.getCurrentState().selectedService = ServiceType.OPENAI
-    OpenAISettings.getCurrentState().model = OpenAIChatCompletionModel.GPT_3_5.code
-
     val conversation = ConversationService.getInstance().startConversation()
 
     assertThat(conversation).isEqualTo(ConversationsState.getCurrentConversation())
-    assertThat(conversation)
-      .extracting("clientCode", "model")
-      .containsExactly("chat.completion", "gpt-3.5-turbo")
   }
 
   fun testSaveConversation() {
     val service = ConversationService.getInstance()
-    val conversation = service.createConversation("chat.completion")
+    val conversation = service.createConversation()
     service.addConversation(conversation)
     val message = Message("TEST_PROMPT")
     message.response = "TEST_RESPONSE"

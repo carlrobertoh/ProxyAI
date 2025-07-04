@@ -1,4 +1,3 @@
-/*
 package ee.carlrobert.codegpt.codecompletions.psi
 
 import com.intellij.openapi.editor.VisualPosition
@@ -66,4 +65,4 @@ class PythonContextFinderTest : BasePlatformTestCase() {
             )
     }
 
-}*/
+}

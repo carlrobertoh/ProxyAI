@@ -10,7 +10,6 @@ public class AdvancedSettingsConfigurable implements Configurable {
 
   private AdvancedSettingsComponent component;
 
-  @Nls(capitalization = Nls.Capitalization.Title)
   @Override
   public String getDisplayName() {
     return CodeGPTBundle.get("advancedSettingsConfigurable.displayName");

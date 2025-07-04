@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor.factory
 
-import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.editor.Editor
@@ -15,7 +14,6 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.actions.toolwindow.ReplaceCodeInMainEditorAction
 import java.awt.Dimension
-import javax.swing.JPanel
 import javax.swing.SwingConstants
 
 object ComponentFactory {
@@ -40,11 +38,7 @@ object ComponentFactory {
         return DefaultActionGroup().apply {
             add(ReplaceCodeInMainEditorAction())
             (editor as? EditorEx)?.contextMenuGroupId?.let { groupId ->
-                val actionManager = ActionManager.getInstance()
-                val originalGroup = actionManager.getAction(groupId)
-                if (originalGroup is ActionGroup) {
-                    addAll(originalGroup.getChildren(null, actionManager).toList())
-                }
+                addAll(ActionManager.getInstance().getAction(groupId))
             }
         }
     }

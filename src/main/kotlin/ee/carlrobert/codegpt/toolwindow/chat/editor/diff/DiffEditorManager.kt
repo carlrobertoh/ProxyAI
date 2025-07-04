@@ -20,19 +20,23 @@ class DiffEditorManager(
     private val virtualFile: VirtualFile?
 ) {
 
+    private val operations = mutableMapOf<String, String>()
+
     fun updateDiffContent(searchContent: String, replaceContent: String) {
-        val currentText = virtualFile?.readText() ?: return
+        val originalText = virtualFile?.readText() ?: return
         val document = diffViewer.getDocument(Side.RIGHT)
+
+        operations[searchContent.trim()] = replaceContent.trim()
+
+        var resultText = originalText
+        for ((search, replace) in operations) {
+            resultText = resultText.replace(search, replace)
+        }
 
         application.executeOnPooledThread {
             runInEdt {
                 if (DiffUtil.executeWriteCommand(document, project, "Updating document") {
-                        document.setText(
-                            StringUtil.convertLineSeparators(
-                                currentText.replaceLast(searchContent.trim(), replaceContent.trim())
-                            )
-                        )
-
+                        document.setText(StringUtil.convertLineSeparators(resultText))
                         diffViewer.scheduleRediff()
                     }) {
                     diffViewer.rediff()
@@ -40,12 +44,6 @@ class DiffEditorManager(
                 }
             }
         }
-    }
-
-    fun String.replaceLast(search: String, replacement: String): String {
-        val index = lastIndexOf(search)
-        return if (index < 0) this else
-            substring(0, index) + replacement + substring(index + search.length)
     }
 
     fun applyAllChanges(): List<UnifiedDiffChange> {

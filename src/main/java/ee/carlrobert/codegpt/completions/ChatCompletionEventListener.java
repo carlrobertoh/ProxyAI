@@ -82,7 +82,6 @@ public class ChatCompletionEventListener implements CompletionEventListener<Stri
     } else {
       telemetryMessage
           .property("conversationId", callParameters.getConversation().getId().toString())
-          .property("model", callParameters.getConversation().getModel())
           .error(new RuntimeException(error.toString(), ex));
     }
     telemetryMessage.send();

@@ -180,7 +180,7 @@ class PsiStructureRepository(
             if (!tagDetails.selected) {
                 null
             } else {
-                when (tagDetails) {
+                val virtualFile = when (tagDetails) {
                     is SelectionTagDetails -> tagDetails.virtualFile
                     is FileTagDetails -> tagDetails.virtualFile
                     is EditorTagDetails -> tagDetails.virtualFile
@@ -188,6 +188,7 @@ class PsiStructureRepository(
                     // Maybe need recursive find all files
                     is FolderTagDetails -> null
 
+                    is HistoryTagDetails -> null
                     is EditorSelectionTagDetails -> null
                     is DocumentationTagDetails -> null
                     is CurrentGitChangesTagDetails -> null
@@ -195,7 +196,10 @@ class PsiStructureRepository(
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is ImageTagDetails -> null
                 }
+                
+                virtualFile?.takeIf { it.isValid && it.exists()}
             }
         }
             .toSet()
@@ -211,12 +215,14 @@ class PsiStructureRepository(
                 // Maybe need recursive find all files
                 is FolderTagDetails -> false
 
+                is HistoryTagDetails -> false
                 is DocumentationTagDetails -> false
                 is CurrentGitChangesTagDetails -> false
                 is GitCommitTagDetails -> false
                 is PersonaTagDetails -> false
                 is EmptyTagDetails -> false
                 is WebTagDetails -> false
+                is ImageTagDetails -> false
             }
         }
             .toSet()
@@ -226,7 +232,7 @@ class PsiStructureRepository(
             if (!tagDetails.selected) {
                 null
             } else {
-                when (tagDetails) {
+                val virtualFile = when (tagDetails) {
                     is SelectionTagDetails -> tagDetails.virtualFile
                     is FileTagDetails -> tagDetails.virtualFile
                     is EditorSelectionTagDetails -> tagDetails.virtualFile
@@ -235,13 +241,17 @@ class PsiStructureRepository(
                     // Maybe need recursive find all files
                     is FolderTagDetails -> null
 
+                    is HistoryTagDetails -> null
                     is DocumentationTagDetails -> null
                     is CurrentGitChangesTagDetails -> null
                     is GitCommitTagDetails -> null
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is ImageTagDetails -> null
                 }
+                
+                virtualFile?.takeIf { it.isValid && it.exists()}
             }
         }
             .toSet()

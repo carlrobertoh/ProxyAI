@@ -1,10 +1,12 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
+import ee.carlrobert.codegpt.completions.HuggingFaceModel
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate.LLAMA
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.llm.client.http.RequestEntity
 import ee.carlrobert.llm.client.http.exchange.NdJsonStreamHttpExchange
@@ -18,8 +20,12 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testOpenAIChatCompletionCall() {
         useOpenAIService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
+        val customPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Test Persona"
+            instructions = "TEST_SYSTEM_PROMPT"
+        }
+        service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
@@ -34,7 +40,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )
@@ -59,8 +65,12 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
     fun testLlamaChatCompletionCall() {
         useLlamaService()
         service<ConfigurationSettings>().state.maxTokens = 99
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
+        val customPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Test Persona"
+            instructions = "TEST_SYSTEM_PROMPT"
+        }
+        service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         conversation.addMessage(Message("Ping", "Pong"))
@@ -101,8 +111,12 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
     fun testOllamaChatCompletionCall() {
         useOllamaService()
         service<ConfigurationSettings>().state.maxTokens = 99
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
+        val customPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Test Persona"
+            instructions = "TEST_SYSTEM_PROMPT"
+        }
+        service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectOllama(NdJsonStreamHttpExchange { request: RequestEntity ->
@@ -117,7 +131,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     HuggingFaceModel.LLAMA_3_8B_Q6_K.code,
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )
@@ -141,8 +155,12 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testGoogleChatCompletionCall() {
         useGoogleService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
+        val customPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Test Persona"
+            instructions = "TEST_SYSTEM_PROMPT"
+        }
+        service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectGoogle(StreamHttpExchange { request: RequestEntity ->
@@ -183,8 +201,12 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testCodeGPTServiceChatCompletionCall() {
         useCodeGPTService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
+        val customPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Test Persona"
+            instructions = "TEST_SYSTEM_PROMPT"
+        }
+        service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectCodeGPT(StreamHttpExchange { request: RequestEntity ->
@@ -199,7 +221,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     "TEST_MODEL",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )

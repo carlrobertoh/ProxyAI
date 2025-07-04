@@ -32,7 +32,6 @@ public class TelemetryConfigurable implements SearchableConfigurable {
   private TelemetryComponent component;
   private final TelemetryConfiguration configuration = TelemetryConfiguration.getInstance();
 
-  @Nls(capitalization = Nls.Capitalization.Title)
   @Override
   public String getDisplayName() {
     return "ProxyAI Telemetry";

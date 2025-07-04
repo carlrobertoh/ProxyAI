@@ -44,7 +44,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "Hello!")
                     )
                 )
@@ -81,13 +81,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -121,7 +116,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf(
                             "role" to "user",
                             "content" to """
@@ -179,13 +174,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -221,7 +211,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     .containsExactly(
                         "gpt-4-vision-preview",
                         listOf(
-                            mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                            mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                             mapOf(
                                 "role" to "user", "content" to listOf(
                                     mapOf(
@@ -269,13 +259,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -377,13 +362,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -459,13 +439,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         }
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])

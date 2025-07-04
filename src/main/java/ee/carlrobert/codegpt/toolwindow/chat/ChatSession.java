@@ -11,6 +11,7 @@ public class ChatSession {
 
   private final UUID id;
   private final Set<ReferencedFile> referencedFiles;
+  private String name;
 
   public ChatSession() {
     this.id = UUID.randomUUID();
@@ -30,5 +31,17 @@ public class ChatSession {
       throw new IllegalArgumentException("Referenced files cannot be null");
     }
     referencedFiles.addAll(files);
+  }
+
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public String getDisplayName() {
+    return name != null && !name.trim().isEmpty() ? name : null;
   }
 }

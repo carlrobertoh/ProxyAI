@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -6,10 +7,9 @@ fun lib(reference: String) = libs.findLibrary(reference).get()
 fun properties(key: String) = project.findProperty(key).toString()
 
 plugins {
-  checkstyle
   id("java")
   id("idea")
-  id("org.jetbrains.intellij")
+  id("org.jetbrains.intellij.platform.module")
   id("org.jetbrains.kotlin.jvm")
 }
 
@@ -17,18 +17,23 @@ version = properties("pluginVersion")
 
 repositories {
   mavenCentral()
-}
 
-intellij {
-  type.set(properties("platformType"))
-  version.set(properties("platformVersion"))
-}
-
-checkstyle {
-  toolVersion = "10.15.0"
+  intellijPlatform {
+    defaultRepositories()
+  }
 }
 
 dependencies {
+  if (project.name != rootProject.name) {
+    intellijPlatform {
+      val type = providers.gradleProperty("platformType")
+      val version = providers.gradleProperty("platformVersion")
+      create(type, version)
+
+      testFramework(TestFrameworkType.Platform)
+    }
+  }
+
   implementation(lib("llm.client"))
   constraints {
     implementation(lib("okio")) {
@@ -36,6 +41,7 @@ dependencies {
     }
   }
 
+  testImplementation("junit:junit:4.13.2")
   testImplementation(platform(lib("junit.bom")))
   testImplementation(lib("assertj.core"))
   testImplementation("org.junit.jupiter:junit-jupiter-params")
@@ -53,29 +59,5 @@ tasks {
     withType<KotlinCompile> {
       compilerOptions.jvmTarget.set(JvmTarget.fromTarget(it))
     }
-  }
-
-  runIde {
-    enabled = false
-  }
-
-  verifyPlugin {
-    enabled = false
-  }
-
-  runPluginVerifier {
-    enabled = false
-  }
-
-  patchPluginXml {
-    enabled = false
-  }
-
-  publishPlugin {
-    enabled = false
-  }
-
-  signPlugin {
-    enabled = false
   }
 }
