@@ -11,6 +11,7 @@ import java.util.UUID;
 public class Conversation {
 
   private UUID id;
+  private String title;
   private List<Message> messages;
   private LocalDateTime createdOn;
   private LocalDateTime updatedOn;
@@ -30,6 +31,14 @@ public class Conversation {
 
   public void setId(UUID id) {
     this.id = id;
+  }
+
+  public String getTitle() {
+    return title;
+  }
+
+  public void setTitle(String title) {
+    this.title = title;
   }
 
   public List<Message> getMessages() {

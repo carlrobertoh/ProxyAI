@@ -132,6 +132,10 @@ public class ChatToolWindowTabPanel implements Disposable {
     return conversation;
   }
 
+  public ChatSession getChatSession() {
+    return chatSession;
+  }
+
   public TotalTokensDetails getTokenDetails() {
     return totalTokensPanel.getTokenDetails();
   }

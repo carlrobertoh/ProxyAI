@@ -79,7 +79,7 @@ class ConversationPanel extends JPanel {
     gbc.weightx = 1.0;
     gbc.gridx = 0;
 
-    headerPanel.add(new JBLabel(getFirstPrompt(conversation))
+    headerPanel.add(new JBLabel(getConversationDisplayTitle(conversation))
         .withFont(JBFont.label().asBold()), gbc);
 
     gbc.gridx = 1;
@@ -94,6 +94,14 @@ class ConversationPanel extends JPanel {
     textPanel.add(headerPanel, BorderLayout.NORTH);
     textPanel.add(bottomPanel, BorderLayout.SOUTH);
     return textPanel;
+  }
+
+  private String getConversationDisplayTitle(Conversation conversation) {
+    String title = conversation.getTitle();
+    if (title != null && !title.trim().isEmpty()) {
+      return title;
+    }
+    return getFirstPrompt(conversation);
   }
 
   private String getFirstPrompt(Conversation conversation) {
