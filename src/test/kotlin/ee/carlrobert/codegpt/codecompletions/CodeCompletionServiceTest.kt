@@ -5,7 +5,9 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.VisualPosition
 import com.intellij.testFramework.PlatformTestUtil
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_EDITOR_COMPLETION
+import ee.carlrobert.codegpt.completions.HuggingFaceModel
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.service.ModelRole.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.http.RequestEntity
@@ -16,54 +18,15 @@ import testsupport.IntegrationTest
 
 class CodeCompletionServiceTest : IntegrationTest() {
 
-    fun `test code completion with ProxyAI provider`() {
-        useCodeGPTService()
-        service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
-        myFixture.configureByText(
-            "CompletionTest.java",
-            FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
-        )
-        myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(3, 0))
-        val prefix = """
-             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-             zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-             [INPUT]
-             p
-             """.trimIndent()
-        val suffix = """
-             
-             [\INPUT]
-             zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-             """.trimIndent()
-        expectCodeGPT(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/v1/code/completions")
-            assertThat(request.method).isEqualTo("POST")
-            assertThat(request.body)
-                .extracting("model", "prefix", "suffix", "fileExtension")
-                .containsExactly("TEST_CODE_MODEL", prefix, suffix, "java")
-            listOf(
-                jsonMapResponse("choices", jsonArray(jsonMap("text", "ublic "))),
-                jsonMapResponse("choices", jsonArray(jsonMap("text", "void"))),
-                jsonMapResponse("choices", jsonArray(jsonMap("text", " main")))
-            )
-        })
-
-        myFixture.type('p')
-
-        assertInlineSuggestion("Failed to display initial inline suggestion.") {
-            "ublic void main" == it
-        }
-    }
-
     fun `test code completion with OpenAI provider`() {
-        useOpenAIService()
+        useOpenAIService("gpt-4", CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
         )
         myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(3, 0))
+        project.service<CodeCompletionCacheService>().clear()
         val prefix = """
              xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
              zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
@@ -96,14 +59,58 @@ class CodeCompletionServiceTest : IntegrationTest() {
         }
     }
 
+    fun `test code completion with Ollama provider and separate model settings`() {
+        useOllamaService(CODECOMPLETION_ROLE)
+        myFixture.configureByText(
+            "CompletionTest.java",
+            FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
+        )
+        myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(3, 0))
+        project.service<CodeCompletionCacheService>().clear()
+        val prefix = """
+             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+             zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+             [INPUT]
+             p
+             """.trimIndent()
+        val suffix = """
+             
+             [\INPUT]
+             zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+             xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+             """.trimIndent()
+        expectOllama(StreamHttpExchange { request: RequestEntity ->
+            assertThat(request.uri.path).isEqualTo("/api/generate")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(request.body)
+                .extracting("model", "prompt", "suffix")
+                .containsExactly(HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code, prefix, suffix)
+            listOf(
+                jsonMapResponse(
+                    e("model", HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code),
+                    e("created_at", "2023-08-04T08:52:19.385406455-07:00"),
+                    e("response", "rivate void main"),
+                    e("done", true),
+                ),
+            )
+        })
+
+        myFixture.type('p')
+
+        assertInlineSuggestion("Failed to display initial inline suggestion.") {
+            "rivate void main" == it
+        }
+    }
+
     fun `_test apply inline suggestions without initial following text`() {
-        useCodeGPTService()
+        useCodeGPTService(CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             "class Node {\n  "
         )
         myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(1, 2))
+        project.service<CodeCompletionCacheService>().clear()
         expectCodeGPT(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/code/completions")
             assertThat(request.method).isEqualTo("POST")
@@ -214,13 +221,14 @@ class CodeCompletionServiceTest : IntegrationTest() {
     }
 
     fun `_test apply inline suggestions with initial following text`() {
-        useCodeGPTService()
+        useCodeGPTService(CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
             "if () {\n   \n} else {\n}"
         )
         myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(0, 4))
+        project.service<CodeCompletionCacheService>().clear()
         expectCodeGPT(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/code/completions")
             assertThat(request.method).isEqualTo("POST")
@@ -285,7 +293,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
     }
 
     fun `_test adjust completion line whitespaces`() {
-        useCodeGPTService()
+        useCodeGPTService(CODECOMPLETION_ROLE)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
             "CompletionTest.java",
@@ -294,6 +302,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
                     "}"
         )
         myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(1, 3))
+        project.service<CodeCompletionCacheService>().clear()
         expectCodeGPT(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/code/completions")
             assertThat(request.method).isEqualTo("POST")

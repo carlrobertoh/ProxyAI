@@ -127,7 +127,7 @@ object CodeCompletionRequestFactory {
         }
 
         return OllamaCompletionRequest.Builder(
-            settings.model,
+            settings.codeCompletionModel,
             prompt
         )
             .setSuffix(if (settings.fimOverride) null else details.suffix)

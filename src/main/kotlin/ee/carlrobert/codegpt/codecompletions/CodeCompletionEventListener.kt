@@ -13,6 +13,7 @@ import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.service.ModelRole.CODECOMPLETION_ROLE
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.treesitter.CodeCompletionParserFactory
@@ -156,7 +157,7 @@ class CodeCompletionEventListener(
     }
 
     override fun onError(error: ErrorDetails, ex: Throwable) {
-        val isCodeGPTService = GeneralSettings.getSelectedService() == ServiceType.CODEGPT
+        val isCodeGPTService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE) == ServiceType.CODEGPT
         if (isCodeGPTService && "RATE_LIMIT_EXCEEDED" == error.code) {
             service<CodeGPTServiceSettings>().state
                 .codeCompletionSettings

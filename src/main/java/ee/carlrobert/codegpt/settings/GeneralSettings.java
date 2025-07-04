@@ -1,10 +1,13 @@
 package ee.carlrobert.codegpt.settings;
 
+import static ee.carlrobert.codegpt.settings.service.ModelRole.CHAT_ROLE;
+
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
+import ee.carlrobert.codegpt.settings.service.ModelRole;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings;
@@ -39,7 +42,11 @@ public class GeneralSettings implements PersistentStateComponent<GeneralSettings
   }
 
   public static ServiceType getSelectedService() {
-    return getCurrentState().getSelectedService();
+    return getCurrentState().getSelectedService(CHAT_ROLE);
+  }
+
+  public static ServiceType getSelectedService(ModelRole role) {
+    return getCurrentState().getSelectedService(role);
   }
 
   public static boolean isSelected(ServiceType serviceType) {
