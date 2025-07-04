@@ -7,6 +7,7 @@ import com.intellij.psi.codeStyle.NameUtil
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.*
@@ -33,6 +34,7 @@ class SearchManager(
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
+        CodeAnalyzeActionItem(tagManager),
         MCPGroupItem(),
         WebActionItem(tagManager),
         ImageActionItem(project, tagManager)

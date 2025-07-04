@@ -15,6 +15,7 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
@@ -43,6 +44,7 @@ class PromptTextFieldLookupManager(
         lookupElements: Array<LookupElement>,
         onGroupSelected: (group: LookupGroupItem, searchText: String) -> Unit,
         onWebActionSelected: (WebActionItem) -> Unit,
+        onCodeAnalyzeSelected: (CodeAnalyzeActionItem) -> Unit,
         searchText: String = ""
     ): LookupImpl {
         val lookup = createLookup(editor, lookupElements, "")
@@ -55,6 +57,7 @@ class PromptTextFieldLookupManager(
 
                 when (suggestion) {
                     is WebActionItem -> onWebActionSelected(suggestion)
+                    is CodeAnalyzeActionItem -> onCodeAnalyzeSelected(suggestion)
                     is LookupGroupItem -> onGroupSelected(suggestion, searchText)
                     is LookupActionItem -> onLookupAdded(suggestion)
                 }

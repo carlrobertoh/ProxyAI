@@ -121,7 +121,7 @@ data class FolderTagDetails(var folder: VirtualFile) :
 
 class WebTagDetails : TagDetails("Web", AllIcons.General.Web)
 
-data class ImageTagDetails(val imagePath: String) : 
+data class ImageTagDetails(val imagePath: String) :
     TagDetails(imagePath.substringAfterLast('/'), AllIcons.FileTypes.Image)
 
 data class HistoryTagDetails(
@@ -130,3 +130,5 @@ data class HistoryTagDetails(
 ) : TagDetails(title, AllIcons.General.Balloon)
 
 class EmptyTagDetails : TagDetails("")
+
+class CodeAnalyzeTagDetails : TagDetails("Code Analyze", AllIcons.Actions.DependencyAnalyzer)

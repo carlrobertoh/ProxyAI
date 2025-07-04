@@ -43,6 +43,7 @@ class ConfigurationSettingsState : BaseState() {
 class ChatCompletionSettingsState : BaseState() {
     var editorContextTagEnabled by property(true)
     var psiStructureEnabled by property(true)
+    var psiStructureAnalyzeDepth by property(3)
 }
 
 class CodeCompletionSettingsState : BaseState() {
@@ -50,4 +51,5 @@ class CodeCompletionSettingsState : BaseState() {
     var gitDiffEnabled by property(true)
     var collectDependencyStructure by property(true)
     var contextAwareEnabled by property(false)
+    var psiStructureAnalyzeDepth by property(2)
 }

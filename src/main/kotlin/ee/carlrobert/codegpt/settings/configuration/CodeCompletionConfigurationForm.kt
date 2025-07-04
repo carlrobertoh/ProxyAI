@@ -2,7 +2,9 @@ package ee.carlrobert.codegpt.settings.configuration
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.ui.PortField
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.fields.IntegerField
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -22,6 +24,10 @@ class CodeCompletionConfigurationForm {
         service<ConfigurationSettings>().state.codeCompletionSettings.collectDependencyStructure
     )
 
+    private val psiStructureAnalyzeDepthField = PortField().apply {
+        number = service<ConfigurationSettings>().state.codeCompletionSettings.psiStructureAnalyzeDepth
+    }
+
     fun createPanel(): DialogPanel {
         return panel {
             row {
@@ -36,12 +42,20 @@ class CodeCompletionConfigurationForm {
                 cell(collectDependencyStructureBox)
                     .comment(CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.collectDependencyStructure.description"))
             }
+            row {
+                label(
+                    CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.analyzeDepth.title"),
+                )
+                cell(psiStructureAnalyzeDepthField)
+                    .comment(CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.analyzeDepth.comment"))
+            }
         }.withBorder(JBUI.Borders.emptyLeft(16))
     }
 
     fun resetForm(prevState: CodeCompletionSettingsState) {
         treeSitterProcessingCheckBox.isSelected = prevState.treeSitterProcessingEnabled
         gitDiffCheckBox.isSelected = prevState.gitDiffEnabled
+        psiStructureAnalyzeDepthField.number = prevState.psiStructureAnalyzeDepth
     }
 
     fun getFormState(): CodeCompletionSettingsState {
@@ -49,6 +63,7 @@ class CodeCompletionConfigurationForm {
             this.treeSitterProcessingEnabled = treeSitterProcessingCheckBox.isSelected
             this.gitDiffEnabled = gitDiffCheckBox.isSelected
             this.collectDependencyStructure = collectDependencyStructureBox.isSelected
+            this.psiStructureAnalyzeDepth = psiStructureAnalyzeDepthField.number
         }
     }
 }

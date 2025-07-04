@@ -32,6 +32,7 @@ object TagProcessorFactory {
             is EditorTagDetails -> EditorTagProcessor(tagDetails)
             is ImageTagDetails -> ImageTagProcessor(tagDetails)
             is EmptyTagDetails -> TagProcessor { _, _ -> }
+            is CodeAnalyzeTagDetails -> TagProcessor { _, _ -> }
         }
     }
 }

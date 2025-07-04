@@ -95,6 +95,9 @@ class PromptTextField(
                     },
                     onWebActionSelected = { webAction ->
                         onLookupAdded(webAction)
+                    },
+                    onCodeAnalyzeSelected = { codeAnalyzeAction ->
+                        onLookupAdded(codeAnalyzeAction)
                     }
                 )
             }
@@ -322,6 +325,7 @@ class PromptTextField(
                         )
                     },
                     onWebActionSelected = { webAction -> onLookupAdded(webAction) },
+                    onCodeAnalyzeSelected = { codeAnalyzeAction -> onLookupAdded(codeAnalyzeAction) },
                     searchText = ""
                 )
             }
