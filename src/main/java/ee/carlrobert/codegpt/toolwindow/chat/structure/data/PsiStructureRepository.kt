@@ -180,7 +180,7 @@ class PsiStructureRepository(
             if (!tagDetails.selected) {
                 null
             } else {
-                when (tagDetails) {
+                val virtualFile = when (tagDetails) {
                     is SelectionTagDetails -> tagDetails.virtualFile
                     is FileTagDetails -> tagDetails.virtualFile
                     is EditorTagDetails -> tagDetails.virtualFile
@@ -198,6 +198,8 @@ class PsiStructureRepository(
                     is WebTagDetails -> null
                     is ImageTagDetails -> null
                 }
+                
+                virtualFile?.takeIf { it.isValid && it.exists()}
             }
         }
             .toSet()
@@ -230,7 +232,7 @@ class PsiStructureRepository(
             if (!tagDetails.selected) {
                 null
             } else {
-                when (tagDetails) {
+                val virtualFile = when (tagDetails) {
                     is SelectionTagDetails -> tagDetails.virtualFile
                     is FileTagDetails -> tagDetails.virtualFile
                     is EditorSelectionTagDetails -> tagDetails.virtualFile
@@ -248,6 +250,8 @@ class PsiStructureRepository(
                     is WebTagDetails -> null
                     is ImageTagDetails -> null
                 }
+                
+                virtualFile?.takeIf { it.isValid && it.exists()}
             }
         }
             .toSet()
