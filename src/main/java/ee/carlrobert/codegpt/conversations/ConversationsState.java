@@ -47,6 +47,10 @@ public class ConversationsState implements PersistentStateComponent<Conversation
   public void loadState(@NotNull ConversationsState state) {
     XmlSerializerUtil.copyBean(state, this);
 
+    if (this.conversations == null) {
+      this.conversations = new ArrayList<>();
+    }
+
     conversationsContainer.getConversationsMapping().values().stream()
         .flatMap(Collection::stream)
         .sorted(Comparator.comparing(Conversation::getUpdatedOn).reversed())
