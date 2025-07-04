@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Chat modes Ask/Edit/Agent
+- Support for conversation renaming
+
+### Fixed
+
+- NPE when loading state with null conversations
+- Internal error when virtual file is invalid
+- Auto Apply logic for larger files
+
 ## [3.4.3-233] - 2025-06-26
 
 ### Added
