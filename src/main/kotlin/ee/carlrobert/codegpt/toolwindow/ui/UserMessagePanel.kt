@@ -6,6 +6,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -23,10 +24,15 @@ import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.events.WebSearchEventDetails
 import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ImageAccordion
 import ee.carlrobert.codegpt.toolwindow.chat.ui.SelectedFilesAccordion
 import ee.carlrobert.codegpt.ui.IconActionButton
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor.Companion.formatConversation
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
+import ee.carlrobert.codegpt.util.MarkdownUtil
 import java.awt.Image
 import java.awt.event.ActionEvent
 import java.awt.event.ActionListener
@@ -168,6 +174,29 @@ class UserMessagePanel(
                         WebpageList(listModel)
                     )
                 )
+            }
+
+            message.conversationsHistoryIds?.let { ids ->
+                additionalContextPanel.add(JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                    isOpaque = false
+                    ids.forEach {
+                        ConversationTagProcessor.getConversation(it)?.let { conversation ->
+                            val title = HistoryActionItem.getConversationTitle(conversation)
+                            val titleLink = ActionLink(title) {
+                                project.service<ChatToolWindowContentManager>()
+                                    .displayConversation(conversation)
+                            }.apply {
+                                icon = AllIcons.General.Balloon
+                                toolTipText =
+                                    MarkdownUtil.convertMdToHtml(
+                                        formatConversation(conversation)
+                                    )
+                            }
+                            add(BorderLayoutPanel().addToLeft(titleLink).andTransparent())
+                        }
+                    }
+                })
             }
 
             if (referencedFilePaths.isNotEmpty()) {

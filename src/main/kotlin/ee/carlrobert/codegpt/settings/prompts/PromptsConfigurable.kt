@@ -18,7 +18,9 @@ class PromptsConfigurable : Configurable {
         return component.createPanel()
     }
 
-    override fun isModified(): Boolean = component.isModified()
+    override fun isModified(): Boolean {
+        return component.isModified()
+    }
 
     override fun apply() {
         component.applyChanges()

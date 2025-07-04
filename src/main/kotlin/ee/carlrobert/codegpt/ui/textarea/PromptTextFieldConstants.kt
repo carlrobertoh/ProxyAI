@@ -13,10 +13,13 @@ object PromptTextFieldConstants {
         "files", "file", "f",
         "folders", "folder", "fold",
         "git", "g",
+        "conversations", "conversation", "conv", "c",
+        "history", "hist", "h",
         "personas", "persona", "p",
         "docs", "doc", "d",
         "mcp", "m",
-        "web", "w"
+        "web", "w",
+        "image", "img", "i"
     )
 
     const val AT_SYMBOL = "@"

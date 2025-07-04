@@ -21,7 +21,7 @@ class AutoApplyAction(
     private val filePath: String?,
     private val virtualFile: VirtualFile?,
     private val onApply: (AnActionLink) -> Unit,
-) : CustomComponentAction, AnAction() {
+) : CustomComponentAction, AnAction("Apply", "Apply changes to the editor", AllIcons.Actions.Execute) {
 
     private val anActionLink: AnActionLink = AnActionLink("Apply", this).apply {
         icon = AllIcons.Actions.Execute

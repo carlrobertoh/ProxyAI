@@ -31,6 +31,15 @@ object CompletionRequestUtil {
     }
 
     @JvmStatic
+    fun formatCodeWithLanguage(code: String, language: String): String {
+        return buildString {
+            append("```${language}\n")
+            append("$code\n")
+            append("```\n")
+        }
+    }
+
+    @JvmStatic
     fun getPromptWithContext(
         referencedFiles: List<ReferencedFile>,
         userPrompt: String?,

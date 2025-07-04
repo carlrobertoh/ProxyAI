@@ -9,6 +9,7 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.*
 import kotlinx.coroutines.CancellationException
 
@@ -30,15 +31,17 @@ class SearchManager(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
         GitGroupItem(project),
+        HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
         CodeAnalyzeActionItem(tagManager),
         MCPGroupItem(),
-        WebActionItem(tagManager)
+        WebActionItem(tagManager),
+        ImageActionItem(project, tagManager)
     ).filter { it.enabled }
 
     suspend fun performGlobalSearch(searchText: String): List<LookupActionItem> {
-        val allGroups = getDefaultGroups().filterNot { it is WebActionItem }
+        val allGroups = getDefaultGroups().filterNot { it is WebActionItem || it is ImageActionItem }
         val allResults = mutableListOf<LookupActionItem>()
 
         allGroups.forEach { group ->

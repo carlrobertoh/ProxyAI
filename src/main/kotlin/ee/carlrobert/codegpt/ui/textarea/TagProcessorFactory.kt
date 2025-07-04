@@ -6,10 +6,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.completions.CompletionRequestUtil
+import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
 import ee.carlrobert.codegpt.util.GitUtil
 import git4idea.GitCommit
+import java.util.*
 
 object TagProcessorFactory {
 
@@ -17,6 +21,7 @@ object TagProcessorFactory {
         return when (tagDetails) {
             is FileTagDetails -> FileTagProcessor(tagDetails)
             is SelectionTagDetails -> SelectionTagProcessor(tagDetails)
+            is HistoryTagDetails -> ConversationTagProcessor(tagDetails)
             is DocumentationTagDetails -> DocumentationTagProcessor(tagDetails)
             is PersonaTagDetails -> PersonaTagProcessor(tagDetails)
             is FolderTagDetails -> FolderTagProcessor(tagDetails)
@@ -25,6 +30,7 @@ object TagProcessorFactory {
             is CurrentGitChangesTagDetails -> CurrentGitChangesTagProcessor(project)
             is EditorSelectionTagDetails -> EditorSelectionTagProcessor(tagDetails)
             is EditorTagDetails -> EditorTagProcessor(tagDetails)
+            is ImageTagDetails -> ImageTagProcessor(tagDetails)
             is EmptyTagDetails -> TagProcessor { _, _ -> }
             is CodeAnalyzeTagDetails -> TagProcessor { _, _ -> }
         }
@@ -195,5 +201,51 @@ class CurrentGitChangesTagProcessor(
             true,
             project
         )
+    }
+}
+
+class ImageTagProcessor(
+    private val tagDetails: ImageTagDetails
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        message.imageFilePath = tagDetails.imagePath
+    }
+}
+
+class ConversationTagProcessor(
+    private val tagDetails: HistoryTagDetails
+) : TagProcessor {
+
+    companion object {
+        fun getConversation(conversationId: UUID) =
+            ConversationsState.getCurrentConversation()?.takeIf {
+                it.id.equals(conversationId)
+            } ?: ConversationsState.getInstance().conversations.find {
+                it.id.equals(conversationId)
+            }
+
+        fun formatConversation(conversation: Conversation): String {
+            val stringBuilder = StringBuilder()
+            stringBuilder.append(
+                "# History\n\n"
+            )
+            stringBuilder.append(
+                "## Conversation: ${HistoryActionItem.getConversationTitle(conversation)}\n\n"
+            )
+
+            conversation.messages.forEachIndexed { index, msg ->
+                stringBuilder.append("**User**: ${msg.prompt}\n\n")
+                stringBuilder.append("**Assistant**: ${msg.response}\n\n")
+                stringBuilder.append("\n")
+            }
+            return stringBuilder.toString()
+        }
+    }
+
+    override fun process(message: Message, stringBuilder: StringBuilder) {
+        if (message.conversationsHistoryIds == null) {
+            message.conversationsHistoryIds = mutableListOf()
+        }
+        message.conversationsHistoryIds?.add(tagDetails.conversationId)
     }
 }

@@ -1,20 +1,29 @@
 package ee.carlrobert.codegpt.conversations;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Conversation {
 
   private UUID id;
-  private List<Message> messages = new ArrayList<>();
-  private String clientCode;
-  private String model;
+  private String title;
+  private List<Message> messages;
   private LocalDateTime createdOn;
   private LocalDateTime updatedOn;
   private boolean discardTokenLimit;
+
+  public Conversation() {
+    this.messages = new ArrayList<>();
+    this.id = UUID.randomUUID();
+    this.createdOn = LocalDateTime.now();
+    this.updatedOn = LocalDateTime.now();
+    this.discardTokenLimit = false;
+  }
 
   public UUID getId() {
     return id;
@@ -22,6 +31,14 @@ public class Conversation {
 
   public void setId(UUID id) {
     this.id = id;
+  }
+
+  public String getTitle() {
+    return title;
+  }
+
+  public void setTitle(String title) {
+    this.title = title;
   }
 
   public List<Message> getMessages() {
@@ -32,24 +49,8 @@ public class Conversation {
     this.messages = new ArrayList<>(messages);
   }
 
-  public String getClientCode() {
-    return clientCode;
-  }
-
-  public void setClientCode(String clientCode) {
-    this.clientCode = clientCode;
-  }
-
   public void addMessage(Message message) {
     messages.add(message);
-  }
-
-  public String getModel() {
-    return model;
-  }
-
-  public void setModel(String model) {
-    this.model = model;
   }
 
   public LocalDateTime getCreatedOn() {

@@ -69,7 +69,6 @@ public class ToolwindowChatCompletionRequestHandler {
   private void sendInfo(ChatCompletionParameters callParameters) {
     TelemetryAction.COMPLETION.createActionMessage()
         .property("conversationId", callParameters.getConversation().getId().toString())
-        .property("model", callParameters.getConversation().getModel())
         .property("service", GeneralSettings.getSelectedService().getCode().toLowerCase())
         .send();
   }

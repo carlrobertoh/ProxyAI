@@ -8,9 +8,9 @@ import com.intellij.openapi.util.Disposer;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.util.ui.JBUI;
+import ee.carlrobert.codegpt.actions.toolwindow.RenameSessionAction;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.ConversationsState;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
@@ -28,9 +28,23 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
 
   private final Map<String, ChatToolWindowTabPanel> activeTabMapping = new TreeMap<>(
       (o1, o2) -> {
-        int n1 = Integer.parseInt(o1.replaceAll("\\D", ""));
-        int n2 = Integer.parseInt(o2.replaceAll("\\D", ""));
-        return Integer.compare(n1, n2);
+        String nums1 = o1.replaceAll("\\D", "");
+        String nums2 = o2.replaceAll("\\D", "");
+
+        if (!nums1.isEmpty() && !nums2.isEmpty()) {
+          int n1 = Integer.parseInt(nums1);
+          int n2 = Integer.parseInt(nums2);
+          return Integer.compare(n1, n2);
+        }
+
+        if (!nums1.isEmpty()) {
+          return -1;
+        }
+        if (!nums2.isEmpty()) {
+          return 1;
+        }
+
+        return o1.compareToIgnoreCase(o2);
       });
   private final Disposable parentDisposable;
 
@@ -49,15 +63,19 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     var tabIndices = activeTabMapping.keySet().toArray(new String[0]);
     var nextIndex = 0;
     for (String title : tabIndices) {
-      int tabNum = Integer.parseInt(title.replaceAll("\\D+", ""));
-      if ((tabNum - 1) == nextIndex) {
-        nextIndex++;
-      } else {
-        break;
+      if (title.matches("Chat \\d+")) {
+        String numberPart = title.replaceAll("\\D+", "");
+        int tabNum = Integer.parseInt(numberPart);
+        if ((tabNum - 1) == nextIndex) {
+          nextIndex++;
+        } else {
+          break;
+        }
       }
     }
 
-    var title = "Chat " + (nextIndex + 1);
+    String title = getTitle(toolWindowPanel, nextIndex);
+
     super.insertTab(title, null, toolWindowPanel.getContent(), null, nextIndex);
     activeTabMapping.put(title, toolWindowPanel);
     super.setSelectedIndex(nextIndex);
@@ -68,6 +86,20 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     }
 
     Disposer.register(parentDisposable, toolWindowPanel);
+  }
+
+  private String getTitle(ChatToolWindowTabPanel toolWindowTabPanel, int nextIndex) {
+    var conversation = toolWindowTabPanel.getConversation();
+    String conversationTitle = (conversation != null) ? conversation.getTitle() : null;
+    String customName = toolWindowTabPanel.getChatSession().getDisplayName();
+
+    if (conversationTitle != null && !conversationTitle.trim().isEmpty()) {
+      return ensureUniqueName(conversationTitle, null);
+    }
+    if (customName != null) {
+      return ensureUniqueName(customName, null);
+    }
+    return "Chat " + (nextIndex + 1);
   }
 
   public Optional<String> tryFindTabTitle(UUID conversationId) {
@@ -94,6 +126,50 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     activeTabMapping.clear();
   }
 
+  public void renameTab(int tabIndex, String newName) {
+    if (tabIndex < 0 || tabIndex >= getTabCount()) {
+      return;
+    }
+
+    String oldTitle = getTitleAt(tabIndex);
+    ChatToolWindowTabPanel panel = activeTabMapping.get(oldTitle);
+
+    if (panel == null) {
+      return;
+    }
+
+    String uniqueName = ensureUniqueName(newName, oldTitle);
+
+    setTitleAt(tabIndex, uniqueName);
+
+    if (tabIndex > 0) {
+      setTabComponentAt(tabIndex, createCloseableTabButtonPanel(uniqueName));
+    }
+
+    activeTabMapping.remove(oldTitle);
+    activeTabMapping.put(uniqueName, panel);
+
+    var conversation = panel.getConversation();
+    if (conversation != null) {
+      conversation.setTitle(uniqueName);
+    }
+
+    panel.getChatSession().setName(uniqueName);
+  }
+
+  String ensureUniqueName(String desiredName, String currentTitle) {
+    String baseName = desiredName.trim();
+    String uniqueName = baseName;
+    int counter = 2;
+
+    while (activeTabMapping.containsKey(uniqueName) && !uniqueName.equals(currentTitle)) {
+      uniqueName = baseName + " (" + counter + ")";
+      counter++;
+    }
+
+    return uniqueName;
+  }
+
   private void refreshTabState() {
     var selectedIndex = getSelectedIndex();
     if (selectedIndex == -1) {
@@ -105,7 +181,6 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
       var conversation = toolWindowPanel.getConversation();
       if (conversation != null) {
         ConversationsState.getInstance().setCurrentConversation(conversation);
-        GeneralSettings.getInstance().sync(conversation);
       }
     }
   }
@@ -162,6 +237,12 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     private int selectedPopupTabIndex = -1;
 
     TabPopupMenu() {
+      add(createPopupMenuItem("Rename Title", e -> {
+        if (selectedPopupTabIndex > 0) {
+          RenameSessionAction.renameSession(ChatToolWindowTabbedPane.this, selectedPopupTabIndex);
+        }
+      }));
+      addSeparator();
       add(createPopupMenuItem("Close", e -> {
         if (selectedPopupTabIndex > 0) {
           activeTabMapping.remove(getTitleAt(selectedPopupTabIndex));
