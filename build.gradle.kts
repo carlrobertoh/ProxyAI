@@ -182,13 +182,17 @@ tasks {
 
     prepareSandbox {
         dependsOn("updateSubmodules")
-        from("src/main/cpp/llama.cpp") {
-            into("ProxyAI/llama.cpp")
+        from(layout.projectDirectory.dir("src/main/cpp/llama.cpp")) {
+            into("CodeGPT/llama.cpp")
         }
     }
 
     runIde {
         environment("ENVIRONMENT", "LOCAL")
+    }
+
+    buildPlugin {
+        dependsOn("prepareSandbox")
     }
 
     publishPlugin {

@@ -216,8 +216,7 @@ public final class LlamaServerAgent implements Disposable {
         StandardCharsets.UTF_8);
     cmakeBuildCommand.setExePath("cmake");
     cmakeBuildCommand.withWorkDirectory(CodeGPTPlugin.getLlamaSourcePath());
-    cmakeBuildCommand.addParameters("--build", "build", "--config", "Release", "-t", "llama-server",
-        "-j", "4");
+    cmakeBuildCommand.addParameters("--build", "build", "--config", "Release", "-j", "4");
     cmakeBuildCommand.withEnvironment(params.additionalEnvironmentVariables());
     cmakeBuildCommand.setRedirectErrorStream(false);
     return cmakeBuildCommand;
