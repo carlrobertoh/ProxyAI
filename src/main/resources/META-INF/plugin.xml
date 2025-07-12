@@ -72,6 +72,8 @@
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.advanced.AdvancedSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.conversations.ConversationsState"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.codecompletions.psi.CompletionContextService"/>
+        <applicationService serviceImplementation="ee.carlrobert.codegpt.services.llama.ServerLogsManager"/>
+        <projectService serviceImplementation="ee.carlrobert.codegpt.services.ExecutableRunnerService"/>
         <inline.completion.provider
           id="CodeGPTInlineCompletionProvider"
           implementation="ee.carlrobert.codegpt.codecompletions.DebouncedCodeCompletionProvider"/>

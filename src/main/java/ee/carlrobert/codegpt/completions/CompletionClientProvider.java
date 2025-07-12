@@ -48,16 +48,9 @@ public class CompletionClientProvider {
 
   public static LlamaClient getLlamaClient() {
     var llamaSettings = LlamaSettings.getCurrentState();
-    var builder = new LlamaClient.Builder()
-        .setPort(llamaSettings.getServerPort());
-    if (!llamaSettings.isRunLocalServer()) {
-      builder.setHost(llamaSettings.getBaseHost());
-      String apiKey = getCredential(CredentialKey.LlamaApiKey.INSTANCE);
-      if (apiKey != null && !apiKey.isBlank()) {
-        builder.setApiKey(apiKey);
-      }
-    }
-    return builder.build(getDefaultClientBuilder());
+    return new LlamaClient.Builder()
+        .setPort(llamaSettings.getServerPort())
+        .build(getDefaultClientBuilder());
   }
 
   public static OllamaClient getOllamaClient() {

@@ -50,14 +50,10 @@ class LlamaRequestFactory : BaseRequestFactory() {
 
     private fun getPromptTemplate(): PromptTemplate {
         val settings = service<LlamaSettings>().state
-        return if (settings.isRunLocalServer) {
-            if (settings.isUseCustomModel)
-                settings.localModelPromptTemplate
-            else
-                LlamaModel.findByHuggingFaceModel(settings.huggingFaceModel).promptTemplate
-        } else {
-            settings.remoteModelPromptTemplate
-        }
+        return if (settings.isUseCustomModel)
+            settings.localModelPromptTemplate
+        else
+            LlamaModel.findByHuggingFaceModel(settings.huggingFaceModel).promptTemplate
     }
 
     private fun buildLlamaRequest(

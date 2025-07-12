@@ -61,10 +61,6 @@ object CredentialsStore {
             override val value: String = "ANTHROPIC_API_KEY"
         }
 
-        data object LlamaApiKey : CredentialKey() {
-            override val value: String = "LLAMA_API_KEY"
-        }
-
         data object GoogleApiKey : CredentialKey() {
             override val value: String = "GOOGLE_API_KEY"
         }

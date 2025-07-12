@@ -144,9 +144,6 @@ object CodeCompletionRequestFactory {
     }
 
     private fun getLlamaInfillPromptTemplate(settings: LlamaSettingsState): InfillPromptTemplate {
-        if (!settings.isRunLocalServer) {
-            return settings.remoteModelInfillPromptTemplate
-        }
         if (settings.isUseCustomModel) {
             return settings.localModelInfillPromptTemplate
         }
