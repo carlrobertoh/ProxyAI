@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.settings.service.llama;
 
-import com.intellij.openapi.util.SystemInfoRt;
 import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate;
 import ee.carlrobert.codegpt.completions.HuggingFaceModel;
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate;
@@ -10,15 +9,11 @@ import java.util.Objects;
 
 public class LlamaSettingsState {
 
-  private boolean runLocalServer = SystemInfoRt.isUnix;
   private boolean useCustomModel;
   private String customLlamaModelPath = "";
   private HuggingFaceModel huggingFaceModel = HuggingFaceModel.CODE_QWEN_2_5_1_5B_Q8_0;
   private PromptTemplate localModelPromptTemplate = PromptTemplate.LLAMA;
-  private PromptTemplate remoteModelPromptTemplate = PromptTemplate.LLAMA;
   private InfillPromptTemplate localModelInfillPromptTemplate = InfillPromptTemplate.CODE_LLAMA;
-  private InfillPromptTemplate remoteModelInfillPromptTemplate = InfillPromptTemplate.CODE_LLAMA;
-  private String baseHost = "http://localhost:8080";
   private Integer serverPort = getRandomAvailablePortOrDefault();
   private int contextSize = 2048;
   private int threads = 8;
@@ -73,39 +68,6 @@ public class LlamaSettingsState {
     this.localModelInfillPromptTemplate = localModelInfillPromptTemplate;
   }
 
-  public InfillPromptTemplate getRemoteModelInfillPromptTemplate() {
-    return remoteModelInfillPromptTemplate;
-  }
-
-  public void setRemoteModelInfillPromptTemplate(
-      InfillPromptTemplate remoteModelInfillPromptTemplate) {
-    this.remoteModelInfillPromptTemplate = remoteModelInfillPromptTemplate;
-  }
-
-  public boolean isRunLocalServer() {
-    return runLocalServer;
-  }
-
-  public void setRunLocalServer(boolean runLocalServer) {
-    this.runLocalServer = runLocalServer;
-  }
-
-  public String getBaseHost() {
-    return baseHost;
-  }
-
-  public void setBaseHost(String baseHost) {
-    this.baseHost = baseHost;
-  }
-
-  public PromptTemplate getRemoteModelPromptTemplate() {
-    return remoteModelPromptTemplate;
-  }
-
-  public void setRemoteModelPromptTemplate(
-      PromptTemplate remoteModelPromptTemplate) {
-    this.remoteModelPromptTemplate = remoteModelPromptTemplate;
-  }
 
   public Integer getServerPort() {
     return serverPort;
@@ -212,8 +174,7 @@ public class LlamaSettingsState {
       return false;
     }
     LlamaSettingsState that = (LlamaSettingsState) o;
-    return runLocalServer == that.runLocalServer
-        && useCustomModel == that.useCustomModel
+    return useCustomModel == that.useCustomModel
         && contextSize == that.contextSize
         && threads == that.threads
         && topK == that.topK
@@ -223,10 +184,7 @@ public class LlamaSettingsState {
         && Objects.equals(customLlamaModelPath, that.customLlamaModelPath)
         && huggingFaceModel == that.huggingFaceModel
         && localModelPromptTemplate == that.localModelPromptTemplate
-        && remoteModelPromptTemplate == that.remoteModelPromptTemplate
         && localModelInfillPromptTemplate == that.localModelInfillPromptTemplate
-        && remoteModelInfillPromptTemplate == that.remoteModelInfillPromptTemplate
-        && Objects.equals(baseHost, that.baseHost)
         && Objects.equals(serverPort, that.serverPort)
         && Objects.equals(additionalParameters, that.additionalParameters)
         && Objects.equals(additionalBuildParameters, that.additionalBuildParameters)
@@ -236,9 +194,9 @@ public class LlamaSettingsState {
 
   @Override
   public int hashCode() {
-    return Objects.hash(runLocalServer, useCustomModel, customLlamaModelPath, huggingFaceModel,
-        localModelPromptTemplate, remoteModelPromptTemplate, localModelInfillPromptTemplate,
-        remoteModelInfillPromptTemplate, baseHost, serverPort, contextSize, threads,
+    return Objects.hash(useCustomModel, customLlamaModelPath, huggingFaceModel,
+        localModelPromptTemplate, localModelInfillPromptTemplate,
+        serverPort, contextSize, threads,
         additionalParameters, additionalBuildParameters, additionalEnvironmentVariables, topK, topP,
         minP, repeatPenalty,
         codeCompletionsEnabled);
