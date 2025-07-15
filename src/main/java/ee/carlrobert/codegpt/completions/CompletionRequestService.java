@@ -6,9 +6,9 @@ import com.intellij.openapi.diagnostic.Logger;
 import ee.carlrobert.codegpt.completions.factory.CustomOpenAIRequest;
 import ee.carlrobert.codegpt.credentials.CredentialsStore;
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
 import ee.carlrobert.llm.client.DeserializationUtil;
 import ee.carlrobert.llm.client.anthropic.completion.ClaudeCompletionRequest;
 import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest;
@@ -63,44 +63,61 @@ public final class CompletionRequestService {
   }
 
   public String getLookupCompletion(LookupCompletionParameters params) {
+    var serviceType =
+        ModelSelectionService.getInstance().getServiceForFeature(FeatureType.LOOKUP);
     var request = CompletionRequestFactory
-        .getFactory(GeneralSettings.getSelectedService())
+        .getFactory(serviceType)
         .createLookupRequest(params);
-    return getChatCompletion(request);
+    return getChatCompletion(request, serviceType, FeatureType.LOOKUP);
   }
 
   public EventSource autoApplyAsync(
       AutoApplyParameters params,
       CompletionEventListener<String> eventListener) {
+    var serviceType =
+        ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AUTO_APPLY);
     var request = CompletionRequestFactory
-        .getFactory(GeneralSettings.getSelectedService())
+        .getFactory(serviceType)
         .createAutoApplyRequest(params);
-    return getChatCompletionAsync(request, eventListener);
+    return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.AUTO_APPLY);
   }
 
   public EventSource getCommitMessageAsync(
       CommitMessageCompletionParameters params,
       CompletionEventListener<String> eventListener) {
+    var serviceType =
+        ModelSelectionService.getInstance().getServiceForFeature(FeatureType.COMMIT_MESSAGE);
     var request = CompletionRequestFactory
-        .getFactory(GeneralSettings.getSelectedService())
+        .getFactory(serviceType)
         .createCommitMessageRequest(params);
-    return getChatCompletionAsync(request, eventListener);
+    return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.COMMIT_MESSAGE);
   }
 
   public EventSource getEditCodeCompletionAsync(
       EditCodeCompletionParameters params,
       CompletionEventListener<String> eventListener) {
+    var serviceType =
+        ModelSelectionService.getInstance().getServiceForFeature(FeatureType.EDIT_CODE);
     var request = CompletionRequestFactory
-        .getFactory(GeneralSettings.getSelectedService())
+        .getFactory(serviceType)
         .createEditCodeRequest(params);
-    return getChatCompletionAsync(request, eventListener);
+    return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.EDIT_CODE);
   }
 
   public EventSource getChatCompletionAsync(
       CompletionRequest request,
-      CompletionEventListener<String> eventListener) {
+      CompletionEventListener<String> eventListener,
+      ServiceType serviceType) {
+    return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.CHAT);
+  }
+
+  public EventSource getChatCompletionAsync(
+      CompletionRequest request,
+      CompletionEventListener<String> eventListener,
+      ServiceType serviceType,
+      FeatureType featureType) {
     if (request instanceof OpenAIChatCompletionRequest completionRequest) {
-      return switch (GeneralSettings.getSelectedService()) {
+      return switch (serviceType) {
         case OPENAI -> CompletionClientProvider.getOpenAIClient()
             .getChatCompletionAsync(completionRequest, eventListener);
         case OLLAMA -> CompletionClientProvider.getOllamaClient()
@@ -123,9 +140,7 @@ public final class CompletionRequestService {
     if (request instanceof GoogleCompletionRequest completionRequest) {
       return CompletionClientProvider.getGoogleClient().getChatCompletionAsync(
           completionRequest,
-          ApplicationManager.getApplication().getService(GoogleSettings.class)
-              .getState()
-              .getModel(),
+          ModelSelectionService.getInstance().getModelForFeature(featureType, null),
           eventListener);
     }
     if (request instanceof LlamaCompletionRequest completionRequest) {
@@ -137,9 +152,13 @@ public final class CompletionRequestService {
     throw new IllegalStateException("Unknown request type: " + request.getClass());
   }
 
-  public String getChatCompletion(CompletionRequest request) {
+  public String getChatCompletion(CompletionRequest request, ServiceType serviceType) {
+    return getChatCompletion(request, serviceType, FeatureType.CHAT);
+  }
+
+  public String getChatCompletion(CompletionRequest request, ServiceType serviceType, FeatureType featureType) {
     if (request instanceof OpenAIChatCompletionRequest completionRequest) {
-      var response = switch (GeneralSettings.getSelectedService()) {
+      var response = switch (serviceType) {
         case OPENAI -> CompletionClientProvider.getOpenAIClient()
             .getChatCompletion(completionRequest);
         case OLLAMA -> CompletionClientProvider.getOllamaClient()
@@ -173,9 +192,9 @@ public final class CompletionRequestService {
     if (request instanceof GoogleCompletionRequest completionRequest) {
       return CompletionClientProvider.getGoogleClient().getChatCompletion(
               completionRequest,
-              ApplicationManager.getApplication().getService(GoogleSettings.class)
-                  .getState()
-                  .getModel())
+              ApplicationManager.getApplication()
+                  .getService(ModelSelectionService.class)
+                  .getModelForFeature(featureType, null))
           .getCandidates().get(0)
           .getContent().getParts().get(0)
           .getText();
@@ -189,10 +208,12 @@ public final class CompletionRequestService {
     throw new IllegalStateException("Unknown request type: " + request.getClass());
   }
 
-  public static boolean isRequestAllowed() {
+  public static boolean isRequestAllowed(FeatureType featureType) {
     try {
-      return ApplicationManager.getApplication()
-          .executeOnPooledThread(() -> isRequestAllowed(GeneralSettings.getSelectedService()))
+      return ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            var serviceType = ModelSelectionService.getInstance().getServiceForFeature(featureType);
+            return isRequestAllowed(serviceType);
+          })
           .get();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
@@ -206,7 +227,7 @@ public final class CompletionRequestService {
           CredentialKey.AnthropicApiKey.INSTANCE
       );
       case GOOGLE -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.GoogleApiKey.INSTANCE);
-      case CODEGPT, CUSTOM_OPENAI, LLAMA_CPP, OLLAMA -> true;
+      case PROXYAI, CUSTOM_OPENAI, LLAMA_CPP, OLLAMA -> true;
     };
   }
 

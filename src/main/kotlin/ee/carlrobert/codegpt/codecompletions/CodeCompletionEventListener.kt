@@ -11,9 +11,9 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
-import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.service.ModelRole.CODECOMPLETION_ROLE
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.treesitter.CodeCompletionParserFactory
@@ -157,7 +157,8 @@ class CodeCompletionEventListener(
     }
 
     override fun onError(error: ErrorDetails, ex: Throwable) {
-        val isCodeGPTService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE) == ServiceType.CODEGPT
+        val isCodeGPTService =
+            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI
         if (isCodeGPTService && "RATE_LIMIT_EXCEEDED" == error.code) {
             service<CodeGPTServiceSettings>().state
                 .codeCompletionSettings

@@ -185,7 +185,7 @@ public enum LlamaModel {
           HuggingFaceModel.CODE_QWEN_1_5_7B_Q5_K_M,
           HuggingFaceModel.CODE_QWEN_1_5_7B_Q6_K)),
   CODE_QWEN2_5_CODER(
-      "CodeQwen2.5 Coder", """
+      "Qwen 2.5 Coder", """
           Qwen2.5-Coder is the latest series of Code-Specific Qwen large language models \
           (formerly known as CodeQwen).
           It brings the following improvements upon CodeQwen1.5:

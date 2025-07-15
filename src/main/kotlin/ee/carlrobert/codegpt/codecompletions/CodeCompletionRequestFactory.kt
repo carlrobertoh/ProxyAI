@@ -11,6 +11,8 @@ import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettingsState
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaParameters
@@ -116,6 +118,7 @@ object CodeCompletionRequestFactory {
 
     fun buildOllamaRequest(details: InfillRequest): OllamaCompletionRequest {
         val settings = service<OllamaSettings>().state
+        val model = service<ModelSelectionService>().getModelForFeature(FeatureType.CODE_COMPLETION)
         val stopTokens = buildList {
             if (details.stopTokens.isNotEmpty()) addAll(details.stopTokens)
         }.toMutableList()
@@ -127,7 +130,7 @@ object CodeCompletionRequestFactory {
         }
 
         return OllamaCompletionRequest.Builder(
-            settings.codeCompletionModel,
+            model,
             prompt
         )
             .setSuffix(if (settings.fimOverride) null else details.suffix)

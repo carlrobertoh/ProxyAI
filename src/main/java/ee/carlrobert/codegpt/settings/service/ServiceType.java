@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public enum ServiceType {
-  CODEGPT("CODEGPT", "service.codegpt.title", "codegpt.chat.completion"),
+  PROXYAI("CODEGPT", "service.codegpt.title", "codegpt.chat.completion"),
   OPENAI("OPENAI", "service.openai.title", "chat.completion"),
   CUSTOM_OPENAI("CUSTOM_OPENAI", "service.custom.openai.title", "custom.openai.chat.completion"),
   ANTHROPIC("ANTHROPIC", "service.anthropic.title", "anthropic.chat.completion"),

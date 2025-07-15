@@ -19,8 +19,7 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OllamaAp
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.service.CodeCompletionConfigurationForm
-import ee.carlrobert.codegpt.settings.service.ModelRole
-import ee.carlrobert.codegpt.settings.service.ModelRole.*
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.ui.URLTextField
@@ -41,7 +40,7 @@ class OllamaSettingsForm {
     private val refreshModelsButton =
         JButton(CodeGPTBundle.get("settingsConfigurable.service.ollama.models.refresh"))
     private val hostField: JBTextField
-    private val modelComboBoxes: Map<ModelRole, ComboBox<String>>
+    private val modelComboBoxes: Map<FeatureType, ComboBox<String>>
     private val codeCompletionConfigurationForm: CodeCompletionConfigurationForm
     private val apiKeyField: JBPasswordField
 
@@ -58,10 +57,10 @@ class OllamaSettingsForm {
         )
         val emptyModelsComboBoxModel =
             DefaultComboBoxModel(arrayOf("Hit refresh to see models for this host"))
-        modelComboBoxes = ModelRole.entries.associate { it to ComboBox(emptyModelsComboBoxModel).apply {
+        modelComboBoxes = mapOf(FeatureType.CHAT to ComboBox(emptyModelsComboBoxModel).apply {
             isEnabled = false
             preferredSize = Dimension(280, preferredSize.height)
-        } }
+        })
         hostField = URLTextField(30).apply {
             text = settings.host
             whenTextChangedFromUi {
@@ -72,10 +71,11 @@ class OllamaSettingsForm {
             }
         }
         refreshModelsButton.addActionListener {
-            refreshModels(mapOf(
-                CHAT_ROLE to (getModel(CHAT_ROLE) ?: settings.model),
-                CODECOMPLETION_ROLE to (getModel(CODECOMPLETION_ROLE) ?: settings.codeCompletionModel),
-                ))
+            refreshModels(
+                mapOf(
+                    FeatureType.CHAT to (getModel(FeatureType.CHAT) ?: settings.model),
+                )
+            )
         }
         apiKeyField = JBPasswordField().apply {
             columns = 30
@@ -96,11 +96,7 @@ class OllamaSettingsForm {
                 )
                 .addLabeledComponent(
                     CodeGPTBundle.get("settingsConfigurable.shared.model.label"),
-                    modelComboBoxes[CHAT_ROLE]!!
-                )
-                .addLabeledComponent(
-                    CodeGPTBundle.get("settingsConfigurable.service.ollama.codeCompletionModel.label"),
-                    modelComboBoxes[CODECOMPLETION_ROLE]!!
+                    modelComboBoxes[FeatureType.CHAT]!!
                 )
                 .addComponent(refreshModelsButton)
                 .addComponent(TitledSeparator(CodeGPTBundle.get("settingsConfigurable.shared.authentication.title")))
@@ -117,9 +113,9 @@ class OllamaSettingsForm {
         .addComponentFillVertically(JPanel(), 0)
         .panel
 
-    fun getModel(role: ModelRole): String? {
-        return if (modelComboBoxes[role]!!.isEnabled) {
-            modelComboBoxes[role]!!.item
+    fun getModel(featureType: FeatureType): String? {
+        return if (modelComboBoxes[featureType]!!.isEnabled) {
+            modelComboBoxes[featureType]!!.item
         } else {
             null
         }
@@ -130,8 +126,7 @@ class OllamaSettingsForm {
     fun resetForm() {
         service<OllamaSettings>().state.run {
             hostField.text = host
-            modelComboBoxes[CHAT_ROLE]!!.item = model ?: ""
-            modelComboBoxes[CODECOMPLETION_ROLE]!!.item = codeCompletionModel ?: ""
+            modelComboBoxes[FeatureType.CHAT]!!.item = model ?: ""
             codeCompletionConfigurationForm.isCodeCompletionsEnabled = codeCompletionsEnabled
             codeCompletionConfigurationForm.fimTemplate = fimTemplate
             codeCompletionConfigurationForm.fimOverride != fimOverride
@@ -142,10 +137,8 @@ class OllamaSettingsForm {
     fun applyChanges() {
         service<OllamaSettings>().state.run {
             host = hostField.text
-            if (modelComboBoxes[CHAT_ROLE]!!.isEnabled)
-                model = modelComboBoxes[CHAT_ROLE]!!.item
-            if (modelComboBoxes[CODECOMPLETION_ROLE]!!.isEnabled)
-                codeCompletionModel = modelComboBoxes[CODECOMPLETION_ROLE]!!.item
+            if (modelComboBoxes[FeatureType.CHAT]!!.isEnabled)
+                model = modelComboBoxes[FeatureType.CHAT]!!.item
             codeCompletionsEnabled = codeCompletionConfigurationForm.isCodeCompletionsEnabled
             fimTemplate = codeCompletionConfigurationForm.fimTemplate!!
             fimOverride = codeCompletionConfigurationForm.fimOverride ?: false
@@ -155,15 +148,14 @@ class OllamaSettingsForm {
 
     fun isModified() = service<OllamaSettings>().state.run {
         hostField.text != host
-                || (modelComboBoxes[CHAT_ROLE]!!.item != model && modelComboBoxes[CHAT_ROLE]!!.isEnabled)
-                || (modelComboBoxes[CODECOMPLETION_ROLE]!!.item != codeCompletionModel && modelComboBoxes[CODECOMPLETION_ROLE]!!.isEnabled)
+                || (modelComboBoxes[FeatureType.CHAT]!!.item != model && modelComboBoxes[FeatureType.CHAT]!!.isEnabled)
                 || codeCompletionConfigurationForm.isCodeCompletionsEnabled != codeCompletionsEnabled
                 || codeCompletionConfigurationForm.fimTemplate != fimTemplate
                 || codeCompletionConfigurationForm.fimOverride != fimOverride
                 || getApiKey() != getCredential(OllamaApikey)
     }
 
-    private fun refreshModels(currentModels: Map<ModelRole, String?>) {
+    private fun refreshModels(currentModels: Map<FeatureType, String?>) {
         disableModelComboBoxWithPlaceholder(DefaultComboBoxModel(arrayOf("Loading")))
         ReadAction.nonBlocking<List<String>> {
             try {
@@ -188,7 +180,10 @@ class OllamaSettingsForm {
             .submit(AppExecutorUtil.getAppExecutorService())
     }
 
-    private fun updateModelComboBoxState(models: List<String>, currentModels: Map<ModelRole, String?>) {
+    private fun updateModelComboBoxState(
+        models: List<String>,
+        currentModels: Map<FeatureType, String?>
+    ) {
         if (models.isNotEmpty()) {
             modelComboBoxes.forEach { (role, comboBox) ->
                 comboBox.model = DefaultComboBoxModel(models.toTypedArray())

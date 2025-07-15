@@ -23,8 +23,7 @@ import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider;
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
-import ee.carlrobert.codegpt.settings.service.ServiceType;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
@@ -104,7 +103,6 @@ public class ChatToolWindowTabPanel implements Disposable {
         psiStructureRepository);
     userInputPanel = new UserInputPanel(
         project,
-        conversation,
         totalTokensPanel,
         this,
         tagManager,
@@ -376,7 +374,7 @@ public class ChatToolWindowTabPanel implements Disposable {
       UserMessagePanel userMessagePanel) {
     var responseContainer = (ChatMessageResponseBody) responseMessagePanel.getContent();
 
-    if (!CompletionRequestService.isRequestAllowed()) {
+    if (!CompletionRequestService.isRequestAllowed(FeatureType.CHAT)) {
       responseContainer.displayMissingCredential();
       return;
     }
@@ -456,10 +454,8 @@ public class ChatToolWindowTabPanel implements Disposable {
         JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0),
         JBUI.Borders.empty(8)));
 
-    if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
-      panel.add(JBUI.Panels.simplePanel(totalTokensPanel)
-          .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
-    }
+    panel.add(JBUI.Panels.simplePanel(totalTokensPanel)
+        .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
     panel.add(userInputPanel, BorderLayout.CENTER);
     return panel;
   }

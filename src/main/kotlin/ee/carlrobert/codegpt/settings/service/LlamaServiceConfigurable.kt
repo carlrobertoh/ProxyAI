@@ -33,7 +33,9 @@ class LlamaServiceConfigurable : Configurable, Disposable {
 
     override fun apply() {
         val currentForm = form ?: return
-        LlamaSettings.getInstance().loadState(currentForm.currentState)
+        LlamaSettings.getInstance().loadState(currentForm.getCurrentState())
+
+        ModelReplacementDialog.showDialogIfNeeded(ServiceType.LLAMA_CPP)
     }
 
     override fun reset() {

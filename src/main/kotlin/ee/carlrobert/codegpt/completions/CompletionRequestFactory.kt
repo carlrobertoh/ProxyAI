@@ -8,6 +8,8 @@ import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.completion.CompletionRequest
 
@@ -22,7 +24,7 @@ interface CompletionRequestFactory {
         @JvmStatic
         fun getFactory(serviceType: ServiceType): CompletionRequestFactory {
             return when (serviceType) {
-                ServiceType.CODEGPT -> CodeGPTRequestFactory(ClassStructureSerializer)
+                ServiceType.PROXYAI -> CodeGPTRequestFactory(ClassStructureSerializer)
                 ServiceType.OPENAI -> OpenAIRequestFactory()
                 ServiceType.CUSTOM_OPENAI -> CustomOpenAIRequestFactory()
                 ServiceType.ANTHROPIC -> ClaudeRequestFactory()
@@ -31,19 +33,30 @@ interface CompletionRequestFactory {
                 ServiceType.LLAMA_CPP -> LlamaRequestFactory()
             }
         }
+
+        @JvmStatic
+        fun getFactoryForFeature(featureType: FeatureType): CompletionRequestFactory {
+            val serviceType = ModelSelectionService.getInstance().getServiceForFeature(featureType)
+            return getFactory(serviceType)
+        }
     }
 }
 
 abstract class BaseRequestFactory : CompletionRequestFactory {
+    companion object {
+        private const val LOOKUP_MAX_TOKENS = 512
+        private const val AUTO_APPLY_MAX_TOKENS = 8192
+        private const val DEFAULT_MAX_TOKENS = 4096
+    }
     override fun createEditCodeRequest(params: EditCodeCompletionParameters): CompletionRequest {
         val prompt = "Code to modify:\n${params.selectedText}\n\nInstructions: ${params.prompt}"
         return createBasicCompletionRequest(
-            service<FilteredPromptsService>().getFilteredEditCodePrompt(params.chatMode), prompt, 8192, true
+            service<FilteredPromptsService>().getFilteredEditCodePrompt(params.chatMode), prompt, AUTO_APPLY_MAX_TOKENS, true, FeatureType.EDIT_CODE
         )
     }
 
     override fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest {
-        return createBasicCompletionRequest(params.systemPrompt, params.gitDiff, 512, true)
+        return createBasicCompletionRequest(params.systemPrompt, params.gitDiff, 512, true, FeatureType.COMMIT_MESSAGE)
     }
 
     override fun createLookupRequest(params: LookupCompletionParameters): CompletionRequest {
@@ -51,7 +64,9 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
             service<PromptsSettings>().state.coreActions.generateNameLookups.instructions
                 ?: CoreActionsState.DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT,
             params.prompt,
-            512
+            LOOKUP_MAX_TOKENS,
+            false,
+            FeatureType.LOOKUP
         )
     }
 
@@ -67,14 +82,15 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
             .replace("{{changes_to_merge}}", formattedSource)
             .replace("{{destination_file}}", formattedDestination)
         
-        return createBasicCompletionRequest(systemPrompt, "", 8192, true)
+        return createBasicCompletionRequest(systemPrompt, "Merge the following changes to the destination file.", AUTO_APPLY_MAX_TOKENS, true, FeatureType.AUTO_APPLY)
     }
 
     abstract fun createBasicCompletionRequest(
         systemPrompt: String,
         userPrompt: String,
-        maxTokens: Int = 4096,
-        stream: Boolean = false
+        maxTokens: Int = DEFAULT_MAX_TOKENS,
+        stream: Boolean = false,
+        featureType: FeatureType
     ): CompletionRequest
 
     protected fun getPromptWithFilesContext(callParameters: ChatCompletionParameters): String {

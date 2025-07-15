@@ -34,7 +34,8 @@ import ee.carlrobert.codegpt.events.AnalysisFailedEventDetails;
 import ee.carlrobert.codegpt.events.CodeGPTEvent;
 import ee.carlrobert.codegpt.events.EventDetails;
 import ee.carlrobert.codegpt.events.WebSearchEventDetails;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
@@ -122,7 +123,7 @@ public class ChatMessageResponseBody extends JPanel {
     loadingLabel.setVisible(withLoading);
     add(loadingLabel, BorderLayout.SOUTH);
 
-    if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT) {
+    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == ServiceType.PROXYAI) {
       if (withProgress) {
         contentPanel.add(progressPanel);
       }

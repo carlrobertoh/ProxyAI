@@ -20,6 +20,7 @@ import com.intellij.vcs.commit.CommitWorkflowUi
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.CompletionRequestService
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.CommitWorkflowChanges
@@ -47,7 +48,7 @@ abstract class BaseCommitWorkflowAction : DumbAwareAction() {
 
     override fun update(event: AnActionEvent) {
         val commitWorkflowUi = event.getData(VcsDataKeys.COMMIT_WORKFLOW_UI) ?: return
-        val requestAllowed = CompletionRequestService.isRequestAllowed()
+        val requestAllowed = CompletionRequestService.isRequestAllowed(FeatureType.COMMIT_MESSAGE)
         runInEdt {
             event.presentation.isEnabled =
                 requestAllowed && CommitWorkflowChanges(commitWorkflowUi).isFilesSelected

@@ -22,7 +22,6 @@ class HistoryTagIntegrationTest : IntegrationTest() {
     public override fun setUp() {
         super.setUp()
         conversationService = service<ConversationService>()
-        // Clear any existing conversations
         ConversationsState.getInstance().conversations.clear()
     }
 

@@ -3,7 +3,8 @@ package ee.carlrobert.codegpt.ui.textarea.lookup.action
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
@@ -18,7 +19,7 @@ class WebActionItem(private val tagManager: TagManager) : AbstractLookupActionIt
         get() = enabled()
 
     fun enabled(): Boolean {
-        if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
+        if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) != ServiceType.PROXYAI) {
             return false
         }
         return tagManager.getTags().none { it is WebTagDetails }

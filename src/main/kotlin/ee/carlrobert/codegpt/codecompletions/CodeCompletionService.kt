@@ -3,18 +3,15 @@ package ee.carlrobert.codegpt.codecompletions
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCodeGPTRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCustomRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildLlamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOllamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOpenAIRequest
-import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
-import ee.carlrobert.codegpt.completions.llama.LlamaModel
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.service.ModelRole.CODECOMPLETION_ROLE
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
@@ -23,35 +20,21 @@ import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionEventSourceListener
 import ee.carlrobert.llm.client.openai.completion.OpenAITextCompletionEventSourceListener
 import ee.carlrobert.llm.completion.CompletionEventListener
-import okhttp3.Request
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSources.createFactory
 
 @Service(Service.Level.PROJECT)
 class CodeCompletionService(private val project: Project) {
 
-    // TODO: Consolidate logic in ModelComboBoxAction
     fun getSelectedModelCode(): String? {
-        return when (service<GeneralSettings>().state.selectedService) {
-            CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.model
-            OPENAI -> "gpt-3.5-turbo-instruct"
-            CUSTOM_OPENAI -> service<CustomServicesSettings>().state
-                .active
-                .codeCompletionSettings
-                .body
-                .getOrDefault("model", null) as String
-
-            LLAMA_CPP -> LlamaModel.findByHuggingFaceModel(LlamaSettings.getCurrentState().huggingFaceModel).label
-            OLLAMA -> service<OllamaSettings>().state.codeCompletionModel
-            else -> null
-        }
+        return ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
     }
 
-    fun isCodeCompletionsEnabled(): Boolean = isCodeCompletionsEnabled(GeneralSettings.getSelectedService(CODECOMPLETION_ROLE))
+    fun isCodeCompletionsEnabled(): Boolean = isCodeCompletionsEnabled(ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION))
 
     fun isCodeCompletionsEnabled(selectedService: ServiceType): Boolean =
         when (selectedService) {
-            CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
+            PROXYAI -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled
             CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
             LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
@@ -63,7 +46,7 @@ class CodeCompletionService(private val project: Project) {
         infillRequest: InfillRequest,
         eventListener: CompletionEventListener<String>
     ): EventSource {
-        return when (val selectedService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)) {
+        return when (val selectedService = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION)) {
             OPENAI -> CompletionClientProvider.getOpenAIClient()
                 .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
 

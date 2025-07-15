@@ -5,7 +5,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
@@ -15,8 +14,6 @@ import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.ui.SeparatorComponent
-import com.intellij.ui.SeparatorOrientation
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.panel
@@ -25,10 +22,11 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.conversations.Conversation
-import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.models.ModelRegistry
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
@@ -38,7 +36,6 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import git4idea.GitCommit
-import org.jetbrains.plugins.notebooks.visualization.r.inlays.components.MySeparator
 import java.awt.*
 import java.awt.geom.Area
 import java.awt.geom.Rectangle2D
@@ -47,7 +44,6 @@ import javax.swing.JPanel
 
 class UserInputPanel(
     private val project: Project,
-    private val conversation: Conversation,
     private val totalTokensPanel: TotalTokensPanel,
     parentDisposable: Disposable,
     private val tagManager: TagManager,
@@ -296,10 +292,11 @@ class UserInputPanel(
     }
 
     private fun createFooterPanel(): JPanel {
+        val currentService = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
         val modelComboBox = ModelComboBoxAction(
             project,
             { imageActionSupported.set(isImageActionSupported()) },
-            service<GeneralSettings>().state.selectedService
+            currentService
         ).createCustomComponent(ActionPlaces.UNKNOWN)
 
         val searchReplaceToggle =
@@ -328,34 +325,29 @@ class UserInputPanel(
     }
 
     private fun isImageActionSupported(): Boolean {
-        val selectedService = service<GeneralSettings>().state.selectedService
-        return when (selectedService) {
+        val currentModel = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+        val currentService = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
+        
+        return when (currentService) {
             ServiceType.CUSTOM_OPENAI,
             ServiceType.ANTHROPIC,
             ServiceType.GOOGLE,
             ServiceType.OPENAI,
             ServiceType.OLLAMA -> true
 
-            ServiceType.CODEGPT -> isCodeGPTModelSupported()
+            ServiceType.PROXYAI -> isCodeGPTModelSupported(currentModel)
             else -> false
         }
     }
 
-    private fun isCodeGPTModelSupported(): Boolean {
-        val supportedModels = setOf(
-            "gpt-4.1",
-            "gpt-4.1-mini",
-            "gemini-pro-2.5",
-            "gemini-flash-2.5",
-            "claude-4-sonnet",
-            "claude-4-sonnet-thinking"
+    private fun isCodeGPTModelSupported(modelCode: String): Boolean {
+        return modelCode in setOf(
+            ModelRegistry.GPT_4_1,
+            ModelRegistry.GPT_4_1_MINI,
+            ModelRegistry.GEMINI_PRO_2_5,
+            ModelRegistry.GEMINI_FLASH_2_5,
+            ModelRegistry.CLAUDE_4_SONNET,
+            ModelRegistry.CLAUDE_4_SONNET_THINKING
         )
-
-        val currentModel = service<CodeGPTServiceSettings>()
-            .state
-            .chatCompletionSettings
-            .model
-
-        return currentModel in supportedModels
     }
 }

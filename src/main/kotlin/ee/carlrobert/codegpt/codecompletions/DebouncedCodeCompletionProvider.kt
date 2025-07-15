@@ -6,8 +6,8 @@ import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_CODE_COMPLETION
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.service.ModelRole.*
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -69,8 +69,9 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
                 var eventListener = CodeCompletionEventListener(request.editor, this)
 
-                if (GeneralSettings.getSelectedService(CODECOMPLETION_ROLE) == ServiceType.CODEGPT) {
-                    project.service<GrpcClientService>().getCodeCompletionAsync(eventListener, request, this)
+                if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI) {
+                    project.service<GrpcClientService>()
+                        .getCodeCompletionAsync(eventListener, request, this)
                     return@channelFlow
                 }
 
@@ -98,9 +99,10 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
     }
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
-        val selectedService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)
+        val selectedService =
+            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION)
         val codeCompletionsEnabled = when (selectedService) {
-            ServiceType.CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
+            ServiceType.PROXYAI -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             ServiceType.OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled
             ServiceType.CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
             ServiceType.LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
@@ -119,11 +121,11 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
         if (!codeCompletionsEnabled) {
             return event is InlineCompletionEvent.DocumentChange
-                    && selectedService == ServiceType.CODEGPT
+                    && selectedService == ServiceType.PROXYAI
                     && service<CodeGPTServiceSettings>().state.nextEditsEnabled
                     && !hasActiveCompletion
         }
 
-        return event is InlineCompletionEvent.DocumentChange  || hasActiveCompletion
+        return event is InlineCompletionEvent.DocumentChange || hasActiveCompletion
     }
 }

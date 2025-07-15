@@ -48,5 +48,7 @@ public final class Icons {
       IconLoader.getIcon("/icons/listFiles.svg", Icons.class);
   public static final Icon InSelection =
       IconLoader.getIcon("/icons/inSelection.svg", Icons.class);
+  public static final Icon Locked =
+      IconLoader.getIcon("/icons/locked.svg", Icons.class);
   public static final Icon StatusBarCompletionInProgress = new AnimatedIcon.Default();
 }

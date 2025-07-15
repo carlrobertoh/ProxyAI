@@ -5,8 +5,9 @@ import com.intellij.codeInsight.lookup.LookupElementPresentation
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.documentation.DocumentationSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.ui.DocumentationDetails
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
@@ -19,7 +20,7 @@ class DocActionItem(
 
     override val displayName = documentationDetails.name
     override val icon = AllIcons.Toolwindows.Documentation
-    override val enabled = GeneralSettings.getSelectedService() == ServiceType.CODEGPT
+    override val enabled = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == ServiceType.PROXYAI
 
     override fun setPresentation(element: LookupElement, presentation: LookupElementPresentation) {
         super.setPresentation(element, presentation)

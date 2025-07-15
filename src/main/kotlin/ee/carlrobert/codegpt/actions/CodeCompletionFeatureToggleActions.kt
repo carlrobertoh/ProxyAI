@@ -5,8 +5,8 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAwareAction
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionService
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.service.ModelRole.CODECOMPLETION_ROLE
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -18,38 +18,53 @@ abstract class CodeCompletionFeatureToggleActions(
     private val enableFeatureAction: Boolean
 ) : DumbAwareAction() {
 
-    override fun actionPerformed(e: AnActionEvent) = when (GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)) {
-        CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings::codeCompletionsEnabled::set
+    override fun actionPerformed(e: AnActionEvent) {
+        val serviceType =
+            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION)
+        when (serviceType) {
+            PROXYAI -> {
+                service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled =
+                    enableFeatureAction
+            }
 
-        OPENAI -> OpenAISettings.getCurrentState()::setCodeCompletionsEnabled
+            OPENAI -> {
+                OpenAISettings.getCurrentState().isCodeCompletionsEnabled = enableFeatureAction
+            }
 
-        LLAMA_CPP -> LlamaSettings.getCurrentState()::setCodeCompletionsEnabled
+            LLAMA_CPP -> {
+                LlamaSettings.getCurrentState().isCodeCompletionsEnabled = enableFeatureAction
+            }
 
-        OLLAMA -> service<OllamaSettings>().state::codeCompletionsEnabled::set
+            OLLAMA -> {
+                service<OllamaSettings>().state.codeCompletionsEnabled = enableFeatureAction
+            }
 
-        CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings::codeCompletionsEnabled::set
+            CUSTOM_OPENAI -> {
+                service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled =
+                    enableFeatureAction
+            }
 
-        ANTHROPIC,
-        GOOGLE,
-        null -> { _: Boolean -> Unit } // no-op for these services
-    }(enableFeatureAction)
+            ANTHROPIC,
+            GOOGLE -> {
+            }
+        }
+    }
 
     override fun update(e: AnActionEvent) {
-        val selectedService = GeneralSettings.getSelectedService(CODECOMPLETION_ROLE)
-        val codeCompletionEnabled =
-            e.project?.service<CodeCompletionService>()?.isCodeCompletionsEnabled(selectedService)
-                ?: false
+        val selectedService =
+            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION)
+        val codeCompletionEnabled = e.project?.service<CodeCompletionService>()
+            ?.isCodeCompletionsEnabled(selectedService) == true
         e.presentation.isVisible = codeCompletionEnabled != enableFeatureAction
         e.presentation.isEnabled = when (selectedService) {
-            CODEGPT,
+            PROXYAI,
             OPENAI,
             CUSTOM_OPENAI,
             LLAMA_CPP,
             OLLAMA -> true
 
             ANTHROPIC,
-            GOOGLE,
-            null -> false
+            GOOGLE -> false
         }
     }
 

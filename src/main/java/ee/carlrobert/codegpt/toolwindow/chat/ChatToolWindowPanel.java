@@ -25,7 +25,8 @@ import ee.carlrobert.codegpt.actions.toolwindow.OpenInEditorAction;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.ConversationsState;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState;
 import ee.carlrobert.codegpt.settings.prompts.PromptsConfigurable;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
@@ -84,7 +85,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
             "File path: " + filePath));
     messageBusConnection.subscribe(ProviderChangeNotifier.getTOPIC(),
         (ProviderChangeNotifier) provider -> {
-          if (provider == ServiceType.CODEGPT) {
+          if (provider == ServiceType.PROXYAI) {
             var userDetails = CodeGPTKeys.CODEGPT_USER_DETAILS.get(project);
             upgradePlanLink.setVisible(
                 userDetails != null && userDetails.getPricingPlan() != PricingPlan.INDIVIDUAL);
@@ -95,10 +96,9 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     messageBusConnection.subscribe(CodeGPTUserDetailsNotifier.getCODEGPT_USER_DETAILS_TOPIC(),
         (CodeGPTUserDetailsNotifier) userDetails -> {
           if (userDetails != null) {
-            var provider = ApplicationManager.getApplication().getService(GeneralSettings.class)
-                .getState()
-                .getSelectedService();
-            upgradePlanLink.setVisible(provider == ServiceType.CODEGPT
+            var provider = ModelSelectionService.getInstance()
+                .getServiceForFeature(FeatureType.CHAT);
+            upgradePlanLink.setVisible(provider == ServiceType.PROXYAI
                 && userDetails.getPricingPlan() != PricingPlan.INDIVIDUAL);
           }
         });

@@ -9,7 +9,8 @@ import com.intellij.ui.JBColor;
 import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.credentials.CredentialsStore;
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
@@ -35,7 +36,7 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
   public void displayLandingView(JComponent landingView) {
     clearAll();
     add(landingView);
-    if (GeneralSettings.isSelected(ServiceType.CODEGPT)
+    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == ServiceType.PROXYAI
         && !CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.CodeGptApiKey.INSTANCE)) {
 
       var panel = new ResponseMessagePanel();

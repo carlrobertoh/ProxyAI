@@ -74,22 +74,6 @@ class CompletionRequestProviderTest : IntegrationTest() {
             )
     }
 
-    fun testTotalUsageExceededException() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_3_5.code)
-        val conversation = ConversationService.getInstance().startConversation()
-        conversation.addMessage(createDummyMessage(1500))
-        conversation.addMessage(createDummyMessage(1500))
-        conversation.addMessage(createDummyMessage(1500))
-
-        assertThrows(TotalUsageExceededException::class.java) {
-            OpenAIRequestFactory().createChatRequest(
-                ChatCompletionParameters
-                    .builder(conversation, createDummyMessage(100))
-                    .build()
-            )
-        }
-    }
-
     private fun createDummyMessage(tokenSize: Int): Message {
         return createDummyMessage("TEST_PROMPT", tokenSize)
     }

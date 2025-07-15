@@ -10,6 +10,7 @@ import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.prompts.addProjectPath
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 
@@ -22,7 +23,9 @@ class LlamaRequestFactory : BaseRequestFactory() {
                 service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
             } else {
                 service<PromptsSettings>().state.personas.selectedPersona.let {
-                    if (it.disabled) null else service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode).addProjectPath()
+                    if (it.disabled) null else service<FilteredPromptsService>().getFilteredPersonaPrompt(
+                        params.chatMode
+                    ).addProjectPath()
                 }
             }
 
@@ -39,16 +42,17 @@ class LlamaRequestFactory : BaseRequestFactory() {
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
-        stream: Boolean
+        stream: Boolean,
+        featureType: FeatureType
     ): LlamaCompletionRequest {
-        val promptTemplate = getPromptTemplate()
+        val promptTemplate = getPromptTemplate(featureType)
         val finalPrompt =
             promptTemplate.buildPrompt(systemPrompt, userPrompt, listOf())
 
         return buildLlamaRequest(finalPrompt, emptyList(), stream)
     }
 
-    private fun getPromptTemplate(): PromptTemplate {
+    private fun getPromptTemplate(featureType: FeatureType? = null): PromptTemplate {
         val settings = service<LlamaSettings>().state
         return if (settings.isUseCustomModel)
             settings.localModelPromptTemplate

@@ -10,11 +10,13 @@ import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings.Companion.getState
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.prompts.addProjectPath
-import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.file.FileUtil.getImageMediaType
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel.*
@@ -27,7 +29,7 @@ import java.nio.file.Path
 class OpenAIRequestFactory : CompletionRequestFactory {
 
     override fun createChatRequest(params: ChatCompletionParameters): OpenAIChatCompletionRequest {
-        val model = service<OpenAISettings>().state.model
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
         val configuration = service<ConfigurationSettings>().state
         val requestBuilder: OpenAIChatCompletionRequest.Builder =
             OpenAIChatCompletionRequest.Builder(buildOpenAIMessages(model, params))
@@ -43,14 +45,14 @@ class OpenAIRequestFactory : CompletionRequestFactory {
         } else {
             requestBuilder.setTemperature(configuration.temperature.toDouble())
         }
-
         return requestBuilder.build()
     }
 
     override fun createEditCodeRequest(params: EditCodeCompletionParameters): OpenAIChatCompletionRequest {
-        val model = service<OpenAISettings>().state.model
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.EDIT_CODE)
         val prompt = "Code to modify:\n${params.selectedText}\n\nInstructions: ${params.prompt}"
-        val systemPrompt = service<FilteredPromptsService>().getFilteredEditCodePrompt(params.chatMode)
+        val systemPrompt =
+            service<FilteredPromptsService>().getFilteredEditCodePrompt(params.chatMode)
         if (isReasoningModel(model)) {
             return buildBasicO1Request(model, prompt, systemPrompt, stream = true)
         }
@@ -58,10 +60,17 @@ class OpenAIRequestFactory : CompletionRequestFactory {
     }
 
     override fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest {
-        val model = service<OpenAISettings>().state.model
-        val systemPrompt = service<FilteredPromptsService>().getFilteredAutoApplyPrompt(params.chatMode)
-            .replace("{{changes_to_merge}}", CompletionRequestUtil.formatCode(params.source))
-            .replace("{{destination_file}}", CompletionRequestUtil.formatCode(params.destination.readText(), params.destination.path))
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.AUTO_APPLY)
+        val systemPrompt =
+            service<FilteredPromptsService>().getFilteredAutoApplyPrompt(params.chatMode)
+                .replace("{{changes_to_merge}}", CompletionRequestUtil.formatCode(params.source))
+                .replace(
+                    "{{destination_file}}",
+                    CompletionRequestUtil.formatCode(
+                        params.destination.readText(),
+                        params.destination.path
+                    )
+                )
         val prompt = "Merge the following changes to the destination file."
 
         if (isReasoningModel(model)) {
@@ -71,7 +80,8 @@ class OpenAIRequestFactory : CompletionRequestFactory {
     }
 
     override fun createCommitMessageRequest(params: CommitMessageCompletionParameters): OpenAIChatCompletionRequest {
-        val model = service<OpenAISettings>().state.model
+        val model =
+            ModelSelectionService.getInstance().getModelForFeature(FeatureType.COMMIT_MESSAGE)
         val (gitDiff, systemPrompt) = params
         if (isReasoningModel(model)) {
             return buildBasicO1Request(model, gitDiff, systemPrompt, stream = true)
@@ -80,7 +90,7 @@ class OpenAIRequestFactory : CompletionRequestFactory {
     }
 
     override fun createLookupRequest(params: LookupCompletionParameters): OpenAIChatCompletionRequest {
-        val model = service<OpenAISettings>().state.model
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.LOOKUP)
         val (prompt) = params
         if (isReasoningModel(model)) {
             return buildBasicO1Request(
@@ -186,7 +196,8 @@ class OpenAIRequestFactory : CompletionRequestFactory {
             if (callParameters.conversationType == ConversationType.DEFAULT && !selectedPersona.disabled) {
                 val sessionPersonaDetails = callParameters.personaDetails
                 val instructions = sessionPersonaDetails?.instructions?.addProjectPath()
-                    ?: service<FilteredPromptsService>().getFilteredPersonaPrompt(callParameters.chatMode).addProjectPath()
+                    ?: service<FilteredPromptsService>().getFilteredPersonaPrompt(callParameters.chatMode)
+                        .addProjectPath()
                 val history = if (conversationsHistory.isNullOrEmpty()) {
                     ""
                 } else {
@@ -196,7 +207,12 @@ class OpenAIRequestFactory : CompletionRequestFactory {
                 }
 
                 if (instructions.isNotEmpty()) {
-                    messages.add(OpenAIChatCompletionStandardMessage(role, instructions + "\n" + history))
+                    messages.add(
+                        OpenAIChatCompletionStandardMessage(
+                            role,
+                            instructions + "\n" + history
+                        )
+                    )
                 }
             }
             if (callParameters.conversationType == ConversationType.REVIEW_CHANGES) {

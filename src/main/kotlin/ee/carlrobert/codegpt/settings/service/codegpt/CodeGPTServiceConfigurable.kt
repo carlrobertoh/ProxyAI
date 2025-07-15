@@ -5,8 +5,6 @@ import com.intellij.openapi.options.Configurable
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.util.ApplicationUtil
 import javax.swing.JComponent
 
@@ -29,13 +27,11 @@ class CodeGPTServiceConfigurable : Configurable {
 
     override fun apply() {
         setCredential(CodeGptApiKey, component.getApiKey())
-        service<GeneralSettings>().state.apply {
-            selectedService = ServiceType.CODEGPT
-        }
+        component.applyChanges()
+
         ApplicationUtil.findCurrentProject()
             ?.service<CodeGPTService>()
-            ?.syncUserDetailsAsync(component.getApiKey())
-        component.applyChanges()
+            ?.syncUserDetailsAsync(component.getApiKey(), true)
     }
 
     override fun reset() {

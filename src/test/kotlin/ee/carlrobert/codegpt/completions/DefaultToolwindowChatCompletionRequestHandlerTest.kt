@@ -164,7 +164,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         val message = Message("TEST_PROMPT")
         val conversation = ConversationService.getInstance().startConversation()
         expectGoogle(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/v1/models/gemini-pro:streamGenerateContent")
+            assertThat(request.uri.path).isEqualTo("/v1/models/gemini-2.0-flash:streamGenerateContent")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.uri.query).isEqualTo("key=TEST_API_KEY&alt=sse")
             assertThat(request.body)
@@ -219,7 +219,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "TEST_MODEL",
+                    "gpt-4.1-mini",
                     listOf(
                         mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")

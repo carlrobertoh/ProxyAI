@@ -11,6 +11,9 @@ import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionContent
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest
@@ -25,7 +28,8 @@ class GoogleRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): GoogleCompletionRequest {
         val configuration = service<ConfigurationSettings>().state
-        val messages = buildGoogleMessages(service<GoogleSettings>().state.model, params)
+        val selectedModel = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+        val messages = buildGoogleMessages(selectedModel, params)
         return GoogleCompletionRequest.Builder(messages)
             .generationConfig(
                 GoogleGenerationConfig.Builder()
@@ -40,7 +44,8 @@ class GoogleRequestFactory : BaseRequestFactory() {
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
-        stream: Boolean
+        stream: Boolean,
+        featureType: FeatureType
     ): GoogleCompletionRequest {
         val configuration = service<ConfigurationSettings>().state
         return GoogleCompletionRequest.Builder(

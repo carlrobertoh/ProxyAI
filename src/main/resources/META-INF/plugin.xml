@@ -42,10 +42,12 @@
           instance="ee.carlrobert.codegpt.settings.service.AnthropicServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.google" parentId="settings.codegpt.services" displayName="Google"
           instance="ee.carlrobert.codegpt.settings.service.google.GoogleSettingsConfigurable"/>
-        <applicationConfigurable id="settings.codegpt.services.llama_cpp" parentId="settings.codegpt.services" displayName="LLaMA C/C++ (Local)"
+        <applicationConfigurable id="settings.codegpt.services.llama_cpp" parentId="settings.codegpt.services" displayName="LLaMA C/C++ (Offline)"
           instance="ee.carlrobert.codegpt.settings.service.LlamaServiceConfigurable"/>
-        <applicationConfigurable id="settings.codegpt.services.ollama" parentId="settings.codegpt.services" displayName="Ollama (Local)"
+        <applicationConfigurable id="settings.codegpt.services.ollama" parentId="settings.codegpt.services" displayName="Ollama (Offline)"
           instance="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettingsConfigurable"/>
+        <applicationConfigurable id="settings.codegpt.models" parentId="settings.codegpt" displayName="Models"
+          instance="ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.prompts" parentId="settings.codegpt" displayName="Prompts"
           instance="ee.carlrobert.codegpt.settings.prompts.PromptsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.documentations" parentId="settings.codegpt" displayName="Documentations"
@@ -68,6 +70,7 @@
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.you.YouSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.llama.LlamaSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings"/>
+        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.models.ModelSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.IncludedFilesSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.advanced.AdvancedSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.conversations.ConversationsState"/>

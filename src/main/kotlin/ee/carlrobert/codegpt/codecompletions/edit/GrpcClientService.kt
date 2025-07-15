@@ -14,8 +14,9 @@ import com.jetbrains.rd.util.UUID
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
-import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.telemetry.core.configuration.TelemetryConfiguration
 import ee.carlrobert.codegpt.util.GitUtil
@@ -62,7 +63,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         caretOffset: Int,
         addToQueue: Boolean = false,
     ) {
-        if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT
+        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
             || !service<CodeGPTServiceSettings>().state.nextEditsEnabled
         ) {
             return
@@ -76,7 +77,7 @@ class GrpcClientService(private val project: Project) : Disposable {
     }
 
     fun acceptEdit(responseId: UUID, acceptedEdit: String) {
-        if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT
+        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
             || !TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled
         ) {
             return
@@ -134,7 +135,10 @@ class GrpcClientService(private val project: Project) : Disposable {
     private fun createCodeCompletionGrpcRequest(request: InlineCompletionRequest): GrpcCodeCompletionRequest {
         val editor = request.editor
         return GrpcCodeCompletionRequest.newBuilder()
-            .setModel(service<CodeGPTServiceSettings>().state.codeCompletionSettings.model)
+            .setModel(
+                ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
+                    ?: ""
+            )
             .setFilePath(editor.virtualFile.path)
             .setFileContent(editor.document.text)
             .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")

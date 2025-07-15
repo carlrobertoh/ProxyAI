@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.completions;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
 import ee.carlrobert.codegpt.events.CodeGPTEvent;
@@ -12,6 +13,8 @@ import okhttp3.sse.EventSource;
 
 public class ChatCompletionEventListener implements CompletionEventListener<String> {
 
+  private static final Logger LOG = Logger.getInstance(ChatCompletionEventListener.class);
+  
   private final Project project;
   private final ChatCompletionParameters callParameters;
   private final CompletionResponseEventListener eventListener;
@@ -36,8 +39,8 @@ public class ChatCompletionEventListener implements CompletionEventListener<Stri
     try {
       var event = new ObjectMapper().readValue(data, CodeGPTEvent.class);
       eventListener.handleCodeGPTEvent(event);
-    } catch (JsonProcessingException e) {
-      // ignore
+    } catch (JsonProcessingException exception) {
+      LOG.debug("Failed to parse CodeGPTEvent from data: " + data, exception);
     }
   }
 

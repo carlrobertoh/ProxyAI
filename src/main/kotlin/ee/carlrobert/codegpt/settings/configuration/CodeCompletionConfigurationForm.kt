@@ -55,6 +55,7 @@ class CodeCompletionConfigurationForm {
     fun resetForm(prevState: CodeCompletionSettingsState) {
         treeSitterProcessingCheckBox.isSelected = prevState.treeSitterProcessingEnabled
         gitDiffCheckBox.isSelected = prevState.gitDiffEnabled
+        collectDependencyStructureBox.isSelected = prevState.collectDependencyStructure
         psiStructureAnalyzeDepthField.number = prevState.psiStructureAnalyzeDepth
     }
 

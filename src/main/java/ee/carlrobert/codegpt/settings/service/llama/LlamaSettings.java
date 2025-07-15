@@ -12,7 +12,8 @@ import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate;
 import ee.carlrobert.codegpt.completions.HuggingFaceModel;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.llama.form.LlamaSettingsForm;
 import java.io.File;
 import java.nio.file.Path;
@@ -68,7 +69,7 @@ public class LlamaSettings implements PersistentStateComponent<LlamaSettingsStat
 
   public static boolean isRunnable() {
     return (IS_OS_MAC_OSX || IS_OS_LINUX)
-        && GeneralSettings.getCurrentState().getSelectedService() == LLAMA_CPP;
+        && ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == LLAMA_CPP;
   }
 
   public static boolean isRunnable(HuggingFaceModel model) {
