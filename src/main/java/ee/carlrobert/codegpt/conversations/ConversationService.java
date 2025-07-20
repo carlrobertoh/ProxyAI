@@ -66,6 +66,7 @@ public final class ConversationService {
   public void saveMessage(@NotNull Conversation conversation, @NotNull Message message) {
     conversation.setUpdatedOn(LocalDateTime.now());
     conversation.addMessage(message);
+    saveConversation(conversation);
   }
 
   public void saveConversation(Conversation conversation) {
