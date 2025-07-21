@@ -17,7 +17,9 @@ class ModelSelectionService {
         pricingPlan: PricingPlan? = null
     ): ModelSelection {
         return try {
-            val modelDetailsState = service<ModelSettings>().state.getModelSelection(featureType)
+            val modelSettings = service<ModelSettings>()
+            val modelDetailsState = modelSettings.state.getModelSelection(featureType)
+            
             if (modelDetailsState != null && modelDetailsState.model != null && modelDetailsState.provider != null) {
                 val foundModel = service<ModelRegistry>().findModel(modelDetailsState.provider!!, modelDetailsState.model!!)
                 if (foundModel != null) {

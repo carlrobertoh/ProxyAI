@@ -121,8 +121,11 @@ class ModelSettingsForm(
                 state.getModelSelection(featureType) ?: ModelDetailsState()
             )
         }
+        
+        val codeCompletionModelState = state.getModelSelection(FeatureType.CODE_COMPLETION)
+        val codeCompletionProvider = codeCompletionModelState?.provider ?: ServiceType.PROXYAI
+        updateNextEditButtonState(codeCompletionProvider)
     }
-
 
     fun createPanel(): DialogPanel {
         return panel {

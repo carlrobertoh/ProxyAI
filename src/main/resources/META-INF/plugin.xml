@@ -25,6 +25,7 @@
     </projectListeners>
 
     <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="ee.carlrobert.codegpt.LegacyMigrationActivity"/>
         <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTProjectActivity"/>
         <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTUpdateActivity"/>
         <editorFactoryListener implementation="ee.carlrobert.codegpt.CodeGPTEditorFactoryListener"/>

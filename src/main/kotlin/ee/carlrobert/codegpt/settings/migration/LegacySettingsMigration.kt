@@ -21,36 +21,42 @@ object LegacySettingsMigration {
 
     private val logger = thisLogger()
 
-    fun migrateIfNeeded() {
-        try {
-            val selectedService = GeneralSettings.getCurrentState().selectedService
+    fun migrateIfNeeded(): ModelSettingsState? {
+        return try {
+            val generalState = GeneralSettings.getCurrentState()
+            val selectedService = generalState.selectedService
+            
             if (selectedService != null) {
-                val migratedState = createMigratedState(selectedService)
-                service<ModelSettings>().loadState(migratedState)
+                generalState.selectedService = null
+                createMigratedState(selectedService)
+            } else {
+                null
             }
         } catch (exception: Exception) {
             logger.error("Failed to migrate legacy settings", exception)
+            null
         }
     }
 
     private fun createMigratedState(selectedService: ServiceType): ModelSettingsState {
-        val state = ModelSettingsState()
-        val chatModel = getLegacyChatModelForService(selectedService)
-        state.setModelSelection(FeatureType.CHAT, chatModel, selectedService)
-        state.setModelSelection(FeatureType.AUTO_APPLY, chatModel, selectedService)
-        state.setModelSelection(FeatureType.COMMIT_MESSAGE, chatModel, selectedService)
-        state.setModelSelection(FeatureType.EDIT_CODE, chatModel, selectedService)
-        state.setModelSelection(FeatureType.LOOKUP, chatModel, selectedService)
+        return ModelSettingsState().apply {
+            val chatModel = getLegacyChatModelForService(selectedService)
+            
+            setModelSelection(FeatureType.CHAT, chatModel, selectedService)
+            setModelSelection(FeatureType.AUTO_APPLY, chatModel, selectedService)
+            setModelSelection(FeatureType.COMMIT_MESSAGE, chatModel, selectedService)
+            setModelSelection(FeatureType.EDIT_CODE, chatModel, selectedService)
+            setModelSelection(FeatureType.LOOKUP, chatModel, selectedService)
 
-        val codeModel = getLegacyCodeModelForService(selectedService)
-        state.setModelSelection(FeatureType.CODE_COMPLETION, codeModel, selectedService)
-        if (selectedService == ServiceType.PROXYAI) {
-            state.setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.ZETA, ServiceType.PROXYAI)
-        } else {
-            state.setModelSelection(FeatureType.NEXT_EDIT, null, selectedService)
+            val codeModel = getLegacyCodeModelForService(selectedService)
+            setModelSelection(FeatureType.CODE_COMPLETION, codeModel, selectedService)
+            
+            if (selectedService == ServiceType.PROXYAI) {
+                setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.ZETA, ServiceType.PROXYAI)
+            } else {
+                setModelSelection(FeatureType.NEXT_EDIT, null, selectedService)
+            }
         }
-
-        return state
     }
 
     private fun getLegacyChatModelForService(serviceType: ServiceType): String {
@@ -58,27 +64,25 @@ object LegacySettingsMigration {
             when (serviceType) {
                 ServiceType.PROXYAI -> {
                     val settings = service<CodeGPTServiceSettings>()
-                    settings.state.chatCompletionSettings.model
-                        ?: ModelRegistry.GEMINI_FLASH_2_5
+                    settings.state.chatCompletionSettings.model ?: ModelRegistry.GEMINI_FLASH_2_5
                 }
 
                 ServiceType.OPENAI -> {
-                    OpenAISettings.getCurrentState().model
+                    OpenAISettings.getCurrentState().model ?: ModelRegistry.GPT_4_1
                 }
 
                 ServiceType.ANTHROPIC -> {
-                    AnthropicSettings.getCurrentState().model
-                        ?: ModelRegistry.CLAUDE_SONNET_4_20250514
+                    AnthropicSettings.getCurrentState().model ?: ModelRegistry.CLAUDE_SONNET_4_20250514
                 }
 
                 ServiceType.GOOGLE -> {
-                    service<GoogleSettings>().state.model
-                        ?: GoogleModel.GEMINI_2_5_PRO.code
+                    val settings = service<GoogleSettings>()
+                    settings.state.model ?: GoogleModel.GEMINI_2_5_PRO.code
                 }
 
                 ServiceType.OLLAMA -> {
-                    service<OllamaSettings>().state.model
-                        ?: "llama3.2"
+                    val settings = service<OllamaSettings>()
+                    settings.state.model ?: ModelRegistry.LLAMA_3_2
                 }
 
                 ServiceType.LLAMA_CPP -> {
@@ -91,17 +95,23 @@ object LegacySettingsMigration {
                 }
 
                 ServiceType.CUSTOM_OPENAI -> {
-                    service<CustomServicesSettings>().state.services
-                        .map { it.chatCompletionSettings.body["model"] as String }
-                        .lastOrNull() ?: ""
+                    val customServicesSettings = service<CustomServicesSettings>()
+                    val services = customServicesSettings.state.services
+                    
+                    val activeServiceName = customServicesSettings.state.active.name
+                    if (!activeServiceName.isNullOrBlank()) {
+                        activeServiceName
+                    } else {
+                        services.map { it.name }.lastOrNull()?.takeIf { it.isNotBlank() } ?: "Default"
+                    }
                 }
 
                 ServiceType.MISTRAL -> {
-                    ModelRegistry.CODESTRAL_LATEST
+                    ModelRegistry.DEVSTRAL_MEDIUM_2507
                 }
             }
         } catch (e: Exception) {
-            logger.warn("Could not get legacy model for service $serviceType, using default", e)
+            logger.warn("Failed to get legacy chat model for $serviceType", e)
             getDefaultModelForService(serviceType)
         }
     }
@@ -140,7 +150,7 @@ object LegacySettingsMigration {
 
                 ServiceType.CUSTOM_OPENAI -> {
                     service<CustomServicesSettings>().state.services
-                        .map { it.codeCompletionSettings.body["model"] as String }
+                        .map { it.name }
                         .lastOrNull() ?: ""
                 }
 
@@ -149,8 +159,8 @@ object LegacySettingsMigration {
                 }
             }
         } catch (e: Exception) {
-            logger.warn("Could not get legacy model for service $serviceType, using default", e)
-            getDefaultModelForService(serviceType)
+            logger.warn("Failed to get legacy code model for $serviceType", e)
+            null
         }
     }
 
@@ -163,7 +173,18 @@ object LegacySettingsMigration {
             ServiceType.MISTRAL -> ModelRegistry.DEVSTRAL_MEDIUM_2507
             ServiceType.OLLAMA -> ModelRegistry.LLAMA_3_2
             ServiceType.LLAMA_CPP -> ModelRegistry.LLAMA_3_2_3B_INSTRUCT
-            ServiceType.CUSTOM_OPENAI -> ModelRegistry.GPT_4O
+            ServiceType.CUSTOM_OPENAI -> {
+                // For Custom OpenAI, try to use the active service name if available
+                // If not available, use a placeholder that won't break model selection
+                try {
+                    val customServicesSettings = service<CustomServicesSettings>()
+                    val activeService = customServicesSettings.state.active
+                    activeService?.name?.takeIf { it.isNotBlank() } ?: "Custom OpenAI"
+                } catch (e: Exception) {
+                    logger.warn("Could not access CustomServicesSettings for default model, using placeholder", e)
+                    "Custom OpenAI"
+                }
+            }
         }
     }
 }

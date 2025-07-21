@@ -2,11 +2,11 @@ package ee.carlrobert.codegpt.settings.models
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.*
+import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.settings.migration.LegacySettingsMigration
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.llm.client.codegpt.PricingPlan
 
 @Service
 @State(
@@ -59,10 +59,8 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         val oldState = this.state
         super.loadState(state)
 
-        LegacySettingsMigration.migrateIfNeeded()
-
         migrateMissingProviderInformation()
-        notifyIfChanged(oldState, state)
+        notifyIfChanged(oldState, this.state)
     }
 
     fun setModel(featureType: FeatureType, model: String?, serviceType: ServiceType) {
@@ -80,7 +78,6 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
 
     fun getModelSelection(featureType: FeatureType): ModelSelection {
         val details = getModelDetailsState(featureType)
-        
         if (details == null) {
             val defaultModel = ModelRegistry.getInstance().getDefaultModelForFeature(featureType)
             state.setModelSelection(featureType, defaultModel.model, defaultModel.provider)
@@ -98,18 +95,16 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         }
     }
 
-    fun getOrCreateModelSelection(featureType: FeatureType, ): ModelSelection {
+    fun getOrCreateModelSelection(featureType: FeatureType): ModelSelection {
         return getModelSelection(featureType)
     }
 
     fun getModelForFeature(featureType: FeatureType): String? {
-        val modelDetails = getModelDetailsState(featureType)
-        return modelDetails?.model
+        return getModelDetailsState(featureType)?.model
     }
 
     fun getProviderForFeature(featureType: FeatureType): ServiceType? {
-        val modelDetails = getModelDetailsState(featureType)
-        return modelDetails?.provider
+        return getModelDetailsState(featureType)?.provider
     }
 
     private fun notifyModelChange(
