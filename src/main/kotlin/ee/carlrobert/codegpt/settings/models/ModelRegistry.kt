@@ -135,23 +135,11 @@ class ModelRegistry {
             FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
         ),
         PricingPlan.FREE to mapOf(
-            FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3"),
-            FeatureType.AUTO_APPLY to ModelSelection(
-                ServiceType.PROXYAI,
-                DEEPSEEK_V3,
-                "DeepSeek V3"
-            ),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(
-                ServiceType.PROXYAI,
-                DEEPSEEK_V3,
-                "DeepSeek V3"
-            ),
-            FeatureType.EDIT_CODE to ModelSelection(
-                ServiceType.PROXYAI,
-                DEEPSEEK_V3,
-                "DeepSeek V3"
-            ),
-            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3"),
+            FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
+            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
+            FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
+            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
                 QWEN_2_5_32B_CODE,
@@ -368,6 +356,13 @@ class ModelRegistry {
                 "DeepSeek V3",
                 Icons.DeepSeek,
                 PricingPlan.FREE
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                KIMI_K2,
+                "Kimi K2",
+                Icons.Moonshot,
+                PricingPlan.FREE
             )
         )
     }
@@ -544,6 +539,7 @@ class ModelRegistry {
         const val DEEPSEEK_V3 = "deepseek-v3"
         const val QWEN_2_5_32B_CODE = "qwen-2.5-32b-code"
         const val ZETA = "zeta"
+        const val KIMI_K2 = "kimi-k2-instruct"
 
         // OpenAI Models
         const val GPT_3_5_TURBO_INSTRUCT = "gpt-3.5-turbo-instruct"

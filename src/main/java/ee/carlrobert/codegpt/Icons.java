@@ -24,6 +24,7 @@ public final class Icons {
   public static final Icon MCP = IconLoader.getIcon("/icons/mcp.svg", Icons.class);
   public static final Icon Meta = IconLoader.getIcon("/icons/meta.svg", Icons.class);
   public static final Icon Mistral = IconLoader.getIcon("/icons/mistral.svg", Icons.class);
+  public static final Icon Moonshot = IconLoader.getIcon("/icons/moonshot.svg", Icons.class);
   public static final Icon Send = IconLoader.getIcon("/icons/send.svg", Icons.class);
   public static final Icon Sparkle = IconLoader.getIcon("/icons/sparkle.svg", Icons.class);
   public static final Icon Ollama = IconLoader.getIcon("/icons/ollama.svg", Icons.class);
