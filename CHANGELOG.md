@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native Mistral client support
+- New Chat History UI/UX
+- Server and build logs for llama.cpp
+- Support for model per feature
+
+### Fixed
+
+- llama.cpp server build
+
+### Reverted
+
+- Direct auto apply when similarity threshold is met
+
 ## [3.4.4-233] - 2025-07-04
 
 ### Added
