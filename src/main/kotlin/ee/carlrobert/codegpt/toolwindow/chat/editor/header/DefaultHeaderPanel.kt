@@ -3,17 +3,12 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
-import com.intellij.openapi.ui.MessageType
-import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.readText
-import com.intellij.openapi.vfs.writeText
 import com.intellij.ui.AnimatedIcon
-import com.intellij.ui.components.AnActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -66,7 +61,7 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
             actionGroup.add(CopyAction(editor))
         } else {
             actionGroup.add(AutoApplyAction(project, editor, config.filePath, virtualFile) {
-                handleApply(project, editor, it)
+                handleApply(project, editor)
             })
             actionGroup.add(CopyAction(editor))
             actionGroup.addSeparator()
@@ -75,7 +70,7 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         return createToolbar(actionGroup)
     }
 
-    private fun handleApply(project: Project, editor: EditorEx, link: AnActionLink) {
+    private fun handleApply(project: Project, editor: EditorEx) {
         val file = virtualFile
             ?: EditorUtil.getSelectedEditor(project)?.virtualFile
             ?: throw IllegalStateException("Virtual file is null")
@@ -83,22 +78,9 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         val directApplyThreshold = 0.85
         val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
         if (coefficient > directApplyThreshold) {
-            runUndoTransparentWriteAction {
-                file.writeText(
-                    com.intellij.openapi.util.text.StringUtil.convertLineSeparators(
-                        editor.document.text
-                    )
-                )
-            }
-            val balloon = JBPopupFactory.getInstance()
-                .createHtmlTextBalloonBuilder(
-                    CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.successMessage"),
-                    MessageType.INFO,
-                    null
-                )
-                .setFadeoutTime(3000)
-                .createBalloon()
-            balloon.showInCenterOf(link)
+            val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
+                ?: throw IllegalStateException("Could not find corresponding ResponseEditorPanel")
+            responseEditorPanel.createDiffEditorForDirectApply(file.readText(), editor.document.text, file)
             return
         }
 

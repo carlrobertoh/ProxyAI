@@ -10,17 +10,22 @@ import com.intellij.openapi.editor.event.BulkAwareDocumentListener
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.vfs.readText
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.AutoApplyParameters
 import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.EXPANDED_KEY
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.MIN_LINES_FOR_EXPAND
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorState
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
@@ -42,6 +47,7 @@ class ResponseEditorPanel(
         val RESPONSE_EDITOR_STATE_KEY = Key.create<EditorState>("proxyai.responseEditorState")
     }
 
+    private val logger = thisLogger()
     private val stateManager = EditorStateManager(project)
     private var searchReplaceHandler: SearchReplaceHandler
 
@@ -100,6 +106,66 @@ class ResponseEditorPanel(
                     ?: throw IllegalStateException("Expected parent to be ResponseEditorPanel")
                 responseEditorPanel.replaceEditor(oldEditor, newEditor)
             })
+    }
+    
+    internal fun createReplaceWaitingSegment(searchContent: String, replaceContent: String, virtualFile: VirtualFile): ReplaceWaiting {
+        return ReplaceWaiting(
+            search = searchContent,
+            replace = replaceContent,
+            language = virtualFile.extension ?: "text",
+            filePath = virtualFile.path
+        )
+    }
+    
+    fun createDiffEditorForDirectApply(searchContent: String, replaceContent: String, virtualFile: VirtualFile) {
+        try {
+            val segment = createReplaceWaitingSegment(searchContent, "", virtualFile)
+            
+            val oldEditor = stateManager.getCurrentState()?.editor
+            if (oldEditor == null) {
+                logger.warn("No current editor state found for direct apply")
+                return
+            }
+            
+            val currentText = try {
+                virtualFile.readText()
+            } catch (e: Exception) {
+                logger.error("Failed to read file content for direct apply", e)
+                return
+            }
+            
+            val containsText = currentText.contains(segment.search.trim())
+            
+            val newState = if (containsText) {
+                stateManager.createFromSegment(segment)
+            } else {
+                stateManager.transitionToFailedDiffState(
+                    segment.search,
+                    segment.replace,
+                    virtualFile
+                ) ?: run {
+                    logger.warn("Failed to transition to failed diff state")
+                    return
+                }
+            }
+            
+            replaceEditor(oldEditor, newState.editor)
+            
+            val finalSegment = createReplaceWaitingSegment(searchContent, replaceContent, virtualFile)
+            newState.updateContent(finalSegment)
+            
+            val currentEditor = newState.editor
+            val headerPanel = currentEditor.permanentHeaderComponent as? DiffHeaderPanel
+            
+            ApplicationManager.getApplication().invokeLater {
+                if (!project.isDisposed) {
+                    headerPanel?.handleDone()
+                    CompletionProgressNotifier.update(project, false)
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Unexpected error during direct apply", e)
+        }
     }
 
     override fun dispose() {
