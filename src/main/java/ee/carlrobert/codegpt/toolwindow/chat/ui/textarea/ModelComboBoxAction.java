@@ -31,13 +31,13 @@ import com.intellij.openapi.ui.popup.ListPopup;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
 import ee.carlrobert.codegpt.settings.models.ModelRegistry;
+import ee.carlrobert.codegpt.settings.models.ModelSelection;
 import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifierAdapter;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.settings.models.ModelSelection;
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState;
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings;
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
@@ -168,11 +168,14 @@ public class ModelComboBoxAction extends ComboBoxAction {
       var openaiGroup = DefaultActionGroup.createPopupGroup(() -> "OpenAI");
       openaiGroup.getTemplatePresentation().setIcon(Icons.OpenAI);
       List.of(
+              OpenAIChatCompletionModel.O_4_MINI,
+              OpenAIChatCompletionModel.O_3,
+              OpenAIChatCompletionModel.O_3_MINI,
+              OpenAIChatCompletionModel.O_1_PREVIEW,
+              OpenAIChatCompletionModel.O_1_MINI,
               OpenAIChatCompletionModel.GPT_4_1,
               OpenAIChatCompletionModel.GPT_4_1_MINI,
               OpenAIChatCompletionModel.GPT_4_1_NANO,
-              OpenAIChatCompletionModel.O_3_MINI, OpenAIChatCompletionModel.O_1_PREVIEW,
-              OpenAIChatCompletionModel.O_1_MINI,
               OpenAIChatCompletionModel.GPT_4_O,
               OpenAIChatCompletionModel.GPT_4_O_MINI,
               OpenAIChatCompletionModel.GPT_4_0125_128k)
@@ -278,8 +281,10 @@ public class ModelComboBoxAction extends ComboBoxAction {
         var proxyAIModel = ModelRegistry.getInstance().getProxyAIChatModels().stream()
             .filter(it -> modelCode != null && it.getModel().equals(modelCode))
             .findFirst();
-        templatePresentation.setIcon(proxyAIModel.map(ModelSelection::getIcon).orElse(Icons.CodeGPTModel));
-        templatePresentation.setText(proxyAIModel.map(ModelSelection::getDisplayName).orElse("Unknown"));
+        templatePresentation.setIcon(
+            proxyAIModel.map(ModelSelection::getIcon).orElse(Icons.CodeGPTModel));
+        templatePresentation.setText(
+            proxyAIModel.map(ModelSelection::getDisplayName).orElse("Unknown"));
         break;
       case OPENAI:
         templatePresentation.setIcon(Icons.OpenAI);
@@ -297,7 +302,8 @@ public class ModelComboBoxAction extends ComboBoxAction {
         break;
       case ANTHROPIC:
         templatePresentation.setIcon(Icons.Anthropic);
-        var anthropicModelName = ModelRegistry.getInstance().getModelDisplayName(ANTHROPIC, modelCode);
+        var anthropicModelName = ModelRegistry.getInstance()
+            .getModelDisplayName(ANTHROPIC, modelCode);
         templatePresentation.setText(anthropicModelName);
         break;
       case LLAMA_CPP:
@@ -333,8 +339,8 @@ public class ModelComboBoxAction extends ComboBoxAction {
   private String getLlamaCppPresentationText() {
     var huggingFaceModel = LlamaSettings.getCurrentState().getHuggingFaceModel();
     var llamaModel = LlamaModel.findByHuggingFaceModel(huggingFaceModel);
-    return String.format("%s (%dB)", 
-        llamaModel.getLabel(), 
+    return String.format("%s (%dB)",
+        llamaModel.getLabel(),
         huggingFaceModel.getParameterSize());
   }
 
@@ -372,11 +378,12 @@ public class ModelComboBoxAction extends ComboBoxAction {
     onModelChange.accept(serviceType);
   }
 
-  private AnAction createCodeGPTModelAction(ModelSelection model, Presentation comboBoxPresentation) {
+  private AnAction createCodeGPTModelAction(ModelSelection model,
+      Presentation comboBoxPresentation) {
     var selected = model.getDisplayName().equals(comboBoxPresentation.getText());
     var locked = shouldLockModel(model);
-    return new CodeGPTModelsListPopupAction(model.getDisplayName(), model.getModel(), 
-        model.getIcon() != null ? model.getIcon() : Icons.CodeGPTModel, 
+    return new CodeGPTModelsListPopupAction(model.getDisplayName(), model.getModel(),
+        model.getIcon() != null ? model.getIcon() : Icons.CodeGPTModel,
         model.getPricingPlan() != null ? model.getPricingPlan() : PricingPlan.ANONYMOUS,
         locked, selected, () -> {
       var application = ApplicationManager.getApplication();

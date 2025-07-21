@@ -10,7 +10,6 @@ import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings.Companion.getState
-import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
@@ -108,7 +107,13 @@ class OpenAIRequestFactory : CompletionRequestFactory {
 
     companion object {
         fun isReasoningModel(model: String?) =
-            listOf(O_3_MINI.code, O_1_MINI.code, O_1_PREVIEW.code).contains(model)
+            listOf(
+                O_4_MINI.code,
+                O_3.code,
+                O_3_MINI.code,
+                O_1_MINI.code,
+                O_1_PREVIEW.code
+            ).contains(model)
 
         fun buildBasicO1Request(
             model: String,

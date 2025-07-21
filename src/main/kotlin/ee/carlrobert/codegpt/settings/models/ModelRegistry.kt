@@ -43,96 +43,185 @@ class ModelRegistry {
     private val providerCapabilities = mapOf(
         ServiceType.PROXYAI to ModelCapability(
             ServiceType.PROXYAI,
-            setOf(FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY, 
-                 FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.NEXT_EDIT, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT,
+                FeatureType.CODE_COMPLETION,
+                FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.EDIT_CODE,
+                FeatureType.NEXT_EDIT,
+                FeatureType.LOOKUP
+            )
         ),
         ServiceType.OPENAI to ModelCapability(
             ServiceType.OPENAI,
-            setOf(FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY, 
-                 FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+            )
         ),
         ServiceType.ANTHROPIC to ModelCapability(
             ServiceType.ANTHROPIC,
-            setOf(FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE, 
-                 FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
+                FeatureType.EDIT_CODE, FeatureType.LOOKUP
+            )
         ),
         ServiceType.GOOGLE to ModelCapability(
             ServiceType.GOOGLE,
-            setOf(FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE, 
-                 FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
+                FeatureType.EDIT_CODE, FeatureType.LOOKUP
+            )
         ),
         ServiceType.MISTRAL to ModelCapability(
             ServiceType.MISTRAL,
-            setOf(FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY, 
-                 FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+            )
         ),
         ServiceType.OLLAMA to ModelCapability(
             ServiceType.OLLAMA,
-            setOf(FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY, 
-                 FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+            )
         ),
         ServiceType.LLAMA_CPP to ModelCapability(
             ServiceType.LLAMA_CPP,
-            setOf(FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY, 
-                 FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+            )
         ),
         ServiceType.CUSTOM_OPENAI to ModelCapability(
             ServiceType.CUSTOM_OPENAI,
-            setOf(FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY, 
-                 FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+            setOf(
+                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+            )
         )
     )
 
     private val pricingPlanBasedDefaults = mapOf(
         PricingPlan.ANONYMOUS to mapOf(
-            FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, GEMINI_FLASH_2_5, "Gemini Flash 2.5"),
-            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, GEMINI_FLASH_2_5, "Gemini Flash 2.5"),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
-            FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
+            FeatureType.CHAT to ModelSelection(
+                ServiceType.PROXYAI,
+                GEMINI_FLASH_2_5,
+                "Gemini Flash 2.5"
+            ),
+            FeatureType.AUTO_APPLY to ModelSelection(
+                ServiceType.PROXYAI,
+                GEMINI_FLASH_2_5,
+                "Gemini Flash 2.5"
+            ),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_4_1_MINI,
+                "GPT-4.1 Mini"
+            ),
+            FeatureType.EDIT_CODE to ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_4_1_MINI,
+                "GPT-4.1 Mini"
+            ),
             FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
-            FeatureType.CODE_COMPLETION to ModelSelection(ServiceType.PROXYAI, QWEN_2_5_32B_CODE, "Qwen 2.5 32B Code"),
+            FeatureType.CODE_COMPLETION to ModelSelection(
+                ServiceType.PROXYAI,
+                QWEN_2_5_32B_CODE,
+                "Qwen 2.5 32B Code"
+            ),
             FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
         ),
         PricingPlan.FREE to mapOf(
             FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3"),
-            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3"),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3"),
-            FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3"),
+            FeatureType.AUTO_APPLY to ModelSelection(
+                ServiceType.PROXYAI,
+                DEEPSEEK_V3,
+                "DeepSeek V3"
+            ),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(
+                ServiceType.PROXYAI,
+                DEEPSEEK_V3,
+                "DeepSeek V3"
+            ),
+            FeatureType.EDIT_CODE to ModelSelection(
+                ServiceType.PROXYAI,
+                DEEPSEEK_V3,
+                "DeepSeek V3"
+            ),
             FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3"),
-            FeatureType.CODE_COMPLETION to ModelSelection(ServiceType.PROXYAI, QWEN_2_5_32B_CODE, "Qwen 2.5 32B Code"),
+            FeatureType.CODE_COMPLETION to ModelSelection(
+                ServiceType.PROXYAI,
+                QWEN_2_5_32B_CODE,
+                "Qwen 2.5 32B Code"
+            ),
             FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
         ),
         PricingPlan.INDIVIDUAL to mapOf(
-            FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, CLAUDE_4_SONNET_THINKING, "Claude 4 Sonnet Thinking"),
+            FeatureType.CHAT to ModelSelection(
+                ServiceType.PROXYAI,
+                CLAUDE_4_SONNET_THINKING,
+                "Claude 4 Sonnet Thinking"
+            ),
             FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, GPT_4_1, "GPT-4.1"),
             FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_4_1, "GPT-4.1"),
-            FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, CLAUDE_4_SONNET, "Claude 4 Sonnet"),
+            FeatureType.EDIT_CODE to ModelSelection(
+                ServiceType.PROXYAI,
+                CLAUDE_4_SONNET,
+                "Claude 4 Sonnet"
+            ),
             FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_4_1, "GPT-4.1"),
-            FeatureType.CODE_COMPLETION to ModelSelection(ServiceType.PROXYAI, QWEN_2_5_32B_CODE, "Qwen 2.5 32B Code"),
+            FeatureType.CODE_COMPLETION to ModelSelection(
+                ServiceType.PROXYAI,
+                QWEN_2_5_32B_CODE,
+                "Qwen 2.5 32B Code"
+            ),
             FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
         )
     )
 
     private val fallbackDefaults = mapOf(
-        FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, GEMINI_FLASH_2_5, "Gemini Flash 2.5"),
-        FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, GEMINI_FLASH_2_5, "Gemini Flash 2.5"),
-        FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
+        FeatureType.CHAT to ModelSelection(
+            ServiceType.PROXYAI,
+            GEMINI_FLASH_2_5,
+            "Gemini Flash 2.5"
+        ),
+        FeatureType.AUTO_APPLY to ModelSelection(
+            ServiceType.PROXYAI,
+            GEMINI_FLASH_2_5,
+            "Gemini Flash 2.5"
+        ),
+        FeatureType.COMMIT_MESSAGE to ModelSelection(
+            ServiceType.PROXYAI,
+            GPT_4_1_MINI,
+            "GPT-4.1 Mini"
+        ),
         FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
         FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
-        FeatureType.CODE_COMPLETION to ModelSelection(ServiceType.PROXYAI, QWEN_2_5_32B_CODE, "Qwen 2.5 32B Code"),
+        FeatureType.CODE_COMPLETION to ModelSelection(
+            ServiceType.PROXYAI,
+            QWEN_2_5_32B_CODE,
+            "Qwen 2.5 32B Code"
+        ),
         FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
     )
 
     fun getAllModelsForFeature(featureType: FeatureType): List<ModelSelection> {
         return when (featureType) {
-            FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE, 
+            FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
             FeatureType.EDIT_CODE, FeatureType.LOOKUP -> getAllChatModels()
+
             FeatureType.CODE_COMPLETION -> getAllCodeModels()
             FeatureType.NEXT_EDIT -> getNextEditModels()
         }
     }
 
-    fun getDefaultModelForFeature(featureType: FeatureType, pricingPlan: PricingPlan? = null): ModelSelection {
+    fun getDefaultModelForFeature(
+        featureType: FeatureType,
+        pricingPlan: PricingPlan? = null
+    ): ModelSelection {
         val planBasedDefaults = pricingPlan?.let { pricingPlanBasedDefaults[it] }
         return planBasedDefaults?.get(featureType) ?: fallbackDefaults[featureType]!!
     }
@@ -152,7 +241,7 @@ class ModelRegistry {
             .filter { it.provider == provider }
             .find { it.model == modelCode }
     }
-    
+
     fun getModelDisplayName(provider: ServiceType, modelCode: String): String {
         return findModel(provider, modelCode)?.displayName ?: modelCode
     }
@@ -217,44 +306,112 @@ class ModelRegistry {
 
     fun getProxyAIChatModels(): List<ModelSelection> {
         return listOf(
-            ModelSelection(ServiceType.PROXYAI, O4_MINI, "o4-mini", Icons.OpenAI, PricingPlan.INDIVIDUAL),
-            ModelSelection(ServiceType.PROXYAI, GPT_4_1, "GPT-4.1", Icons.OpenAI, PricingPlan.INDIVIDUAL),
-            ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini", Icons.OpenAI, PricingPlan.ANONYMOUS),
-            ModelSelection(ServiceType.PROXYAI, CLAUDE_4_SONNET_THINKING, "Claude Sonnet 4 (thinking)", Icons.Anthropic, PricingPlan.INDIVIDUAL),
-            ModelSelection(ServiceType.PROXYAI, CLAUDE_4_SONNET, "Claude Sonnet 4", Icons.Anthropic, PricingPlan.INDIVIDUAL),
-            ModelSelection(ServiceType.PROXYAI, GEMINI_PRO_2_5, "Gemini 2.5 Pro", Icons.Google, PricingPlan.INDIVIDUAL),
-            ModelSelection(ServiceType.PROXYAI, GEMINI_FLASH_2_5, "Gemini 2.5 Flash", Icons.Google, PricingPlan.ANONYMOUS),
-            ModelSelection(ServiceType.PROXYAI, DEEPSEEK_R1, "DeepSeek R1", Icons.DeepSeek, PricingPlan.INDIVIDUAL),
-            ModelSelection(ServiceType.PROXYAI, DEEPSEEK_V3, "DeepSeek V3", Icons.DeepSeek, PricingPlan.FREE)
+            ModelSelection(
+                ServiceType.PROXYAI,
+                O4_MINI,
+                "o4-mini",
+                Icons.OpenAI,
+                PricingPlan.INDIVIDUAL
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_4_1,
+                "GPT-4.1",
+                Icons.OpenAI,
+                PricingPlan.INDIVIDUAL
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_4_1_MINI,
+                "GPT-4.1 Mini",
+                Icons.OpenAI,
+                PricingPlan.ANONYMOUS
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                CLAUDE_4_SONNET_THINKING,
+                "Claude Sonnet 4 (thinking)",
+                Icons.Anthropic,
+                PricingPlan.INDIVIDUAL
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                CLAUDE_4_SONNET,
+                "Claude Sonnet 4",
+                Icons.Anthropic,
+                PricingPlan.INDIVIDUAL
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                GEMINI_PRO_2_5,
+                "Gemini 2.5 Pro",
+                Icons.Google,
+                PricingPlan.INDIVIDUAL
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                GEMINI_FLASH_2_5,
+                "Gemini 2.5 Flash",
+                Icons.Google,
+                PricingPlan.ANONYMOUS
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                DEEPSEEK_R1,
+                "DeepSeek R1",
+                Icons.DeepSeek,
+                PricingPlan.INDIVIDUAL
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                DEEPSEEK_V3,
+                "DeepSeek V3",
+                Icons.DeepSeek,
+                PricingPlan.FREE
+            )
         )
     }
 
     fun getProxyAIChatModelsForPricingPlan(userPricingPlan: PricingPlan?): List<ModelSelection> {
         val allModels = getProxyAIChatModels()
         return when (userPricingPlan) {
-            null, PricingPlan.ANONYMOUS -> allModels.filter { 
+            null, PricingPlan.ANONYMOUS -> allModels.filter {
                 it.pricingPlan == PricingPlan.ANONYMOUS || it.pricingPlan == PricingPlan.FREE || it.pricingPlan == PricingPlan.INDIVIDUAL
             }
-            PricingPlan.FREE -> allModels.filter { 
-                it.pricingPlan != PricingPlan.INDIVIDUAL || it.pricingPlan == PricingPlan.FREE || it.pricingPlan == PricingPlan.ANONYMOUS
+
+            PricingPlan.FREE -> allModels.filter {
+                it.pricingPlan != PricingPlan.INDIVIDUAL
             }
+
             PricingPlan.INDIVIDUAL -> allModels
         }
     }
 
     private fun getProxyAICodeModels(): List<ModelSelection> {
         return listOf(
-            ModelSelection(ServiceType.PROXYAI, QWEN_2_5_32B_CODE, "Qwen 2.5 Coder", Icons.Qwen, PricingPlan.ANONYMOUS),
-            ModelSelection(ServiceType.PROXYAI, GPT_3_5_TURBO_INSTRUCT, "GPT-3.5 Turbo Instruct", Icons.OpenAI, PricingPlan.FREE)
+            ModelSelection(
+                ServiceType.PROXYAI,
+                QWEN_2_5_32B_CODE,
+                "Qwen 2.5 Coder",
+                Icons.Qwen,
+                PricingPlan.ANONYMOUS
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_3_5_TURBO_INSTRUCT,
+                "GPT-3.5 Turbo Instruct",
+                Icons.OpenAI,
+                PricingPlan.FREE
+            )
         )
     }
 
     private fun getOpenAIChatModels(): List<ModelSelection> {
         val openAIModels = listOf(
-            GPT_4_1, GPT_4_1_MINI, GPT_4_1_NANO, O3_MINI, O1_PREVIEW, O1_MINI,
+            O4_MINI, O3_PRO, O3, O3_MINI, GPT_4_1, GPT_4_1_MINI, GPT_4_1_NANO, O1_PREVIEW, O1_MINI,
             GPT_4O, GPT_4O_MINI, GPT_4_0125_PREVIEW, GPT_3_5_TURBO_INSTRUCT, GPT_4_VISION_PREVIEW
         )
-        
+
         return openAIModels.mapNotNull { modelId ->
             OpenAIChatCompletionModel.entries.find { it.code == modelId }?.let { model ->
                 ModelSelection(ServiceType.OPENAI, model.code, model.description)
@@ -275,13 +432,41 @@ class ModelRegistry {
 
     private fun getGoogleModels(): List<ModelSelection> {
         return listOf(
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_5_PRO_PREVIEW.code, GoogleModel.GEMINI_2_5_PRO_PREVIEW.description),
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_5_FLASH_PREVIEW.code, GoogleModel.GEMINI_2_5_FLASH_PREVIEW.description),
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_5_PRO.code, GoogleModel.GEMINI_2_5_PRO.description),
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_0_PRO_EXP.code, GoogleModel.GEMINI_2_0_PRO_EXP.description),
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP.code, GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP.description),
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_0_FLASH.code, GoogleModel.GEMINI_2_0_FLASH.description),
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_1_5_PRO.code, GoogleModel.GEMINI_1_5_PRO.description)
+            ModelSelection(
+                ServiceType.GOOGLE,
+                GoogleModel.GEMINI_2_5_PRO_PREVIEW.code,
+                GoogleModel.GEMINI_2_5_PRO_PREVIEW.description
+            ),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                GoogleModel.GEMINI_2_5_FLASH_PREVIEW.code,
+                GoogleModel.GEMINI_2_5_FLASH_PREVIEW.description
+            ),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                GoogleModel.GEMINI_2_5_PRO.code,
+                GoogleModel.GEMINI_2_5_PRO.description
+            ),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                GoogleModel.GEMINI_2_0_PRO_EXP.code,
+                GoogleModel.GEMINI_2_0_PRO_EXP.description
+            ),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP.code,
+                GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP.description
+            ),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                GoogleModel.GEMINI_2_0_FLASH.code,
+                GoogleModel.GEMINI_2_0_FLASH.description
+            ),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                GoogleModel.GEMINI_1_5_PRO.code,
+                GoogleModel.GEMINI_1_5_PRO.description
+            )
         )
     }
 
@@ -338,7 +523,8 @@ class ModelRegistry {
         return try {
             LlamaModel.entries.flatMap { llamaModel ->
                 llamaModel.huggingFaceModels.map { hfModel ->
-                    val displayName = "${llamaModel.label} (${hfModel.parameterSize}B) / Q${hfModel.quantization}"
+                    val displayName =
+                        "${llamaModel.label} (${hfModel.parameterSize}B) / Q${hfModel.quantization}"
                     ModelSelection(ServiceType.LLAMA_CPP, hfModel.name, displayName)
                 }
             }
@@ -350,42 +536,38 @@ class ModelRegistry {
 
     companion object {
         // ProxyAI Models
-        const val O4_MINI = "o4-mini"
         const val GEMINI_PRO_2_5 = "gemini-pro-2.5"
         const val GEMINI_FLASH_2_5 = "gemini-flash-2.5"
-        const val GPT_4_1 = "gpt-4.1"
-        const val GPT_4_1_MINI = "gpt-4.1-mini"
-        const val GPT_4_1_NANO = "gpt-4.1-nano"
         const val CLAUDE_4_SONNET = "claude-4-sonnet"
         const val CLAUDE_4_SONNET_THINKING = "claude-4-sonnet-thinking"
         const val DEEPSEEK_R1 = "deepseek-r1"
         const val DEEPSEEK_V3 = "deepseek-v3"
         const val QWEN_2_5_32B_CODE = "qwen-2.5-32b-code"
         const val ZETA = "zeta"
-        
+
         // OpenAI Models
         const val GPT_3_5_TURBO_INSTRUCT = "gpt-3.5-turbo-instruct"
+        const val O4_MINI = "o4-mini"
+        const val O3_PRO = "o3-pro"
+        const val O3 = "o3"
         const val O3_MINI = "o3-mini"
         const val O1_PREVIEW = "o1-preview"
         const val O1_MINI = "o1-mini"
+        const val GPT_4_1 = "gpt-4.1"
+        const val GPT_4_1_MINI = "gpt-4.1-mini"
+        const val GPT_4_1_NANO = "gpt-4.1-nano"
         const val GPT_4O = "gpt-4o"
         const val GPT_4O_MINI = "gpt-4o-mini"
         const val GPT_4_0125_PREVIEW = "gpt-4-0125-preview"
         const val GPT_4_VISION_PREVIEW = "gpt-4-vision-preview"
-        
+
         // Anthropic Models
         const val CLAUDE_OPUS_4_20250514 = "claude-opus-4-20250514"
         const val CLAUDE_SONNET_4_20250514 = "claude-sonnet-4-20250514"
-        
+
         // Google Models
-        const val GEMINI_2_5_PRO_PREVIEW = "gemini-pro-2.5-preview"
-        const val GEMINI_2_5_FLASH_PREVIEW = "gemini-flash-2.5-preview"
-        const val GEMINI_2_5_PRO = "gemini-2.5-pro"
-        const val GEMINI_2_0_PRO_EXP = "gemini-pro-2.0-exp"
-        const val GEMINI_2_0_FLASH_THINKING_EXP = "gemini-flash-thinking-2.0-exp"
         const val GEMINI_2_0_FLASH = "gemini-2.0-flash"
-        const val GEMINI_1_5_PRO = "gemini-1.5-pro"
-        
+
         // Mistral Models
         const val MISTRAL_LARGE_2411 = "mistral-large-2411"
         const val DEVSTRAL_MEDIUM_2507 = "devstral-medium-2507"
@@ -393,7 +575,7 @@ class ModelRegistry {
 
         // Ollama default models
         const val LLAMA_3_2 = "llama3.2"
-        
+
         // Llama.cpp default models
         const val LLAMA_3_2_3B_INSTRUCT = "llama-3.2-3b-instruct"
 
