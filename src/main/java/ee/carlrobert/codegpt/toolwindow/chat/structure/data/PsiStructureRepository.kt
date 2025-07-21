@@ -140,14 +140,6 @@ class PsiStructureRepository(
                     .filterIsInstance<CodeAnalyzeTagDetails>()
                     .forEach { tagManager.remove(it) }
 
-                if (tagManager.getTags().any { it is EditorTagDetails || it is FileTagDetails }) {
-                    tagManager.addTag(
-                        CodeAnalyzeTagDetails().apply {
-                            selected = newState.chatCompletionSettings.psiStructureEnabled
-                        }
-                    )
-                }
-
                 if (newState.chatCompletionSettings.psiStructureEnabled) {
                     analyzePsiDepth = newState.chatCompletionSettings.psiStructureAnalyzeDepth
                     enable()

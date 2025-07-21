@@ -174,14 +174,6 @@ class UserInputHeaderPanel(
             tagManager.addTag(EditorTagDetails(selectedFile))
         }
 
-        val psiStructureEnabled = service<ConfigurationSettings>().state
-            .chatCompletionSettings
-            .psiStructureEnabled
-
-        tagManager.addTag(
-            CodeAnalyzeTagDetails().apply { selected = psiStructureEnabled }
-        )
-
         EditorUtil.getOpenLocalFiles(project)
             .filterNot { it == selectedFile }
             .take(INITIAL_VISIBLE_FILES)
