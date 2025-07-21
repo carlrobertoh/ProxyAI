@@ -30,6 +30,7 @@ object ModelIcons {
             ServiceType.OPENAI -> Icons.OpenAI
             ServiceType.ANTHROPIC -> Icons.Anthropic
             ServiceType.GOOGLE -> Icons.Google
+            ServiceType.MISTRAL -> Icons.Mistral
             ServiceType.OLLAMA -> Icons.Ollama
             ServiceType.CUSTOM_OPENAI -> Icons.OpenAI
             ServiceType.LLAMA_CPP -> Icons.Llama

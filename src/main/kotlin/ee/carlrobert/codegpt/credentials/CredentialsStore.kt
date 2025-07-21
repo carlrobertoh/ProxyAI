@@ -68,5 +68,9 @@ object CredentialsStore {
         data object OllamaApikey : CredentialKey() {
             override val value: String = "OLLAMA_API_KEY"
         }
+
+        data object MistralApiKey : CredentialKey() {
+            override val value: String = "MISTRAL_API_KEY"
+        }
     }
 }

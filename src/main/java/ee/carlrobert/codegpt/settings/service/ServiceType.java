@@ -10,6 +10,7 @@ public enum ServiceType {
   CUSTOM_OPENAI("CUSTOM_OPENAI", "service.custom.openai.title", "custom.openai.chat.completion"),
   ANTHROPIC("ANTHROPIC", "service.anthropic.title", "anthropic.chat.completion"),
   GOOGLE("GOOGLE", "service.google.title", "google.chat.completion"),
+  MISTRAL("MISTRAL", "service.mistral.title", "mistral.chat.completion"),
   LLAMA_CPP("LLAMA_CPP", "service.llama.title", "llama.chat.completion"),
   OLLAMA("OLLAMA", "service.ollama.title", "ollama.chat.completion");
 

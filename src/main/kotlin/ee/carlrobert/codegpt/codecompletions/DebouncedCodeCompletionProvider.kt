@@ -107,6 +107,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             ServiceType.CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
             ServiceType.LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             ServiceType.OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
+            ServiceType.MISTRAL -> true  // Mistral supports code completions
             ServiceType.ANTHROPIC,
             ServiceType.GOOGLE,
             null -> false

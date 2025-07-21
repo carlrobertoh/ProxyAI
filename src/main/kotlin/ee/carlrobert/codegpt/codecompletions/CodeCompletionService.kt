@@ -8,13 +8,14 @@ import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildL
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOllamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOpenAIRequest
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
-import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
+import ee.carlrobert.codegpt.settings.service.mistral.MistralSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionEventSourceListener
@@ -30,13 +31,16 @@ class CodeCompletionService(private val project: Project) {
         return ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
     }
 
-    fun isCodeCompletionsEnabled(): Boolean = isCodeCompletionsEnabled(ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION))
+    fun isCodeCompletionsEnabled(): Boolean = isCodeCompletionsEnabled(
+        ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION)
+    )
 
     fun isCodeCompletionsEnabled(selectedService: ServiceType): Boolean =
         when (selectedService) {
             PROXYAI -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled
             CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
+            MISTRAL -> MistralSettings.getCurrentState().isCodeCompletionsEnabled
             LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
             else -> false
@@ -46,7 +50,8 @@ class CodeCompletionService(private val project: Project) {
         infillRequest: InfillRequest,
         eventListener: CompletionEventListener<String>
     ): EventSource {
-        return when (val selectedService = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION)) {
+        return when (val selectedService =
+            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION)) {
             OPENAI -> CompletionClientProvider.getOpenAIClient()
                 .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
 
@@ -60,6 +65,9 @@ class CodeCompletionService(private val project: Project) {
                     OpenAITextCompletionEventSourceListener(eventListener)
                 }
             )
+
+            MISTRAL -> CompletionClientProvider.getMistralClient()
+                .getCodeCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
 
             OLLAMA -> CompletionClientProvider.getOllamaClient()
                 .getCompletionAsync(buildOllamaRequest(infillRequest), eventListener)

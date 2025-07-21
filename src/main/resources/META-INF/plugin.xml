@@ -42,6 +42,8 @@
           instance="ee.carlrobert.codegpt.settings.service.AnthropicServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.google" parentId="settings.codegpt.services" displayName="Google"
           instance="ee.carlrobert.codegpt.settings.service.google.GoogleSettingsConfigurable"/>
+        <applicationConfigurable id="settings.codegpt.services.mistral" parentId="settings.codegpt.services" displayName="Mistral"
+          instance="ee.carlrobert.codegpt.settings.service.MistralServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.llama_cpp" parentId="settings.codegpt.services" displayName="LLaMA C/C++ (Offline)"
           instance="ee.carlrobert.codegpt.settings.service.LlamaServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.ollama" parentId="settings.codegpt.services" displayName="Ollama (Offline)"
@@ -68,6 +70,7 @@
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.openai.OpenAISettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.you.YouSettings"/>
+        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.mistral.MistralSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.llama.LlamaSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.models.ModelSettings"/>

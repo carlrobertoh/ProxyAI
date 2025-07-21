@@ -35,6 +35,7 @@ class ServiceConfigurableComponent {
             "Custom OpenAI" to CustomServiceConfigurable::class.java,
             "Anthropic" to AnthropicServiceConfigurable::class.java,
             "Google" to GoogleSettingsConfigurable::class.java,
+            "Mistral" to MistralServiceConfigurable::class.java,
             "LLaMA C/C++" to LlamaServiceConfigurable::class.java,
             "Ollama" to OllamaSettingsConfigurable::class.java,
         ).entries.forEach { (name, configurableClass) ->

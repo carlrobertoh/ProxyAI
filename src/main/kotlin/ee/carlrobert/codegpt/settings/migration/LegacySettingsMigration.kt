@@ -9,7 +9,6 @@ import ee.carlrobert.codegpt.settings.models.ModelSettingsState
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTAvailableModels
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
@@ -74,7 +73,7 @@ object LegacySettingsMigration {
 
                 ServiceType.GOOGLE -> {
                     service<GoogleSettings>().state.model
-                        ?: GoogleModel.GEMINI_PRO.code
+                        ?: GoogleModel.GEMINI_2_5_PRO.code
                 }
 
                 ServiceType.OLLAMA -> {
@@ -95,6 +94,10 @@ object LegacySettingsMigration {
                     service<CustomServicesSettings>().state.services
                         .map { it.chatCompletionSettings.body["model"] as String }
                         .lastOrNull() ?: ""
+                }
+
+                ServiceType.MISTRAL -> {
+                    ModelRegistry.CODESTRAL_LATEST
                 }
             }
         } catch (e: Exception) {
@@ -140,6 +143,10 @@ object LegacySettingsMigration {
                         .map { it.codeCompletionSettings.body["model"] as String }
                         .lastOrNull() ?: ""
                 }
+
+                ServiceType.MISTRAL -> {
+                    ModelRegistry.CODESTRAL_LATEST
+                }
             }
         } catch (e: Exception) {
             logger.warn("Could not get legacy model for service $serviceType, using default", e)
@@ -153,6 +160,7 @@ object LegacySettingsMigration {
             ServiceType.OPENAI -> ModelRegistry.GPT_4O
             ServiceType.ANTHROPIC -> ModelRegistry.CLAUDE_SONNET_4_20250514
             ServiceType.GOOGLE -> ModelRegistry.GEMINI_2_0_FLASH
+            ServiceType.MISTRAL -> ModelRegistry.DEVSTRAL_MEDIUM_2507
             ServiceType.OLLAMA -> ModelRegistry.LLAMA_3_2
             ServiceType.LLAMA_CPP -> ModelRegistry.LLAMA_3_2_3B_INSTRUCT
             ServiceType.CUSTOM_OPENAI -> ModelRegistry.GPT_4O

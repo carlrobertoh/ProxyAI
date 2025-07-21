@@ -29,6 +29,7 @@ interface CompletionRequestFactory {
                 ServiceType.CUSTOM_OPENAI -> CustomOpenAIRequestFactory()
                 ServiceType.ANTHROPIC -> ClaudeRequestFactory()
                 ServiceType.GOOGLE -> GoogleRequestFactory()
+                ServiceType.MISTRAL -> MistralRequestFactory()
                 ServiceType.OLLAMA -> OllamaRequestFactory()
                 ServiceType.LLAMA_CPP -> LlamaRequestFactory()
             }

@@ -67,7 +67,8 @@ class SettingsModelComboBoxAction(
             ServiceType.ANTHROPIC,
             ServiceType.OPENAI,
             ServiceType.CUSTOM_OPENAI,
-            ServiceType.GOOGLE
+            ServiceType.GOOGLE,
+            ServiceType.MISTRAL
         )
         val hasCloudProviders = cloudProviders.any { groupedModels.containsKey(it) }
 

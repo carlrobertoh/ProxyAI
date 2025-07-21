@@ -70,6 +70,7 @@ class ModelRegistryTest : IntegrationTest() {
         assertThat(result).anyMatch { it.provider == ServiceType.OPENAI && it.model == "gpt-4.1" }
         assertThat(result).anyMatch { it.provider == ServiceType.ANTHROPIC && it.model == "claude-sonnet-4-20250514" }
         assertThat(result).anyMatch { it.provider == ServiceType.GOOGLE && it.model.contains("gemini") }
+        assertThat(result).anyMatch { it.provider == ServiceType.MISTRAL && it.model == "codestral-latest" }
         assertThat(result).noneMatch { it.provider == ServiceType.ANTHROPIC && it.model == "qwen-2.5-32b-code" }
     }
 
@@ -78,6 +79,7 @@ class ModelRegistryTest : IntegrationTest() {
 
         assertThat(result).anyMatch { it.provider == ServiceType.PROXYAI && it.model == "qwen-2.5-32b-code" }
         assertThat(result).anyMatch { it.provider == ServiceType.OPENAI && it.model == "gpt-3.5-turbo-instruct" }
+        assertThat(result).anyMatch { it.provider == ServiceType.MISTRAL && it.model == "codestral-latest" }
         assertThat(result).noneMatch { it.provider == ServiceType.ANTHROPIC }
         assertThat(result).noneMatch { it.provider == ServiceType.GOOGLE }
     }
@@ -97,6 +99,7 @@ class ModelRegistryTest : IntegrationTest() {
             ServiceType.OPENAI,
             ServiceType.ANTHROPIC,
             ServiceType.GOOGLE,
+            ServiceType.MISTRAL,
             ServiceType.OLLAMA,
             ServiceType.LLAMA_CPP,
             ServiceType.CUSTOM_OPENAI
@@ -109,6 +112,7 @@ class ModelRegistryTest : IntegrationTest() {
         assertThat(result).containsExactlyInAnyOrder(
             ServiceType.PROXYAI,
             ServiceType.OPENAI,
+            ServiceType.MISTRAL,
             ServiceType.OLLAMA,
             ServiceType.LLAMA_CPP,
             ServiceType.CUSTOM_OPENAI
@@ -156,6 +160,15 @@ class ModelRegistryTest : IntegrationTest() {
         assertThat(result!!.provider).isEqualTo(ServiceType.ANTHROPIC)
         assertThat(result.model).isEqualTo("claude-sonnet-4-20250514")
         assertThat(result.displayName).isEqualTo("Claude Sonnet 4")
+    }
+
+    fun `test findModel with existing mistral model returns model selection`() {
+        val result = modelRegistry.findModel(ServiceType.MISTRAL, "codestral-latest")
+
+        assertThat(result).isNotNull
+        assertThat(result!!.provider).isEqualTo(ServiceType.MISTRAL)
+        assertThat(result.model).isEqualTo("codestral-latest")
+        assertThat(result.displayName).isEqualTo("Codestral")
     }
 
     fun `test findModel with non-existing model returns null`() {

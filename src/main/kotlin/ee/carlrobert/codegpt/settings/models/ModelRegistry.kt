@@ -8,9 +8,7 @@ import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTAvailableModels
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
-import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.llm.client.codegpt.PricingPlan
 import ee.carlrobert.llm.client.google.models.GoogleModel
@@ -62,6 +60,11 @@ class ModelRegistry {
             ServiceType.GOOGLE,
             setOf(FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE, 
                  FeatureType.EDIT_CODE, FeatureType.LOOKUP)
+        ),
+        ServiceType.MISTRAL to ModelCapability(
+            ServiceType.MISTRAL,
+            setOf(FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY, 
+                 FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP)
         ),
         ServiceType.OLLAMA to ModelCapability(
             ServiceType.OLLAMA,
@@ -168,6 +171,7 @@ class ModelRegistry {
             addAll(getOpenAIChatModels())
             addAll(getAnthropicModels())
             addAll(getGoogleModels())
+            addAll(getMistralModels())
             addAll(getLlamaModels())
             addAll(getOllamaModels())
             addAll(getCustomOpenAIModels())
@@ -178,6 +182,7 @@ class ModelRegistry {
         return buildList {
             addAll(getProxyAICodeModels())
             add(getOpenAICodeModel())
+            addAll(getMistralCodeModels())
             addAll(getLlamaModels())
             addAll(getCustomOpenAICodeModels())
             addAll(getOllamaModels())
@@ -207,9 +212,7 @@ class ModelRegistry {
     }
 
     private fun getNextEditModels(): List<ModelSelection> {
-        return listOf(
-            ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
-        )
+        return listOf(ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta"))
     }
 
     fun getProxyAIChatModels(): List<ModelSelection> {
@@ -274,12 +277,24 @@ class ModelRegistry {
         return listOf(
             ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_5_PRO_PREVIEW.code, GoogleModel.GEMINI_2_5_PRO_PREVIEW.description),
             ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_5_FLASH_PREVIEW.code, GoogleModel.GEMINI_2_5_FLASH_PREVIEW.description),
-            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_5_PRO_EXP.code, GoogleModel.GEMINI_2_5_PRO_EXP.description),
+            ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_5_PRO.code, GoogleModel.GEMINI_2_5_PRO.description),
             ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_0_PRO_EXP.code, GoogleModel.GEMINI_2_0_PRO_EXP.description),
             ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP.code, GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP.description),
             ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_2_0_FLASH.code, GoogleModel.GEMINI_2_0_FLASH.description),
             ModelSelection(ServiceType.GOOGLE, GoogleModel.GEMINI_1_5_PRO.code, GoogleModel.GEMINI_1_5_PRO.description)
         )
+    }
+
+    private fun getMistralModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(ServiceType.MISTRAL, DEVSTRAL_MEDIUM_2507, "Devstral Medium"),
+            ModelSelection(ServiceType.MISTRAL, MISTRAL_LARGE_2411, "Mistral Large"),
+            ModelSelection(ServiceType.MISTRAL, CODESTRAL_LATEST, "Codestral"),
+        )
+    }
+
+    private fun getMistralCodeModels(): List<ModelSelection> {
+        return listOf(ModelSelection(ServiceType.MISTRAL, CODESTRAL_LATEST, "Codestral"))
     }
 
     private fun getOllamaModels(): List<ModelSelection> {
@@ -365,12 +380,17 @@ class ModelRegistry {
         // Google Models
         const val GEMINI_2_5_PRO_PREVIEW = "gemini-pro-2.5-preview"
         const val GEMINI_2_5_FLASH_PREVIEW = "gemini-flash-2.5-preview"
-        const val GEMINI_2_5_PRO_EXP = "gemini-pro-2.5-exp"
+        const val GEMINI_2_5_PRO = "gemini-2.5-pro"
         const val GEMINI_2_0_PRO_EXP = "gemini-pro-2.0-exp"
         const val GEMINI_2_0_FLASH_THINKING_EXP = "gemini-flash-thinking-2.0-exp"
         const val GEMINI_2_0_FLASH = "gemini-2.0-flash"
         const val GEMINI_1_5_PRO = "gemini-1.5-pro"
         
+        // Mistral Models
+        const val MISTRAL_LARGE_2411 = "mistral-large-2411"
+        const val DEVSTRAL_MEDIUM_2507 = "devstral-medium-2507"
+        const val CODESTRAL_LATEST = "codestral-latest"
+
         // Ollama default models
         const val LLAMA_3_2 = "llama3.2"
         

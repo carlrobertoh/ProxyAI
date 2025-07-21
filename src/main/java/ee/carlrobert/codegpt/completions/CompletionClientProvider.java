@@ -14,6 +14,7 @@ import ee.carlrobert.llm.client.anthropic.ClaudeClient;
 import ee.carlrobert.llm.client.codegpt.CodeGPTClient;
 import ee.carlrobert.llm.client.google.GoogleClient;
 import ee.carlrobert.llm.client.llama.LlamaClient;
+import ee.carlrobert.llm.client.mistral.MistralClient;
 import ee.carlrobert.llm.client.ollama.OllamaClient;
 import ee.carlrobert.llm.client.openai.OpenAIClient;
 import java.net.InetSocketAddress;
@@ -71,6 +72,10 @@ public class CompletionClientProvider {
   public static GoogleClient getGoogleClient() {
     return new GoogleClient.Builder(getCredential(CredentialKey.GoogleApiKey.INSTANCE))
         .build(getDefaultClientBuilder());
+  }
+
+  public static MistralClient getMistralClient() {
+    return new MistralClient(getCredential(CredentialKey.MistralApiKey.INSTANCE), getDefaultClientBuilder());
   }
 
   public static OkHttpClient.Builder getDefaultClientBuilder() {

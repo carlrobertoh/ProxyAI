@@ -79,13 +79,23 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
     }
 
     fun getModelSelection(featureType: FeatureType): ModelSelection {
-        val details = getModelDetailsState(featureType) ?: throw IllegalStateException("No model selected")
+        val details = getModelDetailsState(featureType)
+        
+        if (details == null) {
+            val defaultModel = ModelRegistry.getInstance().getDefaultModelForFeature(featureType)
+            state.setModelSelection(featureType, defaultModel.model, defaultModel.provider)
+            return defaultModel
+        }
 
         return details.model?.let { model ->
             details.provider?.let { provider ->
                 ModelRegistry.getInstance().findModel(provider, model)
             }
-        } ?: throw IllegalStateException("No model found")
+        } ?: run {
+            val defaultModel = ModelRegistry.getInstance().getDefaultModelForFeature(featureType)
+            state.setModelSelection(featureType, defaultModel.model, defaultModel.provider)
+            defaultModel
+        }
     }
 
     fun getOrCreateModelSelection(featureType: FeatureType, ): ModelSelection {

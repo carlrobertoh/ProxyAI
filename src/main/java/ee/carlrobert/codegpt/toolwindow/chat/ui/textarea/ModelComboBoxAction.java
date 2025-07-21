@@ -5,6 +5,7 @@ import static ee.carlrobert.codegpt.settings.service.ServiceType.ANTHROPIC;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.CUSTOM_OPENAI;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.GOOGLE;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.LLAMA_CPP;
+import static ee.carlrobert.codegpt.settings.service.ServiceType.MISTRAL;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.OLLAMA;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.OPENAI;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI;
@@ -199,13 +200,24 @@ public class ModelComboBoxAction extends ComboBoxAction {
       List.of(
               GoogleModel.GEMINI_2_5_PRO_PREVIEW,
               GoogleModel.GEMINI_2_5_FLASH_PREVIEW,
-              GoogleModel.GEMINI_2_5_PRO_EXP,
+              GoogleModel.GEMINI_2_5_PRO,
               GoogleModel.GEMINI_2_0_PRO_EXP,
               GoogleModel.GEMINI_2_0_FLASH_THINKING_EXP,
               GoogleModel.GEMINI_2_0_FLASH,
               GoogleModel.GEMINI_1_5_PRO)
           .forEach(model -> googleGroup.add(createGoogleModelAction(model, presentation)));
       actionGroup.add(googleGroup);
+    }
+
+    if (availableProviders.contains(MISTRAL)) {
+      var mistralGroup = DefaultActionGroup.createPopupGroup(() -> "Mistral");
+      mistralGroup.getTemplatePresentation().setIcon(Icons.Mistral);
+      List.of(
+              ModelRegistry.DEVSTRAL_MEDIUM_2507,
+              ModelRegistry.MISTRAL_LARGE_2411,
+              ModelRegistry.CODESTRAL_LATEST)
+          .forEach(model -> mistralGroup.add(createMistralModelAction(model, presentation)));
+      actionGroup.add(mistralGroup);
     }
 
     if (availableProviders.contains(LLAMA_CPP) || availableProviders.contains(OLLAMA)) {
@@ -301,6 +313,10 @@ public class ModelComboBoxAction extends ComboBoxAction {
       case GOOGLE:
         templatePresentation.setText(getGooglePresentationText());
         templatePresentation.setIcon(Icons.Google);
+        break;
+      case MISTRAL:
+        templatePresentation.setText(getMistralPresentationText());
+        templatePresentation.setIcon(Icons.Mistral);
         break;
       default:
         break;
@@ -457,5 +473,23 @@ public class ModelComboBoxAction extends ComboBoxAction {
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
             .setModel(FeatureType.CHAT,
                 LlamaSettings.getCurrentState().getHuggingFaceModel().getCode(), LLAMA_CPP));
+  }
+
+  private AnAction createMistralModelAction(String modelCode, Presentation comboBoxPresentation) {
+    var modelName = ModelRegistry.getInstance().getModelDisplayName(MISTRAL, modelCode);
+    return createModelAction(
+        MISTRAL,
+        modelName,
+        Icons.Mistral,
+        comboBoxPresentation,
+        () -> ApplicationManager.getApplication().getService(ModelSettings.class)
+            .setModel(FeatureType.CHAT, modelCode, MISTRAL));
+  }
+
+  private String getMistralPresentationText() {
+    var chatModel = ApplicationManager.getApplication().getService(ModelSettings.class).getState()
+        .getModelSelection(FeatureType.CHAT);
+    var modelCode = chatModel != null ? chatModel.getModel() : null;
+    return ModelRegistry.getInstance().getModelDisplayName(MISTRAL, modelCode);
   }
 }

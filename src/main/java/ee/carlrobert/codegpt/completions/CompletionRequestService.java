@@ -122,6 +122,8 @@ public final class CompletionRequestService {
             .getChatCompletionAsync(completionRequest, eventListener);
         case OLLAMA -> CompletionClientProvider.getOllamaClient()
             .getChatCompletionAsync(completionRequest, eventListener);
+        case MISTRAL -> CompletionClientProvider.getMistralClient()
+            .getChatCompletionAsync(completionRequest, eventListener);
         default -> throw new RuntimeException("Unknown service selected");
       };
     }
@@ -152,16 +154,15 @@ public final class CompletionRequestService {
     throw new IllegalStateException("Unknown request type: " + request.getClass());
   }
 
-  public String getChatCompletion(CompletionRequest request, ServiceType serviceType) {
-    return getChatCompletion(request, serviceType, FeatureType.CHAT);
-  }
-
-  public String getChatCompletion(CompletionRequest request, ServiceType serviceType, FeatureType featureType) {
+  public String getChatCompletion(CompletionRequest request, ServiceType serviceType,
+      FeatureType featureType) {
     if (request instanceof OpenAIChatCompletionRequest completionRequest) {
       var response = switch (serviceType) {
         case OPENAI -> CompletionClientProvider.getOpenAIClient()
             .getChatCompletion(completionRequest);
         case OLLAMA -> CompletionClientProvider.getOllamaClient()
+            .getChatCompletion(completionRequest);
+        case MISTRAL -> CompletionClientProvider.getMistralClient()
             .getChatCompletion(completionRequest);
         default -> throw new RuntimeException("Unknown service selected");
       };
@@ -227,6 +228,8 @@ public final class CompletionRequestService {
           CredentialKey.AnthropicApiKey.INSTANCE
       );
       case GOOGLE -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.GoogleApiKey.INSTANCE);
+      case MISTRAL ->
+          CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.MistralApiKey.INSTANCE);
       case PROXYAI, CUSTOM_OPENAI, LLAMA_CPP, OLLAMA -> true;
     };
   }

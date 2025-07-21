@@ -45,7 +45,8 @@ abstract class CodeCompletionFeatureToggleActions(
             }
 
             ANTHROPIC,
-            GOOGLE -> {
+            GOOGLE,
+            MISTRAL -> {
             }
         }
     }
@@ -61,7 +62,8 @@ abstract class CodeCompletionFeatureToggleActions(
             OPENAI,
             CUSTOM_OPENAI,
             LLAMA_CPP,
-            OLLAMA -> true
+            OLLAMA,
+            MISTRAL -> true
 
             ANTHROPIC,
             GOOGLE -> false

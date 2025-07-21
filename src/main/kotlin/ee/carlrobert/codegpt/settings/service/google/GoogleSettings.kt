@@ -8,5 +8,5 @@ import ee.carlrobert.llm.client.google.models.GoogleModel
 class GoogleSettings : SimplePersistentStateComponent<GoogleSettingsState>(GoogleSettingsState())
 
 class GoogleSettingsState : BaseState() {
-    var model by string(GoogleModel.GEMINI_PRO.code)
+    var model by string(GoogleModel.GEMINI_2_5_PRO.code)
 }
