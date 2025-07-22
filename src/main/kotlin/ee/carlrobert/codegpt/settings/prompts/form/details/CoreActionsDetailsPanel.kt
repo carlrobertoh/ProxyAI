@@ -11,6 +11,7 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.settings.Placeholder
 import ee.carlrobert.codegpt.settings.Placeholder.GIT_DIFF
 import ee.carlrobert.codegpt.settings.prompts.CommitMessageTemplate
+import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_AUTO_APPLY_PROMPT
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_EDIT_CODE_PROMPT
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_FIX_COMPILE_ERRORS_PROMPT
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT
@@ -28,6 +29,12 @@ class CoreActionsDetailsPanel : PromptDetailsPanel {
 
             override fun create(details: CoreActionPromptDetails): JComponent {
                 val editorPanel = when (details.code) {
+
+                    "AUTO_APPLY" -> CoreActionEditorPanel(
+                        details,
+                        DEFAULT_AUTO_APPLY_PROMPT,
+                        "Template used for the 'Auto Apply' feature."
+                    )
 
                     "EDIT_CODE" -> CoreActionEditorPanel(
                         details,
@@ -70,6 +77,7 @@ class CoreActionsDetailsPanel : PromptDetailsPanel {
     init {
         val settings = service<PromptsSettings>().state.coreActions
         listOf(
+            settings.autoApply,
             settings.editCode,
             settings.fixCompileErrors,
             settings.generateCommitMessage,

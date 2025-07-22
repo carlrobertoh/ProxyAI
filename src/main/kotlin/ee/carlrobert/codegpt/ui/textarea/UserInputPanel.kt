@@ -14,7 +14,6 @@ import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.ui.components.AnActionLink
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.panel
@@ -22,14 +21,12 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.actions.AttachImageAction
 import ee.carlrobert.codegpt.conversations.Conversation
-import ee.carlrobert.codegpt.conversations.ConversationService
-import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.models.ModelRegistry
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
-import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
@@ -38,7 +35,6 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import git4idea.GitCommit
 import java.awt.*
 import java.awt.geom.Area
@@ -48,7 +44,6 @@ import javax.swing.JPanel
 
 class UserInputPanel(
     private val project: Project,
-    private val conversation: Conversation,
     private val totalTokensPanel: TotalTokensPanel,
     parentDisposable: Disposable,
     private val tagManager: TagManager,
@@ -60,6 +55,7 @@ class UserInputPanel(
         private const val CORNER_RADIUS = 16
     }
 
+    private var chatMode: ChatMode = ChatMode.ASK
     private val disposableCoroutineScope = DisposableCoroutineScope()
     private val promptTextField =
         PromptTextField(
@@ -106,13 +102,31 @@ class UserInputPanel(
     val text: String
         get() = promptTextField.text
 
+    fun getChatMode(): ChatMode = chatMode
+
+    fun setChatMode(mode: ChatMode) {
+        chatMode = mode
+    }
+
     init {
+        setupDisposables(parentDisposable)
+        setupLayout()
+        addSelectedEditorContent()
+    }
+
+    private fun setupDisposables(parentDisposable: Disposable) {
         Disposer.register(parentDisposable, disposableCoroutineScope)
+        Disposer.register(parentDisposable, promptTextField)
+    }
+
+    private fun setupLayout() {
         background = service<EditorColorsManager>().globalScheme.defaultBackground
         add(userInputHeaderPanel, BorderLayout.NORTH)
         add(promptTextField, BorderLayout.CENTER)
-        add(getFooter(), BorderLayout.SOUTH)
+        add(createFooterPanel(), BorderLayout.SOUTH)
+    }
 
+    private fun addSelectedEditorContent() {
         EditorUtil.getSelectedEditor(project)?.let { editor ->
             if (EditorUtil.hasSelection(editor)) {
                 tagManager.addTag(
@@ -123,8 +137,6 @@ class UserInputPanel(
                 )
             }
         }
-
-        Disposer.register(parentDisposable, promptTextField)
     }
 
     fun getSelectedTags(): List<TagDetails> {
@@ -144,27 +156,44 @@ class UserInputPanel(
 
     fun addCommitReferences(gitCommits: List<GitCommit>) {
         runInEdt {
-            if (promptTextField.text.isEmpty()) {
-                promptTextField.text = if (gitCommits.size == 1) {
-                    "Explain the commit `${gitCommits[0].id.toShortString()}`"
-                } else {
-                    "Explain the commits ${gitCommits.joinToString(", ") { "`${it.id.toShortString()}`" }}"
-                }
-            }
-
-            gitCommits.forEach {
-                addTag(GitCommitTagDetails(it))
-            }
-            promptTextField.requestFocusInWindow()
-            promptTextField.editor?.caretModel?.moveToOffset(promptTextField.text.length)
+            setCommitPromptIfEmpty(gitCommits)
+            addCommitTags(gitCommits)
+            focusOnPromptEnd()
         }
+    }
+
+    private fun setCommitPromptIfEmpty(gitCommits: List<GitCommit>) {
+        if (promptTextField.text.isEmpty()) {
+            promptTextField.text = buildCommitPrompt(gitCommits)
+        }
+    }
+
+    private fun buildCommitPrompt(gitCommits: List<GitCommit>): String {
+        return if (gitCommits.size == 1) {
+            "Explain the commit `${gitCommits[0].id.toShortString()}`"
+        } else {
+            "Explain the commits ${gitCommits.joinToString(", ") { "`${it.id.toShortString()}`" }}"
+        }
+    }
+
+    private fun addCommitTags(gitCommits: List<GitCommit>) {
+        gitCommits.forEach { addTag(GitCommitTagDetails(it)) }
+    }
+
+    private fun focusOnPromptEnd() {
+        promptTextField.requestFocusInWindow()
+        promptTextField.editor?.caretModel?.moveToOffset(promptTextField.text.length)
     }
 
     fun addTag(tagDetails: TagDetails) {
         userInputHeaderPanel.addTag(tagDetails)
+        removeTrailingAtSymbol()
+    }
+
+    private fun removeTrailingAtSymbol() {
         val text = promptTextField.text
-        if (text.isNotEmpty() && text.last() == '@') {
-            promptTextField.text = text.substring(0, text.length - 1)
+        if (text.endsWith('@')) {
+            promptTextField.text = text.dropLast(1)
         }
     }
 
@@ -180,37 +209,53 @@ class UserInputPanel(
 
     override fun paintComponent(g: Graphics) {
         val g2 = g.create() as Graphics2D
+        try {
+            setupGraphics(g2)
+            drawRoundedBackground(g2)
+            super.paintComponent(g2)
+        } finally {
+            g2.dispose()
+        }
+    }
+
+    private fun setupGraphics(g2: Graphics2D) {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+    }
 
-        val area = Area(Rectangle2D.Float(0f, 0f, width.toFloat(), height.toFloat()))
-        val roundedRect = RoundRectangle2D.Float(
-            0f,
-            0f,
-            width.toFloat(),
-            height.toFloat(),
-            CORNER_RADIUS.toFloat(),
-            CORNER_RADIUS.toFloat()
-        )
-        area.intersect(Area(roundedRect))
-
+    private fun drawRoundedBackground(g2: Graphics2D) {
+        val area = createRoundedArea()
         g2.clip = area
-
         g2.color = background
         g2.fill(area)
+    }
 
-        super.paintComponent(g2)
-        g2.dispose()
+    private fun createRoundedArea(): Area {
+        val bounds = Rectangle2D.Float(0f, 0f, width.toFloat(), height.toFloat())
+        val roundedRect = RoundRectangle2D.Float(
+            0f, 0f, width.toFloat(), height.toFloat(),
+            CORNER_RADIUS.toFloat(), CORNER_RADIUS.toFloat()
+        )
+        val area = Area(bounds)
+        area.intersect(Area(roundedRect))
+        return area
     }
 
     override fun paintBorder(g: Graphics) {
         val g2 = g.create() as Graphics2D
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        try {
+            setupGraphics(g2)
+            drawRoundedBorder(g2)
+        } finally {
+            g2.dispose()
+        }
+    }
+
+    private fun drawRoundedBorder(g2: Graphics2D) {
         g2.color = JBUI.CurrentTheme.Focus.defaultButtonColor()
         if (promptTextField.isFocusOwner) {
             g2.stroke = BasicStroke(1.5F)
         }
         g2.drawRoundRect(0, 0, width - 1, height - 1, CORNER_RADIUS, CORNER_RADIUS)
-        g2.dispose()
     }
 
     override fun getInsets(): Insets = JBUI.insets(4)
@@ -236,76 +281,73 @@ class UserInputPanel(
         item.execute(project, this)
     }
 
-    private fun getFooter(): JPanel {
-        val attachImageLink = AnActionLink(CodeGPTBundle.get("shared.image"), AttachImageAction())
-            .apply {
-                icon = AllIcons.FileTypes.Image
-                font = JBUI.Fonts.smallFont()
-            }
+    private fun createToolbarSeparator(): JPanel {
+        return JPanel().apply {
+            isOpaque = true
+            background = JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()
+            preferredSize = Dimension(1, 16)
+            minimumSize = Dimension(1, 16)
+            maximumSize = Dimension(1, 16)
+        }
+    }
+
+    private fun createFooterPanel(): JPanel {
+        val currentService = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
         val modelComboBox = ModelComboBoxAction(
             project,
-            {
-                imageActionSupported.set(isImageActionSupported())
-                // TODO: Implement a proper session management
-                val conversationService = service<ConversationService>()
-                if (conversation.messages.isNotEmpty()) {
-                    conversationService.startConversation()
-                    project.service<ChatToolWindowContentManager>().createNewTabPanel()
-                } else {
-                    conversation.model = conversationService.getModelForSelectedService(it)
-                }
-            },
-            service<GeneralSettings>().state.selectedService
+            { imageActionSupported.set(isImageActionSupported()) },
+            currentService
         ).createCustomComponent(ActionPlaces.UNKNOWN)
 
+        val searchReplaceToggle =
+            SearchReplaceToggleAction(this).createCustomComponent(ActionPlaces.UNKNOWN)
+
         return panel {
-            twoColumnsRow({
-                cell(modelComboBox).gap(RightGap.SMALL)
-                cell(attachImageLink).visibleIf(imageActionSupported)
-            }, {
-                panel {
-                    row {
-                        cell(submitButton).gap(RightGap.SMALL)
-                        cell(stopButton)
-                    }
-                }.align(AlignX.RIGHT)
-            })
+            twoColumnsRow(
+                {
+                    panel {
+                        row {
+                            cell(modelComboBox).gap(RightGap.SMALL)
+                            cell(createToolbarSeparator()).gap(RightGap.SMALL)
+                            cell(searchReplaceToggle)
+                        }
+                    }.align(AlignX.LEFT)
+                },
+                {
+                    panel {
+                        row {
+                            cell(submitButton).gap(RightGap.SMALL)
+                            cell(stopButton)
+                        }
+                    }.align(AlignX.RIGHT)
+                })
         }.andTransparent()
     }
 
     private fun isImageActionSupported(): Boolean {
-        return when (service<GeneralSettings>().state.selectedService) {
+        val currentModel = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+        val currentService = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
+        
+        return when (currentService) {
             ServiceType.CUSTOM_OPENAI,
             ServiceType.ANTHROPIC,
             ServiceType.GOOGLE,
-            ServiceType.AZURE,
+            ServiceType.OPENAI,
             ServiceType.OLLAMA -> true
 
-            ServiceType.CODEGPT -> {
-                listOf(
-                    "gpt-4.1",
-                    "gpt-4.1-mini",
-                    "gemini-pro-2.5",
-                    "claude-3-opus",
-                    "claude-3.5-sonnet",
-                    "claude-3.7-sonnet"
-                ).contains(
-                    service<CodeGPTServiceSettings>()
-                        .state
-                        .chatCompletionSettings
-                        .model
-                )
-            }
-
-            ServiceType.OPENAI -> {
-                listOf(
-                    OpenAIChatCompletionModel.GPT_4_VISION_PREVIEW.code,
-                    OpenAIChatCompletionModel.GPT_4_O.code,
-                    OpenAIChatCompletionModel.GPT_4_O_MINI.code
-                ).contains(service<OpenAISettings>().state.model)
-            }
-
+            ServiceType.PROXYAI -> isCodeGPTModelSupported(currentModel)
             else -> false
         }
+    }
+
+    private fun isCodeGPTModelSupported(modelCode: String): Boolean {
+        return modelCode in setOf(
+            ModelRegistry.GPT_4_1,
+            ModelRegistry.GPT_4_1_MINI,
+            ModelRegistry.GEMINI_PRO_2_5,
+            ModelRegistry.GEMINI_FLASH_2_5,
+            ModelRegistry.CLAUDE_4_SONNET,
+            ModelRegistry.CLAUDE_4_SONNET_THINKING
+        )
     }
 }

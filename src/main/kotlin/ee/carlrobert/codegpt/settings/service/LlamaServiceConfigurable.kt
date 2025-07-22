@@ -1,40 +1,48 @@
 package ee.carlrobert.codegpt.settings.service
 
-import com.intellij.openapi.components.service
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.Configurable
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LlamaApiKey
-import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
-import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
-import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.completions.llama.LlamaServerAgent
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.llama.form.LlamaSettingsForm
 import javax.swing.JComponent
 
-class LlamaServiceConfigurable : Configurable {
+class LlamaServiceConfigurable : Configurable, Disposable {
 
-    private lateinit var component: LlamaSettingsForm
+    private var form: LlamaSettingsForm? = null
 
     override fun getDisplayName(): String {
-        return "ProxyAI: Custom Service"
+        return "CodeGPT: Llama"
     }
 
-    override fun createComponent(): JComponent {
-        component = LlamaSettingsForm(service<LlamaSettings>().state)
-        return component
+    override fun createComponent(): JComponent? {
+        if (form == null) {
+            form = LlamaSettingsForm(LlamaSettings.getCurrentState())
+
+            ApplicationManager.getApplication().getService(LlamaServerAgent::class.java)
+                .setSettingsForm(form)
+        }
+        return form
     }
 
     override fun isModified(): Boolean {
-        return component.getCurrentState() != service<LlamaSettings>().state
-                || component.llamaServerPreferencesForm.getApiKey() != getCredential(LlamaApiKey)
+        val currentForm = form ?: return false
+        return LlamaSettings.getInstance().isModified(currentForm)
     }
 
     override fun apply() {
-        service<GeneralSettings>().state.selectedService = ServiceType.LLAMA_CPP
-        setCredential(LlamaApiKey, component.llamaServerPreferencesForm.getApiKey())
-        service<LlamaSettings>().loadState(component.currentState)
+        val currentForm = form ?: return
+        LlamaSettings.getInstance().loadState(currentForm.getCurrentState())
+
+        ModelReplacementDialog.showDialogIfNeeded(ServiceType.LLAMA_CPP)
     }
 
     override fun reset() {
-        component.resetForm()
+        form?.resetForm(LlamaSettings.getCurrentState())
+    }
+
+    override fun dispose() {
+        form = null
     }
 }

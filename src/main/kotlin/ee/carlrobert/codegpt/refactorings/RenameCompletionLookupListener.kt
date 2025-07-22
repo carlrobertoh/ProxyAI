@@ -16,6 +16,7 @@ import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.completions.LookupCompletionParameters
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.llm.client.codegpt.response.CodeGPTException
 import kotlinx.coroutines.CoroutineScope
@@ -39,7 +40,10 @@ class RenameCompletionLookupListener : LookupManagerListener {
         val isPromptTextFieldDocument =
             IS_PROMPT_TEXT_FIELD_DOCUMENT[newLookup.editor.document] ?: false
         val featureEnabled = service<ConfigurationSettings>().state.methodNameGenerationEnabled
-        if (isPromptTextFieldDocument || !featureEnabled || !CompletionRequestService.isRequestAllowed()) {
+        if (isPromptTextFieldDocument
+            || !featureEnabled
+            || !CompletionRequestService.isRequestAllowed(FeatureType.CHAT)
+        ) {
             return
         }
 

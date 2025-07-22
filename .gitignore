@@ -15,6 +15,7 @@ local.properties
 
 ### IntelliJ IDEA ###
 .idea/*
+.intellijPlatform/*
 *.iws
 *.iml
 *.ipr

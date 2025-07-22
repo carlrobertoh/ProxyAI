@@ -24,7 +24,7 @@ class OpenPredictionAction : EditorAction(Handler()), HintManagerImpl.ActionToIg
             runInEdt {
                 diffViewer.dispose()
             }
-            service<PredictionService>().openDirectPrediction(editor, nextRevision)
+            service<PredictionService>().showDiff(editor, nextRevision)
         }
     }
 }

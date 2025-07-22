@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.toolwindow.chat
 
+import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
 

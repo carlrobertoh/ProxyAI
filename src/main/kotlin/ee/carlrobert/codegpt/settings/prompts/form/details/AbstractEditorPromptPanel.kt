@@ -12,6 +12,7 @@ import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.JBColor
 import java.awt.Dimension
 import javax.swing.JPanel
@@ -94,7 +95,7 @@ abstract class AbstractEditorPromptPanel(
 
     protected fun updateEditorText(text: String?) {
         runWriteAction {
-            editor.document.setText(text ?: "")
+            editor.document.setText(StringUtil.convertLineSeparators(text ?: ""))
         }
     }
 

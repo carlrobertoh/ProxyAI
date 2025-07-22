@@ -2,10 +2,10 @@ package ee.carlrobert.codegpt.ui.textarea.lookup.group
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.documentation.DocumentationSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.ui.DocumentationDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.DocumentationTagDetails
@@ -27,7 +27,7 @@ class DocsGroupItem(
         get() = enabled()
 
     fun enabled(): Boolean {
-        if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
+        if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) != ServiceType.PROXYAI) {
             return false
         }
 

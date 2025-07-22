@@ -1,7 +1,6 @@
 package ee.carlrobert.codegpt.toolwindow.chat;
 
 import static ee.carlrobert.codegpt.ui.UIUtil.createScrollPaneWithSmartScroller;
-import static java.lang.String.format;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
@@ -16,6 +15,7 @@ import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.actions.ActionType;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.completions.CompletionRequestService;
+import ee.carlrobert.codegpt.completions.CompletionRequestUtil;
 import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.completions.ToolwindowChatCompletionRequestHandler;
 import ee.carlrobert.codegpt.conversations.Conversation;
@@ -23,8 +23,7 @@ import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider;
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
-import ee.carlrobert.codegpt.settings.service.ServiceType;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
@@ -37,17 +36,18 @@ import ee.carlrobert.codegpt.toolwindow.ui.ChatToolWindowLandingPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
 import ee.carlrobert.codegpt.toolwindow.ui.UserMessagePanel;
 import ee.carlrobert.codegpt.ui.OverlayUtil;
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor;
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails;
+import ee.carlrobert.codegpt.ui.textarea.header.tag.HistoryTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
-import ee.carlrobert.codegpt.util.file.FileUtil;
 import git4idea.GitCommit;
 import java.awt.BorderLayout;
 import java.util.HashSet;
@@ -103,7 +103,6 @@ public class ChatToolWindowTabPanel implements Disposable {
         psiStructureRepository);
     userInputPanel = new UserInputPanel(
         project,
-        conversation,
         totalTokensPanel,
         this,
         tagManager,
@@ -129,6 +128,10 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   public Conversation getConversation() {
     return conversation;
+  }
+
+  public ChatSession getChatSession() {
+    return chatSession;
   }
 
   public TotalTokensDetails getTokenDetails() {
@@ -170,7 +173,9 @@ public class ChatToolWindowTabPanel implements Disposable {
         .conversationType(conversationType)
         .imageDetailsFromPath(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project))
         .referencedFiles(getReferencedFiles(selectedTags))
-        .psiStructure(psiStructure);
+        .history(getHistory(getSelectedTags()))
+        .psiStructure(psiStructure)
+        .chatMode(userInputPanel.getChatMode());
 
     findTagOfType(selectedTags, PersonaTagDetails.class)
         .ifPresent(tag -> builder.personaDetails(tag.getPersonaDetails()));
@@ -187,6 +192,32 @@ public class ChatToolWindowTabPanel implements Disposable {
         .filter(Objects::nonNull)
         .distinct()
         .map(ReferencedFile::from)
+        .toList();
+  }
+
+  private List<UUID> getConversationHistoryIds(List<? extends TagDetails> tags) {
+    return tags.stream()
+        .map(it -> {
+          if (it instanceof HistoryTagDetails tagDetails) {
+            return tagDetails.getConversationId();
+          }
+          return null;
+        })
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  private List<Conversation> getHistory(List<? extends TagDetails> tags) {
+    return tags.stream()
+        .map(it -> {
+          if (it instanceof HistoryTagDetails tagDetails) {
+            return ConversationTagProcessor.Companion.getConversation(
+                tagDetails.getConversationId());
+          }
+          return null;
+        })
+        .filter(Objects::nonNull)
+        .distinct()
         .toList();
   }
 
@@ -288,6 +319,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         false,
         message.isWebSearchIncluded(),
         fileContextIncluded || message.getDocumentationDetails() != null,
+        true,
         this));
     return panel;
   }
@@ -342,7 +374,7 @@ public class ChatToolWindowTabPanel implements Disposable {
       UserMessagePanel userMessagePanel) {
     var responseContainer = (ChatMessageResponseBody) responseMessagePanel.getContent();
 
-    if (!CompletionRequestService.isRequestAllowed()) {
+    if (!CompletionRequestService.isRequestAllowed(FeatureType.CHAT)) {
       responseContainer.displayMissingCredential();
       return;
     }
@@ -369,6 +401,8 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private Unit handleSubmit(String text) {
+    toolWindowScrollablePanel.scrollToBottom();
+
     var application = ApplicationManager.getApplication();
     application.executeOnPooledThread(() -> {
       final Set<ClassStructure> psiStructure;
@@ -388,6 +422,11 @@ public class ChatToolWindowTabPanel implements Disposable {
       List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
       if (!referencedFiles.isEmpty()) {
         messageBuilder.withReferencedFiles(referencedFiles);
+      }
+
+      List<UUID> conversationHistoryIds = getConversationHistoryIds(appliedTags);
+      if (!conversationHistoryIds.isEmpty()) {
+        messageBuilder.withConversationHistoryIds(conversationHistoryIds);
       }
 
       String attachedImagePath = CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project);
@@ -415,10 +454,8 @@ public class ChatToolWindowTabPanel implements Disposable {
         JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0),
         JBUI.Borders.empty(8)));
 
-    if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
-      panel.add(JBUI.Panels.simplePanel(totalTokensPanel)
-          .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
-    }
+    panel.add(JBUI.Panels.simplePanel(totalTokensPanel)
+        .withBorder(JBUI.Borders.emptyBottom(8)), BorderLayout.NORTH);
     panel.add(userInputPanel, BorderLayout.CENTER);
     return panel;
   }
@@ -434,10 +471,10 @@ public class ChatToolWindowTabPanel implements Disposable {
         return Unit.INSTANCE;
       }
 
-      var fileExtension = FileUtil.getFileExtension(editor.getVirtualFile().getName());
-      var message = new Message(action.getPrompt().replace(
-          "{SELECTION}",
-          format("%n```%s%n%s%n```", fileExtension, editor.getSelectionModel().getSelectedText())));
+      var formattedCode = CompletionRequestUtil.formatCode(
+          editor.getSelectionModel().getSelectedText(),
+          editor.getVirtualFile().getPath());
+      var message = new Message(action.getPrompt().replace("{SELECTION}", formattedCode));
       sendMessage(message, ConversationType.DEFAULT);
       return Unit.INSTANCE;
     });
@@ -458,6 +495,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     userMessagePanel.addReloadAction(() -> reloadMessage(
         ChatCompletionParameters.builder(conversation, message)
             .conversationType(ConversationType.DEFAULT)
+            .chatMode(userInputPanel.getChatMode())
             .build(),
         userMessagePanel));
     userMessagePanel.addDeleteAction(() -> removeMessage(message.getId(), conversation));
@@ -468,8 +506,6 @@ public class ChatToolWindowTabPanel implements Disposable {
     var response = message.getResponse() == null ? "" : message.getResponse();
     var messageResponseBody =
         new ChatMessageResponseBody(project, this).withResponse(response);
-
-    messageResponseBody.hideCaret();
 
     var responseMessagePanel = new ResponseMessagePanel();
     responseMessagePanel.addContent(messageResponseBody);

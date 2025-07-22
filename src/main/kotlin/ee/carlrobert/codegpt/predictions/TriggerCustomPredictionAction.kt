@@ -9,7 +9,8 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.actionSystem.EditorAction
 import com.intellij.openapi.editor.actionSystem.EditorWriteActionHandler
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 
 class TriggerCustomPredictionAction : EditorAction(Handler()), HintManagerImpl.ActionToIgnore {
@@ -21,12 +22,14 @@ class TriggerCustomPredictionAction : EditorAction(Handler()), HintManagerImpl.A
     private class Handler : EditorWriteActionHandler() {
 
         override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
-            if (GeneralSettings.getSelectedService() != ServiceType.CODEGPT) {
+            if (ModelSelectionService.getInstance()
+                    .getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
+            ) {
                 return
             }
 
             ApplicationManager.getApplication().executeOnPooledThread {
-                service<PredictionService>().displayInlineDiff(editor, true)
+                service<PredictionService>().displayInlineDiff(editor)
             }
         }
 

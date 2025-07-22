@@ -6,7 +6,6 @@ import static java.util.Objects.requireNonNull;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.extensions.PluginId;
-import com.intellij.openapi.project.Project;
 import java.nio.file.Path;
 import org.jetbrains.annotations.NotNull;
 
@@ -29,15 +28,7 @@ public final class CodeGPTPlugin {
     return PathManager.getOptionsPath() + separator + "CodeGPT";
   }
 
-  public static @NotNull String getIndexStorePath() {
-    return getPluginOptionsPath() + separator + "indexes";
-  }
-
   public static @NotNull String getLlamaSourcePath() {
     return getPluginBasePath() + separator + "llama.cpp";
-  }
-
-  public static @NotNull String getProjectIndexStorePath(@NotNull Project project) {
-    return getIndexStorePath() + separator + project.getName();
   }
 }

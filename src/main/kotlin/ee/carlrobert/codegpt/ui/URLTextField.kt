@@ -1,7 +1,6 @@
 package ee.carlrobert.codegpt.ui
 
 import com.intellij.ui.components.JBTextField
-import org.jetbrains.annotations.Nls
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 
@@ -11,8 +10,8 @@ import java.awt.event.FocusEvent
 class URLTextField : JBTextField {
     constructor() : super()
     constructor(columns: Int) : super(columns)
-    constructor(text: @Nls String?) : super(text)
-    constructor(text: @Nls String?, columns: Int) : super(text, columns)
+    constructor(text: String?) : super(text)
+    constructor(text: String?, columns: Int) : super(text, columns)
 
     init {
         addFocusListener(object : FocusAdapter() {

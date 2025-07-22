@@ -10,7 +10,6 @@ import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
-import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.*
 import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
 import com.intellij.ui.EnumComboBoxModel
@@ -31,6 +30,7 @@ import ee.carlrobert.codegpt.settings.service.custom.form.model.mapToState
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTemplate
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
+import ee.carlrobert.codegpt.util.ApplicationUtil
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -51,14 +51,14 @@ class CustomServiceListForm(
 
     private val formState = MutableStateFlow(service.state.mapToData())
 
-    private val project = ProjectManager.getInstance().defaultProject
+    private val project = ApplicationUtil.findCurrentProject()
     private val customSettingsFileProvider = CustomSettingsFileProvider()
 
     private var lastSelectedIndex = 0
 
     private val customProvidersJBList = JBList(formState.value.services)
         .apply {
-            setCellRenderer(CustomServiceNameListRenderer())
+            cellRenderer = CustomServiceNameListRenderer()
             selectionMode = ListSelectionModel.SINGLE_SELECTION
 
             addListSelectionListener { _ ->
@@ -103,8 +103,10 @@ class CustomServiceListForm(
         apiKeyField.text = runBlocking(Dispatchers.IO) {
             getCredential(CredentialKey.CustomServiceApiKey(selectedItem.name.orEmpty()))
         }
-        chatCompletionsForm = CustomServiceChatCompletionForm(selectedItem.chatCompletionSettings, this::getApiKey)
-        codeCompletionsForm = CustomServiceCodeCompletionForm(selectedItem.codeCompletionSettings, this::getApiKey)
+        chatCompletionsForm =
+            CustomServiceChatCompletionForm(selectedItem.chatCompletionSettings, this::getApiKey)
+        codeCompletionsForm =
+            CustomServiceCodeCompletionForm(selectedItem.codeCompletionSettings, this::getApiKey)
         tabbedPane = JBTabbedPane().apply {
             add(CodeGPTBundle.get("shared.chatCompletions"), chatCompletionsForm.form)
             add(CodeGPTBundle.get("shared.codeCompletions"), codeCompletionsForm.form)
@@ -124,7 +126,8 @@ class CustomServiceListForm(
                     url = template.codeCompletionTemplate.url
                     headers = template.codeCompletionTemplate.headers
                     body = template.codeCompletionTemplate.body
-                    parseResponseAsChatCompletions = template.codeCompletionTemplate.parseResponseAsChatCompletions
+                    parseResponseAsChatCompletions =
+                        template.codeCompletionTemplate.parseResponseAsChatCompletions
                 }
                 tabbedPane.setEnabledAt(1, true)
             } else {
@@ -132,12 +135,14 @@ class CustomServiceListForm(
                 tabbedPane.setEnabledAt(1, false)
             }
         }
-        exportButton = JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportSettings")).apply {
-            addActionListener { exportSettingsToFile() }
-        }
-        importButton = JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.importSettings")).apply {
-            addActionListener { importSettingsFromFile() }
-        }
+        exportButton =
+            JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportSettings")).apply {
+                addActionListener { exportSettingsToFile() }
+            }
+        importButton =
+            JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.importSettings")).apply {
+                addActionListener { importSettingsFromFile() }
+            }
         updateTemplateHelpTextTooltip(selectedItem.template)
     }
 
@@ -226,7 +231,8 @@ class CustomServiceListForm(
             .setRemoveActionUpdater {
                 formState.value.services.size > 1
             }
-            .addExtraAction(object : AnAction("Duplicate", "Duplicate service", AllIcons.Actions.Copy) {
+            .addExtraAction(object :
+                AnAction("Duplicate", "Duplicate service", AllIcons.Actions.Copy) {
 
                 override fun getActionUpdateThread(): ActionUpdateThread {
                     return ActionUpdateThread.EDT
@@ -264,7 +270,8 @@ class CustomServiceListForm(
     private fun handleDuplicateAction() {
         formState.update {
             val selectedIndex = customProvidersJBList.selectedIndex
-            val copiedService = it.services[selectedIndex].copy(name = it.services[selectedIndex].name + "Copied")
+            val copiedService =
+                it.services[selectedIndex].copy(name = it.services[selectedIndex].name + "Copied")
             it.copy(
                 services = it.services + copiedService
             )
@@ -275,7 +282,8 @@ class CustomServiceListForm(
     private fun handleAddAction() {
         formState.update {
             it.copy(
-                services = it.services + CustomServiceSettingsState().apply { name += it.services.size }.mapToData()
+                services = it.services + CustomServiceSettingsState().apply { name += it.services.size }
+                    .mapToData()
             )
         }
         customProvidersJBList.selectedIndex = formState.value.services.lastIndex
@@ -320,11 +328,12 @@ class CustomServiceListForm(
         val fileNameTextField = JBTextField(defaultSettingsFileName).apply {
             columns = 20
         }
-        val fileChooserDescriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
-            isForcedToUseIdeaFileChooser = true
-        }
+        val fileChooserDescriptor =
+            FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
+                isForcedToUseIdeaFileChooser = true
+            }
         val textFieldWithBrowseButton = TextFieldWithBrowseButton().apply {
-            text = project.basePath ?: System.getProperty("user.home")
+            text = project?.basePath ?: System.getProperty("user.home")
             addBrowseFolderListener(
                 TextBrowseFolderListener(fileChooserDescriptor, project)
             )
@@ -357,26 +366,29 @@ class CustomServiceListForm(
         val fileChooserDescriptor = FileChooserDescriptorFactory.createSingleFileDescriptor()
             .apply { isForcedToUseIdeaFileChooser = true }
 
-        FileChooser.chooseFile(fileChooserDescriptor, project, null)?.let { file ->
-            ReadAction.nonBlocking<List<CustomServiceSettingsData>> {
-                file.canonicalPath?.let {
-                    customSettingsFileProvider.readFromFile(it)
-                }
-            }
-                .inSmartMode(project)
-                .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
-                    if (settings != null) {
-                        val newActualService = settings.firstOrNull { it.name == formState.value.active.name }
-                            ?: settings.first()
-
-                        formState.update { state ->
-                            state.copy(services = settings, active = newActualService)
-                        }
-                        updateFormData(0)
+        project?.let {
+            FileChooser.chooseFile(fileChooserDescriptor, it, null)?.let { file ->
+                ReadAction.nonBlocking<List<CustomServiceSettingsData>> {
+                    file.canonicalPath?.let {
+                        customSettingsFileProvider.readFromFile(it)
                     }
                 }
-                .submit(AppExecutorUtil.getAppExecutorService())
-                .onError { showImportErrorMessage() }
+                    .inSmartMode(it)
+                    .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
+                        if (settings != null) {
+                            val newActualService =
+                                settings.firstOrNull { it.name == formState.value.active.name }
+                                    ?: settings.first()
+
+                            formState.update { state ->
+                                state.copy(services = settings, active = newActualService)
+                            }
+                            updateFormData(0)
+                        }
+                    }
+                    .submit(AppExecutorUtil.getAppExecutorService())
+                    .onError { showImportErrorMessage() }
+            }
         }
     }
 
@@ -431,19 +443,26 @@ class CustomServiceListForm(
 
         val formStateValue = formState.value
 
-        val newActualService = formStateValue.services.firstOrNull { it.name == formStateValue.active.name }
-            ?: formStateValue.services.first()
-
+        val newActualService =
+            formStateValue.services.firstOrNull { it.name == formStateValue.active.name }
+                ?: formStateValue.services.first()
 
         // Cleanup saved api keys
         val savedServicesName = service.state.services.mapNotNull { it.name }
-        val deletedServices = savedServicesName.subtract(formStateValue.services.mapNotNull { it.name }.toSet())
+        val deletedServices =
+            savedServicesName.subtract(formStateValue.services.mapNotNull { it.name }.toSet())
         deletedServices.forEach { deletedServiceName ->
-            CredentialsStore.setCredential(CredentialKey.CustomServiceApiKey(deletedServiceName), null)
+            CredentialsStore.setCredential(
+                CredentialKey.CustomServiceApiKey(deletedServiceName),
+                null
+            )
         }
         // Save apiKeys
         formStateValue.services.forEach {
-            CredentialsStore.setCredential(CredentialKey.CustomServiceApiKey(it.name.orEmpty()), it.apiKey)
+            CredentialsStore.setCredential(
+                CredentialKey.CustomServiceApiKey(it.name.orEmpty()),
+                it.apiKey
+            )
         }
 
         // Save settings

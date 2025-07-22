@@ -37,31 +37,12 @@ public class CodeCompletionParser {
 
         result.deleteCharAt(result.length() - 1);
 
-        if (result.length() > 1 && result.charAt(result.length() - 1) == '{') {
-          long bracketCount = result.chars().filter(ch -> ch == '{').count();
-          if (bracketCount == 1) {
-            var newTree = parser.parseString(currentTree, prefix + result + "}" + suffix);
-            var treeString = newTree.getRootNode().toString();
-            if (!treeString.contains("ERROR")) {
-              return result + "}";
-            }
-          }
-        }
-
         input = prefix + result + suffix;
 
         currentTree = parser.parseString(currentTree, input);
       } else {
         return result.toString();
       }
-    }
-
-    if (output.contains("\n")) {
-      var finalResult = output.substring(0, output.indexOf("\n"));
-      if (finalResult.length() > 1 && finalResult.charAt(finalResult.length() - 1) == '{') {
-        return finalResult + "}";
-      }
-      return finalResult;
     }
 
     return output;

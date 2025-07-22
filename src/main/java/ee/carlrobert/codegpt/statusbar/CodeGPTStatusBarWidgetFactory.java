@@ -16,7 +16,7 @@ public class CodeGPTStatusBarWidgetFactory extends StatusBarEditorBasedWidgetFac
   }
 
   @Override
-  public @Nls @NotNull String getDisplayName() {
+  public @NotNull String getDisplayName() {
     return CodeGPTBundle.get("project.label");
   }
 

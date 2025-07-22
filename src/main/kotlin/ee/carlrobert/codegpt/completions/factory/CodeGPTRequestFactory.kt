@@ -10,7 +10,10 @@ import ee.carlrobert.codegpt.completions.ChatCompletionParameters
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.buildOpenAIMessages
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
+import ee.carlrobert.codegpt.settings.models.ModelSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.codegpt.request.chat.*
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
@@ -19,10 +22,13 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
     BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): ChatCompletionRequest {
-        val model = service<CodeGPTServiceSettings>().state.chatCompletionSettings.model
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+
         val configuration = service<ConfigurationSettings>().state
         val requestBuilder: ChatCompletionRequest.Builder =
-            ChatCompletionRequest.Builder(buildOpenAIMessages(model, params, emptyList()))
+            ChatCompletionRequest.Builder(
+                buildOpenAIMessages(model, params, emptyList(), emptyList())
+            )
                 .setModel(model)
                 .setSessionId(params.sessionId)
                 .setStream(true)
@@ -33,7 +39,7 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
                     )
                 )
 
-        if ("o3-mini" == model) {
+        if ("o4-mini" == model) {
             requestBuilder
                 .setMaxTokens(null)
                 .setTemperature(null)
@@ -58,7 +64,7 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
                         processFolder(it, children)
                         children
                     } else {
-                        listOf(ContextFile(file.fileName(), file.fileContent()))
+                        listOf(ContextFile(file.fileName(), file.filePath(), file.fileContent()))
                     }
                 }
             }
@@ -69,15 +75,20 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         val psiContext = params.psiStructure?.map { classStructure ->
             ContextFile(
                 classStructure.virtualFile.name,
+                classStructure.virtualFile.path,
                 classStructureSerializer.serialize(classStructure)
             )
         }.orEmpty()
 
-        val contextFilesWithPsi = contextFiles + psiContext
-        if (contextFilesWithPsi.isNotEmpty()) {
-            requestBuilder.setContext(AdditionalRequestContext(contextFilesWithPsi))
+        val conversationsHistory = params.history?.joinToString("\n\n") {
+            ConversationTagProcessor.formatConversation(it)
         }
-
+        requestBuilder.setContext(
+            AdditionalRequestContext(
+                contextFiles + psiContext,
+                conversationsHistory
+            )
+        )
         return requestBuilder.build()
     }
 
@@ -85,7 +96,13 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         folder.children.forEach { child ->
             when {
                 child.isDirectory -> processFolder(child, contextFiles)
-                else -> contextFiles.add(ContextFile(child.name, FileUtil.readContent(child)))
+                else -> contextFiles.add(
+                    ContextFile(
+                        child.name,
+                        child.path,
+                        FileUtil.readContent(child)
+                    )
+                )
             }
         }
     }
@@ -94,10 +111,11 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
-        stream: Boolean
+        stream: Boolean,
+        featureType: FeatureType
     ): ChatCompletionRequest {
-        val model = service<CodeGPTServiceSettings>().state.chatCompletionSettings.model
-        if (model == "o3-mini") {
+        val model = ModelSelectionService.getInstance().getModelForFeature(featureType)
+        if (model == "o4-mini") {
             return buildBasicO1Request(model, userPrompt, systemPrompt, maxTokens, stream = stream)
         }
 

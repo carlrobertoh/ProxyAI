@@ -42,9 +42,9 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4",
+                    "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "Hello!")
                     )
                 )
@@ -81,13 +81,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -119,31 +114,28 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4",
+                    "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf(
                             "role" to "user",
                             "content" to """
                             Use the following context to answer question at the end:
 
-                            File Path: /TEST_FILE_NAME_1
-                            File Content:
-                            ```TEST_FILE_NAME_1
+                            ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
                             TEST_FILE_CONTENT_1
                             ```
                             
-                            File Path: /TEST_FILE_NAME_2
-                            File Content:
-                            ```TEST_FILE_NAME_2
+                            
+                            ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
                             TEST_FILE_CONTENT_2
                             ```
                             
-                            File Path: /TEST_FILE_NAME_3
-                            File Content:
-                            ```TEST_FILE_NAME_3
+                            
+                            ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
                             TEST_FILE_CONTENT_3
                             ```
+                            
                             
                             Question: TEST_MESSAGE""".trimIndent()
                         )
@@ -182,13 +174,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -224,7 +211,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     .containsExactly(
                         "gpt-4-vision-preview",
                         listOf(
-                            mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT"),
+                            mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
                             mapOf(
                                 "role" to "user", "content" to listOf(
                                     mapOf(
@@ -272,13 +259,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -317,7 +299,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4",
+                    "gpt-4o",
                     listOf(
                         mapOf(
                             "role" to "system",
@@ -328,23 +310,20 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                             "content" to """
                             Use the following context to answer question at the end:
 
-                            File Path: /TEST_FILE_NAME_1
-                            File Content:
-                            ```TEST_FILE_NAME_1
+                            ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
                             TEST_FILE_CONTENT_1
                             ```
                             
-                            File Path: /TEST_FILE_NAME_2
-                            File Content:
-                            ```TEST_FILE_NAME_2
+                            
+                            ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
                             TEST_FILE_CONTENT_2
                             ```
                             
-                            File Path: /TEST_FILE_NAME_3
-                            File Content:
-                            ```TEST_FILE_NAME_3
+                            
+                            ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
                             TEST_FILE_CONTENT_3
                             ```
+                            
                             
                             Question: TEST_MESSAGE""".trimIndent()
                         )
@@ -383,13 +362,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             )
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
@@ -465,13 +439,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         }
         assertThat(panel.conversation)
             .isNotNull()
-            .extracting("id", "model", "clientCode", "discardTokenLimit")
-            .containsExactly(
-                conversation.id,
-                conversation.model,
-                conversation.clientCode,
-                false
-            )
+            .extracting("id", "discardTokenLimit")
+            .containsExactly(conversation.id, false)
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])

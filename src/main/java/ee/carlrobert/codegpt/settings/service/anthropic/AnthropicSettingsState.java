@@ -5,7 +5,7 @@ import java.util.Objects;
 public class AnthropicSettingsState {
 
   private String apiVersion = "2023-06-01";
-  private String model = "claude-3-opus-20240229";
+  private String model = "claude-sonnet-4-20250514";
   private String baseHost = "";
 
   public String getApiVersion() {

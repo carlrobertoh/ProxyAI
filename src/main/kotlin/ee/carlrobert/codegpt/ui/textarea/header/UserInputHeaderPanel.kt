@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.ui.textarea.header
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.SelectionModel
@@ -17,6 +18,7 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
@@ -107,18 +109,18 @@ class UserInputHeaderPanel(
 
         val allTags = tagManager.getTags()
 
-        val editorVirtualFilesSet = allTags
-            .filterIsInstance<EditorTagDetails>()
+        val filesVirtualFilesSet = allTags
+            .filterIsInstance<FileTagDetails>()
             .map { it.virtualFile }
             .toSet()
 
         /**
-         * Filter the tags collection to prioritize EditorTagDetails over FileTagDetails
-         * Keep all tags except FileTagDetails that have a corresponding EditorTagDetails
+         * Filter the tags collection to prioritize FileTagDetails over EditorTagDetails
+         * Keep all tags except EditorTagDetails that have a corresponding FileTagDetails
          */
         val tags = allTags.filter { tag ->
-            if (tag is FileTagDetails) {
-                !editorVirtualFilesSet.contains(tag.virtualFile)
+            if (tag is EditorTagDetails) {
+                !filesVirtualFilesSet.contains(tag.virtualFile)
             } else {
                 true
             }

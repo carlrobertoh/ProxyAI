@@ -5,7 +5,6 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.CheckboxTree;
 import com.intellij.ui.CheckedTreeNode;
 import com.intellij.ui.ColoredTreeCellRenderer;
-import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.util.List;
 import org.jetbrains.annotations.NotNull;

@@ -30,7 +30,8 @@ sealed class TagDetails(
     }
 }
 
-class EditorTagDetails(val virtualFile: VirtualFile) : TagDetails(virtualFile.name, virtualFile.fileType.icon) {
+class EditorTagDetails(val virtualFile: VirtualFile) :
+    TagDetails(virtualFile.name, virtualFile.fileType.icon) {
 
     private val type: String = "EditorTagDetails"
 
@@ -51,7 +52,8 @@ class EditorTagDetails(val virtualFile: VirtualFile) : TagDetails(virtualFile.na
 
 }
 
-class FileTagDetails(val virtualFile: VirtualFile) : TagDetails(virtualFile.name, virtualFile.fileType.icon) {
+class FileTagDetails(val virtualFile: VirtualFile) :
+    TagDetails(virtualFile.name, virtualFile.fileType.icon) {
 
     private val type: String = "FileTagDetails"
 
@@ -119,4 +121,14 @@ data class FolderTagDetails(var folder: VirtualFile) :
 
 class WebTagDetails : TagDetails("Web", AllIcons.General.Web)
 
+data class ImageTagDetails(val imagePath: String) :
+    TagDetails(imagePath.substringAfterLast('/'), AllIcons.FileTypes.Image)
+
+data class HistoryTagDetails(
+    val conversationId: UUID,
+    val title: String,
+) : TagDetails(title, AllIcons.General.Balloon)
+
 class EmptyTagDetails : TagDetails("")
+
+class CodeAnalyzeTagDetails : TagDetails("Code Analyze", AllIcons.Actions.DependencyAnalyzer)

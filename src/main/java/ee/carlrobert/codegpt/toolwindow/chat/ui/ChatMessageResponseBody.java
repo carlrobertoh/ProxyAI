@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.toolwindow.chat.ui;
 
-import static ee.carlrobert.codegpt.toolwindow.chat.StreamResponseType.CODE;
 import static ee.carlrobert.codegpt.util.MarkdownUtil.convertMdToHtml;
 import static java.lang.String.format;
 import static javax.swing.event.HyperlinkEvent.EventType.ACTIVATED;
@@ -18,14 +17,15 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.VerticalFlowLayout;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
-import com.vladsch.flexmark.ast.FencedCodeBlock;
-import com.vladsch.flexmark.parser.Parser;
+import com.intellij.util.ui.components.BorderLayoutPanel;
 import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.actions.ActionType;
@@ -34,28 +34,40 @@ import ee.carlrobert.codegpt.events.AnalysisFailedEventDetails;
 import ee.carlrobert.codegpt.events.CodeGPTEvent;
 import ee.carlrobert.codegpt.events.EventDetails;
 import ee.carlrobert.codegpt.events.WebSearchEventDetails;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
-import ee.carlrobert.codegpt.toolwindow.chat.StreamParser;
-import ee.carlrobert.codegpt.toolwindow.chat.ThinkingOutputParser;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DefaultHeaderPanel;
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Code;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.CodeEnd;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.CompleteMessageParser;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchWaiting;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.SseMessageParser;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Text;
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Thinking;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseBodyProgressPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.WebpageList;
 import ee.carlrobert.codegpt.ui.ThoughtProcessPanel;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.util.EditorUtil;
-import ee.carlrobert.codegpt.util.MarkdownUtil;
 import java.awt.BorderLayout;
 import java.util.Objects;
 import java.util.stream.Stream;
-import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 import javax.swing.JEditorPane;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
+import javax.swing.event.HyperlinkListener;
+import kotlin.jvm.Synchronized;
 import org.jetbrains.annotations.NotNull;
 
 public class ChatMessageResponseBody extends JPanel {
@@ -64,18 +76,30 @@ public class ChatMessageResponseBody extends JPanel {
 
   private final Project project;
   private final Disposable parentDisposable;
-  private final StreamParser streamParser;
-  private final ThinkingOutputParser thinkingOutputParser;
+  private final SseMessageParser streamOutputParser;
   private final boolean readOnly;
   private final DefaultListModel<WebSearchEventDetails> webpageListModel = new DefaultListModel<>();
   private final WebpageList webpageList = new WebpageList(webpageListModel);
   private final ResponseBodyProgressPanel progressPanel = new ResponseBodyProgressPanel();
+  private final JPanel loadingLabel = createLoadingPanel();
+  private final JPanel contentPanel =
+      new JPanel(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, 4, true, false));
+
   private ResponseEditorPanel currentlyProcessedEditorPanel;
   private JEditorPane currentlyProcessedTextPane;
   private JPanel webpageListPanel;
 
+  private JPanel createLoadingPanel() {
+    return new BorderLayoutPanel()
+        .addToLeft(new JBLabel(
+            CodeGPTBundle.get("toolwindow.chat.loading"),
+            new AnimatedIcon.Default(),
+            JLabel.LEFT))
+        .withBorder(JBUI.Borders.empty(4, 0));
+  }
+
   public ChatMessageResponseBody(Project project, Disposable parentDisposable) {
-    this(project, false, false, false, parentDisposable);
+    this(project, false, false, false, false, parentDisposable);
   }
 
   public ChatMessageResponseBody(
@@ -83,32 +107,38 @@ public class ChatMessageResponseBody extends JPanel {
       boolean readOnly,
       boolean webSearchIncluded,
       boolean withProgress,
+      boolean withLoading,
       Disposable parentDisposable) {
     this.project = project;
     this.parentDisposable = parentDisposable;
-    this.streamParser = new StreamParser();
-    this.thinkingOutputParser = new ThinkingOutputParser();
+    this.streamOutputParser = new SseMessageParser();
     this.readOnly = readOnly;
-    setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+
+    setLayout(new BorderLayout());
     setOpaque(false);
 
-    if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT) {
+    contentPanel.setOpaque(false);
+    add(contentPanel, BorderLayout.NORTH);
+
+    loadingLabel.setVisible(withLoading);
+    add(loadingLabel, BorderLayout.SOUTH);
+
+    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == ServiceType.PROXYAI) {
       if (withProgress) {
-        add(progressPanel);
+        contentPanel.add(progressPanel);
       }
 
       if (webSearchIncluded) {
         webpageListPanel = createWebpageListPanel(webpageList);
-        add(webpageListPanel);
+        contentPanel.add(webpageListPanel);
       }
     }
   }
 
   public ChatMessageResponseBody withResponse(@NotNull String response) {
     try {
-      for (var message : MarkdownUtil.splitCodeBlocks(response)) {
-        processResponse(message, message.startsWith("```"), false);
-
+      for (var item : new CompleteMessageParser().parse(response)) {
+        processResponse(item, false);
         currentlyProcessedTextPane = null;
         currentlyProcessedEditorPanel = null;
       }
@@ -118,108 +148,70 @@ public class ChatMessageResponseBody extends JPanel {
     return this;
   }
 
+  public void stopLoading() {
+    loadingLabel.setVisible(false);
+  }
+
   public void updateMessage(String partialMessage) {
     if (partialMessage.isEmpty()) {
       return;
     }
 
-    var processedPartialMessage = processThinkingOutput(partialMessage);
-    if (processedPartialMessage.isEmpty()) {
-      return;
-    }
-
-    for (var item : streamParser.parse(processedPartialMessage)) {
-      processResponse(item.response(), CODE.equals(item.type()), true);
+    var parsedResponse = streamOutputParser.parse(partialMessage);
+    for (Segment item : parsedResponse) {
+      processResponse(item, true);
     }
   }
 
   public void displayMissingCredential() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      var message = "API key not provided. Open <a href=\"#\">Settings</a> to set one.";
-      currentlyProcessedTextPane.setText(
-          format("<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>", message));
-      currentlyProcessedTextPane.addHyperlinkListener(e -> {
-        if (e.getEventType() == ACTIVATED) {
-          ShowSettingsUtil.getInstance()
-              .showSettingsDialog(project, GeneralSettingsConfigurable.class);
-        }
-      });
-      hideCaret();
-
-      if (webpageListPanel != null) {
-        webpageListPanel.setVisible(false);
+    String message = "API key not provided. Open <a href=\"#\">Settings</a> to set one.";
+    displayErrorMessage(message, e -> {
+      if (e.getEventType() == ACTIVATED) {
+        ShowSettingsUtil.getInstance()
+            .showSettingsDialog(project, GeneralSettingsConfigurable.class);
       }
     });
   }
 
   public void displayQuotaExceeded() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      currentlyProcessedTextPane.setText("<html>"
-          + "<p style=\"margin-top: 4px; margin-bottom: 8px;\">"
-          + "You exceeded your current quota, please check your plan and billing details, "
-          + "or <a href=\"#CHANGE_PROVIDER\">change</a> to a different LLM provider.</p>"
-          + "</html>");
-
-      currentlyProcessedTextPane.addHyperlinkListener(e -> {
-        if (e.getEventType() == ACTIVATED) {
-          ShowSettingsUtil.getInstance()
-              .showSettingsDialog(project, GeneralSettingsConfigurable.class);
-          TelemetryAction.IDE_ACTION.createActionMessage()
-              .property("action", ActionType.CHANGE_PROVIDER.name())
-              .send();
-        }
-      });
-      hideCaret();
-
-      if (webpageListPanel != null) {
-        webpageListPanel.setVisible(false);
+    String message = "You exceeded your current quota, please check your plan and billing details, "
+        + "or <a href=\"#CHANGE_PROVIDER\">change</a> to a different LLM provider.";
+    displayErrorMessage(message, e -> {
+      if (e.getEventType() == ACTIVATED) {
+        ShowSettingsUtil.getInstance()
+            .showSettingsDialog(project, GeneralSettingsConfigurable.class);
+        TelemetryAction.IDE_ACTION.createActionMessage()
+            .property("action", ActionType.CHANGE_PROVIDER.name())
+            .send();
       }
     });
   }
 
   public void displayError(String message) {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      var errorText = format(
-          "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>",
-          message);
-      if (currentlyProcessedTextPane == null) {
-        add(createTextPane(errorText));
-      } else {
-        currentlyProcessedTextPane.setText(errorText);
-      }
-      hideCaret();
-
-      if (webpageListPanel != null) {
-        webpageListPanel.setVisible(false);
-      }
-    });
+    displayErrorMessage(message, null);
   }
 
   public void handleCodeGPTEvent(CodeGPTEvent codegptEvent) {
-    ApplicationManager.getApplication()
-        .invokeLater(() -> {
-          var event = codegptEvent.getEvent();
-          if (event.getDetails() instanceof WebSearchEventDetails webSearchEventDetails) {
-            displayWebSearchItem(webSearchEventDetails);
-            return;
+    ApplicationManager.getApplication().invokeLater(() -> {
+      var event = codegptEvent.getEvent();
+      if (event.getDetails() instanceof WebSearchEventDetails webSearchEventDetails) {
+        displayWebSearchItem(webSearchEventDetails);
+        return;
+      }
+      switch (event.getType()) {
+        case WEB_SEARCH_ITEM -> {
+          if (event.getDetails() instanceof WebSearchEventDetails details) {
+            displayWebSearchItem(details);
           }
-
-          switch (event.getType()) {
-            case WEB_SEARCH_ITEM -> {
-              if (event.getDetails() != null
-                  && event.getDetails() instanceof WebSearchEventDetails eventDetails) {
-                displayWebSearchItem(eventDetails);
-              }
-            }
-
-            case ANALYZE_WEB_DOC_STARTED -> showWebDocsProgress();
-            case ANALYZE_WEB_DOC_COMPLETED -> completeWebDocsProgress(event.getDetails());
-            case ANALYZE_WEB_DOC_FAILED -> failWebDocsProgress(event.getDetails());
-            case PROCESS_CONTEXT -> progressPanel.updateProgressDetails(event.getDetails());
-            default -> {
-            }
-          }
-        });
+        }
+        case ANALYZE_WEB_DOC_STARTED -> showWebDocsProgress();
+        case ANALYZE_WEB_DOC_COMPLETED -> completeWebDocsProgress(event.getDetails());
+        case ANALYZE_WEB_DOC_FAILED -> failWebDocsProgress(event.getDetails());
+        case PROCESS_CONTEXT -> progressPanel.updateProgressDetails(event.getDetails());
+        default -> {
+        }
+      }
+    });
   }
 
   public void hideCaret() {
@@ -229,10 +221,11 @@ public class ChatMessageResponseBody extends JPanel {
   }
 
   public void clear() {
-    removeAll();
+    contentPanel.removeAll();
+    streamOutputParser.clear();
+    loadingLabel.setVisible(false);
 
-    streamParser.clear();
-    // TODO: First message might be code block
+    // Reset for the next incoming message
     prepareProcessingText(true);
     currentlyProcessedTextPane.setText(
         "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">&#8205;</p></html>");
@@ -241,59 +234,125 @@ public class ChatMessageResponseBody extends JPanel {
     revalidate();
   }
 
-  private String processThinkingOutput(String partialMessage) {
-    var processedChunk = thinkingOutputParser.processChunk(partialMessage);
-    var thoughtProcessPanel = getExistingThoughtProcessPanel();
-
-    if (thinkingOutputParser.isThinking()) {
-      progressPanel.setVisible(false);
-
-      if (thoughtProcessPanel == null) {
-        thoughtProcessPanel = new ThoughtProcessPanel();
-        add(thoughtProcessPanel);
-      } else {
-        thoughtProcessPanel.updateText(thinkingOutputParser.getThoughtProcess());
+  private void displayErrorMessage(String message, HyperlinkListener hyperlinkListener) {
+    ApplicationManager.getApplication().invokeLater(() -> {
+      if (loadingLabel.isVisible()) {
+        loadingLabel.setVisible(false);
       }
-    }
+      if (webpageListPanel != null) {
+        webpageListPanel.setVisible(false);
+      }
 
-    if (thoughtProcessPanel != null && thinkingOutputParser.isFinished()) {
-      thoughtProcessPanel.setFinished();
-    }
+      String formattedMessage = format(
+          "<html><p style=\"margin-top: 4px; margin-bottom: 8px;\">%s</p></html>", message);
 
-    return processedChunk;
+      if (currentlyProcessedTextPane == null) {
+        currentlyProcessedTextPane = createTextPane(formattedMessage, false);
+        contentPanel.add(currentlyProcessedTextPane);
+      }
+
+      currentlyProcessedTextPane.setVisible(true);
+      currentlyProcessedTextPane.setText(formattedMessage);
+
+      if (hyperlinkListener != null) {
+        for (HyperlinkListener listener : currentlyProcessedTextPane.getHyperlinkListeners()) {
+          currentlyProcessedTextPane.removeHyperlinkListener(listener);
+        }
+        currentlyProcessedTextPane.addHyperlinkListener(hyperlinkListener);
+      }
+
+      hideCaret();
+
+      revalidate();
+      repaint();
+    });
+  }
+
+  private void processThinkingOutput(String thoughtProcess) {
+    progressPanel.setVisible(false);
+
+    var thoughtProcessPanel = getExistingThoughtProcessPanel();
+    if (thoughtProcessPanel == null) {
+      thoughtProcessPanel = new ThoughtProcessPanel();
+      thoughtProcessPanel.updateText(thoughtProcess);
+      contentPanel.add(thoughtProcessPanel);
+    } else {
+      thoughtProcessPanel.updateText(thoughtProcess);
+    }
   }
 
   private ThoughtProcessPanel getExistingThoughtProcessPanel() {
-    return (ThoughtProcessPanel) Stream.of(getComponents())
+    return (ThoughtProcessPanel) Stream.of(contentPanel.getComponents())
         .filter(it -> it instanceof ThoughtProcessPanel)
         .findFirst()
         .orElse(null);
   }
 
-  private void processResponse(String markdownInput, boolean codeResponse, boolean caretVisible) {
-    if (codeResponse) {
-      processCode(markdownInput);
-    } else {
-      processText(markdownInput, caretVisible);
+  private void processResponse(Segment item, boolean caretVisible) {
+    if (item instanceof Thinking) {
+      processThinkingOutput(item.getContent());
+      return;
+    }
+
+    var thoughtProcessPanel = getExistingThoughtProcessPanel();
+    if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
+      thoughtProcessPanel.setFinished();
+    }
+
+    if (item instanceof CodeEnd) {
+      if (currentlyProcessedEditorPanel != null) {
+        handleHeaderOnCompletion(currentlyProcessedEditorPanel);
+      }
+      currentlyProcessedEditorPanel = null;
+      return;
+    }
+
+    if (item instanceof SearchReplace searchReplace) {
+      if (currentlyProcessedEditorPanel == null) {
+        prepareProcessingCode(searchReplace);
+      }
+      if (currentlyProcessedEditorPanel != null) {
+        currentlyProcessedEditorPanel.handleSearchReplace(searchReplace);
+        handleHeaderOnCompletion(currentlyProcessedEditorPanel);
+        return;
+      }
+    }
+
+    if (item instanceof ReplaceWaiting replaceWaiting) {
+      if (currentlyProcessedEditorPanel != null) {
+        currentlyProcessedEditorPanel.handleReplace(replaceWaiting);
+        return;
+      }
+    }
+
+    if (item instanceof Code || item instanceof SearchWaiting) {
+      processCode(item);
+      return;
+    }
+
+    if (item instanceof Text) {
+      processText(item.getContent(), caretVisible);
     }
   }
 
-  private void processCode(String markdownCode) {
-    var document = Parser.builder().build().parse(markdownCode);
-    var child = document.getChildOfType(FencedCodeBlock.class);
-    if (child != null) {
-      var codeBlock = ((FencedCodeBlock) child);
-      var code = codeBlock.getContentChars().toString();
-      if (!code.isEmpty()) {
-        if (currentlyProcessedEditorPanel == null) {
-          prepareProcessingCode(code, codeBlock.getInfo().toString());
-        }
-        EditorUtil.updateEditorDocument(currentlyProcessedEditorPanel.getEditor(), code);
-      }
+  private void processCode(Segment item) {
+    var content = item.getContent();
+    if (currentlyProcessedEditorPanel == null) {
+      prepareProcessingCode(item);
+      return;
+    }
+
+    var editor = currentlyProcessedEditorPanel.getEditor();
+    if (item instanceof Code && editor != null) {
+      EditorUtil.updateEditorDocument(editor, content);
     }
   }
 
   private void processText(String markdownText, boolean caretVisible) {
+    if (markdownText == null || markdownText.isEmpty()) {
+      return;
+    }
+
     var html = convertMdToHtml(markdownText);
     if (currentlyProcessedTextPane == null) {
       prepareProcessingText(caretVisible);
@@ -301,18 +360,36 @@ public class ChatMessageResponseBody extends JPanel {
     currentlyProcessedTextPane.setText(html);
   }
 
+  @Synchronized
   private void prepareProcessingText(boolean caretVisible) {
     currentlyProcessedEditorPanel = null;
     currentlyProcessedTextPane = createTextPane("", caretVisible);
-    add(currentlyProcessedTextPane);
+    contentPanel.add(currentlyProcessedTextPane);
+    contentPanel.revalidate();
+    contentPanel.repaint();
   }
 
-  private void prepareProcessingCode(String code, String markdownLanguage) {
+  @Synchronized
+  private void prepareProcessingCode(Segment item) {
     hideCaret();
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel =
-        new ResponseEditorPanel(project, code, markdownLanguage, readOnly, parentDisposable);
-    add(currentlyProcessedEditorPanel);
+        new ResponseEditorPanel(project, item, readOnly, parentDisposable);
+    contentPanel.add(currentlyProcessedEditorPanel);
+    contentPanel.revalidate();
+    contentPanel.repaint();
+  }
+
+  private void handleHeaderOnCompletion(ResponseEditorPanel editorPanel) {
+    var editor = editorPanel.getEditor();
+    if (editor != null) {
+      var header = editor.getPermanentHeaderComponent();
+      if (header instanceof DiffHeaderPanel diffHeaderPanel) {
+        diffHeaderPanel.handleDone();
+      } else if (header instanceof DefaultHeaderPanel defaultHeaderPanel) {
+        defaultHeaderPanel.handleDone();
+      }
+    }
   }
 
   private void displayWebSearchItem(WebSearchEventDetails details) {
@@ -340,10 +417,6 @@ public class ChatMessageResponseBody extends JPanel {
     if (eventDetails instanceof AnalysisFailedEventDetails failedEventDetails) {
       progressPanel.updateProgressContainer(failedEventDetails.getError(), General.Error);
     }
-  }
-
-  private JTextPane createTextPane(String text) {
-    return createTextPane(text, false);
   }
 
   private JTextPane createTextPane(String text, boolean caretVisible) {

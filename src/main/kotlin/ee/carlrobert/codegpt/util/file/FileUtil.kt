@@ -6,9 +6,10 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.util.io.FileUtil.createDirectory
+import com.intellij.openapi.vfs.JarFileSystem
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.search.*
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings.getLlamaModelsPath
 import java.io.File
 import java.io.FileOutputStream
@@ -25,6 +26,7 @@ import java.nio.file.StandardOpenOption
 import java.text.DecimalFormat
 import java.util.*
 import java.util.regex.Pattern
+import kotlin.Throws
 
 object FileUtil {
 
@@ -123,7 +125,7 @@ object FileUtil {
     }
 
     @JvmStatic
-    fun findLanguageExtensionMapping(language: String): Map.Entry<String, String> {
+    fun findLanguageExtensionMapping(language: String? = ""): Map.Entry<String, String> {
         val defaultValue = mapOf("Text" to ".txt").entries.first()
         val mapper = ObjectMapper()
 
@@ -217,7 +219,7 @@ object FileUtil {
     @JvmStatic
     fun findFirstExtension(
         languageFileExtensionMappings: List<LanguageFileExtensionDetails>,
-        language: String
+        language: String? = ""
     ): Optional<Map.Entry<String, String>> {
         return languageFileExtensionMappings.stream()
             .filter {
@@ -233,5 +235,23 @@ object FileUtil {
                         ?: ""
                 )
             }
+    }
+
+    fun resolveVirtualFile(filePath: String?): VirtualFile? {
+        if (filePath == null) return null
+        return try {
+            if (filePath.contains("!")) {
+                val jarSeparatorIndex = filePath.indexOf('!')
+                val archivePath = filePath.substring(0, jarSeparatorIndex)
+                val internalPath = filePath.substring(jarSeparatorIndex + 1).removePrefix("/")
+                val jarFileSystemPath = "$archivePath!/$internalPath"
+                JarFileSystem.getInstance().findFileByPath(jarFileSystemPath)
+            } else {
+                LocalFileSystem.getInstance().refreshAndFindFileByIoFile(File(filePath))
+            }
+        } catch (t: Throwable) {
+            logger.error(t)
+            null
+        }
     }
 }

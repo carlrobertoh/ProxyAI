@@ -9,9 +9,10 @@ import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.diff.tools.fragmented.UnifiedDiffChange
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.util.DiffUtil
-import com.intellij.ide.plugins.newui.TagComponent
+import com.intellij.diff.util.Side
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
@@ -27,23 +28,18 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.*
 import com.intellij.testFramework.LightVirtualFile
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.application
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
-import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.service.NextEditResponse
 import java.awt.BorderLayout
 import java.awt.Dimension
-import java.awt.FlowLayout
 import java.awt.Point
 import java.util.*
-import javax.swing.Box
 import javax.swing.JComponent
-import javax.swing.JPanel
 import javax.swing.SwingUtilities
 import kotlin.math.abs
 import kotlin.math.max
@@ -52,12 +48,12 @@ class CodeSuggestionDiffViewer(
     request: DiffRequest,
     val nextEditResponse: NextEditResponse,
     private val mainEditor: Editor,
-    private val isManuallyOpened: Boolean
 ) : UnifiedDiffViewer(MyDiffContext(mainEditor.project), request), Disposable {
 
     private val popup: JBPopup = createSuggestionDiffPopup(component)
     private val visibleAreaListener: VisibleAreaListener
     private val documentListener: DocumentListener
+    private val grpcService = project?.service<GrpcClientService>()
 
     private var applyInProgress = false
 
@@ -78,6 +74,12 @@ class CodeSuggestionDiffViewer(
 
     override fun onAfterRediff() {
         val change = getClosestChange() ?: return
+        val changeContent = getChangeContent(change)
+
+        if (normalizeString(getDocument(Side.LEFT).text).contains(normalizeString(changeContent))) {
+            popup.dispose()
+            return
+        }
 
         myEditor.component.preferredSize =
             Dimension(
@@ -85,6 +87,8 @@ class CodeSuggestionDiffViewer(
                 (myEditor.lineHeight * change.getChangedLinesCount())
             )
         adjustPopupSize(popup, myEditor)
+
+        updateFooterComponent()
 
         val changeOffset = change.lineFragment.startOffset1
         val adjustedLocation =
@@ -122,11 +126,18 @@ class CodeSuggestionDiffViewer(
 
         if (changes.size == 1) {
             popup.dispose()
+
+            application.executeOnPooledThread {
+                grpcService?.getNextEdit(
+                    mainEditor,
+                    mainEditor.document.text,
+                    runReadAction { mainEditor.caretModel.offset },
+                )
+            }
         }
 
         application.executeOnPooledThread {
-            project?.service<GrpcClientService>()
-                ?.acceptEdit(UUID.fromString(nextEditResponse.id), change.toString())
+            grpcService?.acceptEdit(UUID.fromString(nextEditResponse.id), change.toString())
         }
     }
 
@@ -148,8 +159,6 @@ class CodeSuggestionDiffViewer(
             gutterComponentEx.parent.isVisible = false
             scrollPane.horizontalScrollBar.isOpaque = false
         }
-
-        setupStatusLabel()
     }
 
     private fun clearListeners() {
@@ -158,66 +167,20 @@ class CodeSuggestionDiffViewer(
         mainEditor.document.removeDocumentListener(documentListener)
     }
 
+    private fun normalizeString(text: String): String {
+        return text.replace("\\s+".toRegex(), "").lowercase()
+    }
+
+    private fun getChangeContent(change: UnifiedDiffChange): String {
+        val startOffset = change.lineFragment.startOffset2
+        val endOffset = change.lineFragment.endOffset2
+        return getDocument(Side.RIGHT).getText(TextRange(startOffset, endOffset))
+    }
+
     private fun getClosestChange(): UnifiedDiffChange? {
         val changes = diffChanges ?: emptyList()
         val cursorOffset = mainEditor.caretModel.offset
         return changes.minByOrNull { abs(it.lineFragment.startOffset1 - cursorOffset) }
-    }
-
-    private fun getTagPanel(): JComponent {
-        val tagPanel = JPanel(FlowLayout(FlowLayout.LEADING, 0, 0)).apply {
-            isOpaque = false
-        }
-        tagPanel.add(
-            TagComponent(
-                "Open: ${getShortcutText(OpenPredictionAction.ID)}"
-            ).apply {
-                setListener({ _, _ ->
-                    service<PredictionService>().openDirectPrediction(
-                        mainEditor,
-                        content2.document.text
-                    )
-                    popup.dispose()
-                }, component)
-                font = JBUI.Fonts.smallFont()
-            }
-        )
-        tagPanel.add(Box.createHorizontalStrut(6))
-        tagPanel.add(TagComponent("Accept: ${getShortcutText(AcceptNextPredictionRevisionAction.ID)}").apply {
-            setListener({ _, _ ->
-                applyChanges()
-                popup.dispose()
-            }, component)
-            font = JBUI.Fonts.smallFont()
-        })
-        return tagPanel
-    }
-
-    private fun setupStatusLabel() {
-        (myEditor.scrollPane as JBScrollPane).statusComponent = BorderLayoutPanel()
-            .andTransparent()
-            .withBorder(JBUI.Borders.empty(4))
-            .addToRight(getTagPanel())
-
-        val footerText = if (isManuallyOpened) {
-            CodeGPTBundle.get("shared.escToCancel")
-        } else {
-            "Trigger manually: ${getShortcutText(TriggerCustomPredictionAction.ID)} · ${CodeGPTBundle.get("shared.escToCancel")}"
-        }
-
-        myEditor.component.add(
-            BorderLayoutPanel()
-                .addToRight(
-                    JBLabel(footerText)
-                        .apply {
-                            font = JBUI.Fonts.miniFont()
-                        })
-                .apply {
-                    background = editor.backgroundColor
-                    border = JBUI.Borders.empty(4)
-                },
-            BorderLayout.SOUTH
-        )
     }
 
     private fun getVisibleAreaListener(): VisibleAreaListener {
@@ -269,7 +232,37 @@ class CodeSuggestionDiffViewer(
         }
     }
 
-    private class MyDiffContext(private val project: Project?) : DiffContext() {
+    private fun updateFooterComponent() {
+        for (component in myEditor.component.components) {
+            if (component is BorderLayoutPanel) {
+                myEditor.component.remove(component)
+            }
+        }
+
+        myEditor.component.add(
+            BorderLayoutPanel()
+                .addToLeft(
+                    JBLabel(
+                        "Accept: ${getShortcutText(AcceptNextPredictionRevisionAction.ID)} " +
+                                "· Trigger: ${getShortcutText(TriggerCustomPredictionAction.ID)} " +
+                                "· Open: ${getShortcutText(OpenPredictionAction.ID)} " +
+                                "· Changes: ${diffChanges?.size ?: 0}"
+                    )
+                        .apply {
+                            font = JBUI.Fonts.miniFont()
+                        })
+                .apply {
+                    background = editor.backgroundColor
+                    border = JBUI.Borders.empty(4)
+                },
+            BorderLayout.SOUTH
+        )
+
+        myEditor.component.revalidate()
+        myEditor.component.repaint()
+    }
+
+    class MyDiffContext(private val project: Project?) : DiffContext() {
         private val ownContext: UserDataHolder = UserDataHolderBase()
 
         override fun getProject() = project
@@ -300,7 +293,6 @@ class CodeSuggestionDiffViewer(
         fun displayInlineDiff(
             editor: Editor,
             nextEditResponse: NextEditResponse,
-            isManuallyOpened: Boolean = false
         ) {
             val nextRevision = nextEditResponse.nextRevision
             if (editor.virtualFile == null || editor.isViewer || nextRevision.isEmpty()) {
@@ -316,8 +308,7 @@ class CodeSuggestionDiffViewer(
             }
 
             val diffRequest = createSimpleDiffRequest(editor, nextRevision)
-            val diffViewer =
-                CodeSuggestionDiffViewer(diffRequest, nextEditResponse, editor, isManuallyOpened)
+            val diffViewer = CodeSuggestionDiffViewer(diffRequest, nextEditResponse, editor)
             editor.putUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER, diffViewer)
             diffViewer.rediff(true)
         }

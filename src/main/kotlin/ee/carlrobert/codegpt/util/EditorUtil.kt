@@ -4,6 +4,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runUndoTransparentWriteAction
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
@@ -35,13 +36,15 @@ object EditorUtil {
             String.format("%s/%s", PathManager.getTempPath(), fileName),
             code
         )
-        val editorFactory = EditorFactory.getInstance()
-        val document = editorFactory.createDocument(code)
-        val editor = editorFactory
-            .createEditor(document, project, lightVirtualFile, true, EditorKind.UNTYPED)
-        (editor as EditorEx).backgroundColor =
-            service<EditorColorsManager>().globalScheme.defaultBackground
-        return editor
+
+        return runWriteAction {
+            val editorFactory = EditorFactory.getInstance()
+            val document = editorFactory.createDocument(StringUtil.convertLineSeparators(code))
+            val editor = editorFactory.createEditor(document, project, lightVirtualFile, true, EditorKind.UNTYPED)
+            (editor as EditorEx).backgroundColor =
+                service<EditorColorsManager>().globalScheme.defaultBackground
+            editor
+        }
     }
 
     @JvmStatic

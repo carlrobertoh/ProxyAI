@@ -42,7 +42,7 @@ public class OpenInEditorAction extends AnAction {
       if (project != null && currentConversation != null) {
         var dateTimeStamp = currentConversation.getUpdatedOn()
             .format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
-        var fileName = format("%s_%s.md", currentConversation.getModel(), dateTimeStamp);
+        var fileName = format("proxyai_conversation_%s.md", dateTimeStamp);
         var fileContent = currentConversation
             .getMessages()
             .stream()

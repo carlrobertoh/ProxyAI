@@ -8,8 +8,12 @@ import ee.carlrobert.codegpt.completions.ConversationType
 import ee.carlrobert.codegpt.completions.TotalUsageExceededException
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionContent
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest
@@ -24,13 +28,15 @@ class GoogleRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): GoogleCompletionRequest {
         val configuration = service<ConfigurationSettings>().state
-        val messages = buildGoogleMessages(service<GoogleSettings>().state.model, params)
+        val selectedModel = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+        val messages = buildGoogleMessages(selectedModel, params)
         return GoogleCompletionRequest.Builder(messages)
             .generationConfig(
                 GoogleGenerationConfig.Builder()
                     .maxOutputTokens(configuration.maxTokens)
                     .temperature(configuration.temperature.toDouble()).build()
             )
+            .systemInstruction(buildSystemInstruction(params))
             .build()
     }
 
@@ -38,7 +44,8 @@ class GoogleRequestFactory : BaseRequestFactory() {
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
-        stream: Boolean
+        stream: Boolean,
+        featureType: FeatureType
     ): GoogleCompletionRequest {
         val configuration = service<ConfigurationSettings>().state
         return GoogleCompletionRequest.Builder(
@@ -93,33 +100,6 @@ class GoogleRequestFactory : BaseRequestFactory() {
     private fun buildGoogleMessages(params: ChatCompletionParameters): List<GoogleCompletionContent> {
         val message = params.message
         val messages = mutableListOf<GoogleCompletionContent>()
-
-        when (params.conversationType) {
-            ConversationType.DEFAULT -> {
-                val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
-                if (!selectedPersona.disabled) {
-                    messages.add(
-                        GoogleCompletionContent(
-                            "user",
-                            listOf(PromptsSettings.getSelectedPersonaSystemPrompt())
-                        )
-                    )
-                    messages.add(GoogleCompletionContent("model", listOf("Understood.")))
-                }
-            }
-
-            ConversationType.FIX_COMPILE_ERRORS -> {
-                messages.add(
-                    GoogleCompletionContent(
-                        "user",
-                        listOf(service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions)
-                    )
-                )
-                messages.add(GoogleCompletionContent("model", listOf("Understood.")))
-            }
-
-            else -> {}
-        }
 
         for (prevMessage in params.conversation.messages) {
             if (params.retry && prevMessage.id == message.id) {
@@ -206,5 +186,24 @@ class GoogleRequestFactory : BaseRequestFactory() {
         }
 
         return updatedMessages.filterNotNull()
+    }
+
+    private fun buildSystemInstruction(params: ChatCompletionParameters): String? {
+        return when (params.conversationType) {
+            ConversationType.DEFAULT -> {
+                val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
+                return if (!selectedPersona.disabled) {
+                    service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode)
+                } else {
+                    null
+                }
+            }
+
+            ConversationType.FIX_COMPILE_ERRORS -> service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
+
+            ConversationType.REVIEW_CHANGES -> service<PromptsSettings>().state.coreActions.reviewChanges.instructions
+
+            else -> null
+        }
     }
 }

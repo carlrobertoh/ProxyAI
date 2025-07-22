@@ -11,14 +11,13 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.completions.llama.LlamaModel.findByHuggingFaceModel
 import ee.carlrobert.codegpt.completions.llama.LlamaServerAgent
 import ee.carlrobert.codegpt.completions.llama.LlamaServerStartupParams
-import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType.LLAMA_CPP
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
-import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings.*
-import ee.carlrobert.codegpt.settings.service.llama.form.ServerProgressPanel
+import ee.carlrobert.codegpt.completions.llama.logging.NoOpLoggingStrategy
 import ee.carlrobert.codegpt.ui.OverlayUtil.showNotification
 import ee.carlrobert.codegpt.ui.OverlayUtil.stickyNotification
-import java.util.function.Consumer
 
 private const val STARTING = "settingsConfigurable.service.llama.progress.startingServer"
 private const val RUNNING = "settingsConfigurable.service.llama.progress.serverRunning"
@@ -51,7 +50,11 @@ abstract class LlamaServerToggleActions(
     var notification: Notification? = null
 
     override fun actionPerformed(e: AnActionEvent) {
-        (GeneralSettings.getCurrentState().selectedService == LLAMA_CPP).takeIf { it } ?: return
+        val modelSelectionService = ModelSelectionService.getInstance()
+        val isLlamaUsed =
+            (modelSelectionService.getServiceForFeature(FeatureType.CHAT) == LLAMA_CPP ||
+                    modelSelectionService.getServiceForFeature(FeatureType.CODE_COMPLETION) == LLAMA_CPP)
+        isLlamaUsed.takeIf { it } ?: return
         notification?.expire()
         expireOtherNotification(startServer)
         val llamaServerAgent = service<LlamaServerAgent>()
@@ -66,10 +69,10 @@ abstract class LlamaServerToggleActions(
     }
 
     private fun start(serverName: String, llamaServerAgent: LlamaServerAgent) {
-        notification = stickyNotification(formatMsg(STARTING, serverName),
+        notification = stickyNotification(
+            formatMsg(STARTING, serverName),
             createSimpleExpiring(CodeGPTBundle.get(STOP)) { stop(serverName, llamaServerAgent) })
-        val serverProgressPanel = ServerProgressPanel()
-        llamaServerAgent.setActiveServerProgressPanel(serverProgressPanel)
+
         val settings = LlamaSettings.getInstance().state
         llamaServerAgent.startAgent(
             LlamaServerStartupParams(
@@ -77,20 +80,18 @@ abstract class LlamaServerToggleActions(
                 settings.contextSize,
                 settings.threads,
                 settings.serverPort,
-                getAdditionalParametersList(settings.additionalParameters),
-                getAdditionalParametersList(settings.additionalBuildParameters),
-                getAdditionalEnvironmentVariablesMap(settings.additionalEnvironmentVariables)
+                LlamaSettings.getAdditionalParametersList(settings.additionalParameters),
+                LlamaSettings.getAdditionalParametersList(settings.additionalBuildParameters),
+                LlamaSettings.getAdditionalEnvironmentVariablesMap(settings.additionalEnvironmentVariables)
             ),
-            serverProgressPanel,
+            NoOpLoggingStrategy,
             {
                 notification?.expire()
                 notification = notification(RUNNING, false, serverName, llamaServerAgent)
             },
             {
-                Consumer<ServerProgressPanel> { _: ServerProgressPanel ->
-                    notification?.expire()
-                    notification = notification(STOPPED, true, serverName, llamaServerAgent)
-                }
+                notification?.expire()
+                notification = notification(STOPPED, true, serverName, llamaServerAgent)
             })
     }
 
@@ -107,7 +108,8 @@ abstract class LlamaServerToggleActions(
         serverName: String,
         llamaServerAgent: LlamaServerAgent
     ) =
-        showNotification(formatMsg(id, serverName),
+        showNotification(
+            formatMsg(id, serverName),
             createSimpleExpiring(CodeGPTBundle.get(if (nextStart) START else STOP)) {
                 if (nextStart) start(serverName, llamaServerAgent) else stop(
                     serverName,
@@ -115,8 +117,6 @@ abstract class LlamaServerToggleActions(
                 )
             })
 
-    // "Starting server..." -> "Starting server: CodeLlama 7B 4-bit ..."
-    // "Stopped server"     -> "Stopped server: CodeLlama 7B 4-bit"
     private fun formatMsg(id: String, serverName: String): String {
         val msg = CodeGPTBundle.get(id)
         val points = msg.endsWith("...")
@@ -124,7 +124,8 @@ abstract class LlamaServerToggleActions(
     }
 
     override fun update(e: AnActionEvent) {
-        val llamaRunnable = isRunnable(LlamaSettings.getInstance().state.huggingFaceModel)
+        val llamaRunnable =
+            LlamaSettings.isRunnable(LlamaSettings.getInstance().state.huggingFaceModel)
         val serverRunning = llamaRunnable && service<LlamaServerAgent>().isServerRunning
         val toggle = llamaRunnable && serverRunning != startServer
         e.presentation.isVisible = toggle

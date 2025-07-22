@@ -15,7 +15,7 @@ class CompletionContextService {
     companion object {
         private val CONTEXT_FINDERS = mapOf(
             "JAVA" to JavaContextFinder::class.java,
-            "Python" to PythonContextFinder::class.java
+            // "Python" to PythonContextFinder::class.java
         )
     }
 

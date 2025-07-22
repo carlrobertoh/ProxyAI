@@ -106,7 +106,6 @@ abstract class ToolWindowCompletionResponseEventListener implements
       if (answer == OK) {
         TelemetryAction.IDE_ACTION.createActionMessage()
             .property("action", "DISCARD_TOKEN_LIMIT")
-            .property("model", conversation.getModel())
             .send();
 
         ConversationService.getInstance().discardTokenLimits(conversation);
@@ -162,6 +161,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
     textArea.setSubmitEnabled(true);
     userMessagePanel.enableAllActions(true);
     responsePanel.enableAllActions(true);
+    responseContainer.stopLoading();
     responseContainer.hideCaret();
     CompletionProgressNotifier.update(project, false);
   }

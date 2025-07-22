@@ -25,13 +25,15 @@ class FoldersGroupItem(
     override val icon = AllIcons.Nodes.Folder
 
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
-        project.service<ProjectFileIndex>().iterateContent {
-            if (it.isDirectory && !it.name.startsWith(".") && !tagManager.containsTag(it)) {
-                runInEdt {
-                    LookupUtil.addLookupItem(lookup, FolderActionItem(project, it))
+        withContext(Dispatchers.Default) {
+            project.service<ProjectFileIndex>().iterateContent {
+                if (it.isDirectory && !it.name.startsWith(".") && !tagManager.containsTag(it)) {
+                    runInEdt {
+                        LookupUtil.addLookupItem(lookup, FolderActionItem(project, it))
+                    }
                 }
+                true
             }
-            true
         }
     }
 

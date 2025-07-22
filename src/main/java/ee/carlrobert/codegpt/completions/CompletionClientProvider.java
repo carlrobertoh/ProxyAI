@@ -7,16 +7,14 @@ import com.intellij.util.net.ssl.CertificateManager;
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
 import ee.carlrobert.codegpt.settings.advanced.AdvancedSettings;
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings;
-import ee.carlrobert.codegpt.settings.service.azure.AzureSettings;
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings;
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings;
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings;
 import ee.carlrobert.llm.client.anthropic.ClaudeClient;
-import ee.carlrobert.llm.client.azure.AzureClient;
-import ee.carlrobert.llm.client.azure.AzureCompletionRequestParams;
 import ee.carlrobert.llm.client.codegpt.CodeGPTClient;
 import ee.carlrobert.llm.client.google.GoogleClient;
 import ee.carlrobert.llm.client.llama.LlamaClient;
+import ee.carlrobert.llm.client.mistral.MistralClient;
 import ee.carlrobert.llm.client.ollama.OllamaClient;
 import ee.carlrobert.llm.client.openai.OpenAIClient;
 import java.net.InetSocketAddress;
@@ -42,40 +40,18 @@ public class CompletionClientProvider {
 
   public static ClaudeClient getClaudeClient() {
     var builder = new ClaudeClient.Builder(getCredential(CredentialKey.AnthropicApiKey.INSTANCE),
-            AnthropicSettings.getCurrentState().getApiVersion());
+        AnthropicSettings.getCurrentState().getApiVersion());
     if (AnthropicSettings.getCurrentState().hasCustomBaseHost()) {
       builder.setHost(AnthropicSettings.getCurrentState().getBaseHost());
     }
     return builder.build(getDefaultClientBuilder());
   }
 
-  public static AzureClient getAzureClient() {
-    var settings = AzureSettings.getCurrentState();
-    var params = new AzureCompletionRequestParams(
-        settings.getResourceName(),
-        settings.getDeploymentId(),
-        settings.getApiVersion());
-    var useAzureActiveDirectoryAuthentication = settings.isUseAzureActiveDirectoryAuthentication();
-    var credential = useAzureActiveDirectoryAuthentication
-        ? getCredential(CredentialKey.AzureActiveDirectoryToken.INSTANCE)
-        : getCredential(CredentialKey.AzureOpenaiApiKey.INSTANCE);
-    return new AzureClient.Builder(credential, params)
-        .setActiveDirectoryAuthentication(useAzureActiveDirectoryAuthentication)
-        .build(getDefaultClientBuilder());
-  }
-
   public static LlamaClient getLlamaClient() {
     var llamaSettings = LlamaSettings.getCurrentState();
-    var builder = new LlamaClient.Builder()
-        .setPort(llamaSettings.getServerPort());
-    if (!llamaSettings.isRunLocalServer()) {
-      builder.setHost(llamaSettings.getBaseHost());
-      String apiKey = getCredential(CredentialKey.LlamaApiKey.INSTANCE);
-      if (apiKey != null && !apiKey.isBlank()) {
-        builder.setApiKey(apiKey);
-      }
-    }
-    return builder.build(getDefaultClientBuilder());
+    return new LlamaClient.Builder()
+        .setPort(llamaSettings.getServerPort())
+        .build(getDefaultClientBuilder());
   }
 
   public static OllamaClient getOllamaClient() {
@@ -96,6 +72,10 @@ public class CompletionClientProvider {
   public static GoogleClient getGoogleClient() {
     return new GoogleClient.Builder(getCredential(CredentialKey.GoogleApiKey.INSTANCE))
         .build(getDefaultClientBuilder());
+  }
+
+  public static MistralClient getMistralClient() {
+    return new MistralClient(getCredential(CredentialKey.MistralApiKey.INSTANCE), getDefaultClientBuilder());
   }
 
   public static OkHttpClient.Builder getDefaultClientBuilder() {

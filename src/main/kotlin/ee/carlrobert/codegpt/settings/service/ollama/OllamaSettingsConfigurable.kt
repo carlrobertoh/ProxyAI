@@ -1,9 +1,7 @@
 package ee.carlrobert.codegpt.settings.service.ollama
 
-
-import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
-import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.service.ModelReplacementDialog
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import javax.swing.JComponent
 
@@ -26,7 +24,8 @@ class OllamaSettingsConfigurable : Configurable {
 
     override fun apply() {
         component.applyChanges()
-        service<GeneralSettings>().state.selectedService = ServiceType.OLLAMA
+
+        ModelReplacementDialog.showDialogIfNeeded(ServiceType.OLLAMA)
     }
 
     override fun reset() {

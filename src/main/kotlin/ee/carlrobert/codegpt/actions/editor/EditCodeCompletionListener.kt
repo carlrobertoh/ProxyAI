@@ -15,7 +15,7 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.ui.JBColor
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
-import ee.carlrobert.codegpt.toolwindow.chat.ThinkingOutputParser
+import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import ee.carlrobert.codegpt.ui.ObservableProperties
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails

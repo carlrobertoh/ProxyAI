@@ -11,8 +11,11 @@ public final class Icons {
       IconLoader.getIcon("/icons/codegpt-small.svg", Icons.class);
   public static final Icon CodeGPTModel =
       IconLoader.getIcon("/icons/codegpt-model.svg", Icons.class);
+  public static final Icon CollapseAll =
+      IconLoader.getIcon("/icons/collapseAll.svg", Icons.class);
+  public static final Icon ExpandAll =
+      IconLoader.getIcon("/icons/expandAll.svg", Icons.class);
   public static final Icon Anthropic = IconLoader.getIcon("/icons/anthropic.svg", Icons.class);
-  public static final Icon Azure = IconLoader.getIcon("/icons/azure.svg", Icons.class);
   public static final Icon DeepSeek = IconLoader.getIcon("/icons/deepseek.png", Icons.class);
   public static final Icon Qwen = IconLoader.getIcon("/icons/qwen.png", Icons.class);
   public static final Icon Google = IconLoader.getIcon("/icons/google.svg", Icons.class);
@@ -21,9 +24,9 @@ public final class Icons {
   public static final Icon MCP = IconLoader.getIcon("/icons/mcp.svg", Icons.class);
   public static final Icon Meta = IconLoader.getIcon("/icons/meta.svg", Icons.class);
   public static final Icon Mistral = IconLoader.getIcon("/icons/mistral.svg", Icons.class);
+  public static final Icon Moonshot = IconLoader.getIcon("/icons/moonshot.svg", Icons.class);
   public static final Icon Send = IconLoader.getIcon("/icons/send.svg", Icons.class);
   public static final Icon Sparkle = IconLoader.getIcon("/icons/sparkle.svg", Icons.class);
-  public static final Icon You = IconLoader.getIcon("/icons/you.svg", Icons.class);
   public static final Icon Ollama = IconLoader.getIcon("/icons/ollama.svg", Icons.class);
   public static final Icon User = IconLoader.getIcon("/icons/user.svg", Icons.class);
   public static final Icon Tree = IconLoader.getIcon("/icons/tree.svg", Icons.class);
@@ -46,5 +49,7 @@ public final class Icons {
       IconLoader.getIcon("/icons/listFiles.svg", Icons.class);
   public static final Icon InSelection =
       IconLoader.getIcon("/icons/inSelection.svg", Icons.class);
+  public static final Icon Locked =
+      IconLoader.getIcon("/icons/locked.svg", Icons.class);
   public static final Icon StatusBarCompletionInProgress = new AnimatedIcon.Default();
 }

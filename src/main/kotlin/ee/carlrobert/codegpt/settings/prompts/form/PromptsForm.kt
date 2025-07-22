@@ -11,7 +11,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.observable.properties.AtomicBooleanProperty
-import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.DialogBuilder
 import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
 import com.intellij.openapi.ui.MessageType
@@ -29,6 +28,7 @@ import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.getFormState
 import ee.carlrobert.codegpt.settings.prompts.form.PromptsFormUtil.toState
 import ee.carlrobert.codegpt.settings.prompts.form.details.*
 import ee.carlrobert.codegpt.ui.OverlayUtil
+import ee.carlrobert.codegpt.util.ApplicationUtil
 import ee.carlrobert.codegpt.util.coroutines.EdtDispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -101,7 +101,7 @@ class PromptsForm {
         }
     }
 
-    private val project = ProjectManager.getInstance().defaultProject
+    private val project = ApplicationUtil.findCurrentProject()
     private val promptsFileProvider = PromptsFileProvider()
 
     private val exportButton: JButton
@@ -158,11 +158,12 @@ class PromptsForm {
 
         val coreActionsFormState = getFormState<CoreActionPromptDetails>(coreActionsNode)
         settings.coreActions.apply {
-            editCode = coreActionsFormState[0].toState()
-            fixCompileErrors = coreActionsFormState[1].toState()
-            generateCommitMessage = coreActionsFormState[2].toState()
-            generateNameLookups = coreActionsFormState[3].toState()
-            reviewChanges = coreActionsFormState[4].toState()
+            autoApply = coreActionsFormState[0].toState()
+            editCode = coreActionsFormState[1].toState()
+            fixCompileErrors = coreActionsFormState[2].toState()
+            generateCommitMessage = coreActionsFormState[3].toState()
+            generateNameLookups = coreActionsFormState[4].toState()
+            reviewChanges = coreActionsFormState[5].toState()
         }
         settings.chatActions.prompts = getFormState<ChatActionPromptDetails>(chatActionsNode)
             .map { it.toState() }
@@ -214,6 +215,7 @@ class PromptsForm {
         val formState = getFormState<CoreActionPromptDetails>(coreActionsNode)
 
         val stateActions = listOf(
+            settingsState.autoApply,
             settingsState.editCode,
             settingsState.fixCompileErrors,
             settingsState.generateCommitMessage,
@@ -269,6 +271,7 @@ class PromptsForm {
         val settings = service<PromptsSettings>().state
 
         listOf(
+            settings.coreActions.autoApply,
             settings.coreActions.editCode,
             settings.coreActions.fixCompileErrors,
             settings.coreActions.generateCommitMessage,
@@ -312,7 +315,7 @@ class PromptsForm {
                 val selectedNode = tree.selectionPath?.lastPathComponent
                 selectedNode is PromptDetailsTreeNode
                         && selectedNode.category != PromptCategory.CORE_ACTIONS
-                        && selectedNode.details.name != "CodeGPT Default"
+                        && selectedNode.details.name != "Default Persona"
             }
             .addExtraAction(object :
                 AnAction("Duplicate", "Duplicate prompt", AllIcons.Actions.Copy) {
@@ -457,11 +460,12 @@ class PromptsForm {
         val fileNameTextField = JBTextField(defaultSettingsFileName).apply {
             columns = 20
         }
-        val fileChooserDescriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
-            isForcedToUseIdeaFileChooser = true
-        }
+        val fileChooserDescriptor =
+            FileChooserDescriptorFactory.createSingleFolderDescriptor().apply {
+                isForcedToUseIdeaFileChooser = true
+            }
         val textFieldWithBrowseButton = TextFieldWithBrowseButton().apply {
-            text = project.basePath ?: System.getProperty("user.home")
+            text = project?.basePath ?: System.getProperty("user.home")
             addBrowseFolderListener(
                 TextBrowseFolderListener(fileChooserDescriptor, project)
             )
@@ -526,22 +530,25 @@ class PromptsForm {
             .createSingleFileDescriptor("json")
             .apply { isForcedToUseIdeaFileChooser = true }
 
-        FileChooser.chooseFile(fileChooserDescriptor, project, null)?.let { file ->
-            ReadAction.nonBlocking<PromptsSettingsState> {
-                file.canonicalPath?.let {
-                    promptsFileProvider.readFromFile(it)
+        project?.let {
+            FileChooser.chooseFile(fileChooserDescriptor, it, null)?.let { file ->
+                ReadAction.nonBlocking<PromptsSettingsState> {
+                    file.canonicalPath?.let {
+                        promptsFileProvider.readFromFile(it)
+                    }
                 }
+                    .inSmartMode(it)
+                    .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
+                        insertPersonasPrompts(settings.personas)
+                        insertChatPrompts(settings.chatActions.prompts)
+                        insertCorePrompts(settings.coreActions)
+                        reloadTreeView()
+                    }
+                    .submit(AppExecutorUtil.getAppExecutorService())
+                    .onError { showImportErrorMessage() }
             }
-                .inSmartMode(project)
-                .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
-                    insertPersonasPrompts(settings.personas)
-                    insertChatPrompts(settings.chatActions.prompts)
-                    insertCorePrompts(settings.coreActions)
-                    reloadTreeView()
-                }
-                .submit(AppExecutorUtil.getAppExecutorService())
-                .onError { showImportErrorMessage() }
         }
+
     }
 
     private fun showImportErrorMessage() {
@@ -588,6 +595,7 @@ class PromptsForm {
     private fun insertCorePrompts(prompts: CoreActionsState) {
         coreActionsNode.removeAllChildren()
         listOf(
+            prompts.autoApply,
             prompts.editCode,
             prompts.fixCompileErrors,
             prompts.generateCommitMessage,

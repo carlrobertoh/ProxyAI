@@ -23,9 +23,9 @@ import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.actions.editor.EditCodeSubmissionHandler
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
-import ee.carlrobert.codegpt.util.ApplicationUtil
+import ee.carlrobert.codegpt.settings.models.ModelSettings
+import ee.carlrobert.codegpt.settings.models.SettingsModelComboBoxAction
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -118,12 +118,11 @@ class EditCodePopover(private val editor: Editor) {
                         font = JBUI.Fonts.smallFont()
                     }
                 cell(
-                    ModelComboBoxAction(
-                        ApplicationUtil.findCurrentProject(),
-                        {},
-                        GeneralSettings.getSelectedService()
-                    )
-                        .createCustomComponent(ActionPlaces.UNKNOWN)
+                    SettingsModelComboBoxAction(
+                        FeatureType.EDIT_CODE,
+                        ModelSettings.getInstance().getModelSelection(FeatureType.EDIT_CODE),
+                        {}
+                    ).createCustomComponent(ActionPlaces.UNKNOWN)
                 ).align(AlignX.RIGHT)
             }
         }.apply {

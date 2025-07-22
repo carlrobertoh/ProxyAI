@@ -152,6 +152,7 @@ object GitUtil {
                         line.startsWith("---") ||
                         line.startsWith("+++") ||
                         line.startsWith("===") ||
+                        line.contains("\\ No newline at end of file")
                         (!showContext && line.startsWith(" "))
             }
             .joinToString("\n")

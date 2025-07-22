@@ -22,7 +22,7 @@ class GenerateCommitMessageWithAdditionalInputAction : BaseCommitWorkflowAction(
             project,
             "Enter additional input for the commit message:",
             "Additional Input",
-            "",
+            commitWorkflowUi.commitMessageUi.text,
             Messages.getQuestionIcon(),
             null
         )
@@ -32,11 +32,7 @@ class GenerateCommitMessageWithAdditionalInputAction : BaseCommitWorkflowAction(
             CompletionRequestService.getInstance().getCommitMessageAsync(
                 CommitMessageCompletionParameters(
                     gitDiff,
-                    """
-                            $systemPrompt
-                            
-                            User input: $userInput
-                        """.trimIndent()
+                    "$systemPrompt\n\nUser input: $userInput"
                 ),
                 CommitMessageEventListener(project, commitWorkflowUi)
             )

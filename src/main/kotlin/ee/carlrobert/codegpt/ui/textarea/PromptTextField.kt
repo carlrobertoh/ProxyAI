@@ -1,27 +1,23 @@
 package ee.carlrobert.codegpt.ui.textarea
 
-import com.intellij.codeInsight.lookup.*
+import com.intellij.codeInsight.lookup.LookupElement
+import com.intellij.codeInsight.lookup.LookupEvent
+import com.intellij.codeInsight.lookup.LookupListener
 import com.intellij.codeInsight.lookup.impl.LookupImpl
-import com.intellij.codeInsight.lookup.impl.PrefixChangeListener
 import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.application.runReadAction
-import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.editor.markup.HighlighterLayer
-import com.intellij.openapi.editor.markup.HighlighterTargetArea
-import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileTypes.FileTypes
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.EditorTextField
-import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
@@ -29,29 +25,33 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.git.GitCommitActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.group.*
 import kotlinx.coroutines.*
 import java.awt.Dimension
 import java.util.*
 
 class PromptTextField(
     private val project: Project,
-    private val tagManager: TagManager,
+    tagManager: TagManager,
     private val onTextChanged: (String) -> Unit,
     private val onBackSpace: () -> Unit,
     private val onLookupAdded: (LookupActionItem) -> Unit,
-    private val onSubmit: (String) -> Unit
+    private val onSubmit: (String) -> Unit,
 ) : EditorTextField(project, FileTypes.PLAIN_TEXT), Disposable {
 
+    companion object {
+        private val logger = thisLogger()
+    }
+
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val lookupManager = PromptTextFieldLookupManager(project, onLookupAdded)
+    private val searchManager = SearchManager(project, tagManager)
+
     private var showSuggestionsJob: Job? = null
+    private var searchState = SearchState()
+    private var lastSearchResults: List<LookupActionItem>? = null
 
     val dispatcherId: UUID = UUID.randomUUID()
+    var lookup: LookupImpl? = null
 
     init {
         isOneLineMode = false
@@ -61,8 +61,14 @@ class PromptTextField(
 
     override fun onEditorAdded(editor: Editor) {
         IdeEventQueue.getInstance().addDispatcher(
-            PromptTextFieldEventDispatcher(dispatcherId, onBackSpace) {
+            PromptTextFieldEventDispatcher(dispatcherId, onBackSpace, lookup) { event ->
+                val shown = lookup?.let { it.isShown && !it.isLookupDisposed } == true
+                if (shown) {
+                    return@PromptTextFieldEventDispatcher
+                }
+
                 onSubmit(text)
+                event.consume()
             },
             this
         )
@@ -75,63 +81,51 @@ class PromptTextField(
     }
 
     suspend fun showGroupLookup() {
-        val lookupItems = listOf(
-            FilesGroupItem(project, tagManager),
-            FoldersGroupItem(project, tagManager),
-            GitGroupItem(project),
-            PersonasGroupItem(tagManager),
-            DocsGroupItem(tagManager),
-            MCPGroupItem(),
-            WebActionItem(tagManager)
-        )
-            .filter { it.enabled }
+        val lookupItems = searchManager.getDefaultGroups()
             .map { it.createLookupElement() }
             .toTypedArray()
 
         withContext(Dispatchers.Main) {
-            editor?.let {
-                showGroupLookup(it, lookupItems)
+            editor?.let { editor ->
+                lookup = lookupManager.showGroupLookup(
+                    editor = editor,
+                    lookupElements = lookupItems,
+                    onGroupSelected = { group, selectedText ->
+                        handleGroupSelected(group, selectedText)
+                    },
+                    onWebActionSelected = { webAction ->
+                        onLookupAdded(webAction)
+                    },
+                    onCodeAnalyzeSelected = { codeAnalyzeAction ->
+                        onLookupAdded(codeAnalyzeAction)
+                    }
+                )
             }
         }
     }
 
-    private fun showGroupLookup(editor: Editor, lookupElements: Array<LookupElement>) {
-        val lookup = createLookup(editor, lookupElements, "")
-        lookup.addLookupListener(object : LookupListener {
-            override fun itemSelected(event: LookupEvent) {
-                val lookupString = event.item?.lookupString ?: return
-                val suggestion =
-                    event.item?.getUserData(LookupItem.KEY) ?: return
-                val offset = editor.caretModel.offset
-                val start = offset - lookupString.length
-                if (start >= 0) {
-                    runUndoTransparentWriteAction {
-                        editor.document.deleteString(start, offset)
-                    }
-                }
-
-                if (suggestion is WebActionItem) {
-                    onLookupAdded(suggestion)
-                }
-
-                if (suggestion !is LookupGroupItem) return
-
-                showSuggestionsJob?.cancel()
-                showSuggestionsJob = coroutineScope.launch {
-                    showGroupSuggestions(suggestion)
-                }
+    private fun showGlobalSearchResults(
+        results: List<LookupActionItem>,
+        searchText: String
+    ) {
+        editor?.let { editor ->
+            try {
+                hideLookupIfShown()
+                lookup = lookupManager.showSearchResultsLookup(editor, results, searchText)
+            } catch (e: Exception) {
+                logger.error("Error showing lookup: $e", e)
             }
-        })
-        lookup.refreshUi(false, true)
-        lookup.showLookup()
+        }
     }
 
-    private fun findAtSymbolPosition(editor: Editor): Int {
-        val atPos = editor.document.text.lastIndexOf('@')
-        return if (atPos >= 0) atPos else -1
+    private fun handleGroupSelected(group: LookupGroupItem, searchText: String) {
+        showSuggestionsJob?.cancel()
+        showSuggestionsJob = coroutineScope.launch {
+            showGroupSuggestions(group, searchText)
+        }
     }
 
-    private suspend fun showGroupSuggestions(group: LookupGroupItem) {
+    private suspend fun showGroupSuggestions(group: LookupGroupItem, filterText: String = "") {
         val suggestions = group.getLookupItems()
         if (suggestions.isEmpty()) {
             return
@@ -140,21 +134,8 @@ class PromptTextField(
         val lookupElements = suggestions.map { it.createLookupElement() }.toTypedArray()
 
         withContext(Dispatchers.Main) {
-            showSuggestionLookup(lookupElements, group)
+            showSuggestionLookup(lookupElements, group, filterText)
         }
-    }
-
-    private fun createLookup(
-        editor: Editor,
-        lookupElements: Array<LookupElement>,
-        searchText: String
-    ) = runReadAction {
-        LookupManager.getInstance(project).createLookup(
-            editor,
-            lookupElements,
-            searchText,
-            LookupArranger.DefaultArranger()
-        ) as LookupImpl
     }
 
     private fun showSuggestionLookup(
@@ -162,77 +143,44 @@ class PromptTextField(
         parentGroup: LookupGroupItem,
         filterText: String = "",
     ) {
-        editor?.let {
-            val lookup = createLookup(it, lookupElements, filterText)
-            lookup.addLookupListener(object : LookupListener {
-                override fun itemSelected(event: LookupEvent) {
-                    val lookupItem = event.item?.getUserData(LookupItem.KEY) ?: return
-                    if (lookupItem !is LookupActionItem) return
+        editor?.let { editor ->
+            searchState = searchState.copy(isInGroupLookupContext = true)
 
-                    replaceAtSymbol(it, lookupItem)
-                    onLookupAdded(lookupItem)
-                }
+            lookup = lookupManager.showSuggestionLookup(
+                editor = editor,
+                lookupElements = lookupElements,
+                parentGroup = parentGroup,
+                onDynamicUpdate = { searchText ->
+                    handleDynamicUpdate(parentGroup, lookupElements, searchText, filterText)
+                },
+                filterText = filterText
+            )
 
-                private fun replaceAtSymbol(editor: Editor, lookupItem: LookupItem) {
-                    val offset = editor.caretModel.offset
-                    val start = findAtSymbolPosition(editor)
-                    if (start >= 0) {
-                        runUndoTransparentWriteAction {
-                            val shouldInsertDisplayName = lookupItem is FileActionItem
-                                    || lookupItem is FolderActionItem
-                                    || lookupItem is GitCommitActionItem
-                            if (shouldInsertDisplayName) {
-                                editor.document.deleteString(start, offset)
-                                editor.document.insertString(start, lookupItem.displayName)
-                                editor.caretModel.moveToOffset(start + lookupItem.displayName.length)
-                                editor.markupModel.addRangeHighlighter(
-                                    start,
-                                    start + lookupItem.displayName.length,
-                                    HighlighterLayer.SELECTION,
-                                    TextAttributes().apply {
-                                        foregroundColor = JBColor(0x00627A, 0xCC7832)
-                                    },
-                                    HighlighterTargetArea.EXACT_RANGE
-                                )
-                            } else {
-                                editor.document.deleteString(start, offset)
-                            }
-                        }
-                    }
+            lookup?.addLookupListener(object : LookupListener {
+                override fun lookupCanceled(event: LookupEvent) {
+                    searchState = searchState.copy(isInGroupLookupContext = false)
                 }
             })
+        }
+    }
 
-            lookup.addPrefixChangeListener(object : PrefixChangeListener {
-                override fun afterAppend(c: Char) {
-                    showSuggestionsJob?.cancel()
-                    showSuggestionsJob = coroutineScope.launch {
-                        if (parentGroup is DynamicLookupGroupItem) {
-                            val searchText = getSearchText()
-                            if (searchText.length == 2) {
-                                parentGroup.updateLookupList(lookup, searchText)
-                            }
-                        }
+    private fun handleDynamicUpdate(
+        parentGroup: LookupGroupItem,
+        lookupElements: Array<LookupElement>,
+        searchText: String,
+        filterText: String
+    ) {
+        showSuggestionsJob?.cancel()
+        showSuggestionsJob = coroutineScope.launch {
+            if (parentGroup is DynamicLookupGroupItem) {
+                if (searchText.length >= PromptTextFieldConstants.MIN_DYNAMIC_SEARCH_LENGTH) {
+                    parentGroup.updateLookupList(lookup!!, searchText)
+                } else if (searchText.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        showSuggestionLookup(lookupElements, parentGroup, filterText)
                     }
                 }
-
-                override fun afterTruncate() {
-                    if (parentGroup is DynamicLookupGroupItem) {
-                        val searchText = getSearchText()
-                        if (searchText.isEmpty()) {
-                            showSuggestionLookup(lookupElements, parentGroup, filterText)
-                        }
-                    }
-                }
-
-                private fun getSearchText(): String {
-                    val text = it.document.text
-                    return text.substring(text.lastIndexOf("@") + 1)
-                }
-
-            }, this)
-
-            lookup.refreshUi(false, true)
-            lookup.showLookup()
+            }
         }
     }
 
@@ -245,11 +193,17 @@ class PromptTextField(
     }
 
     override fun updateBorder(editor: EditorEx) {
-        editor.setBorder(JBUI.Borders.empty(4, 8))
+        editor.setBorder(
+            JBUI.Borders.empty(
+                PromptTextFieldConstants.BORDER_PADDING,
+                PromptTextFieldConstants.BORDER_SIDE_PADDING
+            )
+        )
     }
 
     override fun dispose() {
         showSuggestionsJob?.cancel()
+        lastSearchResults = null
     }
 
     private fun setupDocumentListener(editor: EditorEx) {
@@ -257,19 +211,141 @@ class PromptTextField(
             override fun documentChanged(event: DocumentEvent) {
                 adjustHeight(editor)
                 onTextChanged(event.document.text)
-
-                if ("@" == event.newFragment.toString()) {
-                    showSuggestionsJob?.cancel()
-                    showSuggestionsJob = coroutineScope.launch {
-                        showGroupLookup()
-                    }
-                }
+                handleDocumentChange(event)
             }
         }, this)
     }
 
+    private fun handleDocumentChange(event: DocumentEvent) {
+        val text = event.document.text
+        val caretOffset = event.offset + event.newLength
+
+        when {
+            isAtSymbolTyped(event) -> handleAtSymbolTyped()
+            else -> handleTextChange(text, caretOffset)
+        }
+    }
+
+    private fun isAtSymbolTyped(event: DocumentEvent): Boolean {
+        return PromptTextFieldConstants.AT_SYMBOL == event.newFragment.toString()
+    }
+
+    private fun handleAtSymbolTyped() {
+        searchState = searchState.copy(
+            isInSearchContext = true,
+            lastSearchText = ""
+        )
+
+        showSuggestionsJob?.cancel()
+        showSuggestionsJob = coroutineScope.launch {
+            showGroupLookup()
+        }
+    }
+
+    private fun handleTextChange(text: String, caretOffset: Int) {
+        val searchText = searchManager.getSearchTextAfterAt(text, caretOffset)
+
+        when {
+            searchText != null && searchText.isEmpty() -> handleEmptySearch()
+            !searchText.isNullOrEmpty() -> handleNonEmptySearch(searchText)
+            searchText == null -> handleNoSearch()
+        }
+    }
+
+    private fun handleEmptySearch() {
+        if (!searchState.isInSearchContext || searchState.lastSearchText != "") {
+            searchState = searchState.copy(
+                isInSearchContext = true,
+                lastSearchText = "",
+                isInGroupLookupContext = false
+            )
+
+            showSuggestionsJob?.cancel()
+            showSuggestionsJob = coroutineScope.launch {
+                updateLookupWithGroups()
+            }
+        }
+    }
+
+    private fun handleNonEmptySearch(searchText: String) {
+        if (!searchState.isInGroupLookupContext) {
+            if (!searchManager.matchesAnyDefaultGroup(searchText)) {
+                if (!searchState.isInSearchContext || searchState.lastSearchText != searchText) {
+                    searchState = searchState.copy(
+                        isInSearchContext = true,
+                        lastSearchText = searchText
+                    )
+
+                    showSuggestionsJob?.cancel()
+                    showSuggestionsJob = coroutineScope.launch {
+                        delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
+                        updateLookupWithSearchResults(searchText)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleNoSearch() {
+        if (searchState.isInSearchContext) {
+            searchState = SearchState()
+            showSuggestionsJob?.cancel()
+            hideLookupIfShown()
+        }
+    }
+
+    private fun hideLookupIfShown() {
+        lookup?.let { existingLookup ->
+            if (!existingLookup.isLookupDisposed && existingLookup.isShown) {
+                runInEdt { existingLookup.hide() }
+            }
+        }
+    }
+
+    private suspend fun updateLookupWithGroups() {
+        val lookupItems = searchManager.getDefaultGroups()
+            .map { it.createLookupElement() }
+            .toTypedArray()
+
+        withContext(Dispatchers.Main) {
+            editor?.let { editor ->
+                lookup?.let { existingLookup ->
+                    if (existingLookup.isShown && !existingLookup.isLookupDisposed) {
+                        existingLookup.hide()
+                    }
+                }
+
+                lookup = lookupManager.showGroupLookup(
+                    editor = editor,
+                    lookupElements = lookupItems,
+                    onGroupSelected = { group, currentSearchText ->
+                        handleGroupSelected(
+                            group,
+                            currentSearchText
+                        )
+                    },
+                    onWebActionSelected = { webAction -> onLookupAdded(webAction) },
+                    onCodeAnalyzeSelected = { codeAnalyzeAction -> onLookupAdded(codeAnalyzeAction) },
+                    searchText = ""
+                )
+            }
+        }
+    }
+
+    private suspend fun updateLookupWithSearchResults(searchText: String) {
+        val matchedResults = searchManager.performGlobalSearch(searchText)
+
+        if (lastSearchResults != matchedResults) {
+            lastSearchResults = matchedResults
+            withContext(Dispatchers.Main) {
+                showGlobalSearchResults(matchedResults, searchText)
+            }
+        }
+    }
+
     private fun adjustHeight(editor: EditorEx) {
-        val contentHeight = editor.contentComponent.preferredSize.height + 8
+        val contentHeight =
+            editor.contentComponent.preferredSize.height + PromptTextFieldConstants.HEIGHT_PADDING
         val maxHeight = JBUI.scale(getToolWindowHeight() / 2)
         val newHeight = minOf(contentHeight, maxHeight)
 
@@ -282,6 +358,7 @@ class PromptTextField(
 
     private fun getToolWindowHeight(): Int {
         return project.service<ToolWindowManager>()
-            .getToolWindow("ProxyAI")?.component?.visibleRect?.height ?: 400
+            .getToolWindow("ProxyAI")?.component?.visibleRect?.height
+            ?: PromptTextFieldConstants.DEFAULT_TOOL_WINDOW_HEIGHT
     }
 }

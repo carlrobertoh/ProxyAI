@@ -18,7 +18,8 @@ import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
@@ -63,6 +64,8 @@ public class TotalTokensPanel extends JPanel {
           if (ConfigurationSettings.getState().getChatCompletionSettings()
               .getPsiStructureEnabled()) {
             updatePsiTokenCount(psiTokens);
+          } else {
+            updatePsiTokenCount(0);
           }
           return Unit.INSTANCE;
         }
@@ -180,7 +183,7 @@ public class TotalTokensPanel extends JPanel {
   }
 
   private String getIconToolTipText(String html) {
-    if (!GeneralSettings.isSelected(ServiceType.OPENAI)) {
+    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) != ServiceType.OPENAI) {
       return """
           <html>
           <body style="margin: 0; padding: 0;">

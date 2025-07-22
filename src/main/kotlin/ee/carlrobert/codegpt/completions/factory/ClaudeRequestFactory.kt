@@ -4,8 +4,11 @@ import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.models.ModelSettings
+import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
-import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.llm.client.anthropic.completion.*
 import ee.carlrobert.llm.completion.CompletionRequest
 
@@ -13,13 +16,13 @@ class ClaudeRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): ClaudeCompletionRequest {
         return ClaudeCompletionRequest().apply {
-            model = service<AnthropicSettings>().state.model
+            model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
             maxTokens = service<ConfigurationSettings>().state.maxTokens
             isStream = true
 
             val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
             if (!selectedPersona.disabled) {
-                system = PromptsSettings.getSelectedPersonaSystemPrompt()
+                system = service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode)
             }
 
             messages = params.conversation.messages
@@ -64,12 +67,13 @@ class ClaudeRequestFactory : BaseRequestFactory() {
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
-        stream: Boolean
+        stream: Boolean,
+        featureType: FeatureType
     ): CompletionRequest {
         return ClaudeCompletionRequest().apply {
             system = systemPrompt
             isStream = stream
-            model = service<AnthropicSettings>().state.model
+            model = ModelSelectionService.getInstance().getModelForFeature(featureType)
             messages =
                 listOf<ClaudeCompletionMessage>(ClaudeCompletionStandardMessage("user", userPrompt))
             this.maxTokens = maxTokens

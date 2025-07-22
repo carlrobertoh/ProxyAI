@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.settings.service.llama;
 
-import static ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.LlamaApiKey;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.LLAMA_CPP;
 import static org.apache.commons.lang3.SystemUtils.IS_OS_LINUX;
 import static org.apache.commons.lang3.SystemUtils.IS_OS_MAC_OSX;
@@ -13,8 +12,8 @@ import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate;
 import ee.carlrobert.codegpt.completions.HuggingFaceModel;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate;
-import ee.carlrobert.codegpt.credentials.CredentialsStore;
-import ee.carlrobert.codegpt.settings.GeneralSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.llama.form.LlamaSettingsForm;
 import java.io.File;
 import java.nio.file.Path;
@@ -23,7 +22,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
 @State(name = "CodeGPT", storages = @Storage("CodeGPT_LlamaSettings.xml"))
@@ -40,16 +38,11 @@ public class LlamaSettings implements PersistentStateComponent<LlamaSettingsStat
   @Override
   public void loadState(@NotNull LlamaSettingsState state) {
     this.state = state;
-    // Catch if model's name has changed which could lead to
-    // HuggingFaceModel or PromptTemplates not being found
     if (this.state.getHuggingFaceModel() == null) {
       this.state.setHuggingFaceModel(HuggingFaceModel.CODE_QWEN_2_5_1_5B_Q8_0);
     }
     if (this.state.getLocalModelPromptTemplate() == null) {
       this.state.setLocalModelPromptTemplate(PromptTemplate.CODE_QWEN);
-    }
-    if (this.state.getRemoteModelInfillPromptTemplate() == null) {
-      this.state.setRemoteModelInfillPromptTemplate(InfillPromptTemplate.CODE_QWEN_2_5);
     }
     if (this.state.getLocalModelInfillPromptTemplate() == null) {
       this.state.setLocalModelInfillPromptTemplate(InfillPromptTemplate.CODE_QWEN);
@@ -60,13 +53,10 @@ public class LlamaSettings implements PersistentStateComponent<LlamaSettingsStat
     return getInstance().getState();
   }
 
-  /**
-   * Code Completions enabled in settings and a model with InfillPromptTemplate selected.
-   */
   public static boolean isCodeCompletionsPossible() {
     return getInstance().getState().isCodeCompletionsEnabled()
-            && LlamaModel.findByHuggingFaceModel(getInstance().getState().getHuggingFaceModel())
-                    .getInfillPromptTemplate() != null;
+        && LlamaModel.findByHuggingFaceModel(getInstance().getState().getHuggingFaceModel())
+        .getInfillPromptTemplate() != null;
   }
 
   public static LlamaSettings getInstance() {
@@ -74,15 +64,12 @@ public class LlamaSettings implements PersistentStateComponent<LlamaSettingsStat
   }
 
   public boolean isModified(LlamaSettingsForm form) {
-    return !form.getCurrentState().equals(state)
-        || !StringUtils.equals(
-        form.getLlamaServerPreferencesForm().getApiKey(),
-        CredentialsStore.getCredential(LlamaApiKey.INSTANCE));
+    return !form.getCurrentState().equals(state);
   }
 
   public static boolean isRunnable() {
     return (IS_OS_MAC_OSX || IS_OS_LINUX)
-            && GeneralSettings.getCurrentState().getSelectedService() == LLAMA_CPP;
+        && ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == LLAMA_CPP;
   }
 
   public static boolean isRunnable(HuggingFaceModel model) {
@@ -97,19 +84,18 @@ public class LlamaSettings implements PersistentStateComponent<LlamaSettingsStat
     return Paths.get(System.getProperty("user.home"), ".codegpt/models/gguf");
   }
 
-  // Copied from LlamaModelPreferencesForm
   public String getActualModelPath() {
     return state.isUseCustomModel()
-            ? state.getCustomLlamaModelPath()
-            : getLlamaModelsPath() + File.separator
+        ? state.getCustomLlamaModelPath()
+        : getLlamaModelsPath() + File.separator
             + state.getHuggingFaceModel().getFileName();
   }
 
   public static List<String> getAdditionalParametersList(String additionalParameters) {
     return Arrays.stream(additionalParameters.split(","))
-            .map(String::trim)
-            .filter(s -> !s.isBlank())
-            .toList();
+        .map(String::trim)
+        .filter(s -> !s.isBlank())
+        .toList();
   }
 
   public static Map<String, String> getAdditionalEnvironmentVariablesMap(

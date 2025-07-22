@@ -19,13 +19,14 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OllamaAp
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.settings.service.CodeCompletionConfigurationForm
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.ui.URLTextField
 import ee.carlrobert.llm.client.ollama.OllamaClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import java.awt.BorderLayout
+import java.awt.Dimension
 import java.lang.String.format
 import java.net.ConnectException
 import java.util.concurrent.TimeoutException
@@ -39,7 +40,7 @@ class OllamaSettingsForm {
     private val refreshModelsButton =
         JButton(CodeGPTBundle.get("settingsConfigurable.service.ollama.models.refresh"))
     private val hostField: JBTextField
-    private val modelComboBox: ComboBox<String>
+    private val modelComboBoxes: Map<FeatureType, ComboBox<String>>
     private val codeCompletionConfigurationForm: CodeCompletionConfigurationForm
     private val apiKeyField: JBPasswordField
 
@@ -56,18 +57,25 @@ class OllamaSettingsForm {
         )
         val emptyModelsComboBoxModel =
             DefaultComboBoxModel(arrayOf("Hit refresh to see models for this host"))
-        modelComboBox = ComboBox(emptyModelsComboBoxModel).apply {
+        modelComboBoxes = mapOf(FeatureType.CHAT to ComboBox(emptyModelsComboBoxModel).apply {
             isEnabled = false
-        }
-        hostField = URLTextField().apply {
+            preferredSize = Dimension(280, preferredSize.height)
+        })
+        hostField = URLTextField(30).apply {
             text = settings.host
             whenTextChangedFromUi {
-                modelComboBox.model = emptyModelsComboBoxModel
-                modelComboBox.isEnabled = false
+                modelComboBoxes.values.forEach { comboBox ->
+                    comboBox.model = emptyModelsComboBoxModel
+                    comboBox.isEnabled = false
+                }
             }
         }
         refreshModelsButton.addActionListener {
-            refreshModels(getModel() ?: settings.model)
+            refreshModels(
+                mapOf(
+                    FeatureType.CHAT to (getModel(FeatureType.CHAT) ?: settings.model),
+                )
+            )
         }
         apiKeyField = JBPasswordField().apply {
             columns = 30
@@ -88,11 +96,9 @@ class OllamaSettingsForm {
                 )
                 .addLabeledComponent(
                     CodeGPTBundle.get("settingsConfigurable.shared.model.label"),
-                    JPanel(BorderLayout(8, 0)).apply {
-                        add(modelComboBox, BorderLayout.CENTER)
-                        add(refreshModelsButton, BorderLayout.EAST)
-                    }
+                    modelComboBoxes[FeatureType.CHAT]!!
                 )
+                .addComponent(refreshModelsButton)
                 .addComponent(TitledSeparator(CodeGPTBundle.get("settingsConfigurable.shared.authentication.title")))
                 .setFormLeftIndent(32)
                 .addLabeledComponent(
@@ -107,9 +113,9 @@ class OllamaSettingsForm {
         .addComponentFillVertically(JPanel(), 0)
         .panel
 
-    fun getModel(): String? {
-        return if (modelComboBox.isEnabled) {
-            modelComboBox.item
+    fun getModel(featureType: FeatureType): String? {
+        return if (modelComboBoxes[featureType]!!.isEnabled) {
+            modelComboBoxes[featureType]!!.item
         } else {
             null
         }
@@ -120,7 +126,7 @@ class OllamaSettingsForm {
     fun resetForm() {
         service<OllamaSettings>().state.run {
             hostField.text = host
-            modelComboBox.item = model ?: ""
+            modelComboBoxes[FeatureType.CHAT]!!.item = model ?: ""
             codeCompletionConfigurationForm.isCodeCompletionsEnabled = codeCompletionsEnabled
             codeCompletionConfigurationForm.fimTemplate = fimTemplate
             codeCompletionConfigurationForm.fimOverride != fimOverride
@@ -131,7 +137,8 @@ class OllamaSettingsForm {
     fun applyChanges() {
         service<OllamaSettings>().state.run {
             host = hostField.text
-            model = modelComboBox.item
+            if (modelComboBoxes[FeatureType.CHAT]!!.isEnabled)
+                model = modelComboBoxes[FeatureType.CHAT]!!.item
             codeCompletionsEnabled = codeCompletionConfigurationForm.isCodeCompletionsEnabled
             fimTemplate = codeCompletionConfigurationForm.fimTemplate!!
             fimOverride = codeCompletionConfigurationForm.fimOverride ?: false
@@ -141,14 +148,14 @@ class OllamaSettingsForm {
 
     fun isModified() = service<OllamaSettings>().state.run {
         hostField.text != host
-                || (modelComboBox.item != model && modelComboBox.isEnabled)
+                || (modelComboBoxes[FeatureType.CHAT]!!.item != model && modelComboBoxes[FeatureType.CHAT]!!.isEnabled)
                 || codeCompletionConfigurationForm.isCodeCompletionsEnabled != codeCompletionsEnabled
                 || codeCompletionConfigurationForm.fimTemplate != fimTemplate
                 || codeCompletionConfigurationForm.fimOverride != fimOverride
                 || getApiKey() != getCredential(OllamaApikey)
     }
 
-    private fun refreshModels(currentModel: String?) {
+    private fun refreshModels(currentModels: Map<FeatureType, String?>) {
         disableModelComboBoxWithPlaceholder(DefaultComboBoxModel(arrayOf("Loading")))
         ReadAction.nonBlocking<List<String>> {
             try {
@@ -168,31 +175,36 @@ class OllamaSettingsForm {
             }
         }
             .finishOnUiThread(ModalityState.defaultModalityState()) { models ->
-                updateModelComboBoxState(models, currentModel)
+                updateModelComboBoxState(models, currentModels)
             }
             .submit(AppExecutorUtil.getAppExecutorService())
     }
 
-    private fun updateModelComboBoxState(models: List<String>, currentModel: String?) {
+    private fun updateModelComboBoxState(
+        models: List<String>,
+        currentModels: Map<FeatureType, String?>
+    ) {
         if (models.isNotEmpty()) {
-            modelComboBox.model = DefaultComboBoxModel(models.toTypedArray())
-            modelComboBox.isEnabled = true
-            currentModel?.let {
-                if (models.contains(currentModel)) {
-                    modelComboBox.selectedItem = currentModel
-                } else {
-                    OverlayUtil.showBalloon(
-                        format(
-                            CodeGPTBundle.get("validation.error.model.notExists"),
-                            currentModel
-                        ),
-                        MessageType.ERROR,
-                        modelComboBox
-                    )
+            modelComboBoxes.forEach { (role, comboBox) ->
+                comboBox.model = DefaultComboBoxModel(models.toTypedArray())
+                comboBox.isEnabled = true
+                currentModels[role]?.let {
+                    if (models.contains(currentModels[role])) {
+                        comboBox.selectedItem = currentModels[role]
+                    } else {
+                        OverlayUtil.showBalloon(
+                            format(
+                                CodeGPTBundle.get("validation.error.model.notExists"),
+                                currentModels[role]
+                            ),
+                            MessageType.ERROR,
+                            comboBox
+                        )
+                    }
                 }
             }
         } else {
-            modelComboBox.model = DefaultComboBoxModel(arrayOf("No models"))
+            disableModelComboBoxWithPlaceholder(DefaultComboBoxModel(arrayOf("No models")))
         }
         val availableModels = ApplicationManager.getApplication()
             .getService(OllamaSettings::class.java)
@@ -229,9 +241,11 @@ class OllamaSettingsForm {
     }
 
     private fun disableModelComboBoxWithPlaceholder(placeholderModel: ComboBoxModel<String>) {
-        modelComboBox.apply {
-            model = placeholderModel
-            isEnabled = false
+        modelComboBoxes.values.forEach { comboBox ->
+            comboBox.apply {
+                model = placeholderModel
+                isEnabled = false
+            }
         }
     }
 }

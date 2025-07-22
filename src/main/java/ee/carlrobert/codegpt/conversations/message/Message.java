@@ -16,10 +16,15 @@ public class Message {
   private String prompt;
   private String response;
   private List<String> referencedFilePaths;
+  private List<UUID> conversationsHistoryIds;
   private String imageFilePath;
   private boolean webSearchIncluded;
   private DocumentationDetails documentationDetails;
   private String personaName;
+
+  public Message() {
+    this.id = UUID.randomUUID();
+  }
 
   public Message(String prompt, String response) {
     this(prompt);
@@ -58,6 +63,14 @@ public class Message {
 
   public void setReferencedFilePaths(List<String> referencedFilePaths) {
     this.referencedFilePaths = referencedFilePaths;
+  }
+
+  public List<UUID> getConversationsHistoryIds() {
+    return conversationsHistoryIds;
+  }
+
+  public void setConversationsHistoryIds(List<UUID> conversationsHistoryIds) {
+    this.conversationsHistoryIds = conversationsHistoryIds;
   }
 
   public @Nullable String getImageFilePath() {

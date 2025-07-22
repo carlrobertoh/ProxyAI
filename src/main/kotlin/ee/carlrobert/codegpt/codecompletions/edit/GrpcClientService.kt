@@ -1,10 +1,8 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
-import com.intellij.codeInsight.lookup.LookupManager
-import com.intellij.notification.NotificationAction.createSimpleExpiring
-import com.intellij.notification.NotificationType
+import com.intellij.codeInsight.inline.completion.InlineCompletionRequest
+import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -13,32 +11,31 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.util.net.ssl.CertificateManager
 import com.jetbrains.rd.util.UUID
-import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
+import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
-import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer
+import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.telemetry.core.configuration.TelemetryConfiguration
-import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.GitUtil
-import ee.carlrobert.service.AcceptEditRequest
-import ee.carlrobert.service.NextEditRequest
-import ee.carlrobert.service.NextEditResponse
-import ee.carlrobert.service.NextEditServiceImplGrpc
-import io.grpc.*
+import ee.carlrobert.service.*
+import io.grpc.ManagedChannel
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
-import io.grpc.stub.StreamObserver
-import java.util.concurrent.Executor
+import kotlinx.coroutines.channels.ProducerScope
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.cancellation.CancellationException
 
 @Service(Service.Level.PROJECT)
 class GrpcClientService(private val project: Project) : Disposable {
 
     private var channel: ManagedChannel? = null
-    private var stub: NextEditServiceImplGrpc.NextEditServiceImplStub? = null
-    private var prevObserver: NextEditStreamObserver? = null
+    private var codeCompletionStub: CodeCompletionServiceImplGrpc.CodeCompletionServiceImplStub? =
+        null
+    private var codeCompletionObserver: CodeCompletionStreamObserver? = null
+    private var nextEditStub: NextEditServiceImplGrpc.NextEditServiceImplStub? = null
+    private var nextEditStreamObserver: NextEditStreamObserver? = null
 
     companion object {
         private const val HOST = "grpc.tryproxy.io"
@@ -48,95 +45,44 @@ class GrpcClientService(private val project: Project) : Disposable {
         private val logger = thisLogger()
     }
 
-    @Synchronized
-    private fun ensureConnection() {
-        if (channel == null || channel?.isShutdown == true) {
-            try {
-                channel = NettyChannelBuilder.forAddress(HOST, PORT)
-                    .useTransportSecurity()
-                    .sslContext(GrpcSslContexts.forClient()
-                        .trustManager(CertificateManager.getInstance().trustManager)
-                        .build())
-                    .build()
-                stub = NextEditServiceImplGrpc.newStub(channel)
-                    .withCallCredentials(
-                        ApiKeyCredentials(CredentialsStore.getCredential(CodeGptApiKey) ?: "")
-                    )
+    fun getCodeCompletionAsync(
+        eventListener: CodeCompletionEventListener,
+        request: InlineCompletionRequest,
+        channel: ProducerScope<InlineCompletionElement>
+    ) {
+        ensureCodeCompletionConnection()
 
-                logger.info("gRPC connection established")
-            } catch (e: Exception) {
-                logger.error("Failed to establish gRPC connection", e)
-                throw e
-            }
-        }
+        val grpcRequest = createCodeCompletionGrpcRequest(request)
+        codeCompletionObserver = CodeCompletionStreamObserver(channel, eventListener)
+        codeCompletionStub?.getCodeCompletion(grpcRequest, codeCompletionObserver)
     }
 
-    fun getNextEdit(editor: Editor, isManuallyOpened: Boolean = false) {
-        ensureConnection()
-        prevObserver?.onCompleted()
-
-        val request = NextEditRequest.newBuilder()
-            .setFileName(editor.virtualFile.name)
-            .setFileContent(editor.document.text)
-            .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")
-            .setCursorPosition(runReadAction { editor.caretModel.offset })
-            .setEnableTelemetry(TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled)
-            .build()
-        prevObserver = NextEditStreamObserver(editor, isManuallyOpened) {
-            dispose()
+    fun getNextEdit(
+        editor: Editor,
+        fileContent: String,
+        caretOffset: Int,
+        addToQueue: Boolean = false,
+    ) {
+        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
+            || !service<CodeGPTServiceSettings>().state.nextEditsEnabled
+        ) {
+            return
         }
 
-        stub?.nextEdit(request, prevObserver)
-    }
+        ensureNextEditConnection()
 
-    class NextEditStreamObserver(
-        private val editor: Editor,
-        private val isManuallyOpened: Boolean,
-        private val onDispose: () -> Unit
-    ) : StreamObserver<NextEditResponse> {
-        override fun onNext(response: NextEditResponse) {
-            runInEdt {
-                val documentText = editor.document.text
-                if (LookupManager.getActiveLookup(editor) == null
-                    && documentText != response.nextRevision
-                    && documentText == response.oldRevision) {
-                    CodeSuggestionDiffViewer.displayInlineDiff(editor, response, isManuallyOpened)
-                }
-            }
-        }
-
-        override fun onError(ex: Throwable) {
-            if (ex is CancellationException ||
-                (ex is StatusRuntimeException && ex.status.code == Status.Code.CANCELLED)
-            ) {
-                onCompleted()
-                return
-            }
-
-            try {
-                if (ex is StatusRuntimeException) {
-                    OverlayUtil.showNotification(
-                        ex.status.description ?: ex.localizedMessage,
-                        NotificationType.ERROR,
-                        createSimpleExpiring("Disable multi-line edits") {
-                            service<CodeGPTServiceSettings>().state.nextEditsEnabled =
-                                false
-                        })
-                } else {
-                    logger.error("Something went wrong", ex)
-                }
-            } finally {
-                onCompleted()
-                onDispose()
-            }
-        }
-
-        override fun onCompleted() {
-            editor.project?.let { CompletionProgressNotifier.update(it, false) }
-        }
+        val request = createNextEditGrpcRequest(editor, fileContent, caretOffset)
+        nextEditStreamObserver = NextEditStreamObserver(editor, addToQueue) { dispose() }
+        nextEditStub?.nextEdit(request, nextEditStreamObserver)
     }
 
     fun acceptEdit(responseId: UUID, acceptedEdit: String) {
+        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
+            || !TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled
+        ) {
+            return
+        }
+
         NextEditServiceImplGrpc
             .newBlockingStub(channel)
             .acceptEdit(
@@ -146,6 +92,95 @@ class GrpcClientService(private val project: Project) : Disposable {
                     .build()
             )
     }
+
+    @Synchronized
+    fun refreshConnection() {
+        channel?.let {
+            if (!it.isShutdown) {
+                try {
+                    it.shutdown().awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    logger.info("Existing gRPC connection closed for refresh")
+                } catch (e: InterruptedException) {
+                    logger.warn("Interrupted while shutting down gRPC channel for refresh", e)
+                    Thread.currentThread().interrupt()
+                } finally {
+                    if (!it.isTerminated) {
+                        it.shutdownNow()
+                    }
+                }
+            }
+        }
+    }
+
+    @Synchronized
+    private fun ensureCodeCompletionConnection() {
+        ensureActiveChannel()
+
+        if (codeCompletionStub == null) {
+            codeCompletionStub = CodeCompletionServiceImplGrpc.newStub(channel)
+                .withCallCredentials(createCallCredentials())
+        }
+    }
+
+    @Synchronized
+    private fun ensureNextEditConnection() {
+        ensureActiveChannel()
+
+        if (nextEditStub == null) {
+            nextEditStub = NextEditServiceImplGrpc.newStub(channel)
+                .withCallCredentials(createCallCredentials())
+        }
+    }
+
+    private fun createCodeCompletionGrpcRequest(request: InlineCompletionRequest): GrpcCodeCompletionRequest {
+        val editor = request.editor
+        return GrpcCodeCompletionRequest.newBuilder()
+            .setModel(
+                ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
+                    ?: ""
+            )
+            .setFilePath(editor.virtualFile.path)
+            .setFileContent(editor.document.text)
+            .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")
+            .setCursorPosition(runReadAction { editor.caretModel.offset })
+            .setEnableTelemetry(TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled)
+            .build()
+    }
+
+    private fun createNextEditGrpcRequest(editor: Editor, fileContent: String, caretOffset: Int) =
+        NextEditRequest.newBuilder()
+            .setFileName(editor.virtualFile.name)
+            .setFileContent(fileContent)
+            .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")
+            .setCursorPosition(caretOffset)
+            .setEnableTelemetry(TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled)
+            .build()
+
+    private fun createChannel(): ManagedChannel = NettyChannelBuilder.forAddress(HOST, PORT)
+        .useTransportSecurity()
+        .sslContext(
+            GrpcSslContexts.forClient()
+                .trustManager(CertificateManager.getInstance().trustManager)
+                .build()
+        )
+        .build()
+
+    private fun ensureActiveChannel() {
+        if (channel == null || channel?.isShutdown == true) {
+            try {
+                channel = createChannel()
+                codeCompletionStub = null
+                nextEditStub = null
+                logger.info("gRPC connection established")
+            } catch (e: Exception) {
+                logger.error("Failed to establish gRPC connection", e)
+                throw e
+            }
+        }
+    }
+
+    private fun createCallCredentials() =
+        GrpcCallCredentials(CredentialsStore.getCredential(CodeGptApiKey) ?: "")
 
     override fun dispose() {
         channel?.let { ch ->
@@ -160,33 +195,9 @@ class GrpcClientService(private val project: Project) : Disposable {
                     if (!ch.isTerminated) {
                         ch.shutdownNow()
                     }
-                    channel = null
                 }
             }
         }
-    }
-}
-
-internal class ApiKeyCredentials(private val apiKey: String) : CallCredentials() {
-
-    companion object {
-        private val API_KEY_HEADER: Metadata.Key<String> =
-            Metadata.Key.of("x-api-key", Metadata.ASCII_STRING_MARSHALLER)
-    }
-
-    override fun applyRequestMetadata(
-        requestInfo: RequestInfo?,
-        executor: Executor,
-        metadataApplier: MetadataApplier
-    ) {
-        executor.execute {
-            try {
-                val headers = Metadata()
-                headers.put(API_KEY_HEADER, apiKey)
-                metadataApplier.apply(headers)
-            } catch (e: Throwable) {
-                metadataApplier.fail(Status.UNAUTHENTICATED.withCause(e))
-            }
-        }
+        channel = null
     }
 }

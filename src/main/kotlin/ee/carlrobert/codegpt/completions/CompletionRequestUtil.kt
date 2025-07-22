@@ -5,6 +5,7 @@ import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.IncludedFilesSettings
+import ee.carlrobert.codegpt.util.file.FileUtil
 import org.jetbrains.kotlin.utils.addToStdlib.ifNotEmpty
 import java.util.stream.Collectors
 
@@ -20,6 +21,25 @@ object CompletionRequestUtil {
     """.trimIndent()
 
     @JvmStatic
+    fun formatCode(code: String, filePath: String? = null): String {
+        val header = filePath?.let { "${FileUtil.getFileExtension(it)}:$it" } ?: ""
+        return buildString {
+            append("```${header}\n")
+            append("$code\n")
+            append("```\n")
+        }
+    }
+
+    @JvmStatic
+    fun formatCodeWithLanguage(code: String, language: String): String {
+        return buildString {
+            append("```${language}\n")
+            append("$code\n")
+            append("```\n")
+        }
+    }
+
+    @JvmStatic
     fun getPromptWithContext(
         referencedFiles: List<ReferencedFile>,
         userPrompt: String?,
@@ -29,32 +49,31 @@ object CompletionRequestUtil {
         val repeatableContext = includedFilesSettings.repeatableContext
         val fileContext = referencedFiles.stream()
             .map { item: ReferencedFile ->
-                repeatableContext
-                    .replace("{FILE_PATH}", item.filePath())
-                    .replace(
-                        "{FILE_CONTENT}", String.format(
-                            "```%s%n%s%n```",
-                            item.fileExtension,
-                            item.fileContent().trim { it <= ' ' })
-                    )
+                formatCode(item.fileContent(), item.filePath())
             }
             .collect(Collectors.joining("\n\n"))
 
         val structureContext = psiStructure
             ?.map { structure: ClassStructure ->
-                val fileExtension = structure.virtualFile.extension ?: ""
+                formatCode(
+                    psiStructureSerializer.serialize(structure),
+                    structure.virtualFile.path
+                )
                 repeatableContext
                     .replace("{FILE_PATH}", structure.virtualFile.path)
                     .replace(
-                        "{FILE_CONTENT}", String.format(
-                            "```%s%n%s%n```",
-                            fileExtension,
-                            psiStructureSerializer.serialize(structure)
+                        "{FILE_CONTENT}",
+                        formatCode(
+                            psiStructureSerializer.serialize(structure),
+                            structure.virtualFile.path
                         )
                     )
             }
             ?.ifNotEmpty {
-                joinToString(prefix = "\n\n" + PSI_STRUCTURE_TITLE + "\n\n", separator = "\n\n") { it }
+                joinToString(
+                    prefix = "\n\n" + PSI_STRUCTURE_TITLE + "\n\n",
+                    separator = "\n\n"
+                ) { it }
             }
 
         return includedFilesSettings.promptTemplate

@@ -9,6 +9,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.codeStyle.NameUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
@@ -18,6 +19,8 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupUtil
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class FilesGroupItem(
     private val project: Project,
@@ -28,22 +31,43 @@ class FilesGroupItem(
     override val icon = AllIcons.FileTypes.Any_type
 
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
-        project.service<ProjectFileIndex>().iterateContent {
-            if (!it.isDirectory && !containsTag(it)) {
-                runInEdt {
-                    LookupUtil.addLookupItem(lookup, FileActionItem(project, it))
+        withContext(Dispatchers.Default) {
+            project.service<ProjectFileIndex>().iterateContent {
+                if (!it.isDirectory && !containsTag(it)) {
+                    val actionItem = FileActionItem(project, it)
+                    runInEdt {
+                        LookupUtil.addLookupItem(lookup, actionItem)
+                    }
                 }
+                true
             }
-            true
         }
     }
 
     override suspend fun getLookupItems(searchText: String): List<LookupActionItem> {
         return readAction {
             val projectFileIndex = project.service<ProjectFileIndex>()
-            project.service<FileEditorManager>().openFiles
-                .filter { projectFileIndex.isInContent(it) && !containsTag(it) }
-                .toFileSuggestions()
+            val matcher = NameUtil.buildMatcher("*$searchText").build()
+            val matchingFiles = mutableListOf<VirtualFile>()
+
+            projectFileIndex.iterateContent { file ->
+                if (!file.isDirectory &&
+                    !containsTag(file) &&
+                    (searchText.isEmpty() || matcher.matchingDegree(file.name) != Int.MIN_VALUE)
+                ) {
+                    matchingFiles.add(file)
+                }
+                true
+            }
+
+            val openFiles = project.service<FileEditorManager>().openFiles
+                .filter {
+                    projectFileIndex.isInContent(it) &&
+                            !containsTag(it) &&
+                            (searchText.isEmpty() || matcher.matchingDegree(it.name) != Int.MIN_VALUE)
+                }
+
+            (matchingFiles + openFiles).distinctBy { it.path }.toFileSuggestions()
         }
     }
 
@@ -54,7 +78,6 @@ class FilesGroupItem(
     private fun Iterable<VirtualFile>.toFileSuggestions(): List<LookupActionItem> {
         val selectedFileTags = TagUtil.getExistingTags(project, FileTagDetails::class.java)
         return filter { file -> selectedFileTags.none { it.virtualFile == file } }
-            .take(10)
             .map { FileActionItem(project, it) } + listOf(IncludeOpenFilesActionItem())
     }
 }

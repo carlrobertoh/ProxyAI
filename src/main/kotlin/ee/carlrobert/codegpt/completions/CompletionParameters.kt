@@ -1,10 +1,13 @@
 package ee.carlrobert.codegpt.completions
 
+import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.file.FileUtil
 import java.nio.file.Files
 import java.nio.file.Path
@@ -19,9 +22,12 @@ class ChatCompletionParameters private constructor(
     var sessionId: UUID?,
     var retry: Boolean,
     var imageDetails: ImageDetails?,
+    var history: List<Conversation>?,
     var referencedFiles: List<ReferencedFile>?,
     var personaDetails: PersonaDetails?,
     var psiStructure: Set<ClassStructure>?,
+    var chatMode: ChatMode = ChatMode.ASK,
+    var featureType: FeatureType = FeatureType.CHAT
 ) : CompletionParameters {
 
     fun toBuilder(): Builder {
@@ -33,6 +39,8 @@ class ChatCompletionParameters private constructor(
             referencedFiles(this@ChatCompletionParameters.referencedFiles)
             personaDetails(this@ChatCompletionParameters.personaDetails)
             psiStructure(this@ChatCompletionParameters.psiStructure)
+            chatMode(this@ChatCompletionParameters.chatMode)
+            featureType(this@ChatCompletionParameters.featureType)
         }
     }
 
@@ -41,10 +49,13 @@ class ChatCompletionParameters private constructor(
         private var conversationType: ConversationType = ConversationType.DEFAULT
         private var retry: Boolean = false
         private var imageDetails: ImageDetails? = null
+        private var history: List<Conversation>? = null
         private var referencedFiles: List<ReferencedFile>? = null
         private var personaDetails: PersonaDetails? = null
         private var psiStructure: Set<ClassStructure>? = null
         private var gitDiff: String = ""
+        private var chatMode: ChatMode = ChatMode.ASK
+        private var featureType: FeatureType = FeatureType.CHAT
 
         fun sessionId(sessionId: UUID?) = apply { this.sessionId = sessionId }
         fun conversationType(conversationType: ConversationType) =
@@ -63,12 +74,18 @@ class ChatCompletionParameters private constructor(
 
         fun gitDiff(gitDiff: String) = apply { this.gitDiff = gitDiff }
 
+        fun history(history: List<Conversation>?) = apply { this.history = history }
+
         fun referencedFiles(referencedFiles: List<ReferencedFile>?) =
             apply { this.referencedFiles = referencedFiles }
 
         fun personaDetails(personaDetails: PersonaDetails?) = apply { this.personaDetails = personaDetails }
 
         fun psiStructure(psiStructure: Set<ClassStructure>?) = apply { this.psiStructure = psiStructure }
+
+        fun chatMode(chatMode: ChatMode) = apply { this.chatMode = chatMode }
+
+        fun featureType(featureType: FeatureType) = apply { this.featureType = featureType }
 
         fun build(): ChatCompletionParameters {
             return ChatCompletionParameters(
@@ -78,9 +95,12 @@ class ChatCompletionParameters private constructor(
                 sessionId,
                 retry,
                 imageDetails,
+                history,
                 referencedFiles,
                 personaDetails,
                 psiStructure,
+                chatMode,
+                featureType
             )
         }
     }
@@ -93,14 +113,27 @@ class ChatCompletionParameters private constructor(
 
 data class CommitMessageCompletionParameters(
     val gitDiff: String,
-    val systemPrompt: String
+    val systemPrompt: String,
+    val featureType: FeatureType = FeatureType.COMMIT_MESSAGE
 ) : CompletionParameters
 
-data class LookupCompletionParameters(val prompt: String) : CompletionParameters
+data class LookupCompletionParameters(
+    val prompt: String,
+    val featureType: FeatureType = FeatureType.LOOKUP
+) : CompletionParameters
+
+data class AutoApplyParameters(
+    val source: String, 
+    val destination: VirtualFile,
+    val chatMode: ChatMode = ChatMode.ASK,
+    val featureType: FeatureType = FeatureType.AUTO_APPLY
+)
 
 data class EditCodeCompletionParameters(
     val prompt: String,
-    val selectedText: String
+    val selectedText: String,
+    val chatMode: ChatMode = ChatMode.ASK,
+    val featureType: FeatureType = FeatureType.EDIT_CODE
 ) : CompletionParameters
 
 data class ImageDetails(
