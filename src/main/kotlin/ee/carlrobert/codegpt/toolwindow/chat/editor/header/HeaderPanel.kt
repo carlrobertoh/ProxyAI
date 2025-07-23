@@ -46,6 +46,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
 
     private val statsComponent = SimpleColoredComponent().apply {
         font = JBUI.Fonts.smallFont()
+        preferredSize = Dimension(preferredSize.width, 16)
     }
     private val errorLabel = JBLabel(AllIcons.General.Error).apply {
         isVisible = config.error != null
@@ -53,7 +54,6 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
     }
     private val rightPanel = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.X_AXIS)
-        alignmentY = 0.5f
         isOpaque = false
     }
 
@@ -72,14 +72,8 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
     protected fun setupUI() {
         setupPanelAppearance()
         addToLeft(createLeftPanel(virtualFile))
-        rightPanel.removeAll()
         initializeRightPanel(rightPanel)
-
-        val rightCenteringPanel = JPanel(BorderLayout()).apply {
-            isOpaque = false
-            add(rightPanel, BorderLayout.CENTER)
-        }
-        addToRight(rightCenteringPanel)
+        addToRight(rightPanel)
     }
 
     protected fun setRightPanelComponent(component: JComponent?) {

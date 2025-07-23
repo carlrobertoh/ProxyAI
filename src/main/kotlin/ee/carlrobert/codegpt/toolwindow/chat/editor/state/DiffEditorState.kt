@@ -29,6 +29,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.HeaderConfig
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
 import ee.carlrobert.codegpt.util.file.FileUtil
+import okhttp3.sse.EventSource
 import java.util.*
 import javax.swing.Icon
 import javax.swing.JButton
@@ -39,7 +40,8 @@ abstract class DiffEditorState(
     override val segment: Segment,
     override val project: Project,
     val diffViewer: UnifiedDiffViewer?,
-    val virtualFile: VirtualFile?
+    val virtualFile: VirtualFile?,
+    private val eventSource: EventSource? = null
 ) : EditorState {
 
     companion object {
@@ -91,6 +93,10 @@ abstract class DiffEditorState(
             override fun onOpenDiff() {
                 openDiff()
             }
+
+            override fun onClose() {
+                handleClose()
+            }
         }
 
         return DiffHeaderPanel(
@@ -102,11 +108,14 @@ abstract class DiffEditorState(
                 false
             ),
             readOnly,
-            actions
+            actions,
+            eventSource
         )
     }
 
     abstract fun applyAllChanges()
+
+    abstract fun handleClose()
 
     private fun openDiff() {
         if (virtualFile == null) {

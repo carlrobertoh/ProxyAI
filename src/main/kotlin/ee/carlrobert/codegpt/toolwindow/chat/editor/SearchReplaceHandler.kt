@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.CodeGPTKeys
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel.Companion.RESPONSE_EDITOR_DIFF_VIEWER_VALUE_PAIR_KEY
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
@@ -25,11 +26,11 @@ class SearchReplaceHandler(
     private var searchFailed = false
 
     fun handleSearchReplace(item: SearchReplace) {
+        handleReplace(item, item.filePath, item.search, item.replace)
+
         val editor = stateManager.getCurrentState()?.editor ?: return
         (editor.permanentHeaderComponent as? DiffHeaderPanel)?.handleDone()
-
         RESPONSE_EDITOR_DIFF_VIEWER_VALUE_PAIR_KEY.set(editor, Pair(item.search, item.replace))
-        handleReplace(item, item.filePath, item.search, item.replace)
     }
 
     fun handleReplace(item: ReplaceWaiting) {

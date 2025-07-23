@@ -17,23 +17,29 @@ class AutoApplyListener(
     private val project: Project,
     private val stateManager: EditorStateManager,
     private val virtualFile: VirtualFile,
+    private val originalSuggestion: String,
     private val onEditorReplaced: (EditorEx, EditorEx) -> Unit
 ) : CompletionEventListener<String> {
 
     private val logger = logger<AutoApplyListener>()
     private var editorReplaced: Boolean = false
     private val messageParser = SseMessageParser()
+    private var eventSource: EventSource? = null
 
     override fun onOpen() {
         CompletionProgressNotifier.update(project, true)
     }
 
     override fun onMessage(message: String, eventSource: EventSource?) {
-        processMessageSegments(message, eventSource)
+        if (this.eventSource == null && eventSource != null) {
+            this.eventSource = eventSource
+        }
+        processMessageSegments(message)
     }
 
     override fun onError(error: ErrorDetails?, ex: Throwable?) {
-        logger.error("Something went wrong while retrying diff-based editing", ex)
+        logger.error("Something went wrong while applying the changes", ex)
+        ErrorHandler.handleError(error, ex)
         handleComplete()
     }
 
@@ -45,10 +51,7 @@ class AutoApplyListener(
         handleComplete()
     }
 
-    private fun processMessageSegments(
-        message: String,
-        eventSource: EventSource?
-    ) {
+    private fun processMessageSegments(message: String) {
         val segments = messageParser.parse(message)
         for (segment in segments) {
             when (segment) {
@@ -85,7 +88,7 @@ class AutoApplyListener(
         val containsText = currentText.contains(segment.search.trim())
 
         val newState = if (containsText) {
-            stateManager.createFromSegment(segment)
+            stateManager.createFromSegment(segment, false, eventSource, originalSuggestion)
         } else {
             stateManager.transitionToFailedDiffState(
                 segment.search,
@@ -101,5 +104,7 @@ class AutoApplyListener(
         val editor = stateManager.getCurrentState()?.editor ?: return
         (editor.permanentHeaderComponent as? DiffHeaderPanel)?.handleDone()
         CompletionProgressNotifier.update(project, false)
+        eventSource = null
     }
+
 }

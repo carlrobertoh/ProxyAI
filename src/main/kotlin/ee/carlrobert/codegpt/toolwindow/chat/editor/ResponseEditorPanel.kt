@@ -2,7 +2,9 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor
 
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
@@ -10,11 +12,9 @@ import com.intellij.openapi.editor.event.BulkAwareDocumentListener
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.vfs.readText
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
@@ -25,6 +25,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.EXPANDED_KEY
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.MIN_LINES_FOR_EXPAND
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DefaultHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorState
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
@@ -98,17 +99,39 @@ class ResponseEditorPanel(
         }
     }
 
-    fun applyCodeAsync(content: String, virtualFile: VirtualFile, editor: EditorEx) {
-        CompletionRequestService.getInstance().autoApplyAsync(
+    fun replaceEditorWithSegment(segment: Segment) {
+        val oldEditor = stateManager.getCurrentState()?.editor ?: return
+        val newState = stateManager.createFromSegment(segment)
+        replaceEditor(oldEditor, newState.editor)
+    }
+
+    fun removeCurrentEditor() {
+        runInEdt {
+            removeAll()
+            stateManager.clearCurrentState()
+            revalidate()
+            repaint()
+        }
+    }
+
+    fun applyCodeAsync(content: String, virtualFile: VirtualFile, editor: EditorEx, headerPanel: DefaultHeaderPanel? = null) {
+        val eventSource = CompletionRequestService.getInstance().autoApplyAsync(
             AutoApplyParameters(content, virtualFile),
-            AutoApplyListener(project, stateManager, virtualFile) { oldEditor, newEditor ->
+            AutoApplyListener(project, stateManager, virtualFile, content) { oldEditor, newEditor ->
                 val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
                     ?: throw IllegalStateException("Expected parent to be ResponseEditorPanel")
                 responseEditorPanel.replaceEditor(oldEditor, newEditor)
             })
+        
+        val panel = headerPanel ?: (editor.permanentHeaderComponent as? DefaultHeaderPanel)
+        panel?.setLoading(eventSource)
     }
-    
-    internal fun createReplaceWaitingSegment(searchContent: String, replaceContent: String, virtualFile: VirtualFile): ReplaceWaiting {
+
+    internal fun createReplaceWaitingSegment(
+        searchContent: String,
+        replaceContent: String,
+        virtualFile: VirtualFile
+    ): ReplaceWaiting {
         return ReplaceWaiting(
             search = searchContent,
             replace = replaceContent,
@@ -116,26 +139,30 @@ class ResponseEditorPanel(
             filePath = virtualFile.path
         )
     }
-    
-    fun createDiffEditorForDirectApply(searchContent: String, replaceContent: String, virtualFile: VirtualFile) {
+
+    fun createDiffEditorForDirectApply(
+        searchContent: String,
+        replaceContent: String,
+        virtualFile: VirtualFile
+    ) {
         try {
             val segment = createReplaceWaitingSegment(searchContent, "", virtualFile)
-            
+
             val oldEditor = stateManager.getCurrentState()?.editor
             if (oldEditor == null) {
                 logger.warn("No current editor state found for direct apply")
                 return
             }
-            
+
             val currentText = try {
                 virtualFile.readText()
             } catch (e: Exception) {
                 logger.error("Failed to read file content for direct apply", e)
                 return
             }
-            
+
             val containsText = currentText.contains(segment.search.trim())
-            
+
             val newState = if (containsText) {
                 stateManager.createFromSegment(segment)
             } else {
@@ -148,15 +175,16 @@ class ResponseEditorPanel(
                     return
                 }
             }
-            
+
             replaceEditor(oldEditor, newState.editor)
-            
-            val finalSegment = createReplaceWaitingSegment(searchContent, replaceContent, virtualFile)
+
+            val finalSegment =
+                createReplaceWaitingSegment(searchContent, replaceContent, virtualFile)
             newState.updateContent(finalSegment)
-            
+
             val currentEditor = newState.editor
             val headerPanel = currentEditor.permanentHeaderComponent as? DiffHeaderPanel
-            
+
             ApplicationManager.getApplication().invokeLater {
                 if (!project.isDisposed) {
                     headerPanel?.handleDone()

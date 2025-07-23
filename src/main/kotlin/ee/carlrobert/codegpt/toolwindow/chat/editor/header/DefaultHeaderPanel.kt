@@ -3,29 +3,32 @@ package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.openapi.vfs.readText
-import com.intellij.ui.AnimatedIcon
-import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.*
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.StringUtil
+import okhttp3.sse.EventSource
 import javax.swing.JPanel
 
 class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
 
-    private val loadingLabel: JBLabel by lazy {
-        JBLabel(
-            CodeGPTBundle.get("toolwindow.chat.editor.diff.thinking"),
-            AnimatedIcon.Default(),
-            JBLabel.LEFT
-        )
+    companion object {
+        private val logger = thisLogger()
+    }
+
+    private var currentEventSource: EventSource? = null
+    private val loadingPanel = LoadingPanel(
+        CodeGPTBundle.get("toolwindow.chat.editor.diff.thinking")
+    ) {
+        handleDone()
     }
 
     init {
@@ -34,21 +37,28 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
 
     override fun initializeRightPanel(rightPanel: JPanel) {
         if (config.loading) {
-            rightPanel.add(loadingLabel)
+            rightPanel.add(loadingPanel)
         } else {
             rightPanel.add(createHeaderActions().component)
         }
     }
 
-    fun setLoading(label: String = "Loading...") {
+    fun setLoading(
+        eventSource: EventSource? = null,
+        label: String = CodeGPTBundle.get("toolwindow.chat.editor.diff.applying")
+    ) {
+        currentEventSource = eventSource
+        loadingPanel.setText(label)
+        loadingPanel.setEventSource(eventSource)
+
         runInEdt {
-            loadingLabel.text = label
-            setRightPanelComponent(loadingLabel)
+            setRightPanelComponent(loadingPanel)
         }
     }
 
     fun handleDone() {
         runInEdt {
+            currentEventSource = null
             setRightPanelComponent(createHeaderActions().component)
         }
     }
@@ -71,23 +81,27 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
     }
 
     private fun handleApply(project: Project, editor: EditorEx) {
-        val file = virtualFile
-            ?: EditorUtil.getSelectedEditor(project)?.virtualFile
-            ?: throw IllegalStateException("Virtual file is null")
-
-        val directApplyThreshold = 0.85
-        val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
-        if (coefficient > directApplyThreshold) {
+        try {
+            val file = virtualFile
+                ?: EditorUtil.getSelectedEditor(project)?.virtualFile
+                ?: throw IllegalStateException("Could not find file")
             val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
-                ?: throw IllegalStateException("Could not find corresponding ResponseEditorPanel")
-            responseEditorPanel.createDiffEditorForDirectApply(file.readText(), editor.document.text, file)
-            return
-        }
+                ?: throw IllegalStateException("Could not find editor panel")
 
-        val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
-            ?: throw IllegalStateException("Could not find corresponding ResponseEditorPanel")
-        responseEditorPanel.applyCodeAsync(editor.document.text, file, editor)
-        setLoading("Editing...")
+            val directApplyThreshold = 0.85
+            val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
+            if (coefficient > directApplyThreshold) {
+                responseEditorPanel.createDiffEditorForDirectApply(
+                    file.readText(),
+                    editor.document.text,
+                    file
+                )
+                return
+            }
+            responseEditorPanel.applyCodeAsync(editor.document.text, file, editor, this)
+        } catch (e: Exception) {
+            logger.error(e.message, e)
+        }
     }
 
     private fun createToolbar(actionGroup: ActionGroup): ActionToolbar {

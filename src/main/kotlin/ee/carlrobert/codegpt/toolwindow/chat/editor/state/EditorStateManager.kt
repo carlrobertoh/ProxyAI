@@ -12,21 +12,24 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffEditorManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.EditorFactory
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
+import okhttp3.sse.EventSource
 
 class EditorStateManager(private val project: Project) {
 
     private var currentState: EditorState? = null
     private var diffEditorManager: DiffEditorManager? = null
 
-    fun createFromSegment(segment: Segment, readOnly: Boolean = false): EditorState {
+    fun createFromSegment(segment: Segment, readOnly: Boolean = false, eventSource: EventSource? = null, originalSuggestion: String? = null): EditorState {
         val editor = EditorFactory.createEditor(project, segment)
         val state = if (editor.editorKind == EditorKind.DIFF) {
-            createDiffState(editor, segment)
+            createDiffState(editor, segment, eventSource, originalSuggestion)
         } else {
             RegularEditorState(editor, segment, project)
         }
+        
         runInEdt {
-            EditorFactory.configureEditor(editor, state.createHeaderComponent(readOnly))
+            val headerComponent = state.createHeaderComponent(readOnly)
+            EditorFactory.configureEditor(editor, headerComponent)
         }
 
         RESPONSE_EDITOR_STATE_KEY.set(editor, state)
@@ -55,7 +58,8 @@ class EditorStateManager(private val project: Project) {
             FailedDiffEditorState(newEditor, newSegment, project, searchContent, replaceContent)
 
         runInEdt {
-            EditorFactory.configureEditor(newEditor, newState.createHeaderComponent(false))
+            val headerComponent = newState.createHeaderComponent(false)
+            EditorFactory.configureEditor(newEditor, headerComponent)
         }
 
         this.currentState = newState
@@ -67,19 +71,27 @@ class EditorStateManager(private val project: Project) {
         return currentState
     }
 
-    private fun createDiffState(editor: EditorEx, segment: Segment): EditorState {
+    fun clearCurrentState() {
+        currentState = null
+    }
+
+    private fun createDiffState(editor: EditorEx, segment: Segment, eventSource: EventSource? = null, originalSuggestion: String? = null): EditorState {
         val virtualFile = getVirtualFile(segment.filePath)
         val diffViewer = ResponseEditorPanel.RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor)
         val diffEditorManager = DiffEditorManager(project, diffViewer, virtualFile)
         this.diffEditorManager = diffEditorManager
-        return StandardDiffEditorState(
+        
+        val state = StandardDiffEditorState(
             editor,
             segment,
             project,
             diffViewer,
             virtualFile,
-            diffEditorManager
+            diffEditorManager,
+            eventSource,
+            originalSuggestion
         )
+        return state
     }
 
     private fun getVirtualFile(filePath: String?): VirtualFile? {
