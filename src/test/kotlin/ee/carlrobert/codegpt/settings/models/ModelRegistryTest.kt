@@ -27,8 +27,8 @@ class ModelRegistryTest : IntegrationTest() {
         val result = modelRegistry.getDefaultModelForFeature(FeatureType.CHAT, PricingPlan.FREE)
 
         assertThat(result.provider).isEqualTo(ServiceType.PROXYAI)
-        assertThat(result.model).isEqualTo("kimi-k2-instruct")
-        assertThat(result.displayName).isEqualTo("Kimi K2")
+        assertThat(result.model).isEqualTo("qwen3-coder")
+        assertThat(result.displayName).isEqualTo("Qwen3 Coder")
     }
 
     fun `test getDefaultModelForFeature with anonymous plan returns basic model`() {

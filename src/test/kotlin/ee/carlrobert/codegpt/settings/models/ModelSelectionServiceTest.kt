@@ -41,7 +41,7 @@ class ModelSelectionServiceTest : IntegrationTest() {
             modelSelectionService.getModelSelectionForFeature(FeatureType.CHAT, PricingPlan.FREE)
 
         assertThat(individualResult.model).isEqualTo("claude-4-sonnet-thinking")
-        assertThat(freeResult.model).isEqualTo("kimi-k2-instruct")
+        assertThat(freeResult.model).isEqualTo("qwen3-coder")
     }
 
     fun `test getModelSelectionForFeature with code completion returns code model`() {

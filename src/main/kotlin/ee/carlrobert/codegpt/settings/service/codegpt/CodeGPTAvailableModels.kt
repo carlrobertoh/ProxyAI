@@ -20,7 +20,7 @@ object CodeGPTAvailableModels {
         CodeGPTModel("Gemini 2.5 Flash", "gemini-flash-2.5", Icons.Google, ANONYMOUS),
         CodeGPTModel("DeepSeek R1", "deepseek-r1", Icons.DeepSeek, INDIVIDUAL),
         CodeGPTModel("DeepSeek V3", "deepseek-v3", Icons.DeepSeek, FREE),
-        CodeGPTModel("Kimi K2", "kimi-k2", Icons.Moonshot, FREE),
+        CodeGPTModel("Qwen3 Coder", "qwen3-coder", Icons.Qwen, FREE),
     )
 
     @JvmStatic

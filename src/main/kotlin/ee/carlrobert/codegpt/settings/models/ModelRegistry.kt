@@ -135,11 +135,11 @@ class ModelRegistry {
             FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
         ),
         PricingPlan.FREE to mapOf(
-            FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
-            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
-            FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
-            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, KIMI_K2, "Kimi K2"),
+            FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
+            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
+            FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
+            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
                 QWEN_2_5_32B_CODE,
@@ -359,9 +359,9 @@ class ModelRegistry {
             ),
             ModelSelection(
                 ServiceType.PROXYAI,
-                KIMI_K2,
-                "Kimi K2",
-                Icons.Moonshot,
+                QWEN3_CODER,
+                "Qwen3 Coder",
+                Icons.Qwen,
                 PricingPlan.FREE
             )
         )
@@ -539,7 +539,7 @@ class ModelRegistry {
         const val DEEPSEEK_V3 = "deepseek-v3"
         const val QWEN_2_5_32B_CODE = "qwen-2.5-32b-code"
         const val ZETA = "zeta"
-        const val KIMI_K2 = "kimi-k2-instruct"
+        const val QWEN3_CODER = "qwen3-coder"
 
         // OpenAI Models
         const val GPT_3_5_TURBO_INSTRUCT = "gpt-3.5-turbo-instruct"

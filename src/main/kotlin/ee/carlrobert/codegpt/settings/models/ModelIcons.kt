@@ -18,7 +18,7 @@ object ModelIcons {
             ModelRegistry.CLAUDE_4_SONNET_THINKING, ModelRegistry.CLAUDE_4_SONNET -> Icons.Anthropic
             ModelRegistry.GEMINI_PRO_2_5, ModelRegistry.GEMINI_FLASH_2_5 -> Icons.Google
             ModelRegistry.DEEPSEEK_R1, ModelRegistry.DEEPSEEK_V3 -> Icons.DeepSeek
-            ModelRegistry.KIMI_K2 -> Icons.Moonshot
+            ModelRegistry.QWEN3_CODER -> Icons.Qwen
             "qwen-2.5-32b-chat", ModelRegistry.QWEN_2_5_32B_CODE -> Icons.Qwen
             "llama-3.1-405b" -> Icons.Meta
             else -> Icons.DefaultSmall
