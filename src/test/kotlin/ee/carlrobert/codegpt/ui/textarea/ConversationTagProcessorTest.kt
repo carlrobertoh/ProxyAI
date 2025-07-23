@@ -100,7 +100,7 @@ class ConversationTagProcessorTest : IntegrationTest() {
     }
 
     fun `test should find current conversation by id`() {
-        val conversation = conversationService.startConversation()
+        val conversation = conversationService.startConversation(project)
         conversation.addMessage(Message("Current conversation test").apply {
             response = "This is the current conversation"
         })
@@ -134,7 +134,7 @@ class ConversationTagProcessorTest : IntegrationTest() {
             response = "This is stored"
         })
         conversationService.addConversation(storedConversation)
-        val currentConversation = conversationService.startConversation()
+        val currentConversation = conversationService.startConversation(project)
         currentConversation.id = storedConversation.id
         currentConversation.addMessage(Message("Current version").apply {
             response = "This is current"

@@ -17,7 +17,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
     fun testDefaultPersonaUsesEditModePromptWhenEnabled() {
         useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
-        val conversation = ConversationService.getInstance().startConversation()
+        val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
         val callParameters = ChatCompletionParameters
             .builder(conversation, message)
@@ -120,7 +120,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
     fun testDefaultPersonaIsFilteredInAskMode() {
         useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
-        val conversation = ConversationService.getInstance().startConversation()
+        val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
         val callParameters = ChatCompletionParameters
             .builder(conversation, message)
@@ -239,7 +239,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             instructions = personaPromptWithSearchReplace
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
-        val conversation = ConversationService.getInstance().startConversation()
+        val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
         val callParameters = ChatCompletionParameters
             .builder(conversation, message)
@@ -282,7 +282,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         """.trimIndent()
         service<PromptsSettings>().state.personas.selectedPersona.instructions =
             personaPromptWithSearchReplace
-        val conversation = ConversationService.getInstance().startConversation()
+        val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
         val callParameters = ChatCompletionParameters
             .builder(conversation, message)

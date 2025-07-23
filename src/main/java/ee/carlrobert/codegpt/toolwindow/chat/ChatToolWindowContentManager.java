@@ -78,7 +78,7 @@ public final class ChatToolWindowContentManager {
         .map(item -> {
           var panel = new ChatToolWindowTabPanel(
               project,
-              ConversationService.getInstance().startConversation());
+              ConversationService.getInstance().startConversation(project));
           item.addNewTab(panel);
           return panel;
         })
@@ -117,7 +117,7 @@ public final class ChatToolWindowContentManager {
       tabbedPane.clearAll();
       tabbedPane.addNewTab(new ChatToolWindowTabPanel(
           project,
-          ConversationService.getInstance().startConversation()));
+          ConversationService.getInstance().startConversation(project)));
     });
   }
 

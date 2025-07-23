@@ -192,7 +192,7 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
       removeTabAt(getSelectedIndex());
       addNewTab(new ChatToolWindowTabPanel(
           project,
-          ConversationService.getInstance().startConversation()));
+          ConversationService.getInstance().startConversation(project)));
       repaint();
       revalidate();
     });

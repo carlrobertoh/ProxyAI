@@ -10,6 +10,7 @@ import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.util.ProjectPathUtils
 import java.awt.Color
 import java.awt.Cursor
 import java.awt.Dimension
@@ -195,7 +196,15 @@ class ChatHistoryItemPanel(
     private fun createMetadataPanel(): JPanel {
         return panel {
             row {
-                label(formatDate())
+                val dateText = formatDate()
+                val projectName = ProjectPathUtils.extractProjectNameTruncated(conversation.projectPath)
+                val metadataText = if (projectName != null) {
+                    "$dateText • [$projectName]"
+                } else {
+                    dateText
+                }
+                
+                label(metadataText)
                     .applyToComponent {
                         font = JBFont.regular().deriveFont(11f)
                         foreground = getMetadataColor()

@@ -21,6 +21,7 @@ import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
+import ee.carlrobert.codegpt.util.ProjectPathUtils
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
@@ -41,6 +42,7 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
     private val searchField = SearchTextField()
     private var allConversations = mutableListOf<Conversation>()
     private var sortOption = SortOption.UPDATED_DATE_DESC
+    private var projectFilter: ProjectFilterState = ProjectFilterState.AllProjects
     private val statusLabel = JBLabel().apply {
         font = JBFont.small()
         foreground = UIUtil.getContextHelpForeground()
@@ -49,6 +51,13 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
     private var lastSearchText = ""
     private var lastFilteredConversations: List<Conversation>? = null
     private var isDataLoaded = false
+    private var projectInfoCache: Map<String, ProjectInfo> = emptyMap()
+
+    data class ProjectInfo(
+        val path: String,
+        val name: String,
+        val conversationCount: Int
+    )
 
     enum class SortOption(val propertyKey: String) {
         UPDATED_DATE_DESC("conversation.sortOption.recentlyUpdated"),
@@ -60,6 +69,32 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
 
         val displayName: String
             get() = CodeGPTBundle.get(propertyKey)
+    }
+
+    sealed class ProjectFilterState {
+        object AllProjects : ProjectFilterState()
+        object CurrentProjectOnly : ProjectFilterState()
+        data class SelectedProjects(val projectPaths: Set<String>) : ProjectFilterState()
+
+        fun matches(conversationProjectPath: String?, currentProjectPath: String?): Boolean {
+            return when (this) {
+                is AllProjects -> true
+                is CurrentProjectOnly -> conversationProjectPath == currentProjectPath
+                is SelectedProjects -> projectPaths.contains(conversationProjectPath)
+            }
+        }
+
+        fun getDisplayText(): String {
+            return when (this) {
+                is AllProjects -> "All Projects"
+                is CurrentProjectOnly -> "Current Project Only"
+                is SelectedProjects -> when (projectPaths.size) {
+                    0 -> "No Projects"
+                    1 -> "1 Project Selected"
+                    else -> "${projectPaths.size} Projects Selected"
+                }
+            }
+        }
     }
 
     init {
@@ -154,14 +189,22 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
     }
 
     private fun filterConversations(searchText: String): List<Conversation> {
+        val projectFiltered = allConversations.filter { conversation ->
+            projectFilter.matches(conversation.projectPath, project.basePath)
+        }
+
         return if (searchText.isBlank()) {
             lastSearchText = ""
             lastFilteredConversations = null
-            allConversations
+            projectFiltered
         } else if (searchText == lastSearchText && lastFilteredConversations != null) {
-            lastFilteredConversations!!
+            lastFilteredConversations!!.filter { conversation ->
+                projectFiltered.contains(conversation)
+            }
         } else {
-            val startList = getOptimizedSearchStartList(searchText)
+            val startList = getOptimizedSearchStartList(searchText).filter { conversation ->
+                projectFiltered.contains(conversation)
+            }
             val filtered = startList.filter { conversation ->
                 matchesSearchText(conversation, searchText)
             }
@@ -247,6 +290,105 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
         return sortAction
     }
 
+    private fun createProjectFilterAction(): AnAction {
+        return object : AnAction(
+            projectFilter.getDisplayText(),
+            "Filter conversations by project",
+            AllIcons.General.Filter
+        ) {
+            override fun actionPerformed(e: AnActionEvent) {
+                val actionGroup = DefaultActionGroup().apply {
+                    add(object : BaseFilterAction("All Projects", null, AllIcons.General.Filter) {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            projectFilter = ProjectFilterState.AllProjects
+                            sortAndFilterConversations()
+                        }
+
+                        override fun isSelected(): Boolean {
+                            return projectFilter is ProjectFilterState.AllProjects
+                        }
+                    })
+
+                    add(object : BaseFilterAction("Current Project Only", null, null) {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            projectFilter = ProjectFilterState.CurrentProjectOnly
+                            sortAndFilterConversations()
+                        }
+
+                        override fun isSelected(): Boolean {
+                            return projectFilter is ProjectFilterState.CurrentProjectOnly
+                        }
+                    })
+
+                    addSeparator("Available Projects")
+
+                    val projects = getProjectsWithConversations()
+                    if (projects.isNotEmpty()) {
+                        projects.forEach { projectInfo ->
+                            val displayName =
+                                "${projectInfo.name} (${projectInfo.conversationCount})"
+                            val isCurrentProject = projectInfo.path == project.basePath
+                            val icon = if (isCurrentProject) AllIcons.Nodes.HomeFolder else null
+
+                            add(object : BaseFilterAction(displayName, projectInfo.path, icon) {
+                                override fun actionPerformed(e: AnActionEvent) {
+                                    projectFilter =
+                                        ProjectFilterState.SelectedProjects(setOf(projectInfo.path))
+                                    sortAndFilterConversations()
+                                }
+
+                                override fun isSelected(): Boolean {
+                                    return when (val filter = projectFilter) {
+                                        is ProjectFilterState.SelectedProjects -> filter.projectPaths.contains(
+                                            projectInfo.path
+                                        )
+                                        is ProjectFilterState.CurrentProjectOnly -> isCurrentProject
+                                        else -> false
+                                    }
+                                }
+                            })
+                        }
+                    } else {
+                        add(object : AnAction("No projects with conversations", null, null) {
+                            override fun actionPerformed(e: AnActionEvent) {}
+                            override fun update(e: AnActionEvent) {
+                                e.presentation.isEnabled = false
+                            }
+
+                            override fun getActionUpdateThread(): ActionUpdateThread {
+                                return ActionUpdateThread.BGT
+                            }
+                        })
+                    }
+                }
+
+                val popup = JBPopupFactory.getInstance()
+                    .createActionGroupPopup(
+                        "Filter by Project",
+                        actionGroup,
+                        e.dataContext,
+                        JBPopupFactory.ActionSelectionAid.SPEEDSEARCH,
+                        true
+                    )
+
+                val component = e.inputEvent?.component
+                if (component != null) {
+                    popup.showUnderneathOf(component)
+                } else {
+                    popup.showInBestPositionFor(e.dataContext)
+                }
+            }
+
+            override fun update(e: AnActionEvent) {
+                e.presentation.text = projectFilter.getDisplayText()
+            }
+
+            override fun getActionUpdateThread(): ActionUpdateThread {
+                return ActionUpdateThread.BGT
+            }
+        }
+    }
+
     private fun setupListeners() {
         var searchTimer: Timer? = null
         searchField.addDocumentListener(object : DocumentAdapter() {
@@ -282,6 +424,7 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
                 }
             })
             add(createSortAction())
+            add(createProjectFilterAction())
             addSeparator()
             add(DeleteAllConversationsAction { refresh() })
         }
@@ -306,6 +449,7 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
                 .toMutableList()
             SwingUtilities.invokeLater {
                 allConversations = conversations
+                projectInfoCache = discoverProjects(conversations)
                 lastSearchText = ""
                 lastFilteredConversations = null
                 isDataLoaded = true
@@ -345,11 +489,44 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
 
     private fun matchesSearchText(conversation: Conversation, searchText: String): Boolean {
         val searchLower = searchText.lowercase()
-        return conversation.title?.lowercase()?.contains(searchLower) == true ||
-                conversation.messages.take(MAX_MESSAGES_TO_SEARCH).any { message ->
-                    message.prompt?.lowercase()?.contains(searchLower) == true ||
-                            message.response?.lowercase()?.contains(searchLower) == true
+
+        if (conversation.title?.lowercase()?.contains(searchLower) == true) {
+            return true
+        }
+
+        conversation.projectPath?.let { path ->
+            val projectName = ProjectPathUtils.extractProjectName(path)?.lowercase()
+            if (projectName?.contains(searchLower) == true) {
+                return true
+            }
+        }
+
+        return conversation.messages.take(MAX_MESSAGES_TO_SEARCH).any { message ->
+            message.prompt?.lowercase()?.contains(searchLower) == true ||
+                    message.response?.lowercase()?.contains(searchLower) == true
+        }
+    }
+
+
+    private fun discoverProjects(conversations: List<Conversation>): Map<String, ProjectInfo> {
+        return conversations
+            .mapNotNull { conversation ->
+                conversation.projectPath?.let { path ->
+                    path to (ProjectPathUtils.extractProjectName(path) ?: path)
                 }
+            }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (path, names) ->
+                ProjectInfo(
+                    path = path,
+                    name = names.firstOrNull() ?: path,
+                    conversationCount = conversations.count { it.projectPath == path }
+                )
+            }
+    }
+
+    private fun getProjectsWithConversations(): List<ProjectInfo> {
+        return projectInfoCache.values.sortedByDescending { it.conversationCount }
     }
 
     private fun updateList(conversations: List<Conversation>) {
@@ -366,6 +543,20 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
             append(getConversationCountMessage(conversations, searchText))
             append(" • ")
             append(CodeGPTBundle.get("conversation.status.sortedBy", sortOption.displayName))
+
+            when (projectFilter) {
+                is ProjectFilterState.CurrentProjectOnly -> {
+                    append(" • ")
+                    append("Current project only")
+                }
+
+                is ProjectFilterState.SelectedProjects -> {
+                    append(" • ")
+                    append(projectFilter.getDisplayText())
+                }
+
+                else -> {}
+            }
         }
     }
 

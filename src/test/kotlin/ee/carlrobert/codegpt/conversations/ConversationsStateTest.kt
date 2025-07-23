@@ -11,7 +11,7 @@ import org.assertj.core.api.Assertions.assertThat
 class ConversationsStateTest : BasePlatformTestCase() {
 
   fun testStartNewDefaultConversation() {
-    val conversation = ConversationService.getInstance().startConversation()
+    val conversation = ConversationService.getInstance().startConversation(project)
 
     assertThat(conversation).isEqualTo(ConversationsState.getCurrentConversation())
   }
@@ -35,8 +35,8 @@ class ConversationsStateTest : BasePlatformTestCase() {
 
   fun testGetPreviousConversation() {
     val service = ConversationService.getInstance()
-    val firstConversation = service.startConversation()
-    service.startConversation()
+    val firstConversation = service.startConversation(project)
+    service.startConversation(project)
 
     val previousConversation = service.previousConversation
 
@@ -46,8 +46,8 @@ class ConversationsStateTest : BasePlatformTestCase() {
 
   fun testGetNextConversation() {
     val service = ConversationService.getInstance()
-    val firstConversation = service.startConversation()
-    val secondConversation = service.startConversation()
+    val firstConversation = service.startConversation(project)
+    val secondConversation = service.startConversation(project)
     ConversationsState.getInstance().setCurrentConversation(firstConversation)
 
     val nextConversation = service.nextConversation
@@ -58,8 +58,8 @@ class ConversationsStateTest : BasePlatformTestCase() {
 
   fun testDeleteSelectedConversation() {
     val service = ConversationService.getInstance()
-    val firstConversation = service.startConversation()
-    service.startConversation()
+    val firstConversation = service.startConversation(project)
+    service.startConversation(project)
 
     service.deleteSelectedConversation()
 
@@ -72,8 +72,8 @@ class ConversationsStateTest : BasePlatformTestCase() {
 
   fun testClearAllConversations() {
     val service = ConversationService.getInstance()
-    service.startConversation()
-    service.startConversation()
+    service.startConversation(project)
+    service.startConversation(project)
 
     service.clearAll()
 

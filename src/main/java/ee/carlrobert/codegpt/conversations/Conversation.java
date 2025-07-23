@@ -16,6 +16,7 @@ public class Conversation {
   private LocalDateTime createdOn;
   private LocalDateTime updatedOn;
   private boolean discardTokenLimit;
+  private String projectPath;
 
   public Conversation() {
     this.messages = new ArrayList<>();
@@ -81,5 +82,13 @@ public class Conversation {
     messages = new ArrayList<>(messages.stream()
         .filter(message -> !message.getId().equals(messageId))
         .toList());
+  }
+
+  public String getProjectPath() {
+    return projectPath;
+  }
+
+  public void setProjectPath(String projectPath) {
+    this.projectPath = projectPath;
   }
 }

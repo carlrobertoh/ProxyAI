@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.conversations;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import java.time.LocalDateTime;
@@ -74,8 +75,13 @@ public final class ConversationService {
     conversationState.setCurrentConversation(conversation);
   }
 
-  public Conversation startConversation() {
+  public Conversation startConversation(Project project) {
+    return startConversation(project != null ? project.getBasePath() : null);
+  }
+
+  private Conversation startConversation(String projectPath) {
     var conversation = createConversation();
+    conversation.setProjectPath(projectPath);
     conversationState.setCurrentConversation(conversation);
     addConversation(conversation);
     return conversation;

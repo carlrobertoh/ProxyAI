@@ -45,11 +45,13 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
   private final ToolWindowFooterNotification imageFileAttachmentNotification;
   private final ActionLink upgradePlanLink;
   private final ChatToolWindowTabbedPane tabbedPane;
+  private final Project project;
 
   public ChatToolWindowPanel(
       @NotNull Project project,
       @NotNull Disposable parentDisposable) {
     super(true);
+    this.project = project;
     imageFileAttachmentNotification = new ToolWindowFooterNotification(() ->
         project.putUserData(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH, ""));
     upgradePlanLink = new ActionLink("Upgrade your plan", event -> {
@@ -72,7 +74,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
   private Conversation getConversation() {
     var conversation = ConversationsState.getCurrentConversation();
     if (conversation == null) {
-      return ConversationService.getInstance().startConversation();
+      return ConversationService.getInstance().startConversation(project);
     }
     return conversation;
   }
@@ -118,7 +120,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     Runnable onAddNewTab = () -> {
       tabbedPane.addNewTab(new ChatToolWindowTabPanel(
           project,
-          ConversationService.getInstance().startConversation()));
+          ConversationService.getInstance().startConversation(project)));
       repaint();
       revalidate();
     };

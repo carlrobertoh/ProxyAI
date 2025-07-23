@@ -31,7 +31,7 @@ class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
 
   fun testResetCurrentlyActiveTabPanel() {
     val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
-    val conversation = ConversationService.getInstance().startConversation()
+    val conversation = ConversationService.getInstance().startConversation(project)
     conversation.addMessage(Message("TEST_PROMPT", "TEST_RESPONSE"))
     tabbedPane.addNewTab(ChatToolWindowTabPanel(project, conversation))
 
@@ -44,7 +44,7 @@ class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
   private fun createNewTabPanel(): ChatToolWindowTabPanel {
     return ChatToolWindowTabPanel(
       project,
-      ConversationService.getInstance().startConversation()
+      ConversationService.getInstance().startConversation(project)
     )
   }
 }
