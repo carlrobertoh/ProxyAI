@@ -8,12 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Kimi K2 model (ProxyAI)
+- Qwen3 Code model for Free and Pro tiers
 - Native Mistral client support
 - New Chat History UI/UX
 - Server and build logs for llama.cpp
 - Support for model per feature
 - Support for PSI analysis (Code Analyze) of added files
+- Support for cancelling auto apply requests
 
 ### Updated
 
