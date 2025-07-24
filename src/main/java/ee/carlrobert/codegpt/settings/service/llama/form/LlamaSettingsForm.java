@@ -400,9 +400,8 @@ public class LlamaSettingsForm extends JPanel {
 
   public void updateServerStatusWithPhase(String phase) {
     SwingUtilities.invokeLater(() -> {
-      serverStatusLabel.setText(CodeGPTBundle.get("llama.ui.status.prefix").replace("{0}", phase));
+      serverStatusLabel.setText(phase);
       serverStatusLabel.setIcon(null);
-      serverStatusLabel.setForeground(JBColor.BLUE);
       serverStatusSpinner.setVisible(true);
     });
   }
