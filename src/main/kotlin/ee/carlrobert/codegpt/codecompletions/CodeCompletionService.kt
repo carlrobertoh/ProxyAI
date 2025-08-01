@@ -39,7 +39,10 @@ class CodeCompletionService(private val project: Project) {
         when (selectedService) {
             PROXYAI -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled
-            CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
+            CUSTOM_OPENAI -> service<CustomServicesSettings>()
+                .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
+                .codeCompletionSettings
+                .codeCompletionsEnabled
             MISTRAL -> MistralSettings.getCurrentState().isCodeCompletionsEnabled
             LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
@@ -55,16 +58,21 @@ class CodeCompletionService(private val project: Project) {
             OPENAI -> CompletionClientProvider.getOpenAIClient()
                 .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
 
-            CUSTOM_OPENAI -> createFactory(
-                CompletionClientProvider.getDefaultClientBuilder().build()
-            ).newEventSource(
-                buildCustomRequest(infillRequest),
-                if (service<CustomServicesSettings>().state.active.codeCompletionSettings.parseResponseAsChatCompletions) {
-                    OpenAIChatCompletionEventSourceListener(eventListener)
-                } else {
-                    OpenAITextCompletionEventSourceListener(eventListener)
-                }
-            )
+            CUSTOM_OPENAI -> {
+                val settings =  service<CustomServicesSettings>()
+                    .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
+                    .codeCompletionSettings
+                createFactory(
+                    CompletionClientProvider.getDefaultClientBuilder().build()
+                ).newEventSource(
+                    buildCustomRequest(infillRequest),
+                    if (settings.parseResponseAsChatCompletions) {
+                        OpenAIChatCompletionEventSourceListener(eventListener)
+                    } else {
+                        OpenAITextCompletionEventSourceListener(eventListener)
+                    }
+                )
+            }
 
             MISTRAL -> CompletionClientProvider.getMistralClient()
                 .getCodeCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)

@@ -21,11 +21,9 @@ class CustomOpenAIRequest(val request: Request) : CompletionRequest
 class CustomOpenAIRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): CustomOpenAIRequest {
-        val activeService = service<CustomServicesSettings>()
-            .state
-            .active
+        val service = service<CustomServicesSettings>().customServiceStateForFeatureType(FeatureType.CHAT)
         val request = buildCustomOpenAIChatCompletionRequest(
-            activeService.chatCompletionSettings,
+            service.chatCompletionSettings,
             OpenAIRequestFactory.buildOpenAIMessages(
                 null,
                 params,
@@ -34,7 +32,7 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
                 params.psiStructure
             ),
             true,
-            getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
+            getCredential(CredentialKey.CustomServiceApiKey(service.name.orEmpty()))
         )
         return CustomOpenAIRequest(request)
     }
@@ -46,18 +44,16 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
         stream: Boolean,
         featureType: FeatureType
     ): CompletionRequest {
-        val activeService = service<CustomServicesSettings>()
-            .state
-            .active
+        val service = service<CustomServicesSettings>().customServiceStateForFeatureType(featureType)
 
         val request = buildCustomOpenAIChatCompletionRequest(
-            activeService.chatCompletionSettings,
+            service.chatCompletionSettings,
             listOf(
                 OpenAIChatCompletionStandardMessage("system", systemPrompt),
                 OpenAIChatCompletionStandardMessage("user", userPrompt)
             ),
             stream,
-            getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
+            getCredential(CredentialKey.CustomServiceApiKey(service.name.orEmpty()))
         )
         return CustomOpenAIRequest(request)
     }
