@@ -132,7 +132,7 @@ data class AutoApplyParameters(
 data class EditCodeCompletionParameters(
     val prompt: String,
     val selectedText: String,
-    val chatMode: ChatMode = ChatMode.ASK,
+    val chatMode: ChatMode = ChatMode.EDIT,
     val featureType: FeatureType = FeatureType.EDIT_CODE
 ) : CompletionParameters
 
