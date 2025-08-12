@@ -6,6 +6,7 @@ import com.intellij.openapi.options.ex.Settings
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.FormBuilder
+import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceForm
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceConfigurable
@@ -18,7 +19,7 @@ class ServiceConfigurableComponent {
     var form: CodeGPTServiceForm = CodeGPTServiceForm()
 
     fun getPanel(): JPanel = FormBuilder.createFormBuilder()
-        .addComponent(JBLabel("All available providers that can be used with ProxyAI:"))
+        .addComponent(JBLabel(CodeGPTBundle.get("settingsConfigurable.providers.description")))
         .addVerticalGap(8)
         .addComponent(FormBuilder.createFormBuilder()
             .setFormLeftIndent(20).apply {
