@@ -162,17 +162,34 @@ class CustomServiceCodeCompletionForm(
     }
 
     private fun testConnection() {
-        CompletionRequestService.getInstance().getCustomOpenAICompletionAsync(
-            CodeCompletionRequestFactory.buildCustomRequest(
-                InfillRequest.Builder("Hello", "!", 0).build(),
-                urlField.text,
-                tabbedPane.headers,
-                tabbedPane.body,
-                promptTemplateComboBox.selectedItem as InfillPromptTemplate,
-                getApiKey.invoke()
-            ),
-            TestConnectionEventListener()
-        )
+        val selectedTemplate = promptTemplateComboBox.selectedItem as InfillPromptTemplate
+        val testRequest = InfillRequest.Builder("Hello", "!", 0).build()
+        
+        if (selectedTemplate == InfillPromptTemplate.CHAT_COMPLETION) {
+            // Use chat completion endpoint for testing
+            CompletionRequestService.getInstance().getCustomOpenAIChatCompletionAsync(
+                CodeCompletionRequestFactory.buildChatBasedFIMHttpRequest(
+                    testRequest,
+                    urlField.text,
+                    tabbedPane.headers,
+                    getApiKey.invoke()
+                ),
+                TestConnectionEventListener()
+            )
+        } else {
+            // Use traditional completion endpoint for testing
+            CompletionRequestService.getInstance().getCustomOpenAICompletionAsync(
+                CodeCompletionRequestFactory.buildCustomRequest(
+                    testRequest,
+                    urlField.text,
+                    tabbedPane.headers,
+                    tabbedPane.body,
+                    selectedTemplate,
+                    getApiKey.invoke()
+                ),
+                TestConnectionEventListener()
+            )
+        }
     }
 
     internal inner class TestConnectionEventListener : CompletionEventListener<String?> {

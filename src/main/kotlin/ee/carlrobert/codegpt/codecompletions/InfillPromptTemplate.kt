@@ -155,6 +155,13 @@ enum class InfillPromptTemplate(val label: String, val stopTokens: List<String>?
                 "[SUFFIX]${infillDetails.suffix}[PREFIX]${infillDetails.prefix}[MIDDLE]"
             return createDefaultMultiFilePrompt(infillDetails, infillPrompt)
         }
+    },
+    CHAT_COMPLETION("Chat-based FIM", listOf("\n\n", "```")) {
+        override fun buildPrompt(infillDetails: InfillRequest): String {
+            // This template is used for chat-based FIM completion
+            // The actual prompt construction is handled in the request factory
+            return "CHAT_FIM_PLACEHOLDER"
+        }
     };
 
     abstract fun buildPrompt(infillDetails: InfillRequest): String

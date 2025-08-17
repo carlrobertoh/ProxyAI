@@ -16,7 +16,9 @@ import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaParameters
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
 import ee.carlrobert.llm.client.openai.completion.request.OpenAITextCompletionRequest
+import ee.carlrobert.llm.client.openai.completion.ChatMessage
 import ee.carlrobert.service.GrpcCodeCompletionRequest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -53,6 +55,83 @@ object CodeCompletionRequestFactory {
     }
 
     @JvmStatic
+    fun buildChatBasedFIMRequest(details: InfillRequest): OpenAIChatCompletionRequest {
+        val systemMessage = ChatMessage(
+            "system",
+            "You are an expert coding assistant. " +
+                    "Given the beginning (prefix) and end (suffix) of a code file, generate the missing code that fits perfectly between them. " +
+                    "Only output the missing code, with no explanations or extra text."
+        )
+        
+        val userMessage = ChatMessage(
+            "user",
+            "Fill in the missing code between the following prefix and suffix:\n\n" +
+                    "PREFIX:\n" +
+                    "```\n" +
+                    "${details.prefix}\n" +
+                    "```\n\n" +
+                    "SUFFIX:\n" +
+                    "```\n" +
+                    "${details.suffix}\n" +
+                    "```\n\n" +
+                    "Please provide only the code that should go between the prefix and suffix."
+        )
+        
+        return OpenAIChatCompletionRequest.Builder(listOf(systemMessage, userMessage))
+            .setModel(
+                ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
+            )
+            .setStream(true)
+            .setMaxTokens(MAX_TOKENS)
+            .setTemperature(0.0)
+            .build()
+    }
+
+    @JvmStatic
+    fun buildChatBasedFIMHttpRequest(
+        details: InfillRequest,
+        url: String,
+        headers: Map<String, String>,
+        credential: String?
+    ): Request {
+        val chatRequest = buildChatBasedFIMRequest(details)
+        val requestBuilder = Request.Builder().url(url)
+        
+        for (entry in headers.entries) {
+            var value = entry.value
+            if (credential != null && value.contains("\$CUSTOM_SERVICE_API_KEY")) {
+                value = value.replace("\$CUSTOM_SERVICE_API_KEY", credential)
+            }
+            requestBuilder.addHeader(entry.key, value)
+        }
+        
+        // Convert OpenAIChatCompletionRequest to JSON
+        val requestBody = mapOf(
+            "model" to chatRequest.model,
+            "messages" to chatRequest.messages.map { message ->
+                mapOf(
+                    "role" to message.role,
+                    "content" to message.content
+                )
+            },
+            "stream" to chatRequest.stream,
+            "max_tokens" to chatRequest.maxTokens,
+            "temperature" to chatRequest.temperature
+        )
+        
+        try {
+            val jsonBody = ObjectMapper()
+                .writerWithDefaultPrettyPrinter()
+                .writeValueAsString(requestBody)
+                .toByteArray(StandardCharsets.UTF_8)
+                .toRequestBody("application/json".toMediaType())
+            return requestBuilder.post(jsonBody).build()
+        } catch (e: JsonProcessingException) {
+            throw RuntimeException(e)
+        }
+    }
+
+    @JvmStatic
     fun buildCustomRequest(details: InfillRequest): Request {
         val activeService = service<CustomServicesSettings>().state.active
         val settings = activeService.codeCompletionSettings
@@ -77,6 +156,12 @@ object CodeCompletionRequestFactory {
         infillTemplate: InfillPromptTemplate,
         credential: String?
     ): Request {
+        // For chat-based FIM, we should not use this method
+        // The routing logic in CodeCompletionService will handle it
+        if (infillTemplate == InfillPromptTemplate.CHAT_COMPLETION) {
+            throw IllegalArgumentException("Chat-based FIM should use buildChatBasedFIMRequest instead")
+        }
+        
         val requestBuilder = Request.Builder().url(url)
         for (entry in headers.entries) {
             var value = entry.value
