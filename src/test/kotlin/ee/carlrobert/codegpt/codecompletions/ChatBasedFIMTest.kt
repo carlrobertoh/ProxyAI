@@ -2,7 +2,7 @@ package ee.carlrobert.codegpt.codecompletions
 
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
-import ee.carlrobert.llm.client.openai.completion.ChatMessage
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 
@@ -76,11 +76,18 @@ class ChatBasedFIMTest {
     fun `test chat based FIM HTTP request creation`() {
         val infillRequest = InfillRequest.Builder("test prefix", "test suffix", 0).build()
         val headers = mapOf("Authorization" to "Bearer \$CUSTOM_SERVICE_API_KEY")
+        val body = mapOf<String, Any>(
+            "model" to "gpt-4.1",
+            "temperature" to 0.2,
+            "max_tokens" to 24,
+            "stream" to false
+        )
         
         val httpRequest = CodeCompletionRequestFactory.buildChatBasedFIMHttpRequest(
             infillRequest,
             "https://api.openai.com/v1/chat/completions",
             headers,
+            body,
             "test-api-key"
         )
         

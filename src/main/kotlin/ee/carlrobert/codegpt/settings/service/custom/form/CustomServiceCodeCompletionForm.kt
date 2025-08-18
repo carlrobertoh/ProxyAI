@@ -172,6 +172,7 @@ class CustomServiceCodeCompletionForm(
                     testRequest,
                     urlField.text,
                     tabbedPane.headers,
+                    tabbedPane.body,
                     getApiKey.invoke()
                 ),
                 TestConnectionEventListener()

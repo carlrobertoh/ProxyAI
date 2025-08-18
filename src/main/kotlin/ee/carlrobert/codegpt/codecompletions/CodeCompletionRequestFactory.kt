@@ -17,8 +17,8 @@ import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaParameters
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 import ee.carlrobert.llm.client.openai.completion.request.OpenAITextCompletionRequest
-import ee.carlrobert.llm.client.openai.completion.ChatMessage
 import ee.carlrobert.service.GrpcCodeCompletionRequest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -56,25 +56,15 @@ object CodeCompletionRequestFactory {
 
     @JvmStatic
     fun buildChatBasedFIMRequest(details: InfillRequest): OpenAIChatCompletionRequest {
-        val systemMessage = ChatMessage(
+        val systemMessage = OpenAIChatCompletionStandardMessage(
             "system",
-            "You are an expert coding assistant. " +
-                    "Given the beginning (prefix) and end (suffix) of a code file, generate the missing code that fits perfectly between them. " +
-                    "Only output the missing code, with no explanations or extra text."
+            "You are a code completion assistant. Complete the code between the given prefix and suffix. " +
+                    "Return only the missing code that should be inserted, without any formatting, explanations, or markdown."
         )
         
-        val userMessage = ChatMessage(
+        val userMessage = OpenAIChatCompletionStandardMessage(
             "user",
-            "Fill in the missing code between the following prefix and suffix:\n\n" +
-                    "PREFIX:\n" +
-                    "```\n" +
-                    "${details.prefix}\n" +
-                    "```\n\n" +
-                    "SUFFIX:\n" +
-                    "```\n" +
-                    "${details.suffix}\n" +
-                    "```\n\n" +
-                    "Please provide only the code that should go between the prefix and suffix."
+            "<PREFIX>\n${details.prefix}\n</PREFIX>\n\n<SUFFIX>\n${details.suffix}\n</SUFFIX>\n\nComplete:"
         )
         
         return OpenAIChatCompletionRequest.Builder(listOf(systemMessage, userMessage))
@@ -92,9 +82,9 @@ object CodeCompletionRequestFactory {
         details: InfillRequest,
         url: String,
         headers: Map<String, String>,
+        body: Map<String, Any>,
         credential: String?
     ): Request {
-        val chatRequest = buildChatBasedFIMRequest(details)
         val requestBuilder = Request.Builder().url(url)
         
         for (entry in headers.entries) {
@@ -105,24 +95,37 @@ object CodeCompletionRequestFactory {
             requestBuilder.addHeader(entry.key, value)
         }
         
-        // Convert OpenAIChatCompletionRequest to JSON
-        val requestBody = mapOf(
-            "model" to chatRequest.model,
-            "messages" to chatRequest.messages.map { message ->
-                mapOf(
-                    "role" to message.role,
-                    "content" to message.content
-                )
-            },
-            "stream" to chatRequest.stream,
-            "max_tokens" to chatRequest.maxTokens,
-            "temperature" to chatRequest.temperature
+        // Create chat completion messages using the improved prompt template
+        val systemMessage = mapOf<String, String>(
+            "role" to "system",
+            "content" to "You are a code completion assistant. Complete the code between the given prefix and suffix. " +
+                    "Return only the missing code that should be inserted, without any formatting, explanations, or markdown."
         )
         
+        val userMessage = mapOf<String, String>(
+            "role" to "user",
+            "content" to "<PREFIX>\n${details.prefix}\n</PREFIX>\n\n<SUFFIX>\n${details.suffix}\n</SUFFIX>\n\nComplete:"
+        )
+        
+        // Transform the custom body configuration, excluding completion-specific parameters
+        val transformedBody = body.entries.mapNotNull { (key, value) ->
+            when (key.lowercase()) {
+                "messages" -> key to listOf(systemMessage, userMessage)
+                // Exclude completion-specific parameters that don't apply to chat completions
+                "prompt", "suffix" -> null
+                else -> key to transformValue(value, InfillPromptTemplate.CHAT_COMPLETION, details)
+            }
+        }.toMap().toMutableMap()
+        
+        // Ensure we have messages for chat completion
+        if (!transformedBody.containsKey("messages")) {
+            transformedBody["messages"] = listOf(systemMessage, userMessage)
+        }
+
         try {
             val jsonBody = ObjectMapper()
                 .writerWithDefaultPrettyPrinter()
-                .writeValueAsString(requestBody)
+                .writeValueAsString(transformedBody)
                 .toByteArray(StandardCharsets.UTF_8)
                 .toRequestBody("application/json".toMediaType())
             return requestBuilder.post(jsonBody).build()
