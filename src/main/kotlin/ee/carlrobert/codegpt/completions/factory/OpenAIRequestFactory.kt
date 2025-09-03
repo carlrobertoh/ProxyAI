@@ -112,7 +112,9 @@ class OpenAIRequestFactory : CompletionRequestFactory {
                 O_3.code,
                 O_3_MINI.code,
                 O_1_MINI.code,
-                O_1_PREVIEW.code
+                O_1_PREVIEW.code,
+                GPT_5_MINI.code,
+                GPT_5.code,
             ).contains(model)
 
         fun buildBasicO1Request(

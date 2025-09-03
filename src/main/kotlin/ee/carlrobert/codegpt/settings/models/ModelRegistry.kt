@@ -118,15 +118,19 @@ class ModelRegistry {
             ),
             FeatureType.COMMIT_MESSAGE to ModelSelection(
                 ServiceType.PROXYAI,
-                GPT_4_1_MINI,
-                "GPT-4.1 Mini"
+                GPT_5_MINI,
+                "GPT-5 Mini"
             ),
             FeatureType.EDIT_CODE to ModelSelection(
                 ServiceType.PROXYAI,
-                GPT_4_1_MINI,
-                "GPT-4.1 Mini"
+                GPT_5_MINI,
+                "GPT-5 Mini"
             ),
-            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
+            FeatureType.LOOKUP to ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_5_MINI,
+                "GPT-5 Mini"
+            ),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
                 QWEN_2_5_32B_CODE,
@@ -136,9 +140,21 @@ class ModelRegistry {
         ),
         PricingPlan.FREE to mapOf(
             FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
-            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
-            FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
+            FeatureType.AUTO_APPLY to ModelSelection(
+                ServiceType.PROXYAI,
+                QWEN3_CODER,
+                "Qwen3 Coder"
+            ),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(
+                ServiceType.PROXYAI,
+                QWEN3_CODER,
+                "Qwen3 Coder"
+            ),
+            FeatureType.EDIT_CODE to ModelSelection(
+                ServiceType.PROXYAI,
+                QWEN3_CODER,
+                "Qwen3 Coder"
+            ),
             FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
@@ -153,14 +169,14 @@ class ModelRegistry {
                 CLAUDE_4_SONNET_THINKING,
                 "Claude 4 Sonnet Thinking"
             ),
-            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, GPT_4_1, "GPT-4.1"),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_4_1, "GPT-4.1"),
+            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
             FeatureType.EDIT_CODE to ModelSelection(
                 ServiceType.PROXYAI,
                 CLAUDE_4_SONNET,
                 "Claude 4 Sonnet"
             ),
-            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_4_1, "GPT-4.1"),
+            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
                 QWEN_2_5_32B_CODE,
@@ -183,11 +199,11 @@ class ModelRegistry {
         ),
         FeatureType.COMMIT_MESSAGE to ModelSelection(
             ServiceType.PROXYAI,
-            GPT_4_1_MINI,
-            "GPT-4.1 Mini"
+            GPT_5_MINI,
+            "GPT-5 Mini"
         ),
-        FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
-        FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_4_1_MINI, "GPT-4.1 Mini"),
+        FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
+        FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
         FeatureType.CODE_COMPLETION to ModelSelection(
             ServiceType.PROXYAI,
             QWEN_2_5_32B_CODE,
@@ -296,24 +312,24 @@ class ModelRegistry {
         return listOf(
             ModelSelection(
                 ServiceType.PROXYAI,
+                GPT_5,
+                "GPT-5",
+                Icons.OpenAI,
+                PricingPlan.INDIVIDUAL
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_5_MINI,
+                "GPT-5 Mini",
+                Icons.OpenAI,
+                PricingPlan.ANONYMOUS
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
                 O4_MINI,
                 "o4-mini",
                 Icons.OpenAI,
                 PricingPlan.INDIVIDUAL
-            ),
-            ModelSelection(
-                ServiceType.PROXYAI,
-                GPT_4_1,
-                "GPT-4.1",
-                Icons.OpenAI,
-                PricingPlan.INDIVIDUAL
-            ),
-            ModelSelection(
-                ServiceType.PROXYAI,
-                GPT_4_1_MINI,
-                "GPT-4.1 Mini",
-                Icons.OpenAI,
-                PricingPlan.ANONYMOUS
             ),
             ModelSelection(
                 ServiceType.PROXYAI,
@@ -403,8 +419,23 @@ class ModelRegistry {
 
     private fun getOpenAIChatModels(): List<ModelSelection> {
         val openAIModels = listOf(
-            O4_MINI, O3_PRO, O3, O3_MINI, GPT_4_1, GPT_4_1_MINI, GPT_4_1_NANO, O1_PREVIEW, O1_MINI,
-            GPT_4O, GPT_4O_MINI, GPT_4_0125_PREVIEW, GPT_3_5_TURBO_INSTRUCT, GPT_4_VISION_PREVIEW
+            GPT_5,
+            GPT_5_MINI,
+            O4_MINI,
+            O3_PRO,
+            O3,
+            O3_MINI,
+            GPT_4_1,
+            GPT_4_1_MINI,
+            GPT_4_1_NANO,
+            O1_PREVIEW,
+            O1_MINI,
+            GPT_5,
+            GPT_5_MINI,
+            GPT_4O,
+            GPT_4_0125_PREVIEW,
+            GPT_3_5_TURBO_INSTRUCT,
+            GPT_4_VISION_PREVIEW
         )
 
         return openAIModels.mapNotNull { modelId ->
@@ -556,6 +587,8 @@ class ModelRegistry {
         const val GPT_4O_MINI = "gpt-4o-mini"
         const val GPT_4_0125_PREVIEW = "gpt-4-0125-preview"
         const val GPT_4_VISION_PREVIEW = "gpt-4-vision-preview"
+        const val GPT_5 = "gpt-5"
+        const val GPT_5_MINI = "gpt-5-mini"
 
         // Anthropic Models
         const val CLAUDE_OPUS_4_20250514 = "claude-opus-4-20250514"

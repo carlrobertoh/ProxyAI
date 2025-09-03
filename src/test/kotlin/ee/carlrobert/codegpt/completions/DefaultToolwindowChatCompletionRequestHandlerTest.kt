@@ -218,9 +218,9 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                     "messages"
                 )
                 .containsExactly(
-                    "gpt-4.1-mini",
+                    "gpt-5-mini",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
+                        mapOf("role" to "user", "content" to "TEST_SYSTEM_PROMPT\n"),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )

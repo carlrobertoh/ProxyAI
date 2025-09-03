@@ -55,7 +55,7 @@ enum class CustomServiceChatCompletionTemplate(
         getDefaultHeaders("Authorization", "Bearer \$CUSTOM_SERVICE_API_KEY"),
         getDefaultBodyParams(
             mapOf(
-                "model" to "gpt-4.1",
+                "model" to "gpt-5",
                 "max_tokens" to 8192
             )
         )

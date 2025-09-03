@@ -168,6 +168,8 @@ public class ModelComboBoxAction extends ComboBoxAction {
       var openaiGroup = DefaultActionGroup.createPopupGroup(() -> "OpenAI");
       openaiGroup.getTemplatePresentation().setIcon(Icons.OpenAI);
       List.of(
+              OpenAIChatCompletionModel.GPT_5,
+              OpenAIChatCompletionModel.GPT_5_MINI,
               OpenAIChatCompletionModel.O_4_MINI,
               OpenAIChatCompletionModel.O_3,
               OpenAIChatCompletionModel.O_3_MINI,

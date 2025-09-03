@@ -14,7 +14,9 @@ object ModelIcons {
 
     fun getProxyAIModelIcon(modelId: String): Icon? {
         return when (modelId) {
+            ModelRegistry.GPT_5, ModelRegistry.GPT_5_MINI,
             ModelRegistry.O4_MINI, ModelRegistry.GPT_4_1, ModelRegistry.GPT_4_1_MINI -> Icons.OpenAI
+
             ModelRegistry.CLAUDE_4_SONNET_THINKING, ModelRegistry.CLAUDE_4_SONNET -> Icons.Anthropic
             ModelRegistry.GEMINI_PRO_2_5, ModelRegistry.GEMINI_FLASH_2_5 -> Icons.Google
             ModelRegistry.DEEPSEEK_R1, ModelRegistry.DEEPSEEK_V3 -> Icons.DeepSeek

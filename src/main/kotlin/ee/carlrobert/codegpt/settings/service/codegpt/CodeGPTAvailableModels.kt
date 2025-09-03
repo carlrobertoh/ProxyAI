@@ -12,8 +12,8 @@ object CodeGPTAvailableModels {
     @JvmStatic
     val ALL_CHAT_MODELS: List<CodeGPTModel> = listOf(
         CodeGPTModel("o4-mini", "o4-mini", Icons.OpenAI, INDIVIDUAL),
-        CodeGPTModel("GPT-4.1", "gpt-4.1", Icons.OpenAI, INDIVIDUAL),
-        CodeGPTModel("GPT-4.1 Mini", "gpt-4.1-mini", Icons.OpenAI, ANONYMOUS),
+        CodeGPTModel("GPT-5", "gpt-5", Icons.OpenAI, INDIVIDUAL),
+        CodeGPTModel("GPT-5 Mini", "gpt-5-mini", Icons.OpenAI, ANONYMOUS),
         CodeGPTModel("Claude Sonnet 4 (thinking)", "claude-4-sonnet-thinking", Icons.Anthropic, INDIVIDUAL),
         CodeGPTModel("Claude Sonnet 4", "claude-4-sonnet", Icons.Anthropic, INDIVIDUAL),
         CodeGPTModel("Gemini 2.5 Pro", "gemini-pro-2.5", Icons.Google, INDIVIDUAL),

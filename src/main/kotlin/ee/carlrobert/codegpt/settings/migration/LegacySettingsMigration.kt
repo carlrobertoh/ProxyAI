@@ -68,7 +68,7 @@ object LegacySettingsMigration {
                 }
 
                 ServiceType.OPENAI -> {
-                    OpenAISettings.getCurrentState().model ?: ModelRegistry.GPT_4_1
+                    OpenAISettings.getCurrentState().model ?: ModelRegistry.GPT_5
                 }
 
                 ServiceType.ANTHROPIC -> {
