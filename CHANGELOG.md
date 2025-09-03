@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- GPT-5 model support
+- Chat-based FIM code completion for Custom OpenAI providers
+- Chinese language support
+
+### Fixed
+
+- Edit Code prompt regression issue [#1070](https://github.com/carlrobertoh/ProxyAI/issues/1070)
+- Custom OpenAI services not adhering to model selections
+
 ## [3.5.0-233] - 2025-07-24
 
 ### Added
