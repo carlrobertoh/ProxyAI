@@ -15,7 +15,7 @@ kotlin = "2.1.20"
 llm-client = "0.8.46"
 okio = "3.15.0"
 tree-sitter = "0.24.5"
-grpc = "1.71.0"
+grpc = "1.75.0"
 protobuf = "3.25.1"
 protobuf-plugin = "0.9.4"
 
