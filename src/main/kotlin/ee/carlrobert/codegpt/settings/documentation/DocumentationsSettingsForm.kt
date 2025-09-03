@@ -9,6 +9,7 @@ import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.table.JBTable
+import ee.carlrobert.codegpt.CodeGPTBundle
 import java.awt.Dimension
 import javax.swing.table.DefaultTableModel
 
@@ -47,7 +48,7 @@ class DocumentationsSettingsForm {
                     }
             }
             row {
-                text("Documentations can be included in the chat suggestions popup by pressing the @ symbol.")
+                text(CodeGPTBundle.get("settingsConfigurable.documentations.description"))
             }
         }
     }

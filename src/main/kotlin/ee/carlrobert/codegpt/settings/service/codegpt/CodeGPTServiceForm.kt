@@ -25,7 +25,7 @@ class CodeGPTServiceForm {
     }
 
     private val enableNextEditsEnabledCheckBox = JBCheckBox(
-        "Enable next edits",
+        CodeGPTBundle.get("codeCompletionsForm.enableNextEditText"),
         service<CodeGPTServiceSettings>().state.nextEditsEnabled
     )
 
