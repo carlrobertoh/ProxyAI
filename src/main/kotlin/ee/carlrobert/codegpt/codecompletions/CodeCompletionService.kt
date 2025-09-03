@@ -3,11 +3,15 @@ package ee.carlrobert.codegpt.codecompletions
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildChatBasedFIMRequest
+import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildChatBasedFIMHttpRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCustomRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildLlamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOllamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOpenAIRequest
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
+import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -55,23 +59,47 @@ class CodeCompletionService(private val project: Project) {
     ): EventSource {
         return when (val selectedService =
             ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION)) {
-            OPENAI -> CompletionClientProvider.getOpenAIClient()
-                .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
+            OPENAI -> {
+                val openAISettings = OpenAISettings.getCurrentState()
+                // Check if user wants to use chat-based FIM (we'll add this setting later)
+                // For now, default to traditional completion
+                CompletionClientProvider.getOpenAIClient()
+                    .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
+            }
 
             CUSTOM_OPENAI -> {
-                val settings =  service<CustomServicesSettings>()
-                    .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
-                    .codeCompletionSettings
-                createFactory(
-                    CompletionClientProvider.getDefaultClientBuilder().build()
-                ).newEventSource(
-                    buildCustomRequest(infillRequest),
-                    if (settings.parseResponseAsChatCompletions) {
+                val activeService = service<CustomServicesSettings>().state.active
+                val customSettings = activeService.codeCompletionSettings
+                val isChatBasedFIM = customSettings.infillTemplate == InfillPromptTemplate.CHAT_COMPLETION
+                
+                if (isChatBasedFIM) {
+                    // Use chat completion endpoint for chat-based FIM with proper API key substitution
+                    val credential = getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
+                    createFactory(
+                        CompletionClientProvider.getDefaultClientBuilder().build()
+                    ).newEventSource(
+                        buildChatBasedFIMHttpRequest(
+                            infillRequest,
+                            customSettings.url!!,
+                            customSettings.headers,
+                            customSettings.body,
+                            credential
+                        ),
                         OpenAIChatCompletionEventSourceListener(eventListener)
-                    } else {
-                        OpenAITextCompletionEventSourceListener(eventListener)
-                    }
-                )
+                    )
+                } else {
+                    // Use traditional completion endpoint
+                    createFactory(
+                        CompletionClientProvider.getDefaultClientBuilder().build()
+                    ).newEventSource(
+                        buildCustomRequest(infillRequest),
+                        if (customSettings.parseResponseAsChatCompletions) {
+                            OpenAIChatCompletionEventSourceListener(eventListener)
+                        } else {
+                            OpenAITextCompletionEventSourceListener(eventListener)
+                        }
+                    )
+                }
             }
 
             MISTRAL -> CompletionClientProvider.getMistralClient()

@@ -16,6 +16,8 @@ import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaParameters
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 import ee.carlrobert.llm.client.openai.completion.request.OpenAITextCompletionRequest
 import ee.carlrobert.service.GrpcCodeCompletionRequest
 import okhttp3.MediaType.Companion.toMediaType
@@ -53,6 +55,86 @@ object CodeCompletionRequestFactory {
     }
 
     @JvmStatic
+    fun buildChatBasedFIMRequest(details: InfillRequest): OpenAIChatCompletionRequest {
+        val systemMessage = OpenAIChatCompletionStandardMessage(
+            "system",
+            "You are a code completion assistant. Complete the code between the given prefix and suffix. " +
+                    "Return only the missing code that should be inserted, without any formatting, explanations, or markdown."
+        )
+        
+        val userMessage = OpenAIChatCompletionStandardMessage(
+            "user",
+            "<PREFIX>\n${details.prefix}\n</PREFIX>\n\n<SUFFIX>\n${details.suffix}\n</SUFFIX>\n\nComplete:"
+        )
+        
+        return OpenAIChatCompletionRequest.Builder(listOf(systemMessage, userMessage))
+            .setModel(
+                ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
+            )
+            .setStream(true)
+            .setMaxTokens(MAX_TOKENS)
+            .setTemperature(0.0)
+            .build()
+    }
+
+    @JvmStatic
+    fun buildChatBasedFIMHttpRequest(
+        details: InfillRequest,
+        url: String,
+        headers: Map<String, String>,
+        body: Map<String, Any>,
+        credential: String?
+    ): Request {
+        val requestBuilder = Request.Builder().url(url)
+        
+        for (entry in headers.entries) {
+            var value = entry.value
+            if (credential != null && value.contains("\$CUSTOM_SERVICE_API_KEY")) {
+                value = value.replace("\$CUSTOM_SERVICE_API_KEY", credential)
+            }
+            requestBuilder.addHeader(entry.key, value)
+        }
+        
+        // Create chat completion messages using the improved prompt template
+        val systemMessage = mapOf<String, String>(
+            "role" to "system",
+            "content" to "You are a code completion assistant. Complete the code between the given prefix and suffix. " +
+                    "Return only the missing code that should be inserted, without any formatting, explanations, or markdown."
+        )
+        
+        val userMessage = mapOf<String, String>(
+            "role" to "user",
+            "content" to "<PREFIX>\n${details.prefix}\n</PREFIX>\n\n<SUFFIX>\n${details.suffix}\n</SUFFIX>\n\nComplete:"
+        )
+        
+        // Transform the custom body configuration, excluding completion-specific parameters
+        val transformedBody = body.entries.mapNotNull { (key, value) ->
+            when (key.lowercase()) {
+                "messages" -> key to listOf(systemMessage, userMessage)
+                // Exclude completion-specific parameters that don't apply to chat completions
+                "prompt", "suffix" -> null
+                else -> key to transformValue(value, InfillPromptTemplate.CHAT_COMPLETION, details)
+            }
+        }.toMap().toMutableMap()
+        
+        // Ensure we have messages for chat completion
+        if (!transformedBody.containsKey("messages")) {
+            transformedBody["messages"] = listOf(systemMessage, userMessage)
+        }
+
+        try {
+            val jsonBody = ObjectMapper()
+                .writerWithDefaultPrettyPrinter()
+                .writeValueAsString(transformedBody)
+                .toByteArray(StandardCharsets.UTF_8)
+                .toRequestBody("application/json".toMediaType())
+            return requestBuilder.post(jsonBody).build()
+        } catch (e: JsonProcessingException) {
+            throw RuntimeException(e)
+        }
+    }
+
+    @JvmStatic
     fun buildCustomRequest(details: InfillRequest): Request {
         val activeService = service<CustomServicesSettings>()
             .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
@@ -78,6 +160,12 @@ object CodeCompletionRequestFactory {
         infillTemplate: InfillPromptTemplate,
         credential: String?
     ): Request {
+        // For chat-based FIM, we should not use this method
+        // The routing logic in CodeCompletionService will handle it
+        if (infillTemplate == InfillPromptTemplate.CHAT_COMPLETION) {
+            throw IllegalArgumentException("Chat-based FIM should use buildChatBasedFIMRequest instead")
+        }
+        
         val requestBuilder = Request.Builder().url(url)
         for (entry in headers.entries) {
             var value = entry.value
