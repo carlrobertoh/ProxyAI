@@ -34,6 +34,7 @@ class ConfigurationSettingsState : BaseState() {
     var tableData by map<String, String>()
     var chatCompletionSettings by property(ChatCompletionSettingsState())
     var codeCompletionSettings by property(CodeCompletionSettingsState())
+    var chatMode by enum(ChatMode.ASK)
 
     init {
         tableData.putAll(EditorActionsUtil.DEFAULT_ACTIONS)

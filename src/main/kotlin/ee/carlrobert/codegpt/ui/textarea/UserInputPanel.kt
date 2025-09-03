@@ -23,6 +23,7 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
@@ -55,7 +56,7 @@ class UserInputPanel(
         private const val CORNER_RADIUS = 16
     }
 
-    private var chatMode: ChatMode = ChatMode.ASK
+    private var chatMode: ChatMode = ConfigurationSettings.getState().chatMode
     private val disposableCoroutineScope = DisposableCoroutineScope()
     private val promptTextField =
         PromptTextField(
@@ -106,6 +107,7 @@ class UserInputPanel(
 
     fun setChatMode(mode: ChatMode) {
         chatMode = mode
+        ConfigurationSettings.getState().chatMode = mode
     }
 
     init {
