@@ -40,8 +40,9 @@ abstract class CodeCompletionFeatureToggleActions(
             }
 
             CUSTOM_OPENAI -> {
-                service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled =
-                    enableFeatureAction
+                service<CustomServicesSettings>()
+                    .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
+                    .codeCompletionSettings.codeCompletionsEnabled = enableFeatureAction
             }
 
             ANTHROPIC,

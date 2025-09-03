@@ -104,7 +104,10 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         val codeCompletionsEnabled = when (selectedService) {
             ServiceType.PROXYAI -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             ServiceType.OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled
-            ServiceType.CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
+            ServiceType.CUSTOM_OPENAI -> service<CustomServicesSettings>()
+                .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
+                .codeCompletionSettings.codeCompletionsEnabled
+
             ServiceType.LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             ServiceType.OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
             ServiceType.MISTRAL -> true  // Mistral supports code completions
