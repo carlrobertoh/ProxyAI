@@ -40,18 +40,18 @@ class ChatBasedFIMTest {
         assertNotNull(chatRequest)
         assertEquals(2, chatRequest.messages.size)
         
-        val systemMessage = chatRequest.messages[0]
+        val systemMessage = chatRequest.messages[0] as OpenAIChatCompletionStandardMessage
         assertEquals("system", systemMessage.role)
         assertTrue(systemMessage.content.contains("expert coding assistant"))
         
-        val userMessage = chatRequest.messages[1]
+        val userMessage = chatRequest.messages[1] as OpenAIChatCompletionStandardMessage
         assertEquals("user", userMessage.role)
         assertTrue(userMessage.content.contains("PREFIX:"))
         assertTrue(userMessage.content.contains("SUFFIX:"))
         assertTrue(userMessage.content.contains("function calculateSum(a, b) {"))
         assertTrue(userMessage.content.contains("return result;"))
         
-        assertTrue(chatRequest.stream)
+        assertTrue(chatRequest.isStream)
         assertEquals(128, chatRequest.maxTokens)
         assertEquals(0.0, chatRequest.temperature)
     }
