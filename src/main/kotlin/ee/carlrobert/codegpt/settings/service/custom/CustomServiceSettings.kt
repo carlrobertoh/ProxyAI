@@ -6,6 +6,9 @@ import com.intellij.openapi.components.*
 import com.intellij.util.xmlb.annotations.OptionTag
 import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
 import ee.carlrobert.codegpt.credentials.CredentialsStore
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceChatCompletionTemplate
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceCodeCompletionTemplate
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTemplate
@@ -89,6 +92,21 @@ class CustomServicesSettings :
             }
         }
     }
+
+    fun customServiceStateForFeatureType(featureType: FeatureType): CustomServiceSettingsState {
+        val modelSelection = service<ModelSelectionService>()
+        val featureSelection = modelSelection.getModelSelectionForFeature(featureType)
+
+        if (featureSelection.provider != ServiceType.CUSTOM_OPENAI)
+            throw IllegalStateException(
+                "Current selected ServiceType (${featureSelection}) is not of type 'CUSTOM_OPENAI'. " +
+                        "This function should not be called in this context!"
+            )
+
+        return this.state.services
+            .find { it.name == featureSelection.model }
+            ?: throw IllegalStateException("Unable to find custom service with name '${featureSelection.model}'.")
+    }
 }
 
 private class CustomServiceSettingsListConverter : BaseConverter<List<CustomServiceSettingsState>>(
@@ -102,7 +120,7 @@ class CustomServicesState(
     @get:OptionTag(converter = CustomServiceSettingsListConverter::class)
     var services by list<CustomServiceSettingsState>()
 
-    var active by property<CustomServiceSettingsState>(initialState)
+    var active by property(initialState)
 
     init {
         services.add(initialState)

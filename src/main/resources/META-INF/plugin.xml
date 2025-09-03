@@ -70,7 +70,6 @@
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.GeneralSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.openai.OpenAISettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.you.YouSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.mistral.MistralSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.llama.LlamaSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings"/>

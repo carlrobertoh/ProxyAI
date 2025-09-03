@@ -43,7 +43,10 @@ class CodeCompletionService(private val project: Project) {
         when (selectedService) {
             PROXYAI -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled
-            CUSTOM_OPENAI -> service<CustomServicesSettings>().state.active.codeCompletionSettings.codeCompletionsEnabled
+            CUSTOM_OPENAI -> service<CustomServicesSettings>()
+                .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
+                .codeCompletionSettings
+                .codeCompletionsEnabled
             MISTRAL -> MistralSettings.getCurrentState().isCodeCompletionsEnabled
             LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
