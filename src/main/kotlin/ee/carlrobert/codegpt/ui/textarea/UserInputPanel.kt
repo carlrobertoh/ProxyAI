@@ -21,7 +21,7 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -30,6 +30,7 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
+import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
@@ -64,7 +65,11 @@ class UserInputPanel(
             ::updateUserTokens,
             ::handleBackSpace,
             ::handleLookupAdded,
-            ::handleSubmit
+            ::handleSubmit,
+            onFilesDropped = { files ->
+                includeFiles(files.toMutableList())
+                totalTokensPanel.updateReferencedFilesTokens(files.map { ReferencedFile.from(it).fileContent() })
+            }
         )
     private val userInputHeaderPanel =
         UserInputHeaderPanel(
@@ -112,6 +117,10 @@ class UserInputPanel(
         setupDisposables(parentDisposable)
         setupLayout()
         addSelectedEditorContent()
+        FileDragAndDrop.install(this) { files ->
+            includeFiles(files.toMutableList())
+            totalTokensPanel.updateReferencedFilesTokens(files.map { ReferencedFile.from(it).fileContent() })
+        }
     }
 
     private fun setupDisposables(parentDisposable: Disposable) {
@@ -198,7 +207,13 @@ class UserInputPanel(
     }
 
     fun includeFiles(referencedFiles: MutableList<VirtualFile>) {
-        referencedFiles.forEach { userInputHeaderPanel.addTag(FileTagDetails(it)) }
+        referencedFiles.forEach { vf ->
+            if (vf.isDirectory) {
+                userInputHeaderPanel.addTag(FolderTagDetails(vf))
+            } else {
+                userInputHeaderPanel.addTag(FileTagDetails(vf))
+            }
+        }
     }
 
     override fun requestFocus() {
@@ -252,10 +267,17 @@ class UserInputPanel(
 
     private fun drawRoundedBorder(g2: Graphics2D) {
         g2.color = JBUI.CurrentTheme.Focus.defaultButtonColor()
-        if (promptTextField.isFocusOwner) {
+        if (promptTextField.isFocusOwner || dragActive) {
             g2.stroke = BasicStroke(1.5F)
         }
         g2.drawRoundRect(0, 0, width - 1, height - 1, CORNER_RADIUS, CORNER_RADIUS)
+    }
+
+    private var dragActive: Boolean = false
+
+    fun setDragActive(active: Boolean) {
+        dragActive = active
+        repaint()
     }
 
     override fun getInsets(): Insets = JBUI.insets(4)

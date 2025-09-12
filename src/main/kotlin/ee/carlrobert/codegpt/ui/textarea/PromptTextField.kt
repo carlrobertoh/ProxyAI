@@ -17,6 +17,7 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileTypes.FileTypes
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorTextField
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -25,6 +26,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
+import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import kotlinx.coroutines.*
 import java.awt.Dimension
 import java.util.*
@@ -36,6 +38,7 @@ class PromptTextField(
     private val onBackSpace: () -> Unit,
     private val onLookupAdded: (LookupActionItem) -> Unit,
     private val onSubmit: (String) -> Unit,
+    private val onFilesDropped: (List<VirtualFile>) -> Unit = {},
 ) : EditorTextField(project, FileTypes.PLAIN_TEXT), Disposable {
 
     companion object {
@@ -72,6 +75,8 @@ class PromptTextField(
             },
             this
         )
+        val highlightTarget = (this.parent as? javax.swing.JComponent) ?: this
+        FileDragAndDrop.install(editor.contentComponent as javax.swing.JComponent, highlightTarget) { onFilesDropped(it) }
     }
 
     fun clear() {
