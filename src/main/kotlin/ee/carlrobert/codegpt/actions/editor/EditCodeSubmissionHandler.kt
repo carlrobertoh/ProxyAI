@@ -11,6 +11,8 @@ import com.jetbrains.rd.util.AtomicReference
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.completions.EditCodeCompletionParameters
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.ui.ObservableProperties
 
 class EditCodeSubmissionHandler(
@@ -39,8 +41,10 @@ class EditCodeSubmissionHandler(
         }
         runInEdt { editor.selectionModel.removeSelection() }
 
+        // EditCode should always use EDIT mode (no backticks)
+        // This is independent from the chat interface ChatMode setting
         service<CompletionRequestService>().getEditCodeCompletionAsync(
-            EditCodeCompletionParameters(userPrompt, selectedText),
+            EditCodeCompletionParameters(userPrompt, selectedText, ChatMode.EDIT),
             EditCodeCompletionListener(editor, observableProperties, selectionTextRange)
         )
     }
