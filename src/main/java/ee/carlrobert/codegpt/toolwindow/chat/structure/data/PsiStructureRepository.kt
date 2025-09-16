@@ -226,6 +226,7 @@ class PsiStructureRepository(
                     is WebTagDetails -> null
                     is ImageTagDetails -> null
                     is CodeAnalyzeTagDetails -> null
+                    is DiagnosticsTagDetails -> null
                 }
 
                 virtualFile?.takeIf { it.isValid && it.exists()}
@@ -253,6 +254,7 @@ class PsiStructureRepository(
                 is WebTagDetails -> false
                 is ImageTagDetails -> false
                 is CodeAnalyzeTagDetails -> false
+                is DiagnosticsTagDetails -> false
             }
         }
             .toSet()
@@ -280,6 +282,7 @@ class PsiStructureRepository(
                     is WebTagDetails -> null
                     is ImageTagDetails -> null
                     is CodeAnalyzeTagDetails -> null
+                    is DiagnosticsTagDetails -> null
                 }
 
                 virtualFile?.takeIf { it.isValid && it.exists()}

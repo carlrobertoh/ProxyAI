@@ -10,6 +10,7 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.DiagnosticsActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.*
 import kotlinx.coroutines.CancellationException
 
@@ -35,6 +36,7 @@ class SearchManager(
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
         CodeAnalyzeActionItem(tagManager),
+        DiagnosticsActionItem(tagManager),
         MCPGroupItem(),
         WebActionItem(tagManager),
         ImageActionItem(project, tagManager)

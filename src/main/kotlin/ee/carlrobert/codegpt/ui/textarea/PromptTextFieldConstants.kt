@@ -17,6 +17,7 @@ object PromptTextFieldConstants {
         "history", "hist", "h",
         "personas", "persona", "p",
         "docs", "doc", "d",
+        "diagnostics", "diagnostic", "diag",
         "mcp", "m",
         "web", "w",
         "image", "img", "i"

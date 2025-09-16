@@ -132,3 +132,6 @@ data class HistoryTagDetails(
 class EmptyTagDetails : TagDetails("")
 
 class CodeAnalyzeTagDetails : TagDetails("Code Analyze", AllIcons.Actions.DependencyAnalyzer)
+
+data class DiagnosticsTagDetails(val virtualFile: VirtualFile) :
+    TagDetails("${virtualFile.name} Problems", AllIcons.General.InspectionsEye)
