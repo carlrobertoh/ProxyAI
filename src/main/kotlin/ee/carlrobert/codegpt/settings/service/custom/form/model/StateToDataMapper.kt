@@ -5,25 +5,26 @@ import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletion
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceCodeCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesState
+import java.util.UUID
 
 fun CustomServicesState.mapToData(): CustomServicesStateData =
-    CustomServicesStateData(
-        services = services.map { it.mapToData() },
-        active = active.mapToData()
-    )
+    CustomServicesStateData(services.map { it.mapToData() })
 
 fun CustomServiceSettingsState.mapToData(): CustomServiceSettingsData =
     CustomServiceSettingsData(
+        id = id ?: UUID.randomUUID().toString(),
         name = name,
         template = template,
-        apiKey = CredentialsStore.getCredential(CredentialsStore.CredentialKey.CustomServiceApiKey(name.orEmpty())),
+        apiKey = if (!id.isNullOrEmpty())
+            CredentialsStore.getCredential(CredentialsStore.CredentialKey.CustomServiceApiKeyById(id!!))
+        else null,
         chatCompletionSettings = chatCompletionSettings.mapToData(),
         codeCompletionSettings = codeCompletionSettings.mapToData()
     )
 
 fun CustomServiceChatCompletionSettingsState.mapToData(): CustomServiceChatCompletionSettingsData =
     CustomServiceChatCompletionSettingsData(
-        url = url,
+        url = url ?: "",
         headers = headers,
         body = body
     )
@@ -33,7 +34,7 @@ fun CustomServiceCodeCompletionSettingsState.mapToData(): CustomServiceCodeCompl
         codeCompletionsEnabled = codeCompletionsEnabled,
         parseResponseAsChatCompletions = parseResponseAsChatCompletions,
         infillTemplate = infillTemplate,
-        url = url,
+        url = url ?: "",
         headers = headers,
         body = body
     )

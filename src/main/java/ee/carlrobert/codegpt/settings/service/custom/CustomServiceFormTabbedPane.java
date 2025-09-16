@@ -58,11 +58,30 @@ public class CustomServiceFormTabbedPane extends JBTabbedPane {
 
   private void setTableData(JBTable table, Map<String, ?> values) {
     DefaultTableModel model = (DefaultTableModel) table.getModel();
-    model.setRowCount(0);
 
-    for (var entry : values.entrySet()) {
-      model.addRow(new Object[]{entry.getKey(), entry.getValue()});
+    if (hasTableDataChanged(model, values)) {
+      model.setRowCount(0);
+      for (var entry : values.entrySet()) {
+        model.addRow(new Object[]{entry.getKey(), entry.getValue()});
+      }
     }
+  }
+
+  private boolean hasTableDataChanged(DefaultTableModel model, Map<String, ?> newValues) {
+    if (model.getRowCount() != newValues.size()) {
+      return true;
+    }
+
+    for (int i = 0; i < model.getRowCount(); i++) {
+      String key = (String) model.getValueAt(i, 0);
+      Object value = model.getValueAt(i, 1);
+
+      if (!newValues.containsKey(key) || !java.util.Objects.equals(newValues.get(key), value)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private Map<String, Object> getTableData(JBTable table) {

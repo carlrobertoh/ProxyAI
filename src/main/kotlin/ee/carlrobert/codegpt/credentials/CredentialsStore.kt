@@ -48,8 +48,13 @@ object CredentialsStore {
             override val value: String = "OPENAI_API_KEY"
         }
 
+        @Deprecated("Only for migration")
         data class CustomServiceApiKey(val name: String) : CredentialKey() {
             override val value: String = "CUSTOM_SERVICE_API_KEY:$name"
+        }
+
+        data class CustomServiceApiKeyById(val id: String) : CredentialKey() {
+            override val value: String = "CUSTOM_SERVICE_API_KEY_ID:$id"
         }
 
         @Deprecated("Only for migration")

@@ -31,22 +31,26 @@ import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTempl
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.util.ApplicationUtil
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import okhttp3.internal.toImmutableList
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.ItemEvent
 import java.net.MalformedURLException
 import java.net.URL
 import javax.swing.*
 
-class CustomServiceListForm(
+class CustomServiceForm(
     private val service: CustomServicesSettings,
-    coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope
 ) {
 
     private val formState = MutableStateFlow(service.state.mapToData())
@@ -55,6 +59,9 @@ class CustomServiceListForm(
     private val customSettingsFileProvider = CustomSettingsFileProvider()
 
     private var lastSelectedIndex = 0
+    private var selectedServiceId: String? = null
+    private var pendingSelectedId: String? = null
+    private var suppressSelectionEvents: Boolean = false
 
     private val customProvidersJBList = JBList(formState.value.services)
         .apply {
@@ -62,6 +69,7 @@ class CustomServiceListForm(
             selectionMode = ListSelectionModel.SINGLE_SELECTION
 
             addListSelectionListener { _ ->
+                if (suppressSelectionEvents) return@addListSelectionListener
                 val localSelectedIndex = selectedIndex
                 if (localSelectedIndex != -1) {
                     if (lastSelectedIndex != -1) {
@@ -69,6 +77,7 @@ class CustomServiceListForm(
                     }
 
                     lastSelectedIndex = localSelectedIndex
+                    selectedServiceId = model.getElementAt(localSelectedIndex).id
                     updateFormData(lastSelectedIndex)
                 }
             }
@@ -76,9 +85,36 @@ class CustomServiceListForm(
 
     init {
         formState
-            .onEach {
-                customProvidersJBList.setListData(it.services.toTypedArray())
-                customProvidersJBList.repaint()
+            .onEach { newState ->
+                val model = customProvidersJBList.model
+                val current = (0 until model.size).map { model.getElementAt(it) }
+                val currentIds = current.map { it.id }
+                val newIds = newState.services.map { it.id }
+                val idsChanged = currentIds != newIds
+                val namesChanged = !idsChanged && current.indices.any { i ->
+                    i < newState.services.size && current[i].name != newState.services[i].name
+                }
+                if (idsChanged || namesChanged) {
+                    SwingUtilities.invokeLater {
+                        suppressSelectionEvents = true
+                        try {
+                            customProvidersJBList.setListData(newState.services.toTypedArray())
+                            val targetId = pendingSelectedId ?: selectedServiceId
+                            val idx = newState.services.indexOfFirst { it.id == targetId }
+                            val targetIndex = if (idx >= 0) idx else 0
+                            if (newState.services.isNotEmpty()) {
+                                customProvidersJBList.selectedIndex = targetIndex
+                                lastSelectedIndex = targetIndex
+                                selectedServiceId = newState.services[targetIndex].id
+                                updateFormDataSilently(newState.services[targetIndex])
+                            }
+                            pendingSelectedId = null
+                            customProvidersJBList.repaint()
+                        } finally {
+                            suppressSelectionEvents = false
+                        }
+                    }
+                }
             }
             .launchIn(coroutineScope)
     }
@@ -99,10 +135,7 @@ class CustomServiceListForm(
 
     init {
         val selectedItem = formState.value.services.first()
-
-        apiKeyField.text = runBlocking(Dispatchers.IO) {
-            getCredential(CredentialKey.CustomServiceApiKey(selectedItem.name.orEmpty()))
-        }
+        apiKeyField.text = getCredential(CredentialKey.CustomServiceApiKeyById(selectedItem.id))
         chatCompletionsForm =
             CustomServiceChatCompletionForm(selectedItem.chatCompletionSettings, this::getApiKey)
         codeCompletionsForm =
@@ -110,31 +143,8 @@ class CustomServiceListForm(
         tabbedPane = JBTabbedPane().apply {
             add(CodeGPTBundle.get("shared.chatCompletions"), chatCompletionsForm.form)
             add(CodeGPTBundle.get("shared.codeCompletions"), codeCompletionsForm.form)
-            templateComboBox.selectedItem = selectedItem.template
         }
-        nameField.text = selectedItem.name
-        templateComboBox.addItemListener {
-            val template = it.item as CustomServiceTemplate
-            updateTemplateHelpTextTooltip(template)
-            chatCompletionsForm.run {
-                url = template.chatCompletionTemplate.url
-                headers = template.chatCompletionTemplate.headers
-                body = template.chatCompletionTemplate.body
-            }
-            if (template.codeCompletionTemplate != null) {
-                codeCompletionsForm.run {
-                    url = template.codeCompletionTemplate.url
-                    headers = template.codeCompletionTemplate.headers
-                    body = template.codeCompletionTemplate.body
-                    parseResponseAsChatCompletions =
-                        template.codeCompletionTemplate.parseResponseAsChatCompletions
-                }
-                tabbedPane.setEnabledAt(1, true)
-            } else {
-                tabbedPane.selectedIndex = 0
-                tabbedPane.setEnabledAt(1, false)
-            }
-        }
+
         exportButton =
             JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.exportSettings")).apply {
                 addActionListener { exportSettingsToFile() }
@@ -143,34 +153,83 @@ class CustomServiceListForm(
             JButton(CodeGPTBundle.get("settingsConfigurable.service.custom.openai.importSettings")).apply {
                 addActionListener { importSettingsFromFile() }
             }
-        updateTemplateHelpTextTooltip(selectedItem.template)
+
+        templateComboBox.addItemListener { event ->
+            if (event.stateChange == ItemEvent.SELECTED) {
+                val template = event.item as CustomServiceTemplate
+                updateTemplateHelpTextTooltip(template)
+
+                chatCompletionsForm.run {
+                    url = template.chatCompletionTemplate.url
+                    headers = template.chatCompletionTemplate.headers
+                    body = template.chatCompletionTemplate.body
+                }
+                if (template.codeCompletionTemplate != null) {
+                    codeCompletionsForm.run {
+                        url = template.codeCompletionTemplate.url
+                        headers = template.codeCompletionTemplate.headers
+                        body = template.codeCompletionTemplate.body
+                        parseResponseAsChatCompletions =
+                            template.codeCompletionTemplate.parseResponseAsChatCompletions
+                    }
+                    tabbedPane.setEnabledAt(1, true)
+                } else {
+                    tabbedPane.selectedIndex = 0
+                    tabbedPane.setEnabledAt(1, false)
+                }
+            }
+        }
+
+        updateFormDataSilently(selectedItem)
+        SwingUtilities.invokeLater {
+            if (customProvidersJBList.model.size > 0) {
+                customProvidersJBList.selectedIndex = 0
+                lastSelectedIndex = 0
+                selectedServiceId = customProvidersJBList.model.getElementAt(0).id
+            }
+        }
     }
 
     private fun updateFormData(index: Int) {
         val selectedItem = formState.value.services[index]
+        SwingUtilities.invokeLater {
+            updateFormDataSilently(selectedItem)
+        }
+    }
 
-        chatCompletionsForm.apply {
-            val chatCompletionSettings = selectedItem.chatCompletionSettings
-            url = chatCompletionSettings.url.orEmpty()
-            body = chatCompletionSettings.body.toMutableMap()
-            headers = chatCompletionSettings.headers.toMutableMap()
+    private fun updateFormDataSilently(selectedItem: CustomServiceSettingsData) {
+        val templateListener = templateComboBox.itemListeners.firstOrNull()
+        templateListener?.let { templateComboBox.removeItemListener(it) }
+
+        try {
+            chatCompletionsForm.apply {
+                val chatCompletionSettings = selectedItem.chatCompletionSettings
+                url = chatCompletionSettings.url.orEmpty()
+                body = chatCompletionSettings.body.toMutableMap()
+                headers = chatCompletionSettings.headers.toMutableMap()
+            }
+            codeCompletionsForm.apply {
+                val codeCompletionSettings = selectedItem.codeCompletionSettings
+                url = codeCompletionSettings.url.orEmpty()
+                body = codeCompletionSettings.body.toMutableMap()
+                headers = codeCompletionSettings.headers.toMutableMap()
+                infillTemplate = codeCompletionSettings.infillTemplate
+                codeCompletionsEnabled = codeCompletionSettings.codeCompletionsEnabled
+                parseResponseAsChatCompletions =
+                    codeCompletionSettings.parseResponseAsChatCompletions
+            }
+
+            apiKeyField.text = getCredential(CredentialKey.CustomServiceApiKeyById(selectedItem.id))
+            nameField.text = selectedItem.name
+            templateComboBox.selectedItem = selectedItem.template
+            updateTemplateHelpTextTooltip(selectedItem.template)
+        } finally {
+            templateListener?.let { templateComboBox.addItemListener(it) }
         }
-        codeCompletionsForm.apply {
-            val codeCompletionSettings = selectedItem.codeCompletionSettings
-            url = codeCompletionSettings.url.orEmpty()
-            body = codeCompletionSettings.body.toMutableMap()
-            headers = codeCompletionSettings.headers.toMutableMap()
-            infillTemplate = codeCompletionSettings.infillTemplate
-            codeCompletionsEnabled = codeCompletionSettings.codeCompletionsEnabled
-            parseResponseAsChatCompletions = codeCompletionSettings.parseResponseAsChatCompletions
-        }
-        apiKeyField.text = selectedItem.apiKey
-        nameField.text = selectedItem.name
-        templateComboBox.selectedItem = selectedItem.template
-        updateTemplateHelpTextTooltip(selectedItem.template)
     }
 
     private fun updateStateFromForm(editedIndex: Int) {
+        if (editedIndex < 0 || editedIndex >= formState.value.services.size) return
         formState.update { state ->
             val editedItem = state.services[editedIndex]
 
@@ -252,41 +311,48 @@ class CustomServiceListForm(
 
     private fun handleRemoveAction() {
         val prevSelectedIndex = customProvidersJBList.selectedIndex
+
+        // Update form state before deletion to ensure current edits are saved
+        if (lastSelectedIndex != -1 && lastSelectedIndex < formState.value.services.size) {
+            updateStateFromForm(lastSelectedIndex)
+        }
+
+        val current = formState.value.services
+        val targetNeighborId = when {
+            current.isEmpty() -> null
+            prevSelectedIndex <= 0 && current.size >= 2 -> current[1].id
+            prevSelectedIndex > 0 -> current[prevSelectedIndex - 1].id
+            else -> null
+        }
+
         formState.update { state ->
-            state.copy(services = state.services.filterIndexed { index, _ ->
-                index != customProvidersJBList.selectedIndex
-            })
+            state.copy(services = state.services.filterIndexed { index, _ -> index != prevSelectedIndex })
         }
-        val newSelectedIndex = if (prevSelectedIndex == 0) {
-            0
-        } else {
-            prevSelectedIndex - 1
-        }
+
+        pendingSelectedId = targetNeighborId
         lastSelectedIndex = -1
-        updateFormData(newSelectedIndex)
-        customProvidersJBList.selectedIndex = newSelectedIndex
     }
 
     private fun handleDuplicateAction() {
         formState.update {
             val selectedIndex = customProvidersJBList.selectedIndex
-            val copiedService =
-                it.services[selectedIndex].copy(name = it.services[selectedIndex].name + "Copied")
+            val src = it.services[selectedIndex]
+            val copiedService = src.copy(
+                id = java.util.UUID.randomUUID().toString(),
+                name = src.name + "Copied"
+            )
             it.copy(
                 services = it.services + copiedService
             )
         }
-        customProvidersJBList.selectedIndex = formState.value.services.lastIndex
+        pendingSelectedId = formState.value.services.last().id
     }
 
     private fun handleAddAction() {
-        formState.update {
-            it.copy(
-                services = it.services + CustomServiceSettingsState().apply { name += it.services.size }
-                    .mapToData()
-            )
-        }
-        customProvidersJBList.selectedIndex = formState.value.services.lastIndex
+        val newData = CustomServiceSettingsState().apply { name += formState.value.services.size }
+            .mapToData()
+        formState.update { it.copy(services = it.services + newData) }
+        pendingSelectedId = newData.id
     }
 
     private fun createContentPanel(): JPanel = FormBuilder.createFormBuilder()
@@ -317,7 +383,9 @@ class CustomServiceListForm(
     fun getApiKey() = String(apiKeyField.password).ifEmpty { null }
 
     fun isModified(): Boolean {
-        updateStateFromForm(lastSelectedIndex)
+        if (lastSelectedIndex >= 0 && lastSelectedIndex < formState.value.services.size) {
+            updateStateFromForm(lastSelectedIndex)
+        }
         return service.state.mapToData() != formState.value
     }
 
@@ -376,12 +444,8 @@ class CustomServiceListForm(
                     .inSmartMode(it)
                     .finishOnUiThread(ModalityState.defaultModalityState()) { settings ->
                         if (settings != null) {
-                            val newActualService =
-                                settings.firstOrNull { it.name == formState.value.active.name }
-                                    ?: settings.first()
-
                             formState.update { state ->
-                                state.copy(services = settings, active = newActualService)
+                                state.copy(services = settings)
                             }
                             updateFormData(0)
                         }
@@ -432,51 +496,41 @@ class CustomServiceListForm(
     }
 
     fun applyChanges() {
-        if (!validateServiceNames()) {
-            OverlayUtil.showBalloon(
-                "Service names must be unique",
-                MessageType.ERROR,
-                customProvidersJBList,
-            )
-            return
+        if (lastSelectedIndex != -1 && lastSelectedIndex < formState.value.services.size) {
+            updateStateFromForm(lastSelectedIndex)
         }
 
         val formStateValue = formState.value
 
-        val newActualService =
-            formStateValue.services.firstOrNull { it.name == formStateValue.active.name }
-                ?: formStateValue.services.first()
-
-        // Cleanup saved api keys
-        val savedServicesName = service.state.services.mapNotNull { it.name }
-        val deletedServices =
-            savedServicesName.subtract(formStateValue.services.mapNotNull { it.name }.toSet())
-        deletedServices.forEach { deletedServiceName ->
-            CredentialsStore.setCredential(
-                CredentialKey.CustomServiceApiKey(deletedServiceName),
-                null
-            )
+        val prevById = service.state.services.associateBy { it.id }
+        val savedIds = prevById.keys.filterNotNull().toSet()
+        val newIds = formStateValue.services.map { it.id }.toSet()
+        val deletedIds = savedIds.subtract(newIds)
+        deletedIds.forEach { deletedId ->
+            CredentialsStore.setCredential(CredentialKey.CustomServiceApiKeyById(deletedId), null)
         }
-        // Save apiKeys
         formStateValue.services.forEach {
-            CredentialsStore.setCredential(
-                CredentialKey.CustomServiceApiKey(it.name.orEmpty()),
-                it.apiKey
-            )
+            if (it.id.isNotBlank()) {
+                CredentialsStore.setCredential(
+                    CredentialKey.CustomServiceApiKeyById(it.id),
+                    it.apiKey
+                )
+            }
         }
 
-        // Save settings
         service.state.run {
             services = formStateValue.services.mapTo(mutableListOf()) { it.mapToState() }
-            active = newActualService.mapToState()
         }
         formState.value = service.state.mapToData()
     }
 
-    private fun validateServiceNames(): Boolean {
-        val serviceNames = formState.value.services.mapNotNull { it.name }
-        val uniqueNames = serviceNames.toSet()
-        return serviceNames.size == uniqueNames.size
+    fun getSelectedServiceId(): String? {
+        val idx = customProvidersJBList.selectedIndex
+        return if (idx >= 0 && idx < formState.value.services.size) {
+            formState.value.services[idx].id
+        } else {
+            selectedServiceId
+        }
     }
 
     fun resetForm() {

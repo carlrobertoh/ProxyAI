@@ -9,15 +9,13 @@ import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.models.ModelSettingsForm
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTAvailableModels
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTModel
 import ee.carlrobert.codegpt.util.ApplicationUtil
-import ee.carlrobert.llm.client.codegpt.PricingPlan
 import javax.swing.JComponent
 
 class ModelReplacementDialog(
     private val project: Project?,
-    serviceType: ServiceType
+    serviceType: ServiceType,
+    private val preferredCustomServiceId: String? = null
 ) : DialogWrapper(project) {
 
     private val modelSettingsForm =
@@ -67,19 +65,28 @@ class ModelReplacementDialog(
         super.dispose()
     }
 
-    private fun generateInitialModelSelections(serviceType: ServiceType): Map<FeatureType, ModelSelection?>? {
+    private fun generateInitialModelSelections(serviceType: ServiceType): Map<FeatureType, ModelSelection?> {
         val registry = ModelRegistry.getInstance()
-
-        return when (serviceType) {
-            ServiceType.PROXYAI -> {
-                val userDetails = project?.let { CODEGPT_USER_DETAILS.get(it) }
-                FeatureType.entries.associateWith { featureType ->
+        return FeatureType.entries.associateWith { featureType ->
+            when (serviceType) {
+                ServiceType.PROXYAI -> {
+                    val userDetails = project?.let { CODEGPT_USER_DETAILS.get(it) }
                     registry.getDefaultModelForFeature(featureType, userDetails?.pricingPlan)
                 }
-            }
 
-            else -> {
-                FeatureType.entries.associateWith { featureType ->
+                ServiceType.CUSTOM_OPENAI -> {
+                    val models = registry.getAllModelsForFeature(featureType)
+                        .filter { it.provider == serviceType }
+
+                    if (!preferredCustomServiceId.isNullOrBlank()) {
+                        models.firstOrNull { it.model == preferredCustomServiceId }
+                            ?: models.firstOrNull()
+                    } else {
+                        models.firstOrNull()
+                    }
+                }
+
+                else -> {
                     registry.getAllModelsForFeature(featureType)
                         .firstOrNull { it.provider == serviceType }
                 }
@@ -95,70 +102,59 @@ class ModelReplacementDialog(
     }
 
     companion object {
-        fun showDialog(serviceType: ServiceType): DialogResult {
-            val dialog = ModelReplacementDialog(ApplicationUtil.findCurrentProject(), serviceType)
+        fun showDialog(
+            serviceType: ServiceType,
+            preferredCustomServiceId: String? = null
+        ): DialogResult {
+            val dialog = ModelReplacementDialog(
+                ApplicationUtil.findCurrentProject(),
+                serviceType,
+                preferredCustomServiceId
+            )
             dialog.show()
             return dialog.result
         }
 
-        fun showDialogIfNeeded(serviceType: ServiceType): DialogResult {
-            return if (shouldShowDialog(serviceType)) {
-                showDialog(serviceType)
+        fun showDialogIfNeeded(
+            serviceType: ServiceType,
+            preferredCustomServiceId: String? = null
+        ): DialogResult {
+            return if (shouldShowDialog(serviceType, preferredCustomServiceId)) {
+                showDialog(serviceType, preferredCustomServiceId)
             } else {
                 DialogResult.KEEP_MODELS
             }
         }
 
-        private fun shouldShowDialog(serviceType: ServiceType): Boolean {
-            if (serviceType == ServiceType.PROXYAI) {
-                val project = ApplicationUtil.findCurrentProject()
-                val userDetails = project?.let { CODEGPT_USER_DETAILS.get(it) }
-                val modelSettings = service<ModelSettings>()
-                val registry = service<ModelRegistry>()
-
-                return FeatureType.entries.any { featureType ->
-                    val currentSelection = modelSettings.getModelSelection(featureType)
-                    val suggestedSelection =
-                        registry.getDefaultModelForFeature(featureType, userDetails?.pricingPlan)
-
-                    when {
-                        currentSelection == null -> true
-                        currentSelection.provider != serviceType -> true
-                        currentSelection.model != suggestedSelection.model -> {
-                            val suggestedModelAccessible =
-                                CodeGPTAvailableModels.findByCode(suggestedSelection.model)?.let {
-                                    isModelAccessible(it, userDetails?.pricingPlan)
-                                } == true
-                            val currentModelNotAccessible =
-                                CodeGPTAvailableModels.findByCode(currentSelection.model)?.let {
-                                    !isModelAccessible(it, userDetails?.pricingPlan)
-                                } == true
-
-                            suggestedModelAccessible || currentModelNotAccessible
-                        }
-
-                        else -> false
-                    }
-                }
-            }
-
+        private fun shouldShowDialog(
+            serviceType: ServiceType,
+            preferredCustomServiceId: String? = null
+        ): Boolean {
             return FeatureType.entries.any { featureType ->
+                val registry = service<ModelRegistry>()
+                if (!registry.isFeatureSupportedByProvider(
+                        featureType,
+                        serviceType
+                    )
+                ) return@any false
+
                 val currentSelection = service<ModelSettings>().getModelSelection(featureType)
-                val availableModels = service<ModelRegistry>().getAllModelsForFeature(featureType)
+                val availableModels = registry.getAllModelsForFeature(featureType)
                     .filter { it.provider == serviceType }
 
+                if (availableModels.isEmpty()) return@any false
+
                 when {
-                    currentSelection == null -> true
-                    currentSelection.provider != serviceType -> true
-                    availableModels.none { it.model == currentSelection.model } -> true
+                    currentSelection?.provider != null && currentSelection.provider != serviceType -> true
+
+                    serviceType == ServiceType.CUSTOM_OPENAI && !preferredCustomServiceId.isNullOrBlank() &&
+                            currentSelection != null && currentSelection.model != preferredCustomServiceId -> true
+
+                    currentSelection != null && availableModels.none { it.model == currentSelection.model } -> true
+
                     else -> false
                 }
             }
-        }
-
-        private fun isModelAccessible(model: CodeGPTModel, userPricingPlan: PricingPlan?): Boolean {
-            if (userPricingPlan == null) return false
-            return userPricingPlan.ordinal >= model.pricingPlan.ordinal
         }
     }
 }

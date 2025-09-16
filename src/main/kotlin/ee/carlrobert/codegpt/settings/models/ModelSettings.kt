@@ -5,6 +5,7 @@ import com.intellij.openapi.components.*
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 
 @Service
 @State(
@@ -57,6 +58,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         val oldState = this.state
         super.loadState(state)
 
+        migrateCustomOpenAIModelCodesToIds()
         migrateMissingProviderInformation()
         notifyIfChanged(oldState, this.state)
     }
@@ -74,27 +76,13 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         notifyModelChange(featureType, model, serviceType)
     }
 
-    fun getModelSelection(featureType: FeatureType): ModelSelection {
+    fun getModelSelection(featureType: FeatureType): ModelSelection? {
         val details = getModelDetailsState(featureType)
-        if (details == null) {
-            val defaultModel = ModelRegistry.getInstance().getDefaultModelForFeature(featureType)
-            state.setModelSelection(featureType, defaultModel.model, defaultModel.provider)
-            return defaultModel
-        }
-
-        return details.model?.let { model ->
+        return details?.model?.let { model ->
             details.provider?.let { provider ->
                 ModelRegistry.getInstance().findModel(provider, model)
             }
-        } ?: run {
-            val defaultModel = ModelRegistry.getInstance().getDefaultModelForFeature(featureType)
-            state.setModelSelection(featureType, defaultModel.model, defaultModel.provider)
-            defaultModel
         }
-    }
-
-    fun getOrCreateModelSelection(featureType: FeatureType): ModelSelection {
-        return getModelSelection(featureType)
     }
 
     fun getModelForFeature(featureType: FeatureType): String? {
@@ -136,19 +124,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
     }
 
     private fun findServiceTypeForModel(featureType: FeatureType, modelId: String?): ServiceType {
-        if (modelId == null) return ServiceType.PROXYAI
-
-        val provider = getProviderForFeature(featureType)
-        val models = getModelsForFeatureType(featureType)
-
-        if (provider != null) {
-            val modelWithProvider = models.find { it.model == modelId && it.provider == provider }
-            if (modelWithProvider != null) {
-                return modelWithProvider.provider
-            }
-        }
-
-        return models.find { it.model == modelId }?.provider ?: ServiceType.PROXYAI
+        return ServiceType.CUSTOM_OPENAI
     }
 
     private fun migrateMissingProviderInformation() {
@@ -170,6 +146,32 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
     ): ServiceType? {
         val models = getModelsForFeatureType(featureType)
         return models.find { it.model == modelCode }?.provider
+    }
+
+    private fun migrateCustomOpenAIModelCodesToIds() {
+        val servicesByName: Map<String, List<String>> = try {
+            CustomServicesSettings::class.java
+            val settings = service<CustomServicesSettings>()
+            settings.state.services.groupBy({ it.name ?: "" }, { it.id ?: "" }).filterKeys { it.isNotEmpty() }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+
+        if (servicesByName.isEmpty()) return
+
+        FeatureType.entries.forEach { featureType ->
+            val details = state.getModelSelection(featureType) ?: return@forEach
+            if (details.provider == ServiceType.CUSTOM_OPENAI && !details.model.isNullOrBlank()) {
+                val current = details.model!!
+                val ids = servicesByName[current]
+                if (ids != null && ids.size == 1) {
+                    val id = ids.first()
+                    if (id.isNotBlank() && id != current) {
+                        state.setModelSelection(featureType, id, ServiceType.CUSTOM_OPENAI)
+                    }
+                }
+            }
+        }
     }
 
     companion object {

@@ -286,17 +286,15 @@ class ModelRegistry {
         return try {
             val customServicesSettings = service<CustomServicesSettings>()
             customServicesSettings.state.services.mapNotNull { service ->
-                if (service.name.isNullOrBlank()) {
-                    return@mapNotNull null
-                }
+                val serviceId = service.id ?: return@mapNotNull null
+                val serviceName = service.name ?: ""
+                val modelFromBody = service.codeCompletionSettings.body["model"]
+                val modelName = (modelFromBody as? String)
+                val displayName = if (!modelName.isNullOrEmpty()) {
+                    if (modelName.length > 20) "$serviceName (...${modelName.takeLast(20)})" else "$serviceName ($modelName)"
+                } else serviceName
 
-                service.name?.let { serviceName ->
-                    val modelFromBody = service.codeCompletionSettings.body["model"]
-                    val modelName = (modelFromBody as? String) ?: "Unknown Model"
-                    val displayName = "$serviceName ($modelName)"
-
-                    ModelSelection(ServiceType.CUSTOM_OPENAI, serviceName, displayName)
-                }
+                ModelSelection(ServiceType.CUSTOM_OPENAI, serviceId, displayName)
             }
         } catch (e: Exception) {
             logger.error("Failed to get Custom OpenAI code models", e)
@@ -524,20 +522,14 @@ class ModelRegistry {
         return try {
             val customServicesSettings = service<CustomServicesSettings>()
             customServicesSettings.state.services.mapNotNull { service ->
-                if (service.name.isNullOrBlank()) {
-                    return@mapNotNull null
-                }
+                val serviceId = service.id ?: return@mapNotNull null
+                val serviceName = service.name ?: ""
+                val modelName = service.chatCompletionSettings.body["model"] as? String
+                val displayName = if (!modelName.isNullOrEmpty()) {
+                    if (modelName.length > 20) "$serviceName (...${modelName.takeLast(20)})" else "$serviceName ($modelName)"
+                } else serviceName
 
-                service.name?.let { serviceName ->
-                    val modelName = service.chatCompletionSettings.body["model"] as? String
-                    val displayName = if (modelName != null) {
-                        "$serviceName ($modelName)"
-                    } else {
-                        serviceName
-                    }
-
-                    ModelSelection(ServiceType.CUSTOM_OPENAI, serviceName, displayName)
-                }
+                ModelSelection(ServiceType.CUSTOM_OPENAI, serviceId, displayName)
             }
         } catch (e: Exception) {
             logger.error("Failed to get Custom OpenAI models", e)

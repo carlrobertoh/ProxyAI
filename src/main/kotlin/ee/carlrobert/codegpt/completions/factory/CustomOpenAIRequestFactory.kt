@@ -33,7 +33,7 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
                 params.psiStructure
             ),
             true,
-            getCredential(CredentialKey.CustomServiceApiKey(service.name.orEmpty()))
+            getCredential(CredentialKey.CustomServiceApiKeyById(requireNotNull(service.id)))
         )
         return CustomOpenAIRequest(request)
     }
@@ -54,7 +54,7 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
                 OpenAIChatCompletionStandardMessage("user", userPrompt)
             ),
             stream,
-            getCredential(CredentialKey.CustomServiceApiKey(service.name.orEmpty()))
+            getCredential(CredentialKey.CustomServiceApiKeyById(requireNotNull(service.id)))
         )
         return CustomOpenAIRequest(request)
     }
@@ -67,7 +67,7 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
             service.chatCompletionSettings,
             messages,
             true,
-            getCredential(CredentialKey.CustomServiceApiKey(service.name.orEmpty()))
+            getCredential(CredentialKey.CustomServiceApiKeyById(requireNotNull(service.id)))
         )
         return CustomOpenAIRequest(request)
     }

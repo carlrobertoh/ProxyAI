@@ -24,7 +24,7 @@ object LegacySettingsMigration {
         return try {
             val generalState = GeneralSettings.getCurrentState()
             val selectedService = generalState.selectedService
-            
+
             if (selectedService != null) {
                 generalState.selectedService = null
                 createMigratedState(selectedService)
@@ -40,7 +40,7 @@ object LegacySettingsMigration {
     private fun createMigratedState(selectedService: ServiceType): ModelSettingsState {
         return ModelSettingsState().apply {
             val chatModel = getLegacyChatModelForService(selectedService)
-            
+
             setModelSelection(FeatureType.CHAT, chatModel, selectedService)
             setModelSelection(FeatureType.AUTO_APPLY, chatModel, selectedService)
             setModelSelection(FeatureType.COMMIT_MESSAGE, chatModel, selectedService)
@@ -49,7 +49,7 @@ object LegacySettingsMigration {
 
             val codeModel = getLegacyCodeModelForService(selectedService)
             setModelSelection(FeatureType.CODE_COMPLETION, codeModel, selectedService)
-            
+
             if (selectedService == ServiceType.PROXYAI) {
                 setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.ZETA, ServiceType.PROXYAI)
             } else {
@@ -71,7 +71,8 @@ object LegacySettingsMigration {
                 }
 
                 ServiceType.ANTHROPIC -> {
-                    AnthropicSettings.getCurrentState().model ?: ModelRegistry.CLAUDE_SONNET_4_20250514
+                    AnthropicSettings.getCurrentState().model
+                        ?: ModelRegistry.CLAUDE_SONNET_4_20250514
                 }
 
                 ServiceType.GOOGLE -> {
@@ -94,15 +95,10 @@ object LegacySettingsMigration {
                 }
 
                 ServiceType.CUSTOM_OPENAI -> {
-                    val customServicesSettings = service<CustomServicesSettings>()
-                    val services = customServicesSettings.state.services
-                    
-                    val activeServiceName = customServicesSettings.state.active.name
-                    if (!activeServiceName.isNullOrBlank()) {
-                        activeServiceName
-                    } else {
-                        services.map { it.name }.lastOrNull()?.takeIf { it.isNotBlank() } ?: "Default"
-                    }
+                    service<CustomServicesSettings>().state.services
+                        .map { it.name }
+                        .lastOrNull()
+                        ?.takeIf { it.isNotBlank() } ?: "Default"
                 }
 
                 ServiceType.MISTRAL -> {
@@ -111,7 +107,7 @@ object LegacySettingsMigration {
             }
         } catch (e: Exception) {
             logger.warn("Failed to get legacy chat model for $serviceType", e)
-            getDefaultModelForService(serviceType)
+            throw e
         }
     }
 
@@ -160,30 +156,6 @@ object LegacySettingsMigration {
         } catch (e: Exception) {
             logger.warn("Failed to get legacy code model for $serviceType", e)
             null
-        }
-    }
-
-    private fun getDefaultModelForService(serviceType: ServiceType): String {
-        return when (serviceType) {
-            ServiceType.PROXYAI -> ModelRegistry.GEMINI_FLASH_2_5
-            ServiceType.OPENAI -> ModelRegistry.GPT_4O
-            ServiceType.ANTHROPIC -> ModelRegistry.CLAUDE_SONNET_4_20250514
-            ServiceType.GOOGLE -> ModelRegistry.GEMINI_2_0_FLASH
-            ServiceType.MISTRAL -> ModelRegistry.DEVSTRAL_MEDIUM_2507
-            ServiceType.OLLAMA -> ModelRegistry.LLAMA_3_2
-            ServiceType.LLAMA_CPP -> ModelRegistry.LLAMA_3_2_3B_INSTRUCT
-            ServiceType.CUSTOM_OPENAI -> {
-                // For Custom OpenAI, try to use the active service name if available
-                // If not available, use a placeholder that won't break model selection
-                try {
-                    val customServicesSettings = service<CustomServicesSettings>()
-                    val activeService = customServicesSettings.state.active
-                    activeService?.name?.takeIf { it.isNotBlank() } ?: "Custom OpenAI"
-                } catch (e: Exception) {
-                    logger.warn("Could not access CustomServicesSettings for default model, using placeholder", e)
-                    "Custom OpenAI"
-                }
-            }
         }
     }
 }

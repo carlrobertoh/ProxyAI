@@ -312,11 +312,11 @@ public class ModelComboBoxAction extends ComboBoxAction {
         break;
       case CUSTOM_OPENAI:
         ModelRegistry.getInstance().getCustomOpenAIModels().stream()
-            .filter(it -> Objects.requireNonNull(modelCode).equals(it.getModel()))
+            .filter(it -> it.getModel().equals(modelCode))
             .findFirst()
             .ifPresent(selection -> {
               templatePresentation.setIcon(Icons.OpenAI);
-              templatePresentation.setText(selection.getModel());
+              templatePresentation.setText(selection.getDisplayName());
             });
         break;
       case ANTHROPIC:
@@ -463,7 +463,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.OpenAI,
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(featureType, model.getName(), CUSTOM_OPENAI));
+            .setModel(featureType, model.getId(), CUSTOM_OPENAI));
   }
 
   private AnAction createGoogleModelAction(GoogleModel model, Presentation comboBoxPresentation) {

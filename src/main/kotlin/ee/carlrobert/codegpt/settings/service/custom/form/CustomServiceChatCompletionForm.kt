@@ -1,7 +1,5 @@
 package ee.carlrobert.codegpt.settings.service.custom.form
 
-import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.observable.util.whenTextChanged
 import com.intellij.openapi.ui.MessageType
 import com.intellij.util.ui.FormBuilder
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -31,7 +29,9 @@ class CustomServiceChatCompletionForm(
     )
 
     init {
-        testConnectionButton.addActionListener { testConnection() }
+        testConnectionButton.addActionListener {
+            testConnection()
+        }
     }
 
     var url: String
@@ -73,42 +73,70 @@ class CustomServiceChatCompletionForm(
     }
 
     private fun testConnection() {
+        testConnectionButton.isEnabled = false
+        testConnectionButton.text = "Testing..."
+
+        val request = CustomOpenAIRequestFactory.buildCustomOpenAICompletionRequest(
+            "Test",
+            urlField.text,
+            tabbedPane.headers,
+            tabbedPane.body,
+            getApiKey.invoke()
+
+        )
+
         CompletionRequestService.getInstance().getCustomOpenAIChatCompletionAsync(
-            CustomOpenAIRequestFactory.buildCustomOpenAICompletionRequest(
-                "Test",
-                urlField.text,
-                tabbedPane.headers,
-                tabbedPane.body,
-                getApiKey.invoke()
-            ),
+            request,
             TestConnectionEventListener()
         )
     }
 
     internal inner class TestConnectionEventListener : CompletionEventListener<String?> {
+        private var responseReceived = false
+
         override fun onMessage(value: String?, eventSource: EventSource) {
-            if (!value.isNullOrEmpty()) {
-                runInEdt {
-                    OverlayUtil.showBalloon(
-                        CodeGPTBundle.get("settingsConfigurable.service.custom.openai.connectionSuccess"),
-                        MessageType.INFO,
-                        testConnectionButton
-                    )
-                    eventSource.cancel()
-                }
+            if (!responseReceived) {
+                responseReceived = true
+                testConnectionButton.isEnabled = true
+                testConnectionButton.text =
+                    CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
+                OverlayUtil.showBalloon(
+                    "Connection successful!",
+                    MessageType.INFO,
+                    testConnectionButton
+                )
+                eventSource.cancel()
             }
         }
 
         override fun onError(error: ErrorDetails, ex: Throwable) {
-            runInEdt {
+            testConnectionButton.isEnabled = true
+            testConnectionButton.text =
+                CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
+            OverlayUtil.showBalloon(
+                "Connection failed: ${error.message}",
+                MessageType.ERROR,
+                testConnectionButton
+            )
+        }
+
+        override fun onComplete(messageBuilder: StringBuilder) {
+            if (!responseReceived) {
+                testConnectionButton.isEnabled = true
+                testConnectionButton.text =
+                    CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
                 OverlayUtil.showBalloon(
-                    CodeGPTBundle.get("settingsConfigurable.service.custom.openai.connectionFailed")
-                            + "\n\n"
-                            + error.message,
-                    MessageType.ERROR,
+                    "Connection successful!",
+                    MessageType.INFO,
                     testConnectionButton
                 )
             }
+        }
+
+        override fun onCancelled(messageBuilder: StringBuilder) {
+            testConnectionButton.isEnabled = true
+            testConnectionButton.text =
+                CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
         }
     }
 }

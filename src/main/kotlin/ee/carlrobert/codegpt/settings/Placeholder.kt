@@ -1,7 +1,8 @@
 package ee.carlrobert.codegpt.settings
 
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import git4idea.GitUtil
+import ee.carlrobert.codegpt.util.GitUtil
 import git4idea.branch.GitBranchUtil
 import java.time.LocalDate
 
@@ -16,7 +17,10 @@ enum class Placeholder(val description: String, val code: String) {
         "The complete source code contents of all files currently open in the IDE editor tabs, maintaining their formatting and structure.",
         "$" + "OPEN_FILES"
     ),
-    ACTIVE_CONVERSATION("The complete conversation history with the AI assistant, including the most recent response and any relevant context from the current interaction.", "$" + "ACTIVE_CONVERSATION"),
+    ACTIVE_CONVERSATION(
+        "The complete conversation history with the AI assistant, including the most recent response and any relevant context from the current interaction.",
+        "$" + "ACTIVE_CONVERSATION"
+    ),
     PREFIX("Code before the cursor.", "$" + "PREFIX"),
     SUFFIX("Code after the cursor.", "$" + "SUFFIX"),
     FIM_PROMPT(
@@ -36,15 +40,19 @@ class DatePlaceholderStrategy : PlaceholderStrategy {
 }
 
 class BranchNamePlaceholderStrategy(val project: Project) : PlaceholderStrategy {
+    private val logger = thisLogger()
+
     override fun getReplacementValue(): String {
         return try {
-            val repositories = GitUtil.getRepositoryManager(project).repositories
-            if (repositories.isEmpty() || repositories.size != 1) {
+            val repository = GitUtil.getProjectRepository(project)
+            if (repository == null) {
+                logger.error("Couldn't find repository for project")
                 return "BRANCH-UNKNOWN"
             }
 
-            GitBranchUtil.getBranchNameOrRev(repositories[0])
-        } catch (ignore: Exception) {
+            GitBranchUtil.getBranchNameOrRev(repository)
+        } catch (ex: Exception) {
+            logger.error("Couldn't get git branch name replacement value", ex)
             "BRANCH-UNKNOWN"
         }
     }

@@ -59,6 +59,32 @@ class ModelSelectionService {
         }
     }
 
+    fun syncWithAvailableCustomOpenAIModels(preferredServiceId: String? = null) {
+        val registry = service<ModelRegistry>()
+        val settings = service<ModelSettings>()
+
+        FeatureType.entries.forEach { featureType ->
+            if (!registry.isFeatureSupportedByProvider(featureType, ServiceType.CUSTOM_OPENAI)) return@forEach
+
+            val current = settings.getModelSelection(featureType)
+            if (current?.provider != ServiceType.CUSTOM_OPENAI) return@forEach
+
+            val available = registry.getAllModelsForFeature(featureType)
+                .filter { it.provider == ServiceType.CUSTOM_OPENAI }
+
+            val isCurrentValid = available.any { it.model == current.model }
+
+            if (!isCurrentValid) {
+                val newId = when {
+                    !preferredServiceId.isNullOrBlank() && available.any { it.model == preferredServiceId } -> preferredServiceId
+                    available.isNotEmpty() -> available.first().model
+                    else -> null
+                }
+                settings.setModelWithProvider(featureType, newId, ServiceType.CUSTOM_OPENAI)
+            }
+        }
+    }
+
     companion object {
 
         private val logger = thisLogger()

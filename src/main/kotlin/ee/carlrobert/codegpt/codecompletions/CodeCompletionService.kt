@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.codecompletions
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildChatBasedFIMRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildChatBasedFIMHttpRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCustomRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildLlamaRequest
@@ -68,13 +67,13 @@ class CodeCompletionService(private val project: Project) {
             }
 
             CUSTOM_OPENAI -> {
-                val activeService = service<CustomServicesSettings>().state.active
+                val activeService =
+                    service<CustomServicesSettings>().customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
                 val customSettings = activeService.codeCompletionSettings
-                val isChatBasedFIM = customSettings.infillTemplate == InfillPromptTemplate.CHAT_COMPLETION
-                
+                val isChatBasedFIM =
+                    customSettings.infillTemplate == InfillPromptTemplate.CHAT_COMPLETION
                 if (isChatBasedFIM) {
-                    // Use chat completion endpoint for chat-based FIM with proper API key substitution
-                    val credential = getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
+                    val credential = getCredential(CredentialKey.CustomServiceApiKeyById(requireNotNull(activeService.id)))
                     createFactory(
                         CompletionClientProvider.getDefaultClientBuilder().build()
                     ).newEventSource(
@@ -88,7 +87,6 @@ class CodeCompletionService(private val project: Project) {
                         OpenAIChatCompletionEventSourceListener(eventListener)
                     )
                 } else {
-                    // Use traditional completion endpoint
                     createFactory(
                         CompletionClientProvider.getDefaultClientBuilder().build()
                     ).newEventSource(

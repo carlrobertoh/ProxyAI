@@ -26,8 +26,13 @@ object GitUtil {
     @JvmStatic
     fun getProjectRepository(project: Project): GitRepository? {
         val repositoryManager = project.service<GitRepositoryManager>()
-        return repositoryManager.getRepositoryForFile(project.guessProjectDir())
-            ?: repositoryManager.repositories.firstOrNull()
+        return try {
+            repositoryManager.getRepositoryForFile(project.guessProjectDir())
+                ?: repositoryManager.repositories.firstOrNull()
+        } catch (e: Exception) {
+            logger.warn("Failed to get git repository", e)
+            repositoryManager.repositories.firstOrNull()
+        }
     }
 
     fun getCurrentChanges(project: Project): String? {

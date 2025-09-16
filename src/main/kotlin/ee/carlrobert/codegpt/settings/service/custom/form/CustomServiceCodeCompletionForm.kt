@@ -2,7 +2,6 @@ package ee.carlrobert.codegpt.settings.service.custom.form
 
 import com.intellij.icons.AllIcons.General
 import com.intellij.ide.HelpTooltip
-import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.panel.ComponentPanelBuilder
@@ -162,6 +161,9 @@ class CustomServiceCodeCompletionForm(
     }
 
     private fun testConnection() {
+        testConnectionButton.isEnabled = false
+        testConnectionButton.text = "Testing..."
+
         val selectedTemplate = promptTemplateComboBox.selectedItem as InfillPromptTemplate
         val testRequest = InfillRequest.Builder("Hello", "!", 0).build()
         
@@ -193,30 +195,53 @@ class CustomServiceCodeCompletionForm(
         }
     }
 
+
     internal inner class TestConnectionEventListener : CompletionEventListener<String?> {
+        private var responseReceived = false
+
         override fun onMessage(value: String?, eventSource: EventSource) {
-            if (!value.isNullOrEmpty()) {
-                runInEdt {
-                    OverlayUtil.showBalloon(
-                        CodeGPTBundle.get("settingsConfigurable.service.custom.openai.connectionSuccess"),
-                        MessageType.INFO,
-                        testConnectionButton
-                    )
-                    eventSource.cancel()
-                }
+            if (!responseReceived) {
+                responseReceived = true
+                testConnectionButton.isEnabled = true
+                testConnectionButton.text =
+                    CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
+                OverlayUtil.showBalloon(
+                    "Connection successful!",
+                    MessageType.INFO,
+                    testConnectionButton
+                )
+                eventSource.cancel()
             }
         }
 
         override fun onError(error: ErrorDetails, ex: Throwable) {
-            runInEdt {
+            testConnectionButton.isEnabled = true
+            testConnectionButton.text =
+                CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
+            OverlayUtil.showBalloon(
+                "Connection failed: ${error.message}",
+                MessageType.ERROR,
+                testConnectionButton
+            )
+        }
+
+        override fun onComplete(messageBuilder: StringBuilder) {
+            if (!responseReceived) {
+                testConnectionButton.isEnabled = true
+                testConnectionButton.text =
+                    CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
                 OverlayUtil.showBalloon(
-                    CodeGPTBundle.get("settingsConfigurable.service.custom.openai.connectionFailed")
-                            + "\n\n"
-                            + error.message,
-                    MessageType.ERROR,
+                    "Connection successful!",
+                    MessageType.INFO,
                     testConnectionButton
                 )
             }
+        }
+
+        override fun onCancelled(messageBuilder: StringBuilder) {
+            testConnectionButton.isEnabled = true
+            testConnectionButton.text =
+                CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")
         }
     }
 

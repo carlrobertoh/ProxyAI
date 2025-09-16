@@ -3,10 +3,12 @@ package ee.carlrobert.codegpt.settings.service.custom.form.model
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceCodeCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
+import java.util.UUID
 
 
 fun CustomServiceSettingsData.mapToState(): CustomServiceSettingsState =
     CustomServiceSettingsState().also { serviceState ->
+        serviceState.id = if (id.isBlank()) UUID.randomUUID().toString() else id
         serviceState.name = name
         serviceState.template = template
         serviceState.chatCompletionSettings = chatCompletionSettings.mapToState()

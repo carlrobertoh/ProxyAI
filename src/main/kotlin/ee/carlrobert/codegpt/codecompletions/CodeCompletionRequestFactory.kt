@@ -139,8 +139,7 @@ object CodeCompletionRequestFactory {
         val activeService = service<CustomServicesSettings>()
             .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
         val settings = activeService.codeCompletionSettings
-        val credential =
-            getCredential(CredentialKey.CustomServiceApiKey(activeService.name.orEmpty()))
+        val credential = getCredential(CredentialKey.CustomServiceApiKeyById(requireNotNull(activeService.id)))
         return buildCustomRequest(
             details,
             settings.url!!,

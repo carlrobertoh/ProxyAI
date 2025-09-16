@@ -13,6 +13,7 @@ import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceChatC
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceCodeCompletionTemplate
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTemplate
 import ee.carlrobert.codegpt.util.BaseConverter
+import java.util.UUID
 import ee.carlrobert.codegpt.util.MapConverter
 
 private const val DEFAULT_SERVICE_SETTINGS_NANE = "Default"
@@ -63,13 +64,8 @@ class CustomServicesSettings :
             val migrated = CustomServiceSettingsState().apply { copyFrom(oldSettingsService.state) }
             state.services.clear()
             state.services.add(migrated)
-            state.active = migrated
 
             CredentialsStore.setCredential(CredentialsStore.CredentialKey.CustomServiceApiKeyLegacy, null)
-            CredentialsStore.setCredential(
-                CredentialsStore.CredentialKey.CustomServiceApiKey(state.active.name.orEmpty()),
-                oldApiKey
-            )
 
             oldSettingsService.state.apply {
                 template = CustomServiceTemplate.OPENAI
@@ -91,21 +87,49 @@ class CustomServicesSettings :
                 headers = mutableMapOf()
             }
         }
+
+        state.services.forEach { svc ->
+            if (svc.id.isNullOrBlank()) {
+                svc.id = UUID.randomUUID().toString()
+            }
+        }
+
+        runCatching {
+            val services = state.services.filter { !it.id.isNullOrBlank() }
+            val groups = services.groupBy { it.name ?: "" }
+            services.forEach { svc ->
+                val id = svc.id ?: return@forEach
+                val name = svc.name ?: return@forEach
+                val unique = name.isNotEmpty() && (groups[name]?.size == 1)
+                if (unique) {
+                    val idKey = CredentialsStore.CredentialKey.CustomServiceApiKeyById(id)
+                    val hasId = !CredentialsStore.getCredential(idKey).isNullOrEmpty()
+                    if (!hasId) {
+                        val legacy = CredentialsStore.getCredential(
+                            CredentialsStore.CredentialKey.CustomServiceApiKey(name)
+                        )
+                        if (!legacy.isNullOrEmpty()) {
+                            CredentialsStore.setCredential(idKey, legacy)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun customServiceStateForFeatureType(featureType: FeatureType): CustomServiceSettingsState {
         val modelSelection = service<ModelSelectionService>()
         val featureSelection = modelSelection.getModelSelectionForFeature(featureType)
 
-        if (featureSelection.provider != ServiceType.CUSTOM_OPENAI)
+        if (featureSelection?.provider != ServiceType.CUSTOM_OPENAI)
             throw IllegalStateException(
                 "Current selected ServiceType (${featureSelection}) is not of type 'CUSTOM_OPENAI'. " +
                         "This function should not be called in this context!"
             )
 
         return this.state.services
-            .find { it.name == featureSelection.model }
-            ?: throw IllegalStateException("Unable to find custom service with name '${featureSelection.model}'.")
+            .find { it.id == featureSelection.model }
+            ?: throw IllegalStateException("Unable to find custom service with id '${featureSelection.model}'.")
     }
 }
 
@@ -120,8 +144,6 @@ class CustomServicesState(
     @get:OptionTag(converter = CustomServiceSettingsListConverter::class)
     var services by list<CustomServiceSettingsState>()
 
-    var active by property(initialState)
-
     init {
         services.add(initialState)
     }
@@ -129,6 +151,7 @@ class CustomServicesState(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 class CustomServiceSettingsState : BaseState() {
+    var id by string(UUID.randomUUID().toString())
     var name by string(DEFAULT_SERVICE_SETTINGS_NANE)
     var template by enum(CustomServiceTemplate.OPENAI)
     var chatCompletionSettings by property(CustomServiceChatCompletionSettingsState())

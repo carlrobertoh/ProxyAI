@@ -173,23 +173,14 @@ class ModelSettingsTest : IntegrationTest() {
         assertThat(notification.serviceType).isEqualTo(ServiceType.ANTHROPIC)
     }
 
-    fun `test getOrCreateModelSelection with existing selection returns stored model`() {
-        modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4o", ServiceType.OPENAI)
-
-        val result = modelSettings.getOrCreateModelSelection(FeatureType.CHAT)
-
-        assertThat(result.provider).isEqualTo(ServiceType.OPENAI)
-        assertThat(result.model).isEqualTo("gpt-4o")
-    }
-
     fun `test getModelSelection with valid feature returns model selection`() {
         modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4o", ServiceType.OPENAI)
 
         val result = modelSettings.getModelSelection(FeatureType.CHAT)
 
         assertThat(result).isNotNull
-        assertThat(result.provider).isEqualTo(ServiceType.OPENAI)
-        assertThat(result.model).isEqualTo("gpt-4o")
+        assertThat(result?.provider).isEqualTo(ServiceType.OPENAI)
+        assertThat(result?.model).isEqualTo("gpt-4o")
     }
 
     fun `test getModelForFeature returns stored model`() {

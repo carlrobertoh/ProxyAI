@@ -2,9 +2,8 @@ package ee.carlrobert.codegpt.settings.service.custom
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
-import ee.carlrobert.codegpt.settings.service.ModelReplacementDialog
-import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.custom.form.CustomServiceListForm
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.custom.form.CustomServiceForm
 import ee.carlrobert.codegpt.util.coroutines.EdtDispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -14,14 +13,14 @@ import javax.swing.JComponent
 class CustomServiceConfigurable : Configurable {
 
     private val coroutineScope = CoroutineScope(SupervisorJob() + EdtDispatchers.Default)
-    private lateinit var component: CustomServiceListForm
+    private lateinit var component: CustomServiceForm
 
     override fun getDisplayName(): String {
         return "ProxyAI: Custom Service"
     }
 
     override fun createComponent(): JComponent {
-        component = CustomServiceListForm(service<CustomServicesSettings>(), coroutineScope)
+        component = CustomServiceForm(service<CustomServicesSettings>(), coroutineScope)
         return component.getForm()
     }
 
@@ -29,8 +28,8 @@ class CustomServiceConfigurable : Configurable {
 
     override fun apply() {
         component.applyChanges()
-
-        ModelReplacementDialog.showDialogIfNeeded(ServiceType.CUSTOM_OPENAI)
+        ModelSelectionService.getInstance()
+            .syncWithAvailableCustomOpenAIModels(component.getSelectedServiceId())
     }
 
     override fun reset() {

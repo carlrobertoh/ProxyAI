@@ -17,7 +17,9 @@ class ModelSettingsState : BaseState() {
         val registry = ModelRegistry.getInstance()
         FeatureType.entries.forEach { featureType ->
             val defaultModel = registry.getDefaultModelForFeature(featureType)
-            setModelSelection(featureType, defaultModel.model, defaultModel.provider)
+            if (defaultModel != null) {
+                setModelSelection(featureType, defaultModel.model, defaultModel.provider)
+            }
         }
     }
 
