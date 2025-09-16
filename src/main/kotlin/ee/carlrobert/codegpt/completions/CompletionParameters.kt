@@ -129,11 +129,17 @@ data class AutoApplyParameters(
     val featureType: FeatureType = FeatureType.AUTO_APPLY
 )
 
-data class EditCodeCompletionParameters(
+data class InlineEditCompletionParameters(
     val prompt: String,
-    val selectedText: String,
-    val chatMode: ChatMode = ChatMode.EDIT,
-    val featureType: FeatureType = FeatureType.EDIT_CODE
+    val selectedText: String? = null,
+    val filePath: String? = null,
+    val fileExtension: String? = null,
+    val projectBasePath: String? = null,
+    val referencedFiles: List<ReferencedFile>? = null,
+    val gitDiff: String? = null,
+    val conversation: Conversation? = null,
+    val conversationHistory: List<Conversation>? = null,
+    val diagnosticsInfo: String? = null
 ) : CompletionParameters
 
 data class ImageDetails(

@@ -14,7 +14,8 @@ sealed class TagDetails(
     val name: String,
     val icon: Icon? = null,
     val id: UUID = UUID.randomUUID(),
-    val createdOn: Long = System.currentTimeMillis()
+    val createdOn: Long = System.currentTimeMillis(),
+    val isRemovable: Boolean = true
 ) {
 
     var selected: Boolean = true
@@ -30,8 +31,8 @@ sealed class TagDetails(
     }
 }
 
-class EditorTagDetails(val virtualFile: VirtualFile) :
-    TagDetails(virtualFile.name, virtualFile.fileType.icon) {
+class EditorTagDetails(val virtualFile: VirtualFile, isRemovable: Boolean = true) :
+    TagDetails(virtualFile.name, virtualFile.fileType.icon, isRemovable = isRemovable) {
 
     private val type: String = "EditorTagDetails"
 

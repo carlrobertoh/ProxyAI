@@ -27,7 +27,7 @@ abstract class TagPanel(
 
     private val label = TagLabel(tagDetails.name, tagDetails.icon, tagDetails.selected)
     private val closeButton = CloseButton {
-        isVisible = isSelected
+        isVisible = isSelected && tagDetails.isRemovable
         onClose()
     }
     private var isRevertingSelection = false
@@ -41,7 +41,7 @@ abstract class TagPanel(
     abstract fun onClose()
 
     fun update(text: String, icon: Icon? = null) {
-        closeButton.isVisible = isSelected
+        closeButton.isVisible = isSelected && tagDetails.isRemovable
         label.update(text, icon, isSelected)
         revalidate()
         repaint()
@@ -66,7 +66,7 @@ abstract class TagPanel(
         border = JBUI.Borders.empty(2, 6)
         cursor = Cursor(Cursor.HAND_CURSOR)
         isSelected = tagDetails.selected
-        closeButton.isVisible = isSelected
+        closeButton.isVisible = isSelected && tagDetails.isRemovable
 
         val gbc = GridBagConstraints().apply {
             gridx = 0
@@ -90,7 +90,7 @@ abstract class TagPanel(
                 isRevertingSelection = false
             }
 
-            closeButton.isVisible = isSelected
+            closeButton.isVisible = isSelected && tagDetails.isRemovable
             tagDetails.selected = isSelected
             tagManager.notifySelectionChanged(tagDetails)
             label.update(isSelected)

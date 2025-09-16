@@ -93,15 +93,15 @@ public final class CompletionRequestService {
     return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.COMMIT_MESSAGE);
   }
 
-  public EventSource getEditCodeCompletionAsync(
-      EditCodeCompletionParameters params,
+  public EventSource getInlineEditCompletionAsync(
+      InlineEditCompletionParameters params,
       CompletionEventListener<String> eventListener) {
     var serviceType =
-        ModelSelectionService.getInstance().getServiceForFeature(FeatureType.EDIT_CODE);
+        ModelSelectionService.getInstance().getServiceForFeature(FeatureType.INLINE_EDIT);
     var request = CompletionRequestFactory
         .getFactory(serviceType)
-        .createEditCodeRequest(params);
-    return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.EDIT_CODE);
+        .createInlineEditRequest(params);
+    return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.INLINE_EDIT);
   }
 
   public EventSource getChatCompletionAsync(

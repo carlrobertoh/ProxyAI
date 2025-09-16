@@ -2,8 +2,6 @@ package ee.carlrobert.codegpt.settings.models
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.*
-import com.intellij.openapi.diagnostic.thisLogger
-import ee.carlrobert.codegpt.settings.migration.LegacySettingsMigration
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -32,7 +30,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         FeatureType.COMMIT_MESSAGE to PublisherMethod { publisher, model, serviceType ->
             publisher.commitMessageModelChanged(model, serviceType)
         },
-        FeatureType.EDIT_CODE to PublisherMethod { publisher, model, serviceType ->
+        FeatureType.INLINE_EDIT to PublisherMethod { publisher, model, serviceType ->
             publisher.editCodeModelChanged(model, serviceType)
         },
         FeatureType.NEXT_EDIT to PublisherMethod { publisher, model, serviceType ->

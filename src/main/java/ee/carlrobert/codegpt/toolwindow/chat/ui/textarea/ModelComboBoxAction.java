@@ -66,12 +66,13 @@ public class ModelComboBoxAction extends ComboBoxAction {
   private final Project project;
   private final List<ServiceType> availableProviders;
   private final boolean showConfigureModels;
+  private final FeatureType featureType;
 
   public ModelComboBoxAction(
       Project project,
       Consumer<ServiceType> onModelChange,
       ServiceType selectedService) {
-    this(project, onModelChange, selectedService, Arrays.asList(ServiceType.values()), true);
+    this(project, onModelChange, selectedService, Arrays.asList(ServiceType.values()), true, FeatureType.CHAT);
   }
 
   public ModelComboBoxAction(
@@ -80,10 +81,21 @@ public class ModelComboBoxAction extends ComboBoxAction {
       ServiceType selectedProvider,
       List<ServiceType> availableProviders,
       boolean showConfigureModels) {
+    this(project, onModelChange, selectedProvider, availableProviders, showConfigureModels, FeatureType.CHAT);
+  }
+
+  public ModelComboBoxAction(
+      Project project,
+      Consumer<ServiceType> onModelChange,
+      ServiceType selectedProvider,
+      List<ServiceType> availableProviders,
+      boolean showConfigureModels,
+      FeatureType featureType) {
     this.project = project;
     this.onModelChange = onModelChange;
     this.availableProviders = availableProviders;
     this.showConfigureModels = showConfigureModels;
+    this.featureType = featureType;
     setSmallVariant(true);
     updateTemplatePresentation(selectedProvider);
 
@@ -92,8 +104,12 @@ public class ModelComboBoxAction extends ComboBoxAction {
         ModelChangeNotifier.getTopic(),
         new ModelChangeNotifierAdapter() {
           @Override
-          public void chatModelChanged(@NotNull String newModel, @NotNull ServiceType serviceType) {
-            updateTemplatePresentation(serviceType);
+          public void modelChanged(@NotNull FeatureType changedFeature,
+              @NotNull String newModel,
+              @NotNull ServiceType serviceType) {
+            if (changedFeature == featureType) {
+              updateTemplatePresentation(serviceType);
+            }
           }
         });
   }
@@ -275,12 +291,13 @@ public class ModelComboBoxAction extends ComboBoxAction {
     var application = ApplicationManager.getApplication();
     var templatePresentation = getTemplatePresentation();
     var chatModel = application.getService(ModelSettings.class).getState()
-        .getModelSelection(FeatureType.CHAT);
+        .getModelSelection(featureType);
     var modelCode = chatModel != null ? chatModel.getModel() : null;
 
     switch (selectedService) {
       case PROXYAI:
-        var proxyAIModel = ModelRegistry.getInstance().getProxyAIChatModels().stream()
+        var proxyAIModel = ModelRegistry.getInstance().getAllModelsForFeature(featureType).stream()
+            .filter(it -> it.getProvider() == PROXYAI)
             .filter(it -> modelCode != null && it.getModel().equals(modelCode))
             .findFirst();
         templatePresentation.setIcon(
@@ -391,7 +408,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
       var application = ApplicationManager.getApplication();
       application
           .getService(ModelSettings.class)
-          .setModel(FeatureType.CHAT, model.getModel(), PROXYAI);
+          .setModel(featureType, model.getModel(), PROXYAI);
 
       handleModelChange(PROXYAI);
     });
@@ -420,7 +437,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
               .setModel(model);
           application
               .getService(ModelSettings.class)
-              .setModel(FeatureType.CHAT, model, OLLAMA);
+              .setModel(featureType, model, OLLAMA);
         });
   }
 
@@ -434,7 +451,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.OpenAI,
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(FeatureType.CHAT, model.getCode(), OPENAI));
+            .setModel(featureType, model.getCode(), OPENAI));
   }
 
   private AnAction createCustomOpenAIModelAction(
@@ -446,7 +463,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.OpenAI,
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(FeatureType.CHAT, model.getName(), CUSTOM_OPENAI));
+            .setModel(featureType, model.getName(), CUSTOM_OPENAI));
   }
 
   private AnAction createGoogleModelAction(GoogleModel model, Presentation comboBoxPresentation) {
@@ -457,7 +474,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.Google,
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(FeatureType.CHAT, model.getCode(), GOOGLE));
+            .setModel(featureType, model.getCode(), GOOGLE));
   }
 
   private AnAction createAnthropicModelAction(
@@ -470,7 +487,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.Anthropic,
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(FeatureType.CHAT, modelCode, ANTHROPIC));
+            .setModel(featureType, modelCode, ANTHROPIC));
   }
 
   private AnAction createLlamaModelAction(Presentation comboBoxPresentation) {
@@ -480,7 +497,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.Llama,
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(FeatureType.CHAT,
+            .setModel(featureType,
                 LlamaSettings.getCurrentState().getHuggingFaceModel().getCode(), LLAMA_CPP));
   }
 
@@ -492,12 +509,12 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.Mistral,
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(FeatureType.CHAT, modelCode, MISTRAL));
+            .setModel(featureType, modelCode, MISTRAL));
   }
 
   private String getMistralPresentationText() {
     var chatModel = ApplicationManager.getApplication().getService(ModelSettings.class).getState()
-        .getModelSelection(FeatureType.CHAT);
+        .getModelSelection(featureType);
     var modelCode = chatModel != null ? chatModel.getModel() : null;
     return ModelRegistry.getInstance().getModelDisplayName(MISTRAL, modelCode);
   }

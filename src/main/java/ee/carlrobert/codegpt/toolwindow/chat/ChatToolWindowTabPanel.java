@@ -105,9 +105,12 @@ public class ChatToolWindowTabPanel implements Disposable {
         project,
         totalTokensPanel,
         this,
+        FeatureType.CHAT,
         tagManager,
         this::handleSubmit,
-        this::handleCancel);
+        this::handleCancel,
+        true,
+        true);
     userInputPanel.requestFocus();
     rootPanel = createRootPanel();
 

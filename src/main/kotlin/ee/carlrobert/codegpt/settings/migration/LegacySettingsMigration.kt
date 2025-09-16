@@ -4,7 +4,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.models.ModelRegistry
-import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.models.ModelSettingsState
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -45,7 +44,7 @@ object LegacySettingsMigration {
             setModelSelection(FeatureType.CHAT, chatModel, selectedService)
             setModelSelection(FeatureType.AUTO_APPLY, chatModel, selectedService)
             setModelSelection(FeatureType.COMMIT_MESSAGE, chatModel, selectedService)
-            setModelSelection(FeatureType.EDIT_CODE, chatModel, selectedService)
+            setModelSelection(FeatureType.INLINE_EDIT, chatModel, selectedService)
             setModelSelection(FeatureType.LOOKUP, chatModel, selectedService)
 
             val codeModel = getLegacyCodeModelForService(selectedService)

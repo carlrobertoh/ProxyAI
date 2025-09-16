@@ -7,9 +7,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import ee.carlrobert.codegpt.actions.editor.EditorActionsUtil
-import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTService
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier
 import ee.carlrobert.codegpt.ui.OverlayUtil

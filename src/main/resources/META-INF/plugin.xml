@@ -109,6 +109,7 @@
         <nameSuggestionProvider implementation="ee.carlrobert.codegpt.refactorings.DefaultNameSuggestionProvider"/>
     </extensions>
 
+
     <resource-bundle>messages.codegpt</resource-bundle>
 
     <actions>
@@ -133,6 +134,25 @@
             <keyboard-shortcut first-keystroke="ctrl shift ENTER" keymap="$default"/>
         </action>
 
+        <action
+                id="codegpt.acceptInlineEdit"
+                text="Accept Inline Edit"
+                class="ee.carlrobert.codegpt.actions.editor.AcceptInlineEditAction">
+            <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
+        </action>
+
+        <action
+                id="codegpt.acceptNextInlayWord"
+                text="Apply next word"
+                use-shortcut-of="EditorNextWord"
+                class="ee.carlrobert.codegpt.codecompletions.AcceptNextWordInlayAction"/>
+
+        <action
+                id="codegpt.acceptNextInlayLine"
+                text="Apply next line"
+                use-shortcut-of="EditorLineEnd"
+                class="ee.carlrobert.codegpt.codecompletions.AcceptNextLineInlayAction"/>
+
         <group id="CodeGPTEditorPopup">
             <group id="action.editor.group.EditorActionGroup"
                    text="ProxyAI"
@@ -147,10 +167,10 @@
                     <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift N" replace-all="true"/>
                 </action>
                 <action
-                        id="CodeGPT.ContextMenuEditCodeAction"
-                        text="Edit Code"
-                        description="Edit code from editor's context menu"
-                        class="ee.carlrobert.codegpt.actions.editor.EditCodeContextMenuAction">
+                  id="CodeGPT.ContextMenuInlineEditAction"
+                  text="Inline Edit"
+                  description="Edit code inline from editor's context menu"
+                  class="ee.carlrobert.codegpt.actions.editor.InlineEditContextMenuAction">
                     <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift K" replace-all="true"/>
                 </action>
                 <action
@@ -205,10 +225,10 @@
 
         <group id="CodeGPT.FloatingCodeToolbarMenuRootGroup">
             <action
-                    id="CodeGPT.FloatingMenuEditCodeAction"
-                    text="Edit Code"
-                    description="Edit code from editor's floating menu"
-                    class="ee.carlrobert.codegpt.actions.editor.EditCodeFloatingMenuAction">
+              id="CodeGPT.FloatingMenuInlineEditAction"
+              text="Inline Edit"
+              description="Edit code inline from editor's floating menu"
+              class="ee.carlrobert.codegpt.actions.editor.InlineEditFloatingMenuAction">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift K" replace-all="true"/>
             </action>
             <add-to-group
@@ -225,10 +245,54 @@
                 description="Adds the selected text to the ProxyAI context">
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift I" replace-all="true"/>
 
-            <add-to-group group-id="action.editor.group.EditorActionGroup" anchor="after"
-                          relative-to-action="CodeGPT.NewChat"/>
-            <add-to-group group-id="CodeGPT.FloatingCodeToolbarMenuRootGroup" anchor="after"
-                          relative-to-action="CodeGPT.FloatingMenuEditCodeAction"/>
+            <add-to-group group-id="action.editor.group.EditorActionGroup" anchor="after" relative-to-action="CodeGPT.NewChat"/>
+            <add-to-group group-id="CodeGPT.FloatingCodeToolbarMenuRootGroup" anchor="after" relative-to-action="CodeGPT.FloatingMenuInlineEditAction"/>
+        </action>
+
+        <!-- Inline Edit Keyboard Shortcuts -->
+        <action
+          id="CodeGPT.AcceptAllInlineEdit"
+          class="ee.carlrobert.codegpt.inlineedit.AcceptAllInlineEditAction"
+          text="Accept All Inline Edit Changes"
+          description="Accept all changes in the Inline Edit diff view">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift ENTER" replace-all="true"/>
+            <add-to-group group-id="EditorActions" anchor="last"/>
+        </action>
+
+        <action
+          id="CodeGPT.RejectAllInlineEdit"
+          class="ee.carlrobert.codegpt.inlineedit.RejectAllInlineEditAction"
+          text="Reject All Inline Edit Changes"
+          description="Reject all changes in the Inline Edit diff view">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift BACK_SPACE" replace-all="true"/>
+            <add-to-group group-id="EditorActions" anchor="last"/>
+        </action>
+
+        <action
+          id="CodeGPT.RejectInlineEdit"
+          class="ee.carlrobert.codegpt.inlineedit.RejectInlineEditAction"
+          text="Reject Inline Edit Changes"
+          description="Reject changes in the Inline Edit diff view">
+            <keyboard-shortcut keymap="$default" first-keystroke="ESCAPE" replace-all="true"/>
+            <add-to-group group-id="EditorActions" anchor="last"/>
+        </action>
+
+        <action
+          id="CodeGPT.AcceptCurrentInlineEdit"
+          class="ee.carlrobert.codegpt.inlineedit.AcceptCurrentInlineEditAction"
+          text="Accept Current Inline Edit Change"
+          description="Accept the current or next pending inline edit change">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl ENTER" replace-all="true"/>
+            <add-to-group group-id="EditorActions" anchor="last"/>
+        </action>
+
+        <action
+          id="CodeGPT.RejectCurrentInlineEdit"
+          class="ee.carlrobert.codegpt.inlineedit.RejectCurrentInlineEditAction"
+          text="Reject Current Inline Edit Change"
+          description="Reject the current or next pending inline edit change">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl BACK_SPACE" replace-all="true"/>
+            <add-to-group group-id="EditorActions" anchor="last"/>
         </action>
 
         <action

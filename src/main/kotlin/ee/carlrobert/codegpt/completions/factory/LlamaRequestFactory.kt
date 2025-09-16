@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.completions.factory
 
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
+import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
 import ee.carlrobert.codegpt.completions.ConversationType
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
@@ -12,6 +13,7 @@ import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
+import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 
 class LlamaRequestFactory : BaseRequestFactory() {
@@ -50,6 +52,14 @@ class LlamaRequestFactory : BaseRequestFactory() {
             promptTemplate.buildPrompt(systemPrompt, userPrompt, listOf())
 
         return buildLlamaRequest(finalPrompt, emptyList(), stream)
+    }
+
+    override fun createInlineEditRequest(params: InlineEditCompletionParameters): LlamaCompletionRequest {
+        val prepared = prepareInlineEditPrompts(params)
+        val promptTemplate = getPromptTemplate(FeatureType.INLINE_EDIT)
+        val history = params.conversation?.messages?.filter { !it.response.isNullOrBlank() } ?: listOf()
+        val finalPrompt = promptTemplate.buildPrompt(prepared.systemPrompt, prepared.userPrompt, history)
+        return buildLlamaRequest(finalPrompt, emptyList(), stream = true)
     }
 
     private fun getPromptTemplate(featureType: FeatureType? = null): PromptTemplate {

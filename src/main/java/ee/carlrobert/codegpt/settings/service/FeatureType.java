@@ -5,7 +5,7 @@ public enum FeatureType {
     CODE_COMPLETION,
     AUTO_APPLY,
     COMMIT_MESSAGE,
-    EDIT_CODE,
+    INLINE_EDIT,
     NEXT_EDIT,
     LOOKUP
 }

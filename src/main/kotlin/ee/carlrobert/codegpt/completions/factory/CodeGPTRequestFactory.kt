@@ -7,16 +7,17 @@ import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
+import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.buildOpenAIMessages
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.codegpt.request.chat.*
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage
 
 class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructureSerializer) :
     BaseRequestFactory() {
@@ -127,6 +128,28 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         )
             .setModel(model)
             .setStream(stream)
+            .build()
+    }
+
+    override fun createInlineEditRequest(params: InlineEditCompletionParameters): ChatCompletionRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.INLINE_EDIT)
+        val prepared = prepareInlineEditPrompts(params)
+        val messages: MutableList<OpenAIChatCompletionMessage> =
+            OpenAIRequestFactory.buildInlineEditMessages(prepared, params.conversation)
+
+        if (model == "o4-mini") {
+            val collapsed = messages.joinToString("\n\n") { msg ->
+                when (msg) {
+                    is OpenAIChatCompletionStandardMessage -> msg.content
+                    else -> ""
+                }
+            }
+            return buildBasicO1Request(model, collapsed, systemPrompt = "", maxCompletionTokens = 4096, stream = true)
+        }
+
+        return ChatCompletionRequest.Builder(messages)
+            .setModel(model)
+            .setStream(true)
             .build()
     }
 

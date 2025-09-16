@@ -25,7 +25,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 
-class OpenAIRequestFactory : CompletionRequestFactory {
+class OpenAIRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): OpenAIChatCompletionRequest {
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
@@ -47,15 +47,27 @@ class OpenAIRequestFactory : CompletionRequestFactory {
         return requestBuilder.build()
     }
 
-    override fun createEditCodeRequest(params: EditCodeCompletionParameters): OpenAIChatCompletionRequest {
-        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.EDIT_CODE)
-        val prompt = "Code to modify:\n${params.selectedText}\n\nInstructions: ${params.prompt}"
-        val systemPrompt =
-            service<FilteredPromptsService>().getFilteredEditCodePrompt(params.chatMode)
-        if (isReasoningModel(model)) {
-            return buildBasicO1Request(model, prompt, systemPrompt, stream = true)
+    override fun createInlineEditRequest(params: InlineEditCompletionParameters): OpenAIChatCompletionRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.INLINE_EDIT)
+        val prepared = prepareInlineEditPrompts(params)
+        val messages = buildInlineEditMessages(prepared, params.conversation)
+
+        val configuration = service<ConfigurationSettings>().state
+        return if (isReasoningModel(model)) {
+            val collapsed = messages.joinToString("\n\n") { msg ->
+                when (msg) {
+                    is OpenAIChatCompletionStandardMessage -> msg.content
+                    else -> ""
+                }
+            }
+            buildBasicO1Request(model, collapsed, systemPrompt = "", stream = true)
+        } else {
+            OpenAIChatCompletionRequest.Builder(messages)
+                .setModel(model)
+                .setStream(true)
+                .setTemperature(configuration.temperature.toDouble())
+                .build()
         }
-        return createBasicCompletionRequest(systemPrompt, prompt, model, true)
     }
 
     override fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest {
@@ -76,6 +88,29 @@ class OpenAIRequestFactory : CompletionRequestFactory {
             return buildBasicO1Request(model, prompt, systemPrompt, stream = true)
         }
         return createBasicCompletionRequest(systemPrompt, prompt, model, true)
+    }
+
+    override fun createBasicCompletionRequest(
+        systemPrompt: String,
+        userPrompt: String,
+        maxTokens: Int,
+        stream: Boolean,
+        featureType: FeatureType
+    ): CompletionRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(featureType)
+        return if (isReasoningModel(model)) {
+            buildBasicO1Request(model, userPrompt, systemPrompt, maxCompletionTokens = maxTokens, stream = stream)
+        } else {
+            OpenAIChatCompletionRequest.Builder(
+                listOf(
+                    OpenAIChatCompletionStandardMessage("system", systemPrompt),
+                    OpenAIChatCompletionStandardMessage("user", userPrompt)
+                )
+            )
+                .setModel(model)
+                .setStream(stream)
+                .build()
+        }
     }
 
     override fun createCommitMessageRequest(params: CommitMessageCompletionParameters): OpenAIChatCompletionRequest {
@@ -106,6 +141,22 @@ class OpenAIRequestFactory : CompletionRequestFactory {
     }
 
     companion object {
+        fun buildInlineEditMessages(
+            prepared: InlineEditPrompts,
+            conversation: Conversation?
+        ): MutableList<OpenAIChatCompletionMessage> {
+            val messages = mutableListOf<OpenAIChatCompletionMessage>()
+            messages.add(OpenAIChatCompletionStandardMessage("system", prepared.systemPrompt))
+            conversation?.messages?.forEach { m ->
+                val p = m.prompt?.trim().orEmpty()
+                if (p.isNotEmpty()) messages.add(OpenAIChatCompletionStandardMessage("user", p))
+                val r = m.response?.trim().orEmpty()
+                if (r.isNotEmpty()) messages.add(OpenAIChatCompletionStandardMessage("assistant", r))
+            }
+            messages.add(OpenAIChatCompletionStandardMessage("user", prepared.userPrompt))
+            return messages
+        }
+
         fun isReasoningModel(model: String?) =
             listOf(
                 O_4_MINI.code,

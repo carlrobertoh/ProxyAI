@@ -20,6 +20,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorTextField
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
@@ -60,6 +61,8 @@ class PromptTextField(
         isOneLineMode = false
         IS_PROMPT_TEXT_FIELD_DOCUMENT.set(document, true)
         setPlaceholder(CodeGPTBundle.get("toolwindow.chat.textArea.emptyText"))
+        
+        putClientProperty(UIUtil.HIDE_EDITOR_FROM_DATA_CONTEXT_PROPERTY, true)
     }
 
     override fun onEditorAdded(editor: Editor) {
@@ -82,6 +85,13 @@ class PromptTextField(
     fun clear() {
         runInEdt {
             text = ""
+        }
+    }
+
+    fun setTextAndFocus(text: String) {
+        runInEdt {
+            this.text = text
+            requestFocusInWindow()
         }
     }
 
@@ -349,6 +359,11 @@ class PromptTextField(
     }
 
     private fun adjustHeight(editor: EditorEx) {
+        val toolWindow = project.service<ToolWindowManager>().getToolWindow("ProxyAI")
+        if (toolWindow == null || !toolWindow.component.isAncestorOf(this)) {
+            return
+        }
+        
         val contentHeight =
             editor.contentComponent.preferredSize.height + PromptTextFieldConstants.HEIGHT_PADDING
         val maxHeight = JBUI.scale(getToolWindowHeight() / 2)

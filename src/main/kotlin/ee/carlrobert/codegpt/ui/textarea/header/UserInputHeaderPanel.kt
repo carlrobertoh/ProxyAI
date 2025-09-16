@@ -40,7 +40,8 @@ class UserInputHeaderPanel(
     private val project: Project,
     private val tagManager: TagManager,
     private val totalTokensPanel: TotalTokensPanel,
-    private val promptTextField: PromptTextField
+    private val promptTextField: PromptTextField,
+    private val withRemovableSelectedEditorTag: Boolean
 ) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener {
 
     companion object {
@@ -171,7 +172,7 @@ class UserInputHeaderPanel(
     private fun addInitialTags() {
         val selectedFile = getSelectedEditor(project)?.virtualFile
         if (selectedFile != null) {
-            tagManager.addTag(EditorTagDetails(selectedFile))
+            tagManager.addTag(EditorTagDetails(selectedFile, isRemovable = withRemovableSelectedEditorTag))
         }
 
         EditorUtil.getOpenLocalFiles(project)
@@ -226,7 +227,8 @@ class UserInputHeaderPanel(
         }
 
         override fun paintComponent(g: Graphics) {
-            PaintUtil.drawRoundedBackground(g, this, true)
+            val selectedVisually = isEnabled
+            PaintUtil.drawRoundedBackground(g, this, selectedVisually)
             super.paintComponent(g)
         }
     }
@@ -260,11 +262,26 @@ class UserInputHeaderPanel(
     private inner class FileSelectionListener : FileEditorManagerListener {
         override fun selectionChanged(event: FileEditorManagerEvent) {
             event.newFile?.let { newFile ->
-                val containsTag = tagManager.getTags()
-                    .none { it is EditorTagDetails && it.virtualFile == newFile }
-                if (containsTag) {
-                    tagManager.addTag(EditorTagDetails(newFile).apply { selected = false })
+                val hasTag = tagManager.getTags()
+                    .any { it is EditorTagDetails && it.virtualFile == newFile }
+                if (!hasTag) {
+                    tagManager.addTag(EditorTagDetails(newFile, isRemovable = false))
+                } else {
+                    tagManager.getTags()
+                        .filterIsInstance<EditorTagDetails>()
+                        .firstOrNull { it.virtualFile == newFile && it.isRemovable }?.let { existing ->
+                            tagManager.remove(existing)
+                            tagManager.addTag(EditorTagDetails(newFile, isRemovable = false))
+                        }
                 }
+
+                tagManager.getTags()
+                    .filterIsInstance<EditorTagDetails>()
+                    .filter { it.virtualFile != newFile && !it.isRemovable }
+                    .forEach { prev ->
+                        tagManager.remove(prev)
+                        tagManager.addTag(EditorTagDetails(prev.virtualFile).apply { selected = false })
+                    }
 
                 emptyText.isVisible = false
             }
@@ -340,6 +357,7 @@ class UserInputHeaderPanel(
 
         override fun show(invoker: Component, x: Int, y: Int) {
             if (invoker is TagPanel) {
+                if (!invoker.isEnabled) return
                 val components = this@UserInputHeaderPanel.components.filterIsInstance<TagPanel>()
                 val currentIndex = components.indexOf(invoker)
 

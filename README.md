@@ -94,7 +94,7 @@ git submodule update
 
 **Tailing logs**
 ```shell
-tail -f build/idea-sandbox/system/log/idea.log
+tail -f build/idea-sandbox/IC-2024.1.2/log/idea.log
 ```
 
 ## Privacy

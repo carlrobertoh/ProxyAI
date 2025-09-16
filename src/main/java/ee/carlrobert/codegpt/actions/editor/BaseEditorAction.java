@@ -37,17 +37,15 @@ public abstract class BaseEditorAction extends AnAction {
     var project = event.getProject();
     var editor = event.getData(PlatformDataKeys.EDITOR);
     if (editor != null && project != null) {
-      actionPerformed(project, editor, editor.getSelectionModel().getSelectedText());
+      var selectedText = editor.getSelectionModel().getSelectedText();
+      actionPerformed(project, editor, selectedText != null ? selectedText : "");
     }
   }
 
   public void update(AnActionEvent event) {
     Project project = event.getProject();
     Editor editor = event.getData(PlatformDataKeys.EDITOR);
-    boolean menuAllowed = false;
-    if (editor != null && project != null) {
-      menuAllowed = editor.getSelectionModel().getSelectedText() != null;
-    }
+    boolean menuAllowed = editor != null && project != null;
     event.getPresentation().setEnabled(menuAllowed);
   }
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
+import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -53,6 +54,19 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
                 OpenAIChatCompletionStandardMessage("user", userPrompt)
             ),
             stream,
+            getCredential(CredentialKey.CustomServiceApiKey(service.name.orEmpty()))
+        )
+        return CustomOpenAIRequest(request)
+    }
+
+    override fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest {
+        val service = service<CustomServicesSettings>().customServiceStateForFeatureType(FeatureType.INLINE_EDIT)
+        val prepared = prepareInlineEditPrompts(params)
+        val messages = OpenAIRequestFactory.buildInlineEditMessages(prepared, params.conversation)
+        val request = buildCustomOpenAIChatCompletionRequest(
+            service.chatCompletionSettings,
+            messages,
+            true,
             getCredential(CredentialKey.CustomServiceApiKey(service.name.orEmpty()))
         )
         return CustomOpenAIRequest(request)

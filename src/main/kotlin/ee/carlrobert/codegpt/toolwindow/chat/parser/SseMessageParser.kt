@@ -12,6 +12,10 @@ class SseMessageParser : MessageParser {
         const val NEWLINE = "\n"
         const val HEADER_DELIMITER = ":"
         const val HEADER_PARTS_LIMIT = 2
+        
+        val SEARCH_START_REGEX = Regex("""^\s*<{3,}(\s*SEARCH.*)?$""", RegexOption.IGNORE_CASE)
+        val SEPARATOR_REGEX = Regex("""^\s*={3,}\s*$""")
+        val REPLACE_END_REGEX = Regex("""^\s*>{3,}(\s*REPLACE.*)?$""", RegexOption.IGNORE_CASE)
     }
 
     private var parserState: ParserState = ParserState.Outside
@@ -119,7 +123,7 @@ class SseMessageParser : MessageParser {
                 true
             }
 
-            line.trimStart().startsWith(SEARCH_MARKER) -> {
+            isSearchStartLine(line) -> {
                 // Emit accumulated code content before transitioning
                 if (state.content.isNotEmpty()) {
                     segments.add(Code(state.content, state.header.language, state.header.filePath))
@@ -148,7 +152,7 @@ class SseMessageParser : MessageParser {
         val line = buffer.substring(0, nlIdx)
         consumeFromBuffer(nlIdx + 1)
 
-        return if (line.trim() == SEPARATOR_MARKER) {
+        return if (isSeparatorLine(line)) {
             segments.add(
                 ReplaceWaiting(
                     state.searchContent,
@@ -179,7 +183,7 @@ class SseMessageParser : MessageParser {
         consumeFromBuffer(nlIdx + 1)
 
         return when {
-            line.trim().startsWith(REPLACE_MARKER) -> {
+            isReplaceEndLine(line) -> {
                 segments.add(
                     SearchReplace(
                         search = state.searchContent,
@@ -318,9 +322,24 @@ class SseMessageParser : MessageParser {
         return if (parts.isNotEmpty()) {
             CodeHeader(
                 language = parts.getOrNull(0) ?: "",
-                filePath = parts.getOrNull(1)
+                filePath = parts.getOrNull(1)?.trim()?.ifEmpty { null }
             )
         } else null
+    }
+
+    private fun isSearchStartLine(line: String): Boolean {
+        val trimmed = line.trim()
+        return trimmed.startsWith(SEARCH_MARKER) || SEARCH_START_REGEX.matches(trimmed)
+    }
+
+    private fun isSeparatorLine(line: String): Boolean {
+        val trimmed = line.trim()
+        return trimmed == SEPARATOR_MARKER || SEPARATOR_REGEX.matches(trimmed)
+    }
+
+    private fun isReplaceEndLine(line: String): Boolean {
+        val trimmed = line.trim()
+        return trimmed.startsWith(REPLACE_MARKER) || REPLACE_END_REGEX.matches(trimmed)
     }
 
     private sealed class ParserState {

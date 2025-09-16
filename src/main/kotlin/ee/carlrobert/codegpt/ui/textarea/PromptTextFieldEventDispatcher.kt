@@ -23,17 +23,25 @@ class PromptTextFieldEventDispatcher(
     override fun dispatch(e: AWTEvent): Boolean {
         if ((e is KeyEvent || e is MouseEvent) && findParent() is PromptTextField) {
             if (e is KeyEvent) {
-                if (e.id == KeyEvent.KEY_PRESSED && e.keyCode == KeyEvent.VK_BACK_SPACE) {
-                    onBackSpace()
-                }
+                if (e.id == KeyEvent.KEY_PRESSED) {
+                    when (e.keyCode) {
+                        KeyEvent.VK_BACK_SPACE -> {
+                            if (!handleBackspace(e)) {
+                                onBackSpace()
+                            }
+                        }
 
-                if (e.id == KeyEvent.KEY_PRESSED && e.keyCode == KeyEvent.VK_ENTER) {
-                    if (e.isShiftDown) {
-                        handleShiftEnter(e)
-                    } else if (e.modifiersEx and InputEvent.ALT_DOWN_MASK == 0
-                        && e.modifiersEx and InputEvent.CTRL_DOWN_MASK == 0
-                    ) {
-                        onSubmit(e)
+                        KeyEvent.VK_DELETE -> handleDelete(e)
+                        KeyEvent.VK_A -> if (e.isControlDown || e.isMetaDown) handleSelectAll(e)
+                        KeyEvent.VK_ENTER -> {
+                            if (e.isShiftDown) {
+                                handleShiftEnter(e)
+                            } else if (e.modifiersEx and InputEvent.ALT_DOWN_MASK == 0
+                                && e.modifiersEx and InputEvent.CTRL_DOWN_MASK == 0
+                            ) {
+                                onSubmit(e)
+                            }
+                        }
                     }
                 }
 
@@ -71,5 +79,83 @@ class PromptTextFieldEventDispatcher(
             }
             e.consume()
         }
+    }
+
+    private fun handleSelectAll(e: KeyEvent) {
+        val parent = findParent()
+        if (parent is PromptTextField) {
+            parent.editor?.let { editor ->
+                editor.selectionModel.setSelection(0, editor.document.textLength)
+                e.consume()
+            }
+        }
+    }
+
+    private fun handleDelete(e: KeyEvent) {
+        val parent = findParent()
+        if (parent is PromptTextField) {
+            parent.editor?.let { editor ->
+                runUndoTransparentWriteAction {
+                    val document = editor.document
+                    val caretModel = editor.caretModel
+                    val selectionModel = editor.selectionModel
+
+                    if (selectionModel.hasSelection()) {
+                        document.deleteString(
+                            selectionModel.selectionStart,
+                            selectionModel.selectionEnd
+                        )
+                    } else {
+                        val offset = caretModel.offset
+                        if (offset < document.textLength) {
+                            document.deleteString(offset, offset + 1)
+                        }
+                    }
+                }
+                e.consume()
+            }
+        }
+    }
+
+    private fun handleBackspace(e: KeyEvent): Boolean {
+        val parent = findParent()
+        if (parent is PromptTextField) {
+            parent.editor?.let { editor ->
+                val selectionModel = editor.selectionModel
+                if (selectionModel.hasSelection()) {
+                    runUndoTransparentWriteAction {
+                        editor.document.deleteString(
+                            selectionModel.selectionStart,
+                            selectionModel.selectionEnd
+                        )
+                    }
+                    e.consume()
+                    return true
+                } else if (e.isControlDown || e.isMetaDown) {
+                    runUndoTransparentWriteAction {
+                        val document = editor.document
+                        val caretModel = editor.caretModel
+                        val offset = caretModel.offset
+                        if (offset > 0) {
+                            val text = document.text
+                            var wordStart = offset - 1
+
+                            while (wordStart > 0 && Character.isWhitespace(text[wordStart])) {
+                                wordStart--
+                            }
+
+                            while (wordStart > 0 && !Character.isWhitespace(text[wordStart - 1])) {
+                                wordStart--
+                            }
+
+                            document.deleteString(wordStart, offset)
+                        }
+                    }
+                    e.consume()
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

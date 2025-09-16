@@ -6,7 +6,6 @@ import com.intellij.util.messages.MessageBusConnection
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.llm.client.codegpt.PricingPlan
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import java.util.concurrent.atomic.AtomicReference
@@ -42,7 +41,7 @@ class ModelSettingsTest : IntegrationTest() {
                 lastNotification.set(NotificationData(FeatureType.COMMIT_MESSAGE, newModel, serviceType, "commitMessage"))
             }
             override fun editCodeModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.EDIT_CODE, newModel, serviceType, "editCode"))
+                lastNotification.set(NotificationData(FeatureType.INLINE_EDIT, newModel, serviceType, "editCode"))
             }
             override fun nextEditModelChanged(newModel: String, serviceType: ServiceType) {
                 lastNotification.set(NotificationData(FeatureType.NEXT_EDIT, newModel, serviceType, "nextEdit"))
@@ -121,10 +120,10 @@ class ModelSettingsTest : IntegrationTest() {
     fun `test setModelWithProvider with edit code triggers edit code notification`() {
         lastNotification.set(null)
         
-        modelSettings.setModelWithProvider(FeatureType.EDIT_CODE, "claude-4-sonnet", ServiceType.PROXYAI)
+        modelSettings.setModelWithProvider(FeatureType.INLINE_EDIT, "claude-4-sonnet", ServiceType.PROXYAI)
 
         val notification = lastNotification.get()
-        assertThat(notification!!.featureType).isEqualTo(FeatureType.EDIT_CODE)
+        assertThat(notification!!.featureType).isEqualTo(FeatureType.INLINE_EDIT)
         assertThat(notification.model).isEqualTo("claude-4-sonnet")
         assertThat(notification.serviceType).isEqualTo(ServiceType.PROXYAI)
     }

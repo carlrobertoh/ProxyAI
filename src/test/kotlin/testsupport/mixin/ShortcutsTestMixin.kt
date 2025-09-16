@@ -27,19 +27,16 @@ interface ShortcutsTestMixin {
         }
     }
 
-    fun useOpenAIService(chatModel: String? = "gpt-4o", role: FeatureType = FeatureType.CHAT) {
+    fun useOpenAIService(chatModel: String? = "gpt-4o", featureType: FeatureType = FeatureType.CHAT) {
         setCredential(OpenaiApiKey, "TEST_API_KEY")
         val modelSettings = service<ModelSettings>()
         
-        when (role) {
-            FeatureType.CHAT -> {
-                modelSettings.setModel(FeatureType.CHAT, chatModel ?: "gpt-4o", ServiceType.OPENAI)
-            }
+        when (featureType) {
             FeatureType.CODE_COMPLETION -> {
                 modelSettings.setModel(FeatureType.CODE_COMPLETION, "gpt-3.5-turbo-instruct", ServiceType.OPENAI)
             }
             else -> {
-                modelSettings.setModel(FeatureType.CHAT, chatModel ?: "gpt-4o", ServiceType.OPENAI)
+                modelSettings.setModel(featureType, chatModel ?: "gpt-4o", ServiceType.OPENAI)
                 modelSettings.setModel(FeatureType.CODE_COMPLETION, "gpt-3.5-turbo-instruct", ServiceType.OPENAI)
             }
         }

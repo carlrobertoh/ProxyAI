@@ -1,11 +1,14 @@
 package ee.carlrobert.codegpt;
 
 import com.intellij.openapi.util.Key;
+import ee.carlrobert.codegpt.inlineedit.InlineEditSession;
+import ee.carlrobert.codegpt.inlineedit.InlineEditInlayRenderer;
 import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ToolWindowEditorFileDetails;
 import ee.carlrobert.llm.client.codegpt.CodeGPTUserDetails;
 import ee.carlrobert.service.NextEditResponse;
 import ee.carlrobert.service.PartialCodeCompletionResponse;
+import javax.swing.JComponent;
 
 public class CodeGPTKeys {
 
@@ -21,6 +24,12 @@ public class CodeGPTKeys {
       Key.create("codegpt.isPromptTextFieldDocument");
   public static final Key<CodeSuggestionDiffViewer> EDITOR_PREDICTION_DIFF_VIEWER =
       Key.create("codegpt.editorPredictionDiffViewer");
+  public static final Key<InlineEditSession> EDITOR_INLINE_EDIT_SESSION =
+      Key.create("codegpt.editorInlineEditSession");
+  public static final Key<InlineEditInlayRenderer> EDITOR_INLINE_EDIT_RENDERER =
+      Key.create("codegpt.editorInlineEditRenderer");
+  public static final Key<JComponent> EDITOR_INLINE_EDIT_COMPARE_LINK =
+      Key.create("codegpt.editorInlineEditCompareLink");
   public static final Key<PartialCodeCompletionResponse> REMAINING_CODE_COMPLETION =
       Key.create("codegpt.remainingCodeCompletion");
   public static final Key<NextEditResponse> REMAINING_PREDICTION_RESPONSE =

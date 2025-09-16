@@ -9,7 +9,10 @@ class CompleteMessageParser : MessageParser {
         private val CODE_BLOCK_PATTERN: Pattern =
             Pattern.compile("```([a-zA-Z0-9_+-]*)(?::([^\\n]*))?\\n(.*?)```", Pattern.DOTALL)
         private val SEARCH_REPLACE_PATTERN: Pattern =
-            Pattern.compile("<<<<<<< SEARCH\\n(.*?)\\n=======\\n(.*?)\\n>>>>>>> REPLACE", Pattern.DOTALL)
+            Pattern.compile(
+                "<<<<<<< SEARCH\\n(.*?)\\n=======\\n(.*?)\\n>>>>>>> REPLACE",
+                Pattern.DOTALL
+            )
         private val INCOMPLETE_SEARCH_REPLACE_PATTERN: Pattern =
             Pattern.compile("<<<<<<< SEARCH\\n(.*?)(?:\\n=======\\n(.*?))?$", Pattern.DOTALL)
 
@@ -20,6 +23,12 @@ class CompleteMessageParser : MessageParser {
         private const val CODE_CONTENT_GROUP_INDEX = 3
         private const val SEARCH_CONTENT_GROUP_INDEX = 1
         private const val REPLACE_CONTENT_GROUP_INDEX = 2
+
+        private val TOLERANT_SEARCH_START =
+            Regex("""^\s*<{3,}(\s*SEARCH.*)?$""", RegexOption.IGNORE_CASE)
+        private val TOLERANT_SEPARATOR = Regex("""^\s*={3,}\s*$""")
+        private val TOLERANT_REPLACE_END =
+            Regex("""^\s*>{3,}(\s*REPLACE.*)?$""", RegexOption.IGNORE_CASE)
     }
 
     var extractedThought: String? = null
@@ -137,12 +146,25 @@ class CompleteMessageParser : MessageParser {
 
         while (searchReplaceMatcher.find()) {
             foundSearchReplace = true
-            addCodeSegmentIfExists(codeContent, lastProcessedIndex, searchReplaceMatcher.start(), language, filePath)
+            addCodeSegmentIfExists(
+                codeContent,
+                lastProcessedIndex,
+                searchReplaceMatcher.start(),
+                language,
+                filePath
+            )
             addSearchReplaceSegment(searchReplaceMatcher, language, filePath)
             lastProcessedIndex = searchReplaceMatcher.end()
         }
 
         if (!foundSearchReplace) {
+            val tolerantResult = tolerantScanSearchReplace(codeContent, language, filePath)
+            if (tolerantResult != null) {
+                addAll(tolerantResult.segments)
+                lastProcessedIndex = tolerantResult.lastIndex
+                foundSearchReplace = true
+            }
+
             val incompleteMatch = findIncompleteSearchReplace(codeContent, language, filePath)
             if (incompleteMatch != null) {
                 addAll(incompleteMatch.segments)
@@ -152,7 +174,13 @@ class CompleteMessageParser : MessageParser {
         }
 
         if (foundSearchReplace) {
-            addCodeSegmentIfExists(codeContent, lastProcessedIndex, codeContent.length, language, filePath)
+            addCodeSegmentIfExists(
+                codeContent,
+                lastProcessedIndex,
+                codeContent.length,
+                language,
+                filePath
+            )
         }
     }
 
@@ -185,12 +213,14 @@ class CompleteMessageParser : MessageParser {
         val searchContent = matcher.group(SEARCH_CONTENT_GROUP_INDEX).orEmpty()
         val replaceContent = matcher.group(REPLACE_CONTENT_GROUP_INDEX).orEmpty()
 
-        add(SearchReplace(
-            search = searchContent,
-            replace = replaceContent,
-            language = language,
-            filePath = filePath
-        ))
+        add(
+            SearchReplace(
+                search = searchContent,
+                replace = replaceContent,
+                language = language,
+                filePath = filePath
+            )
+        )
     }
 
     /**
@@ -215,12 +245,14 @@ class CompleteMessageParser : MessageParser {
                 val searchContent = incompleteMatcher.group(SEARCH_CONTENT_GROUP_INDEX).orEmpty()
                 val replaceContent = incompleteMatcher.group(REPLACE_CONTENT_GROUP_INDEX).orEmpty()
 
-                add(SearchReplace(
-                    search = searchContent,
-                    replace = replaceContent,
-                    language = language,
-                    filePath = filePath
-                ))
+                add(
+                    SearchReplace(
+                        search = searchContent,
+                        replace = replaceContent,
+                        language = language,
+                        filePath = filePath
+                    )
+                )
             }
 
             IncompleteSearchReplaceResult(segments, incompleteMatcher.end())
@@ -235,5 +267,97 @@ class CompleteMessageParser : MessageParser {
     private data class IncompleteSearchReplaceResult(
         val segments: List<Segment>,
         val endIndex: Int
+    )
+
+    /**
+     * Tolerant scan for blocks with markers like <<<, ===, >>> (>=3 symbols).
+     * Returns segments in order and the last processed index, so trailing code can be appended by caller.
+     */
+    private fun tolerantScanSearchReplace(
+        codeContent: String,
+        language: String,
+        filePath: String?
+    ): TolerantScanResult? {
+        val segments = mutableListOf<Segment>()
+        var cursor = 0
+        var progressed = false
+
+        fun findNextLineMatching(regex: Regex, startPos: Int): Pair<Int, Int> {
+            var pos = startPos
+            val len = codeContent.length
+            while (pos <= len) {
+                val lineStart = pos
+                if (pos >= len) return -1 to -1
+                val nl = codeContent.indexOf('\n', pos)
+                val lineEndExclusive = if (nl == -1) len else nl + 1
+                val rawLine = codeContent.substring(lineStart, lineEndExclusive).trimEnd('\n', '\r')
+                val trimmed = rawLine.trim()
+                if (regex.matches(trimmed)) return lineStart to lineEndExclusive
+                pos = lineEndExclusive
+            }
+            return -1 to -1
+        }
+
+        while (cursor < codeContent.length) {
+            val (startLineStart, startLineEnd) = findNextLineMatching(TOLERANT_SEARCH_START, cursor)
+            if (startLineStart == -1) break
+
+            segments.addCodeSegmentIfExists(codeContent, cursor, startLineStart, language, filePath)
+
+            val (sepLineStart, sepLineEnd) = findNextLineMatching(TOLERANT_SEPARATOR, startLineEnd)
+            if (sepLineStart == -1) {
+                val search = codeContent.substring(startLineEnd, codeContent.length)
+                if (search.isNotEmpty()) {
+                    segments.add(
+                        SearchReplace(
+                            search = search,
+                            replace = "",
+                            language = language,
+                            filePath = filePath
+                        )
+                    )
+                    cursor = codeContent.length
+                    progressed = true
+                }
+                break
+            }
+
+            val (endLineStart, endLineEnd) = findNextLineMatching(TOLERANT_REPLACE_END, sepLineEnd)
+            if (endLineStart == -1) {
+                val search = codeContent.substring(startLineEnd, sepLineStart)
+                val replace = codeContent.substring(sepLineEnd, codeContent.length)
+                segments.add(
+                    SearchReplace(
+                        search = search,
+                        replace = replace,
+                        language = language,
+                        filePath = filePath
+                    )
+                )
+                cursor = codeContent.length
+                progressed = true
+                break
+            }
+
+            val search = codeContent.substring(startLineEnd, sepLineStart)
+            val replace = codeContent.substring(sepLineEnd, endLineStart)
+            segments.add(
+                SearchReplace(
+                    search = search,
+                    replace = replace,
+                    language = language,
+                    filePath = filePath
+                )
+            )
+            cursor = endLineEnd
+            progressed = true
+        }
+
+        return if (progressed) TolerantScanResult(segments, cursor) else null
+    }
+
+    private data class TolerantScanResult(
+        val segments: List<Segment>,
+        val lastIndex: Int
     )
 }
