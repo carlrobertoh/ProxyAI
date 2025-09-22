@@ -29,6 +29,7 @@ public class ConfigurationComponent {
   private final JBTextField temperatureField;
   private final CodeCompletionConfigurationForm codeCompletionForm;
   private final ChatCompletionConfigurationForm chatCompletionForm;
+  private final ScreenshotConfigurationForm screenshotForm;
 
   public ConfigurationComponent(
       Disposable parentDisposable,
@@ -74,6 +75,8 @@ public class ConfigurationComponent {
 
     codeCompletionForm = new CodeCompletionConfigurationForm();
     chatCompletionForm = new ChatCompletionConfigurationForm();
+    screenshotForm = new ScreenshotConfigurationForm();
+    screenshotForm.loadState(configuration.getScreenshotWatchPaths());
 
     mainPanel = FormBuilder.createFormBuilder()
         .addComponent(checkForPluginUpdatesCheckBox)
@@ -84,6 +87,9 @@ public class ConfigurationComponent {
         .addComponent(new TitledSeparator(
             CodeGPTBundle.get("configurationConfigurable.section.assistant.title")))
         .addComponent(createAssistantConfigurationForm())
+        .addComponent(new TitledSeparator(
+            CodeGPTBundle.get("configurationConfigurable.section.screenshots.title")))
+        .addComponent(screenshotForm.createPanel())
         .addComponent(new TitledSeparator(
             CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.title")))
         .addComponent(codeCompletionForm.createPanel())
@@ -108,6 +114,11 @@ public class ConfigurationComponent {
     state.setAutoFormattingEnabled(autoFormattingCheckBox.isSelected());
     state.setCodeCompletionSettings(codeCompletionForm.getFormState());
     state.setChatCompletionSettings(chatCompletionForm.getFormState());
+
+    var screenshotPaths = screenshotForm.getState();
+    state.getScreenshotWatchPaths().clear();
+    state.getScreenshotWatchPaths().addAll(screenshotPaths);
+
     return state;
   }
 
@@ -121,6 +132,7 @@ public class ConfigurationComponent {
     autoFormattingCheckBox.setSelected(configuration.getAutoFormattingEnabled());
     codeCompletionForm.resetForm(configuration.getCodeCompletionSettings());
     chatCompletionForm.resetForm(configuration.getChatCompletionSettings());
+    screenshotForm.loadState(configuration.getScreenshotWatchPaths());
   }
 
   // Formatted keys are not referenced in the messages bundle file
