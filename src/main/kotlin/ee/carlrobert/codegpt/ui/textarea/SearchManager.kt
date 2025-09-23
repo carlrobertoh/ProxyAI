@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.psi.codeStyle.MinusculeMatcher
 import com.intellij.psi.codeStyle.NameUtil
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
@@ -22,13 +23,27 @@ data class SearchState(
 
 class SearchManager(
     private val project: Project,
-    private val tagManager: TagManager
+    private val tagManager: TagManager,
+    private val featureType: FeatureType? = null
 ) {
     companion object {
         private val logger = thisLogger()
     }
 
-    fun getDefaultGroups() = listOf(
+    fun getDefaultGroups() = when (featureType) {
+        FeatureType.INLINE_EDIT -> getInlineEditGroups()
+        else -> getAllGroups()
+    }
+
+    private fun getInlineEditGroups() = listOf(
+        FilesGroupItem(project, tagManager),
+        FoldersGroupItem(project, tagManager),
+        GitGroupItem(project),
+        HistoryGroupItem(),
+        DiagnosticsActionItem(tagManager)
+    ).filter { it.enabled }
+
+    private fun getAllGroups() = listOf(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
         GitGroupItem(project),
@@ -60,9 +75,11 @@ class SearchManager(
             }
         }
 
-        val webAction = WebActionItem(tagManager)
-        if (webAction.enabled()) {
-            allResults.add(webAction)
+        if (featureType != FeatureType.INLINE_EDIT) {
+            val webAction = WebActionItem(tagManager)
+            if (webAction.enabled()) {
+                allResults.add(webAction)
+            }
         }
 
         return filterAndSortResults(allResults, searchText)

@@ -40,7 +40,7 @@ class ModelSettingsTest : IntegrationTest() {
             override fun commitMessageModelChanged(newModel: String, serviceType: ServiceType) {
                 lastNotification.set(NotificationData(FeatureType.COMMIT_MESSAGE, newModel, serviceType, "commitMessage"))
             }
-            override fun editCodeModelChanged(newModel: String, serviceType: ServiceType) {
+            override fun inlineEditModelChanged(newModel: String, serviceType: ServiceType) {
                 lastNotification.set(NotificationData(FeatureType.INLINE_EDIT, newModel, serviceType, "editCode"))
             }
             override fun nextEditModelChanged(newModel: String, serviceType: ServiceType) {

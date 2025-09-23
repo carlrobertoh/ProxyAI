@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.settings
 
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.util.GitUtil
 import git4idea.branch.GitBranchUtil
@@ -44,13 +45,20 @@ class BranchNamePlaceholderStrategy(val project: Project) : PlaceholderStrategy 
 
     override fun getReplacementValue(): String {
         return try {
-            val repository = GitUtil.getProjectRepository(project)
-            if (repository == null) {
-                logger.error("Couldn't find repository for project")
-                return "BRANCH-UNKNOWN"
-            }
+            ProgressManager.getInstance().runProcessWithProgressSynchronously<String, Exception>(
+                {
+                    val repository = GitUtil.getProjectRepository(project)
+                    if (repository == null) {
+                        logger.error("Couldn't find repository for project")
+                        return@runProcessWithProgressSynchronously "BRANCH-UNKNOWN"
+                    }
 
-            GitBranchUtil.getBranchNameOrRev(repository)
+                    GitBranchUtil.getBranchNameOrRev(repository)
+                },
+                "Getting Commit Diff",
+                true,
+                project
+            )
         } catch (ex: Exception) {
             logger.error("Couldn't get git branch name replacement value", ex)
             "BRANCH-UNKNOWN"

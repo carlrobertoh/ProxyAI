@@ -55,8 +55,8 @@ class FilteredPromptsService {
             ?: CoreActionsState.DEFAULT_AUTO_APPLY_PROMPT
 
     private fun getOriginalEditCodePrompt() =
-        service<PromptsSettings>().state.coreActions.editCode.instructions
-            ?: CoreActionsState.DEFAULT_EDIT_CODE_PROMPT
+        service<PromptsSettings>().state.coreActions.inlineEdit.instructions
+            ?: CoreActionsState.DEFAULT_INLINE_EDIT_PROMPT
 
     private fun getOriginalPersonaPrompt(): String {
         val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona

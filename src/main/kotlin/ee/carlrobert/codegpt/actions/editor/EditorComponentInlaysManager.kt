@@ -12,6 +12,9 @@ import com.intellij.openapi.util.Key
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
+import java.awt.Component
+import java.awt.Container
+import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.Font
 import java.awt.event.ComponentAdapter
@@ -39,19 +42,14 @@ class EditorComponentInlaysManager(val editor: EditorImpl) : Disposable {
     }
 
     @RequiresEdt
-    fun insert(lineIndex: Int, component: JComponent, showAbove: Boolean = false): Disposable? {
+    fun insert(offset: Int, component: JComponent, showAbove: Boolean = false): Disposable? {
         val wrappedComponent = ComponentWrapper(component)
-        val offset = if (lineIndex < editor.document.lineCount) {
-            editor.document.getLineStartOffset(lineIndex)
-        } else {
-            editor.document.textLength
-        }
-
-        val result = EditorEmbeddedComponentManager.getInstance()
+        return EditorEmbeddedComponentManager.getInstance()
             .addComponent(
-                editor, wrappedComponent,
+                editor,
+                wrappedComponent,
                 EditorEmbeddedComponentManager.Properties(
-                    EditorEmbeddedComponentManager.ResizePolicy.none(),
+                    EditorEmbeddedComponentManager.ResizePolicy.any(),
                     null,
                     true,
                     showAbove,
@@ -59,15 +57,12 @@ class EditorComponentInlaysManager(val editor: EditorImpl) : Disposable {
                     offset
                 )
             )
-
-        return result?.also {
-            managedInlays[wrappedComponent] = it
-            Disposer.register(it, Disposable {
-                managedInlays.remove(wrappedComponent)
-            })
-        } ?: run {
-            null
-        }
+            ?.also {
+                managedInlays[wrappedComponent] = it
+                Disposer.register(it, Disposable {
+                    managedInlays.remove(wrappedComponent)
+                })
+            }
     }
 
     private inner class ComponentWrapper(val component: JComponent) : JBScrollPane(component) {
@@ -82,14 +77,78 @@ class EditorComponentInlaysManager(val editor: EditorImpl) : Disposable {
             verticalScrollBar.preferredSize = Dimension(0, 0)
             setViewportView(component)
 
+            isFocusable = false
+            viewport.isFocusable = false
+
+            cursor = Cursor.getDefaultCursor()
+            viewport.cursor = Cursor.getDefaultCursor()
+
+            isFocusTraversalPolicyProvider = true
+            focusTraversalPolicy = object : java.awt.FocusTraversalPolicy() {
+                override fun getFirstComponent(aContainer: Container?) = component
+                override fun getLastComponent(aContainer: Container?) = component
+                override fun getDefaultComponent(aContainer: Container?) = component
+                override fun getComponentAfter(
+                    aContainer: Container?,
+                    aComponent: Component?
+                ) = component
+
+                override fun getComponentBefore(
+                    aContainer: Container?,
+                    aComponent: Component?
+                ) = component
+            }
+
             component.addComponentListener(object : ComponentAdapter() {
-                override fun componentResized(e: ComponentEvent) =
+                override fun componentResized(e: ComponentEvent) {
                     dispatchEvent(ComponentEvent(component, ComponentEvent.COMPONENT_RESIZED))
+                    revalidate()
+                    repaint()
+                }
             })
+
+            component.addPropertyChangeListener("preferredSize") { _ ->
+                invalidate()
+                revalidate()
+                repaint()
+
+                val newSize = component.preferredSize
+                val oldPref = preferredSize
+
+                if (newSize.height != oldPref.height) {
+                    preferredSize = Dimension(getPreferredSize().width, newSize.height)
+
+                    editor.contentComponent.invalidate()
+                    editor.contentComponent.revalidate()
+                    editor.contentComponent.repaint()
+                }
+            }
+        }
+
+        override fun requestFocus() {
+            component.requestFocus()
+        }
+
+        override fun requestFocusInWindow(): Boolean {
+            return component.requestFocusInWindow()
         }
 
         override fun getPreferredSize(): Dimension {
-            return Dimension(editor.contentComponent.width, component.preferredSize.height)
+            val fixed =
+                (component.getClientProperty("codegpt.fixedWidth") as? Int)?.let { JBUI.scale(it) }
+            val height = component.preferredSize.height
+            val width = fixed ?: run {
+                val contentW = editor.contentComponent.visibleRect.width
+                if (contentW > 0) contentW else editor.contentComponent.width
+            }
+            return Dimension(width, height)
+        }
+
+        override fun getMinimumSize(): Dimension {
+            val fixed =
+                (component.getClientProperty("codegpt.fixedWidth") as? Int)?.let { JBUI.scale(it) }
+                    ?: 0
+            return Dimension(fixed, component.minimumSize.height)
         }
     }
 

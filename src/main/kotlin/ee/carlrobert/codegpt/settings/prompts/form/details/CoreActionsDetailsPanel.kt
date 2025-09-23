@@ -8,11 +8,9 @@ import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.layout.ComponentPredicate
 import com.intellij.util.ui.components.BorderLayoutPanel
-import ee.carlrobert.codegpt.settings.Placeholder
-import ee.carlrobert.codegpt.settings.Placeholder.GIT_DIFF
 import ee.carlrobert.codegpt.settings.prompts.CommitMessageTemplate
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_AUTO_APPLY_PROMPT
-import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_EDIT_CODE_PROMPT
+import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_INLINE_EDIT_PROMPT
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_FIX_COMPILE_ERRORS_PROMPT
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState.Companion.DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT
@@ -36,10 +34,10 @@ class CoreActionsDetailsPanel : PromptDetailsPanel {
                         "Template used for the 'Auto Apply' feature."
                     )
 
-                    "EDIT_CODE" -> CoreActionEditorPanel(
+                    "INLINE_EDIT" -> CoreActionEditorPanel(
                         details,
-                        DEFAULT_EDIT_CODE_PROMPT,
-                        "Template used for the 'Edit Code' feature in the main editor."
+                        DEFAULT_INLINE_EDIT_PROMPT,
+                        "Template used for the 'Inline Edit' feature in the main editor."
                     )
 
                     "REVIEW_CHANGES" -> CoreActionEditorPanel(
@@ -78,7 +76,7 @@ class CoreActionsDetailsPanel : PromptDetailsPanel {
         val settings = service<PromptsSettings>().state.coreActions
         listOf(
             settings.autoApply,
-            settings.editCode,
+            settings.inlineEdit,
             settings.fixCompileErrors,
             settings.generateCommitMessage,
             settings.generateNameLookups,

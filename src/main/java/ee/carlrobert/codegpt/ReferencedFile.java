@@ -1,10 +1,7 @@
 package ee.carlrobert.codegpt;
 
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.VirtualFile;
+import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.io.File;
 import java.util.Objects;
@@ -16,13 +13,6 @@ public record ReferencedFile(String fileName, String filePath, String fileConten
 
   public ReferencedFile(String fileName, String filePath, String fileContent) {
     this(fileName, filePath, fileContent, false);
-  }
-
-  public ReferencedFile(String fileName, String filePath, String fileContent, boolean directory) {
-    this.fileName = fileName;
-    this.filePath = filePath;
-    this.fileContent = fileContent;
-    this.directory = directory;
   }
 
   public static ReferencedFile from(File file) {
@@ -47,14 +37,7 @@ public record ReferencedFile(String fileName, String filePath, String fileConten
     if (virtualFile.isDirectory()) {
       return "";
     }
-
-    var documentManager = FileDocumentManager.getInstance();
-    var document = ApplicationManager.getApplication()
-        .runReadAction((Computable<Document>) () -> documentManager.getDocument(virtualFile));
-    if (document != null && documentManager.isDocumentUnsaved(document)) {
-      return document.getText();
-    }
-    return FileUtil.readContent(virtualFile);
+    return EditorUtil.getFileContent(virtualFile);
   }
 
   public String getFileExtension() {

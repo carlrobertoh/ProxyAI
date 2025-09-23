@@ -16,7 +16,6 @@ import java.util.*
 class PromptTextFieldEventDispatcher(
     private val dispatcherId: UUID,
     private val onBackSpace: () -> Unit,
-    private val lookup: LookupImpl?,
     private val onSubmit: (KeyEvent) -> Unit
 ) : IdeEventQueue.EventDispatcher {
 

@@ -45,7 +45,7 @@ class CoreActionsState : BaseState() {
         private const val PROMPTS_BASE_PATH = "/prompts/core/"
 
         val DEFAULT_AUTO_APPLY_PROMPT = loadPrompt("auto-apply.txt")
-        val DEFAULT_EDIT_CODE_PROMPT = loadPrompt("edit-code.txt")
+        val DEFAULT_INLINE_EDIT_PROMPT = loadPrompt("inline-edit.txt")
         val DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT = loadPrompt("generate-commit-message.txt")
         val DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT = loadPrompt("generate-name-lookups.txt")
         val DEFAULT_FIX_COMPILE_ERRORS_PROMPT = loadPrompt("fix-compile-errors.txt")
@@ -61,9 +61,9 @@ class CoreActionsState : BaseState() {
         )
     )
 
-    var editCode by property(
+    var inlineEdit by property(
         createCoreAction(
-            "Edit Code", "EDIT_CODE", DEFAULT_EDIT_CODE_PROMPT
+            "Inline Edit", "INLINE_EDIT", DEFAULT_INLINE_EDIT_PROMPT
         )
     )
 

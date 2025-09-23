@@ -137,7 +137,6 @@ class GrpcClientService(private val project: Project) : Disposable {
         return GrpcCodeCompletionRequest.newBuilder()
             .setModel(
                 ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
-                    ?: ""
             )
             .setFilePath(editor.virtualFile.path)
             .setFileContent(editor.document.text)
@@ -166,7 +165,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         .build()
 
     private fun ensureActiveChannel() {
-        if (channel == null || channel?.isShutdown == true) {
+        if (channel == null || channel?.isShutdown == true || channel?.isTerminated == true) {
             try {
                 channel = createChannel()
                 codeCompletionStub = null

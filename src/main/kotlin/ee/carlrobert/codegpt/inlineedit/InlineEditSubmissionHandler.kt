@@ -17,8 +17,7 @@ import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import ee.carlrobert.codegpt.conversations.Conversation
-import ee.carlrobert.codegpt.ui.InlineEditPopover
-import ee.carlrobert.codegpt.ui.ObservableProperties
+import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import okhttp3.sse.EventSource
 import java.util.concurrent.atomic.AtomicReference
@@ -26,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
 class InlineEditSubmissionHandler(
     private val editor: Editor,
     private val observableProperties: ObservableProperties,
+    private val sessionConversation: Conversation,
 ) {
 
     private val previousSourceRef = AtomicReference<String?>(null)
@@ -54,6 +54,7 @@ class InlineEditSubmissionHandler(
 
         val file = FileDocumentManager.getInstance().getFile(editor.document)
         val editorEx = editor as? EditorEx ?: return
+        sessionConversation.addMessage(Message(userPrompt))
         val parameters = InlineEditCompletionParameters(
             userPrompt,
             runReadAction { editor.selectionModel.selectedText },
@@ -62,9 +63,10 @@ class InlineEditSubmissionHandler(
             editor.project?.basePath,
             referencedFiles,
             gitDiff,
-            InlineEditConversationManager.getOrCreate(editorEx),
+            sessionConversation,
             conversationHistory,
-            diagnosticsInfo
+            diagnosticsInfo,
+            runReadAction { editor.caretModel.offset }
         )
 
         val requestId = System.nanoTime()
@@ -78,14 +80,14 @@ class InlineEditSubmissionHandler(
                 runReadAction { editor.selectionModel.selectionEnd },
             ),
             requestId,
-            userPrompt
+            sessionConversation
         )
 
         editorEx.putUserData(InlineEditSearchReplaceListener.LISTENER_KEY, listener)
 
         listener.showHint("Submitting inline edit…")
 
-        editorEx.getUserData(InlineEditPopover.Companion.POPOVER_KEY)?.apply {
+        editorEx.getUserData(InlineEditInlay.INLAY_KEY)?.apply {
             setInlineEditControlsVisible(false)
             setThinkingVisible(true)
         }
@@ -108,15 +110,43 @@ class InlineEditSubmissionHandler(
                 )
                 observableProperties.loading.set(false)
                 observableProperties.submitted.set(false)
-                editorEx.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+                editorEx.getUserData(InlineEditInlay.INLAY_KEY)
                     ?.setThinkingVisible(false)
             }
         }
     }
 
-    fun handleReject(clearConversation: Boolean = false) {
+    fun handleStop() {
         cancelActiveRequest()
-        (editor as? EditorEx)?.getUserData(InlineEditPopover.Companion.POPOVER_KEY)?.setThinkingVisible(false)
+        val editorEx = editor as? EditorEx ?: return
+
+        runInEdt {
+            editorEx.getUserData(InlineEditInlay.INLAY_KEY)?.setThinkingVisible(false)
+
+            val existingListener = editorEx.getUserData(InlineEditSearchReplaceListener.LISTENER_KEY)
+            existingListener?.stopGenerating()
+
+            val session = editorEx.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)
+            if (session != null && session.hasPendingHunks()) {
+                editorEx.getUserData(InlineEditInlay.INLAY_KEY)?.setInlineEditControlsVisible(true)
+                observableProperties.hasPendingChanges.set(true)
+            } else {
+                editorEx.getUserData(InlineEditInlay.INLAY_KEY)?.setInlineEditControlsVisible(false)
+                observableProperties.hasPendingChanges.set(false)
+            }
+
+            observableProperties.loading.set(false)
+            observableProperties.submitted.set(false)
+            editor.project?.let { project ->
+                CompletionProgressNotifier.Companion.update(project, false)
+            }
+            editorEx.getUserData(InlineEditInlay.INLAY_KEY)?.onCompletionFinished()
+        }
+    }
+
+    fun handleReject() {
+        cancelActiveRequest()
+        (editor as? EditorEx)?.getUserData(InlineEditInlay.INLAY_KEY)?.setThinkingVisible(false)
         val prevSource = previousSourceRef.get()
         if (!observableProperties.accepted.get() && prevSource != null) {
             revertAllChanges(prevSource)
@@ -125,21 +155,21 @@ class InlineEditSubmissionHandler(
         restorePreviousPrompt()
         runInEdt {
             val editorEx = editor as? EditorEx
+            val existingListener = editorEx?.getUserData(InlineEditSearchReplaceListener.LISTENER_KEY)
+            existingListener?.dispose()
             editorEx?.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)?.dispose()
             editorEx?.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION, null)
             editorEx?.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER)?.dispose()
             editorEx?.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER, null)
-            if (clearConversation) {
-                editorEx?.let { InlineEditConversationManager.clear(it) }
-            }
             editorEx?.putUserData(InlineEditSearchReplaceListener.LISTENER_KEY, null)
 
             observableProperties.loading.set(false)
             observableProperties.submitted.set(false)
+            observableProperties.hasPendingChanges.set(false)
             editor.project?.let { project ->
                 CompletionProgressNotifier.Companion.update(project, false)
             }
-            editorEx?.getUserData(InlineEditPopover.Companion.POPOVER_KEY)?.onCompletionFinished()
+            editorEx?.getUserData(InlineEditInlay.INLAY_KEY)?.onCompletionFinished()
         }
     }
 
@@ -153,12 +183,14 @@ class InlineEditSubmissionHandler(
 
     private fun revertAllChanges(prevSource: String) {
         editor.project?.let { project ->
-            WriteCommandAction.runWriteCommandAction(project) {
-                editor.document.replaceString(
-                    0,
-                    editor.document.textLength,
-                    StringUtil.convertLineSeparators(prevSource)
-                )
+            runInEdt {
+                WriteCommandAction.runWriteCommandAction(project) {
+                    editor.document.replaceString(
+                        0,
+                        editor.document.textLength,
+                        StringUtil.convertLineSeparators(prevSource)
+                    )
+                }
             }
         }
     }
@@ -167,7 +199,7 @@ class InlineEditSubmissionHandler(
         val prevPrompt = previousPromptRef.get()
         if (prevPrompt != null) {
             (editor as? EditorEx)
-                ?.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+                ?.getUserData(InlineEditInlay.INLAY_KEY)
                 ?.restorePromptAndFocus(prevPrompt)
         }
     }

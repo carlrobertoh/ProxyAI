@@ -5,19 +5,20 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.CodeGPTPlugin
-import ee.carlrobert.codegpt.completions.BaseRequestFactory
-import ee.carlrobert.codegpt.completions.ChatCompletionParameters
-import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
+import ee.carlrobert.codegpt.completions.*
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.buildOpenAIMessages
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
+import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.file.FileUtil
+import ee.carlrobert.llm.client.codegpt.request.InlineEditRequest
 import ee.carlrobert.llm.client.codegpt.request.chat.*
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage
+import ee.carlrobert.llm.completion.CompletionRequest
 
 class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructureSerializer) :
     BaseRequestFactory() {
@@ -131,25 +132,64 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
             .build()
     }
 
-    override fun createInlineEditRequest(params: InlineEditCompletionParameters): ChatCompletionRequest {
+    override fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest {
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.INLINE_EDIT)
-        val prepared = prepareInlineEditPrompts(params)
-        val messages: MutableList<OpenAIChatCompletionMessage> =
-            OpenAIRequestFactory.buildInlineEditMessages(prepared, params.conversation)
+        val systemTemplate = service<PromptsSettings>().state.coreActions.inlineEdit.instructions
+            ?: CoreActionsState.DEFAULT_INLINE_EDIT_PROMPT
 
-        if (model == "o4-mini") {
-            val collapsed = messages.joinToString("\n\n") { msg ->
-                when (msg) {
-                    is OpenAIChatCompletionStandardMessage -> msg.content
-                    else -> ""
-                }
+        val contextFiles = mutableListOf<InlineEditRequest.ContextFile>()
+        params.referencedFiles
+            ?.filter { !it.fileContent.isNullOrBlank() }
+            ?.forEach { ref ->
+                contextFiles.add(
+                    InlineEditRequest.ContextFile(ref.fileName(), ref.filePath(), ref.fileContent())
+                )
             }
-            return buildBasicO1Request(model, collapsed, systemPrompt = "", maxCompletionTokens = 4096, stream = true)
+
+        val conversationHistory = params.conversationHistory?.map { conversation ->
+            conversation.messages.flatMap { msg ->
+                listOfNotNull(
+                    msg.prompt?.takeIf { it.isNotBlank() }?.let {
+                        InlineEditRequest.ConversationMessage("user", it)
+                    },
+                    msg.response?.takeIf { it.isNotBlank() }?.let {
+                        InlineEditRequest.ConversationMessage("assistant", it)
+                    }
+                )
+            }
+        } ?: emptyList()
+
+        val fileContent = params.filePath?.let { path ->
+            LocalFileSystem.getInstance().findFileByPath(path)?.let { vf ->
+                FileUtil.readContent(vf)
+            }
         }
 
-        return ChatCompletionRequest.Builder(messages)
-            .setModel(model)
-            .setStream(true)
+        val currentConversationMessages = params.conversation?.messages?.flatMap { msg ->
+            listOfNotNull(
+                msg.prompt?.takeIf { it.isNotBlank() }?.let {
+                    InlineEditRequest.ConversationMessage("user", it)
+                },
+                msg.response?.takeIf { it.isNotBlank() }?.let {
+                    InlineEditRequest.ConversationMessage("assistant", it)
+                }
+            )
+        }
+
+        return InlineEditRequest.Builder(model, systemTemplate)
+            .setMetadata(
+                Metadata(CodeGPTPlugin.getVersion(), service<ApplicationInfo>().build.asString())
+            )
+            .setConversation(currentConversationMessages)
+            .setSelectedText(params.selectedText)
+            .setCursorOffset(params.cursorOffset ?: 0)
+            .setFilePath(params.filePath)
+            .setFileContent(fileContent)
+            .setProjectBasePath(params.projectBasePath)
+            .setContextFiles(contextFiles)
+            .setGitDiff(params.gitDiff)
+            .setConversationHistory(conversationHistory.toMutableList())
+            .setDiagnosticsInfo(params.diagnosticsInfo)
             .build()
     }
 

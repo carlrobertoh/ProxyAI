@@ -10,6 +10,7 @@ import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState
 import ee.carlrobert.codegpt.settings.prompts.PersonasState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
+import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
@@ -411,79 +412,17 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
 
         val systemMessage = request.messages[0] as OpenAIChatCompletionStandardMessage
         assertThat(systemMessage.role).isEqualTo("system")
-        assertThat(systemMessage.content).isEqualTo(
-            """
-You are a code modification assistant. Generate SEARCH/REPLACE blocks to modify the specified file.
-
-Project Context:
-Project root: ${project.basePath}
-All file paths should be relative to this project root.
-
-## Current File (Editable)
-```java:${tempFile.absolutePath}
-$testFileContent
-```
-
-## External Context
-
-No external context selected.
-
-## Task
-Analyze the user's request and generate modifications for the current file using SEARCH/REPLACE blocks.
-
-## Format
-Use SEARCH/REPLACE blocks to specify exact code changes:
-
-Single change in the same file:
-```language:filepath
-<<<<<<< SEARCH
-[exact code to find]
-=======
-[replacement code]
->>>>>>> REPLACE
-```
-
-Multiple changes in the same file:
-```language:filepath
-<<<<<<< SEARCH
-[first section]
-=======
-[first replacement]
->>>>>>> REPLACE
-
-<<<<<<< SEARCH
-[second section]
-=======
-[second replacement]
->>>>>>> REPLACE
-```
-
-## Requirements
-• Match indentation and formatting exactly
-• Include 2-4 lines of context for unique pattern matching
-• Generate blocks only for the current file path
-• Use complete code sections without truncation
-• Ensure search and replacement content differ
-• Include file path after language identifier using colon
-• Make search patterns unique within the file
-
-## Example
-```java:src/Example.java
-<<<<<<< SEARCH
-public int calculate(int x, int y) {
-    return x + y;
-}
-=======
-public int calculate(int x, int y) {
-    if (x < 0 || y < 0) {
-        throw new IllegalArgumentException("Values must be non-negative");
-    }
-    return x + y;
-}
->>>>>>> REPLACE
-```
-""".trimIndent()
+        val expectedSystem = buildExpectedInlineEditSystemPrompt(
+            language = "java",
+            filePath = tempFile.absolutePath,
+            fileContent = testFileContent,
+            projectBasePath = project.basePath,
+            referencedFiles = null,
+            gitDiff = null,
+            conversationHistory = null,
+            diagnosticsInfo = null,
         )
+        assertThat(systemMessage.content).isEqualTo(expectedSystem)
         val userMessage = request.messages[1] as OpenAIChatCompletionStandardMessage
         assertThat(userMessage.role).isEqualTo("user")
         assertThat(userMessage.content).isEqualTo(
@@ -553,100 +492,17 @@ public int calculate(int x, int y) {
 
         val systemMessage = request.messages[0] as OpenAIChatCompletionStandardMessage
         assertThat(systemMessage.role).isEqualTo("system")
-        assertThat(systemMessage.content).isEqualTo(
-            """
-You are a code modification assistant. Generate SEARCH/REPLACE blocks to modify the specified file.
-
-Project Context:
-Project root: ${project.basePath}
-All file paths should be relative to this project root.
-
-## Current File (Editable)
-```java:${tempFile.absolutePath}
-$testFileContent
-```
-
-## External Context
-
-### Referenced Files
-
-```java:/path/to/TEST_FILE_NAME_1.java
-TEST_FILE_CONTENT_1
-```
-
-```java:/path/to/TEST_FILE_NAME_2.java
-TEST_FILE_CONTENT_2
-```
-
-### Git Diff
-
-```diff
-TEST_GIT_DIFF
-```
-
-### Conversation History
-
-**User:** HISTORY_PROMPT_1
-**Assistant:** HISTORY_RESPONSE_1
-**User:** HISTORY_PROMPT_2
-**Assistant:** HISTORY_RESPONSE_2
-
-## Task
-Analyze the user's request and generate modifications for the current file using SEARCH/REPLACE blocks.
-
-## Format
-Use SEARCH/REPLACE blocks to specify exact code changes:
-
-Single change in the same file:
-```language:filepath
-<<<<<<< SEARCH
-[exact code to find]
-=======
-[replacement code]
->>>>>>> REPLACE
-```
-
-Multiple changes in the same file:
-```language:filepath
-<<<<<<< SEARCH
-[first section]
-=======
-[first replacement]
->>>>>>> REPLACE
-
-<<<<<<< SEARCH
-[second section]
-=======
-[second replacement]
->>>>>>> REPLACE
-```
-
-## Requirements
-• Match indentation and formatting exactly
-• Include 2-4 lines of context for unique pattern matching
-• Generate blocks only for the current file path
-• Use complete code sections without truncation
-• Ensure search and replacement content differ
-• Include file path after language identifier using colon
-• Make search patterns unique within the file
-
-## Example
-```java:src/Example.java
-<<<<<<< SEARCH
-public int calculate(int x, int y) {
-    return x + y;
-}
-=======
-public int calculate(int x, int y) {
-    if (x < 0 || y < 0) {
-        throw new IllegalArgumentException("Values must be non-negative");
-    }
-    return x + y;
-}
->>>>>>> REPLACE
-```
-""".trimIndent()
+        val expectedSystem = buildExpectedInlineEditSystemPrompt(
+            language = "java",
+            filePath = tempFile.absolutePath,
+            fileContent = testFileContent,
+            projectBasePath = project.basePath,
+            referencedFiles = parameters.referencedFiles,
+            gitDiff = parameters.gitDiff,
+            conversationHistory = parameters.conversationHistory,
+            diagnosticsInfo = parameters.diagnosticsInfo,
         )
+        assertThat(systemMessage.content).isEqualTo(expectedSystem)
         val prevUserMessage = request.messages[1] as OpenAIChatCompletionStandardMessage
         assertThat(prevUserMessage.role).isEqualTo("user")
         assertThat(prevUserMessage.content).isEqualTo("PREV_PROMPT")
@@ -665,5 +521,90 @@ public int calculate(int x, int y) {
             Request: TEST_FOLLOW_UP_PROMPT
         """.trimIndent()
         )
+    }
+
+    private fun buildExpectedInlineEditSystemPrompt(
+        language: String,
+        filePath: String,
+        fileContent: String,
+        projectBasePath: String?,
+        referencedFiles: List<ReferencedFile>?,
+        gitDiff: String?,
+        conversationHistory: List<Conversation>?,
+        diagnosticsInfo: String? = null,
+    ): String {
+        var systemPrompt = service<PromptsSettings>().state.coreActions.inlineEdit.instructions
+            ?: CoreActionsState.DEFAULT_INLINE_EDIT_PROMPT
+
+        if (projectBasePath != null) {
+            val projectContext =
+                "Project Context:\nProject root: ${projectBasePath}\nAll file paths should be relative to this project root."
+            systemPrompt = systemPrompt.replace("{{PROJECT_CONTEXT}}", projectContext)
+        } else {
+            systemPrompt = systemPrompt.replace("\n{{PROJECT_CONTEXT}}\n", "")
+        }
+
+        val currentFileBlock = buildString {
+            append("```$language:$filePath\n")
+            append(fileContent)
+            append("\n```")
+        }
+        systemPrompt = systemPrompt.replace("{{CURRENT_FILE_CONTEXT}}", currentFileBlock)
+
+        val externalContext = buildString {
+            val currentPath = filePath
+            val unique = mutableSetOf<String>()
+            val hasRefs = referencedFiles
+                ?.filter { it.filePath() != currentPath }
+                ?.any { !it.fileContent().isNullOrBlank() } == true
+
+            if (hasRefs) {
+                append("\n\n### Referenced Files")
+                referencedFiles
+                    ?.filter { it.filePath() != currentPath }
+                    ?.forEach {
+                        if (!it.fileContent().isNullOrBlank() && unique.add(it.filePath())) {
+                            append("\n\n```${it.getFileExtension()}:${it.filePath()}\n")
+                            append(it.fileContent())
+                            append("\n```")
+                        }
+                    }
+            }
+
+            if (!gitDiff.isNullOrBlank()) {
+                append("\n\n### Git Diff\n\n")
+                append("```diff\n${gitDiff}\n```")
+            }
+
+            if (!conversationHistory.isNullOrEmpty()) {
+                append("\n\n### Conversation History\n")
+                conversationHistory!!.forEach { conversation ->
+                    conversation.messages.forEach { message ->
+                        val p = message.prompt?.trim().orEmpty()
+                        if (p.isNotEmpty()) append("\n**User:** $p")
+                        val r = message.response?.trim().orEmpty()
+                        if (r.isNotEmpty()) append("\n**Assistant:** $r")
+                    }
+                }
+            }
+
+            if (!diagnosticsInfo.isNullOrBlank()) {
+                append("\n\n### Diagnostics\n")
+                append(diagnosticsInfo)
+            }
+        }
+        systemPrompt = if (externalContext.isEmpty()) {
+            systemPrompt.replace(
+                "{{EXTERNAL_CONTEXT}}",
+                "## External Context\n\nNo external context selected."
+            )
+        } else {
+            systemPrompt.replace(
+                "{{EXTERNAL_CONTEXT}}",
+                "## External Context$externalContext"
+            )
+        }
+
+        return systemPrompt
     }
 }

@@ -1,11 +1,13 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.thisLogger
-import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
-import ee.carlrobert.service.GrpcCodeCompletionRequest
+import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.service.PartialCodeCompletionResponse
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import kotlinx.coroutines.channels.ProducerScope
 import okhttp3.Request
@@ -37,6 +39,12 @@ class CodeCompletionStreamObserver(
 
     override fun onError(t: Throwable?) {
         logger.error("Error occurred while fetching code completion", t)
+        if (t is StatusRuntimeException && t.status.code != Status.Code.UNAVAILABLE) {
+            OverlayUtil.showNotification(
+                t.message ?: "Something went wrong",
+                NotificationType.ERROR
+            )
+        }
         channel.close(t)
     }
 

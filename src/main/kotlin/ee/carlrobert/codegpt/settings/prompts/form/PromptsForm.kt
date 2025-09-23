@@ -159,7 +159,7 @@ class PromptsForm {
         val coreActionsFormState = getFormState<CoreActionPromptDetails>(coreActionsNode)
         settings.coreActions.apply {
             autoApply = coreActionsFormState[0].toState()
-            editCode = coreActionsFormState[1].toState()
+            inlineEdit = coreActionsFormState[1].toState()
             fixCompileErrors = coreActionsFormState[2].toState()
             generateCommitMessage = coreActionsFormState[3].toState()
             generateNameLookups = coreActionsFormState[4].toState()
@@ -212,7 +212,7 @@ class PromptsForm {
 
         val stateActions = listOf(
             settingsState.autoApply,
-            settingsState.editCode,
+            settingsState.inlineEdit,
             settingsState.fixCompileErrors,
             settingsState.generateCommitMessage,
             settingsState.generateNameLookups,
@@ -268,7 +268,7 @@ class PromptsForm {
 
         listOf(
             settings.coreActions.autoApply,
-            settings.coreActions.editCode,
+            settings.coreActions.inlineEdit,
             settings.coreActions.fixCompileErrors,
             settings.coreActions.generateCommitMessage,
             settings.coreActions.generateNameLookups,
@@ -592,7 +592,7 @@ class PromptsForm {
         coreActionsNode.removeAllChildren()
         listOf(
             prompts.autoApply,
-            prompts.editCode,
+            prompts.inlineEdit,
             prompts.fixCompileErrors,
             prompts.generateCommitMessage,
             prompts.generateNameLookups,

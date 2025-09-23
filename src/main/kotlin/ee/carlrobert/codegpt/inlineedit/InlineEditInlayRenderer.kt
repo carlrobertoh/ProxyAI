@@ -21,7 +21,6 @@ import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.actions.editor.EditorComponentInlaysManager
-import ee.carlrobert.codegpt.ui.InlineEditPopover
 import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import java.awt.BorderLayout
 import java.awt.Color
@@ -180,10 +179,8 @@ class InlineEditInlayRenderer(
     ): Disposable? {
         try {
             val inlaysManager = EditorComponentInlaysManager.Companion.from(editor)
-            val leftInset = computeLeftInsetForOffset(offset)
-            val component = createAdditionComponent(newText, onAccept, onReject, leftInset)
-            val lineNumber = editor.document.getLineNumber(offset)
-            return inlaysManager.insert(lineNumber, component, showAbove)
+            val component = createAdditionComponent(newText, onAccept, onReject)
+            return inlaysManager.insert(offset, component, showAbove)
         } catch (e: Exception) {
             logger.error("Error creating addition inlay", e)
             throw e
@@ -194,19 +191,26 @@ class InlineEditInlayRenderer(
         text: String,
         onAccept: (() -> Unit)?,
         onReject: (() -> Unit)?,
-        leftInset: Int,
     ): JComponent {
         val displayText = text.trimEnd('\n', '\r')
 
-        val panel = JPanel(BorderLayout()).apply {
+        val outer = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            border = JBUI.Borders.empty()
+            cursor = Cursor.getDefaultCursor()
+        }
+
+        val content = JPanel(BorderLayout()).apply {
             isOpaque = true
             background = JBColor(Color(0, 128, 0, 28), Color(0, 128, 0, 36))
-            border = JBUI.Borders.empty(0, leftInset, 0, 0)
+            border = JBUI.Borders.empty()
+            cursor = Cursor.getDefaultCursor()
         }
 
         if (onAccept != null || onReject != null) {
             val header = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
                 isOpaque = false
+                cursor = Cursor.getDefaultCursor()
             }
 
             fun badge(textLabel: String, bg: Color, onClick: () -> Unit): JComponent {
@@ -262,7 +266,7 @@ class InlineEditInlayRenderer(
                     )
                 )
             }
-            panel.add(header, BorderLayout.NORTH)
+            outer.add(header, BorderLayout.NORTH)
         }
 
         val textPane = JTextPane().apply {
@@ -274,8 +278,9 @@ class InlineEditInlayRenderer(
             margin = Insets(0, 0, 0, 0)
         }
         applySyntaxColors(displayText, textPane)
-        panel.add(textPane, BorderLayout.CENTER)
-        return panel
+        content.add(textPane, BorderLayout.CENTER)
+        outer.add(content, BorderLayout.CENTER)
+        return outer
     }
 
     private fun formatShortcutLabel(actionId: String, fallback: String): String {
@@ -364,8 +369,7 @@ class InlineEditInlayRenderer(
             val inlaysManager = EditorComponentInlaysManager.Companion.from(editor)
             val leftInset = computeLeftInsetForOffset(offset)
             val panel = createButtonPanel(hunk, leftInset)
-            val lineNumber = editor.document.getLineNumber(offset)
-            return inlaysManager.insert(lineNumber, panel, true)
+            return inlaysManager.insert(offset, panel, true)
         } catch (e: Exception) {
             logger.error("Error creating hunk button inlay", e)
             throw e
@@ -379,10 +383,12 @@ class InlineEditInlayRenderer(
         val container = JPanel(BorderLayout()).apply {
             isOpaque = background != null
             border = JBUI.Borders.empty(0, leftInset, 0, 0)
+            cursor = Cursor.getDefaultCursor()
         }
         val row = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
             isOpaque = false
             border = JBUI.Borders.empty(0, 8, 0, 0)
+            cursor = Cursor.getDefaultCursor()
         }
         val accept = InlineEditChips.keyY {
             editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)?.accept(hunk)
@@ -398,9 +404,7 @@ class InlineEditInlayRenderer(
 
     private fun computeLeftInsetForOffset(offset: Int): Int {
         return try {
-            val line = editor.document.getLineNumber(offset)
-            val lineStart = editor.document.getLineStartOffset(line)
-            val x = editor.offsetToXY(lineStart).x
+            val x = editor.offsetToXY(offset).x
             val gutter = editor.gutterComponentEx.width
             (x - gutter).coerceAtLeast(0)
         } catch (e: Exception) {
@@ -419,7 +423,7 @@ class InlineEditInlayRenderer(
                 "InlineEdit",
                 {
                     try {
-                        editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+                        editor.getUserData(InlineEditInlay.INLAY_KEY)
                             ?.markChangesAsAccepted()
                         editor.document.replaceString(
                             change.startOffset,
@@ -433,7 +437,7 @@ class InlineEditInlayRenderer(
                     }
                 })
             if (changes.isEmpty()) {
-                editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+                editor.getUserData(InlineEditInlay.INLAY_KEY)
                     ?.setInlineEditControlsVisible(false)
             }
         }
@@ -446,7 +450,7 @@ class InlineEditInlayRenderer(
             change.copy(isRejected = true)
             removeChangeVisuals(change)
             if (changes.isEmpty()) {
-                editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+                editor.getUserData(InlineEditInlay.INLAY_KEY)
                     ?.setInlineEditControlsVisible(false)
             }
         }
@@ -492,8 +496,8 @@ class InlineEditInlayRenderer(
         val changesToReject = changes.filter { !it.isAccepted && !it.isRejected }
         changesToReject.forEach { rejectChange(it) }
 
-        editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
-            ?.triggerPromptRestoration()
+        editor.getUserData(InlineEditInlay.INLAY_KEY)
+            ?.restorePreviousPrompt()
     }
 
     fun acceptNext() {

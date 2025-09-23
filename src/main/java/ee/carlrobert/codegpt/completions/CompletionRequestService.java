@@ -11,6 +11,7 @@ import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.llm.client.DeserializationUtil;
 import ee.carlrobert.llm.client.anthropic.completion.ClaudeCompletionRequest;
+import ee.carlrobert.llm.client.codegpt.request.InlineEditRequest;
 import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest;
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest;
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest;
@@ -116,6 +117,10 @@ public final class CompletionRequestService {
       CompletionEventListener<String> eventListener,
       ServiceType serviceType,
       FeatureType featureType) {
+    if (request instanceof InlineEditRequest completionRequest) {
+      return CompletionClientProvider.getCodeGPTClient()
+          .getInlineEditAsync(completionRequest, eventListener);
+    }
     if (request instanceof OpenAIChatCompletionRequest completionRequest) {
       return switch (serviceType) {
         case OPENAI -> CompletionClientProvider.getOpenAIClient()

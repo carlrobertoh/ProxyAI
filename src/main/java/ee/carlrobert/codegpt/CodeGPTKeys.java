@@ -30,6 +30,10 @@ public class CodeGPTKeys {
       Key.create("codegpt.editorInlineEditRenderer");
   public static final Key<JComponent> EDITOR_INLINE_EDIT_COMPARE_LINK =
       Key.create("codegpt.editorInlineEditCompareLink");
+  public static final Key<JComponent> EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP =
+      Key.create("codegpt.editorInlineEditAcceptAllChip");
+  public static final Key<JComponent> EDITOR_INLINE_EDIT_REJECT_ALL_CHIP =
+      Key.create("codegpt.editorInlineEditRejectAllChip");
   public static final Key<PartialCodeCompletionResponse> REMAINING_CODE_COMPLETION =
       Key.create("codegpt.remainingCodeCompletion");
   public static final Key<NextEditResponse> REMAINING_PREDICTION_RESPONSE =

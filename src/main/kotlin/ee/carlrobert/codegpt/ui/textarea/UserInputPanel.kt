@@ -10,6 +10,8 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -41,6 +43,8 @@ import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import git4idea.GitCommit
 import java.awt.*
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.awt.geom.Area
 import java.awt.geom.Rectangle2D
 import java.awt.geom.RoundRectangle2D
@@ -101,8 +105,11 @@ class UserInputPanel @JvmOverloads constructor(
             onSubmit = ::handleSubmit,
             onFilesDropped = { files ->
                 includeFiles(files.toMutableList())
-                totalTokensPanel.updateReferencedFilesTokens(files.map { ReferencedFile.from(it).fileContent() })
-            }
+                totalTokensPanel.updateReferencedFilesTokens(files.map {
+                    ReferencedFile.from(it).fileContent()
+                })
+            },
+            featureType = featureType
         )
     private val userInputHeaderPanel =
         UserInputHeaderPanel(
@@ -113,11 +120,13 @@ class UserInputPanel @JvmOverloads constructor(
             withRemovableSelectedEditorTag
         )
 
+    private var footerPanelRef: JPanel? = null
+
     private val acceptChip =
         InlineEditChips.acceptAll { onAcceptAll?.invoke() }.apply { isVisible = false }
     private val rejectChip =
         InlineEditChips.rejectAll { onRejectAll?.invoke() }.apply { isVisible = false }
-    private var inlineEditControls: List<javax.swing.JComponent> = listOf(acceptChip, rejectChip)
+    private var inlineEditControls: List<JComponent> = listOf(acceptChip, rejectChip)
 
     private val thinkingIcon = AsyncProcessIcon("inline-edit-thinking").apply { isVisible = false }
     private val thinkingLabel = javax.swing.JLabel("Thinking…").apply {
@@ -142,7 +151,9 @@ class UserInputPanel @JvmOverloads constructor(
             }
         },
         "SUBMIT"
-    )
+    ).apply {
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+    }
     private val stopButton = IconActionButton(
         object : AnAction(
             CodeGPTBundle.get("smartTextPane.stopButton.title"),
@@ -154,7 +165,10 @@ class UserInputPanel @JvmOverloads constructor(
             }
         },
         "STOP"
-    ).apply { isEnabled = false }
+    ).apply {
+        isEnabled = false
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+    }
     private val imageActionSupported = AtomicBooleanProperty(isImageActionSupported())
 
     private lateinit var modelComboBoxComponent: JComponent
@@ -173,9 +187,14 @@ class UserInputPanel @JvmOverloads constructor(
         setupDisposables(parentDisposable)
         setupLayout(featureType)
         addSelectedEditorContent()
+        if (featureType == FeatureType.INLINE_EDIT) {
+            setupTextChangeListener()
+        }
         FileDragAndDrop.install(this) { files ->
             includeFiles(files.toMutableList())
-            totalTokensPanel.updateReferencedFilesTokens(files.map { ReferencedFile.from(it).fileContent() })
+            totalTokensPanel.updateReferencedFilesTokens(
+                files.map { ReferencedFile.from(it).fileContent() }
+            )
         }
     }
 
@@ -186,17 +205,53 @@ class UserInputPanel @JvmOverloads constructor(
 
     private fun setupLayout(featureType: FeatureType) {
         background = service<EditorColorsManager>().globalScheme.defaultBackground
+        isFocusable = true
+        cursor = Cursor.getDefaultCursor()
+
         addToTop(userInputHeaderPanel)
         addToCenter(promptTextField)
-        addToBottom(createFooterPanel(featureType))
+        addToBottom(createFooterPanel(featureType).also { footerPanelRef = it })
+
+        if (featureType == FeatureType.INLINE_EDIT) {
+            invokeLater { updatePreferredSizeFromChildren() }
+            minimumSize = Dimension(JBUI.scale(600), JBUI.scale(80))
+
+            addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent?) {
+                    promptTextField.requestFocusInWindow()
+                }
+            })
+        }
+    }
+
+    private fun setupTextChangeListener() {
+        promptTextField.document.addDocumentListener(object : DocumentListener {
+            override fun documentChanged(event: DocumentEvent) {
+                runInEdt {
+                    updatePreferredSizeFromChildren()
+                }
+            }
+        }, disposableCoroutineScope)
+
+        promptTextField.addPropertyChangeListener("preferredSize") { _ ->
+            runInEdt { updatePreferredSizeFromChildren() }
+        }
+        userInputHeaderPanel.addPropertyChangeListener("preferredSize") { _ ->
+            runInEdt { updatePreferredSizeFromChildren() }
+        }
+        footerPanelRef?.addPropertyChangeListener("preferredSize") { _ ->
+            runInEdt { updatePreferredSizeFromChildren() }
+        }
     }
 
     private fun addSelectedEditorContent() {
-        EditorUtil.getSelectedEditor(project)?.let { editor ->
-            if (EditorUtil.hasSelection(editor)) {
-                tagManager.addTag(
-                    EditorSelectionTagDetails(editor.virtualFile, editor.selectionModel)
-                )
+        runInEdt {
+            EditorUtil.getSelectedEditor(project)?.let { editor ->
+                if (EditorUtil.hasSelection(editor)) {
+                    tagManager.addTag(
+                        EditorSelectionTagDetails(editor.virtualFile, editor.selectionModel)
+                    )
+                }
             }
         }
     }
@@ -275,9 +330,17 @@ class UserInputPanel @JvmOverloads constructor(
         }
     }
 
+    override fun requestFocusInWindow(): Boolean {
+        return promptTextField.requestFocusInWindow()
+    }
+
     fun setTextAndFocus(text: String) {
         promptTextField.setTextAndFocus(text)
     }
+
+    override fun isFocusable(): Boolean = true
+
+    fun getPreferredFocusedComponent(): JComponent? = promptTextField
 
     override fun paintComponent(g: Graphics) {
         val g2 = g.create() as Graphics2D
@@ -384,17 +447,21 @@ class UserInputPanel @JvmOverloads constructor(
             ServiceType.entries,
             true,
             featureType
-        ).createCustomComponent(ActionPlaces.UNKNOWN)
+        ).createCustomComponent(ActionPlaces.UNKNOWN).apply {
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
         modelComboBoxComponent = modelComboBox
 
         val searchReplaceToggle = if (showModeSelector) {
-            SearchReplaceToggleAction(this).createCustomComponent(ActionPlaces.UNKNOWN)
+            SearchReplaceToggleAction(this).createCustomComponent(ActionPlaces.UNKNOWN).apply {
+                cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            }
         } else {
             null
         }
         searchReplaceToggleComponent = searchReplaceToggle
 
-        return panel {
+        val pnl = panel {
             twoColumnsRow(
                 {
                     panel {
@@ -419,6 +486,7 @@ class UserInputPanel @JvmOverloads constructor(
                     }.align(AlignX.RIGHT)
                 })
         }.andTransparent()
+        return pnl
     }
 
     fun setInlineEditControlsVisible(visible: Boolean) {
@@ -426,7 +494,6 @@ class UserInputPanel @JvmOverloads constructor(
         revalidate()
         repaint()
     }
-
 
     fun setThinkingVisible(visible: Boolean, text: String = "Thinking…") {
         thinkingLabel.text = text
@@ -463,5 +530,22 @@ class UserInputPanel @JvmOverloads constructor(
             ModelRegistry.CLAUDE_4_SONNET,
             ModelRegistry.CLAUDE_4_SONNET_THINKING
         )
+    }
+
+    private fun updatePreferredSizeFromChildren() {
+        val headerHeight = userInputHeaderPanel.preferredSize?.height ?: 0
+        val textFieldHeight = promptTextField.preferredSize?.height ?: 0
+        val footerHeight = footerPanelRef?.preferredSize?.height ?: 0
+        val desiredHeight =
+            headerHeight + textFieldHeight + footerHeight + insets.top + insets.bottom
+
+        val oldSize = preferredSize
+        val newSize = Dimension(JBUI.scale(600), desiredHeight.coerceAtLeast(JBUI.scale(80)))
+        if (oldSize != newSize) {
+            preferredSize = newSize
+            revalidate()
+            repaint()
+            firePropertyChange("preferredSize", oldSize, newSize)
+        }
     }
 }

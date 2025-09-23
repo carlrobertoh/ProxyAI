@@ -16,7 +16,7 @@ class FilteredPromptsServiceTest : IntegrationTest() {
         promptsSettings = service()
         
         promptsSettings.state.coreActions.autoApply.instructions = null
-        promptsSettings.state.coreActions.editCode.instructions = null
+        promptsSettings.state.coreActions.inlineEdit.instructions = null
         promptsSettings.state.personas.selectedPersona = PersonaPromptDetailsState().apply {
             id = 999L
             name = "Test Persona"
@@ -39,7 +39,7 @@ class FilteredPromptsServiceTest : IntegrationTest() {
     fun testEditCodePromptReturnsDefaultFormatInEditMode() {
         val prompt = filteredPromptsService.getFilteredEditCodePrompt(ChatMode.EDIT)
 
-        assertThat(prompt).isEqualTo(CoreActionsState.DEFAULT_EDIT_CODE_PROMPT)
+        assertThat(prompt).isEqualTo(CoreActionsState.DEFAULT_INLINE_EDIT_PROMPT)
     }
 
     fun testEditCodePromptReturnsSimpleFormatInAskMode() {

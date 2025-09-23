@@ -18,9 +18,6 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.TextRange
 import com.intellij.ui.components.JBScrollPane
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.inlineedit.InlineEditInlayRenderer
-import ee.carlrobert.codegpt.inlineedit.InlineEditKeyEventDispatcher
-import ee.carlrobert.codegpt.ui.InlineEditPopover
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import javax.swing.KeyStroke
@@ -30,7 +27,6 @@ class InlineEditSession(
     private val project: Project,
     private val editor: EditorEx,
     private val baseRange: TextRange,
-    private val initialBaseText: String,
     private var proposedText: String
 ) : Disposable {
 
@@ -74,6 +70,7 @@ class InlineEditSession(
         hunks.clear()
         hunks.addAll(newHunks)
         renderer.renderHunks(hunks)
+        updateHasPendingChangesFlag()
     }
 
     private fun computeHunks(): List<Hunk> {
@@ -148,6 +145,7 @@ class InlineEditSession(
         hunks.addAll(newHunks)
         renderer.setInteractive(interactive)
         renderer.replaceHunks(hunks)
+        updateHasPendingChangesFlag()
     }
 
     fun acceptNearestToCaret() {
@@ -167,14 +165,17 @@ class InlineEditSession(
     }
 
     fun acceptAll() {
-        editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)?.markChangesAsAccepted()
-
+        editor.getUserData(InlineEditInlay.INLAY_KEY)?.markChangesAsAccepted()
         hunks
             .filter { !it.accepted && !it.rejected }
             .sortedByDescending { it.baseMarker.startOffset }
             .forEach { acceptHunk(it) }
         removeCompareLinkIfAny()
-        dispose()
+        clearAcceptedHunks()
+    }
+
+    private fun clearAcceptedHunks() {
+        hunks.removeIf { it.accepted }
     }
 
     fun rejectAll() {
@@ -182,10 +183,12 @@ class InlineEditSession(
             .filter { !it.accepted && !it.rejected }
             .forEach { rejectHunk(it) }
         removeCompareLinkIfAny()
-
-        editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
-            ?.triggerPromptRestoration()
-
+        editor.getUserData(InlineEditInlay.INLAY_KEY)
+            ?.restorePreviousPrompt()
+        editor.getUserData(InlineEditInlay.INLAY_KEY)?.let {
+            try { it.dispose() } catch (_: Exception) {}
+            editor.putUserData(InlineEditInlay.INLAY_KEY, null)
+        }
         dispose()
     }
 
@@ -194,7 +197,7 @@ class InlineEditSession(
         val start = hunk.baseMarker.startOffset
         val end = hunk.baseMarker.endOffset
         WriteCommandAction.runWriteCommandAction(project) {
-            editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)?.markChangesAsAccepted()
+            editor.getUserData(InlineEditInlay.INLAY_KEY)?.markChangesAsAccepted()
             editor.document.replaceString(start, end, hunk.proposedSlice)
             hunk.accepted = true
             val newEnd = start + hunk.proposedSlice.length
@@ -208,11 +211,12 @@ class InlineEditSession(
             hunks.addAll(newHunks)
             renderer.replaceHunks(hunks)
             if (hunks.isEmpty()) {
-                editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+                editor.getUserData(InlineEditInlay.INLAY_KEY)
                     ?.setInlineEditControlsVisible(false)
                 removeCompareLinkIfAny()
             }
         }
+        updateHasPendingChangesFlag()
     }
 
     private fun rejectHunk(hunk: Hunk) {
@@ -236,10 +240,11 @@ class InlineEditSession(
 
         renderer.replaceHunks(hunks)
         if (hunks.isEmpty()) {
-            editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+            editor.getUserData(InlineEditInlay.INLAY_KEY)
                 ?.setInlineEditControlsVisible(false)
             removeCompareLinkIfAny()
         }
+        updateHasPendingChangesFlag()
     }
 
     fun accept(hunk: Hunk) = acceptHunk(hunk)
@@ -248,6 +253,13 @@ class InlineEditSession(
 
     fun hasPendingHunks(): Boolean {
         return hunks.any { !it.accepted && !it.rejected }
+    }
+
+    private fun updateHasPendingChangesFlag() {
+        editor.getUserData(InlineEditInlay.INLAY_KEY)
+            ?.observableProperties
+            ?.hasPendingChanges
+            ?.set(hasPendingHunks())
     }
 
     private fun rangesOverlap(aStart: Int, aEnd: Int, bStart: Int, bEnd: Int): Boolean {
@@ -260,18 +272,29 @@ class InlineEditSession(
         editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION, null)
         editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER)?.dispose()
         editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER, null)
-        editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)?.setInlineEditControlsVisible(false)
+        editor.getUserData(InlineEditInlay.INLAY_KEY)?.setInlineEditControlsVisible(false)
 
         removeCompareLinkIfAny()
     }
 
     private fun removeCompareLinkIfAny() {
-        val comp = editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK) ?: return
         val statusComponent = (editor.scrollPane as JBScrollPane).statusComponent
-        statusComponent.remove(comp)
+
+        editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP)?.let {
+            statusComponent.remove(it)
+            editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP, null)
+        }
+        editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP)?.let {
+            statusComponent.remove(it)
+            editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP, null)
+        }
+        editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK)?.let {
+            statusComponent.remove(it)
+            editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK, null)
+        }
+
         statusComponent.revalidate()
         statusComponent.repaint()
-        editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK, null)
     }
 
     private fun computeLineStartOffsets(text: String): IntArray {
@@ -297,34 +320,15 @@ class InlineEditSession(
             project: Project,
             editor: EditorEx,
             baseRange: TextRange,
-            baseText: String,
             proposedText: String
         ): InlineEditSession {
             editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)?.dispose()
-            return InlineEditSession(project, editor, baseRange, baseText, proposedText)
+            return InlineEditSession(project, editor, baseRange, proposedText)
         }
     }
 
     private fun registerEditorScopedShortcuts() {
         val am = ActionManager.getInstance()
-        am.getAction("CodeGPT.AcceptCurrentInlineEdit")?.let { action ->
-            val ks = resolvePreferredKeyStroke("CodeGPT.AcceptCurrentInlineEdit", KeyEvent.VK_Y)
-            val wrapped = EmptyAction.wrap(action)
-            wrapped.registerCustomShortcutSet(
-                CustomShortcutSet(KeyboardShortcut(ks, null)),
-                editor.contentComponent,
-                this
-            )
-        }
-        am.getAction("CodeGPT.RejectCurrentInlineEdit")?.let { action ->
-            val ks = resolvePreferredKeyStroke("CodeGPT.RejectCurrentInlineEdit", KeyEvent.VK_N)
-            val wrapped = EmptyAction.wrap(action)
-            wrapped.registerCustomShortcutSet(
-                CustomShortcutSet(KeyboardShortcut(ks, null)),
-                editor.contentComponent,
-                this
-            )
-        }
 
         am.getAction("codegpt.acceptInlineEdit")?.let { editorAction ->
             val metaEnter = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK)
@@ -340,18 +344,5 @@ class InlineEditSession(
                 this
             )
         }
-    }
-
-    private fun resolvePreferredKeyStroke(actionId: String, keyCode: Int): KeyStroke {
-        val keymap = KeymapManager.getInstance().activeKeymap
-        val shortcuts = keymap.getShortcuts(actionId)
-        val macKs = KeyStroke.getKeyStroke(keyCode, InputEvent.META_DOWN_MASK)
-        val winKs = KeyStroke.getKeyStroke(keyCode, InputEvent.CTRL_DOWN_MASK)
-        val fromKeymap =
-            shortcuts.firstOrNull { (it as? KeyboardShortcut)?.firstKeyStroke == macKs }
-                ?: shortcuts.firstOrNull { (it as? KeyboardShortcut)?.firstKeyStroke == winKs }
-        val ks = (fromKeymap as? KeyboardShortcut)?.firstKeyStroke
-        if (ks != null) return ks
-        return if (SystemInfo.isMac) macKs else winKs
     }
 }

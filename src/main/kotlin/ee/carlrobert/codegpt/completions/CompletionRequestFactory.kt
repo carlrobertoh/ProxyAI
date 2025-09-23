@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.completions.factory.*
@@ -11,6 +12,7 @@ import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.completion.CompletionRequest
 
@@ -57,8 +59,8 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         val language = params.fileExtension ?: "txt"
         val filePath = params.filePath ?: "untitled"
         var systemPrompt =
-            service<PromptsSettings>().state.coreActions.editCode.instructions
-                ?: CoreActionsState.DEFAULT_EDIT_CODE_PROMPT
+            service<PromptsSettings>().state.coreActions.inlineEdit.instructions
+                ?: CoreActionsState.DEFAULT_INLINE_EDIT_PROMPT
 
 
         if (params.projectBasePath != null) {
@@ -70,7 +72,10 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         }
 
         val currentFileContent = try {
-            params.filePath?.let { LocalFileSystem.getInstance().findFileByPath(it)?.readText() }
+            params.filePath?.let { filePath ->
+                val virtualFile = LocalFileSystem.getInstance().findFileByPath(filePath)
+                virtualFile?.let { EditorUtil.getFileContent(it) }
+            }
         } catch (_: Throwable) {
             null
         }
@@ -188,7 +193,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
 
         val formattedSource = CompletionRequestUtil.formatCodeWithLanguage(params.source, language)
         val formattedDestination =
-            CompletionRequestUtil.formatCode(destination.readText(), destination.path)
+            CompletionRequestUtil.formatCode(EditorUtil.getFileContent(destination), destination.path)
 
         val systemPromptTemplate = service<FilteredPromptsService>().getFilteredAutoApplyPrompt(
             params.chatMode,

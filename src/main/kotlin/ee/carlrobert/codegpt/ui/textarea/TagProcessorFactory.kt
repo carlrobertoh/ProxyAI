@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.ui.textarea
 import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressManager
@@ -272,15 +273,18 @@ class DiagnosticsTagProcessor(
 
     private fun getDiagnosticsString(project: Project, virtualFile: VirtualFile): String {
         return try {
-            DumbService.getInstance(project).runReadActionInSmartMode<String> {
-                val document = FileDocumentManager.getInstance().getDocument(virtualFile)
-                    ?: return@runReadActionInSmartMode "No document found for file"
+            var result = ""
+            ApplicationManager.getApplication().invokeAndWait {
+                result = ApplicationManager.getApplication().runWriteAction<String> {
+                    DumbService.getInstance(project).runReadActionInSmartMode<String> {
+                        val document = FileDocumentManager.getInstance().getDocument(virtualFile)
+                            ?: return@runReadActionInSmartMode "No document found for file"
 
-                PsiDocumentManager.getInstance(project).commitDocument(document)
+                        PsiDocumentManager.getInstance(project).commitDocument(document)
 
-                val psiManager = PsiManager.getInstance(project)
-                val psiFile = psiManager.findFile(virtualFile)
-                    ?: return@runReadActionInSmartMode "No PSI file found for: ${virtualFile.path}"
+                        val psiManager = PsiManager.getInstance(project)
+                        val psiFile = psiManager.findFile(virtualFile)
+                            ?: return@runReadActionInSmartMode "No PSI file found for: ${virtualFile.path}"
 
                 val rangeHighlights =
                     DaemonCodeAnalyzerImpl.getHighlights(
@@ -355,6 +359,9 @@ class DiagnosticsTagProcessor(
                     }
                 }
             }
+        }
+            }
+            result
         } catch (e: Exception) {
             "Error retrieving diagnostics: ${e.message}"
         }

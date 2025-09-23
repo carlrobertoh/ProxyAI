@@ -139,7 +139,8 @@ data class InlineEditCompletionParameters(
     val gitDiff: String? = null,
     val conversation: Conversation? = null,
     val conversationHistory: List<Conversation>? = null,
-    val diagnosticsInfo: String? = null
+    val diagnosticsInfo: String? = null,
+    val cursorOffset: Int? = null
 ) : CompletionParameters
 
 data class ImageDetails(

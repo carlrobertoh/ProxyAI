@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.settings.service.codegpt
 
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
@@ -11,6 +12,7 @@ import javax.swing.JComponent
 class CodeGPTServiceConfigurable : Configurable {
 
     private lateinit var component: CodeGPTServiceForm
+    private var uiComponent: JComponent? = null
 
     override fun getDisplayName(): String {
         return "ProxyAI: ProxyAI Service"
@@ -18,7 +20,8 @@ class CodeGPTServiceConfigurable : Configurable {
 
     override fun createComponent(): JComponent {
         component = CodeGPTServiceForm()
-        return component.getForm()
+        uiComponent = component.getForm()
+        return uiComponent as JComponent
     }
 
     override fun isModified(): Boolean {
@@ -29,9 +32,10 @@ class CodeGPTServiceConfigurable : Configurable {
         setCredential(CodeGptApiKey, component.getApiKey())
         component.applyChanges()
 
+        val modality = ModalityState.stateForComponent(uiComponent ?: component.getForm())
         ApplicationUtil.findCurrentProject()
             ?.service<CodeGPTService>()
-            ?.syncUserDetailsAsync(component.getApiKey(), true)
+            ?.syncUserDetailsAsync(component.getApiKey(), true, modality)
     }
 
     override fun reset() {

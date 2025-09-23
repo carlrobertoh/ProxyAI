@@ -24,16 +24,6 @@ object InlineEditConversationManager {
         return conversation
     }
 
-    fun addUserMessage(editor: EditorEx, prompt: String): Message {
-        val message = Message(prompt)
-        getOrCreate(editor).addMessage(message)
-        return message
-    }
-
-    fun addAssistantResponse(message: Message, content: String) {
-        message.response = content
-    }
-
     fun clear(editor: EditorEx) {
         editor.putUserData(CONVERSATION_KEY, null)
     }

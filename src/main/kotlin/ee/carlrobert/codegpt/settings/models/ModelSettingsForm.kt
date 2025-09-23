@@ -48,7 +48,7 @@ class ModelSettingsForm(
                         FeatureType.COMMIT_MESSAGE,
                         "settings.models.commitMessages.label"
                     ),
-                    FeatureConfig(FeatureType.INLINE_EDIT, "settings.models.editCode.label"),
+                    FeatureConfig(FeatureType.INLINE_EDIT, "settings.models.inlineEdit.label"),
                     FeatureConfig(FeatureType.LOOKUP, "settings.models.nameLookups.label")
                 )
             ),
@@ -89,7 +89,7 @@ class ModelSettingsForm(
                     modelChanged(FeatureType.COMMIT_MESSAGE, newModel, serviceType)
                 }
 
-                override fun editCodeModelChanged(newModel: String, serviceType: ServiceType) {
+                override fun inlineEditModelChanged(newModel: String, serviceType: ServiceType) {
                     modelChanged(FeatureType.INLINE_EDIT, newModel, serviceType)
                 }
 

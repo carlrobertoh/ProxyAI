@@ -32,7 +32,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
             publisher.commitMessageModelChanged(model, serviceType)
         },
         FeatureType.INLINE_EDIT to PublisherMethod { publisher, model, serviceType ->
-            publisher.editCodeModelChanged(model, serviceType)
+            publisher.inlineEditModelChanged(model, serviceType)
         },
         FeatureType.NEXT_EDIT to PublisherMethod { publisher, model, serviceType ->
             publisher.nextEditModelChanged(model, serviceType)
@@ -151,8 +151,9 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
     private fun migrateCustomOpenAIModelCodesToIds() {
         val servicesByName: Map<String, List<String>> = try {
             CustomServicesSettings::class.java
-            val settings = service<CustomServicesSettings>()
-            settings.state.services.groupBy({ it.name ?: "" }, { it.id ?: "" }).filterKeys { it.isNotEmpty() }
+            service<CustomServicesSettings>().state.services
+                .groupBy({ it.name ?: "" }, { it.id ?: "" })
+                .filterKeys { it.isNotEmpty() }
         } catch (_: Exception) {
             emptyMap()
         }

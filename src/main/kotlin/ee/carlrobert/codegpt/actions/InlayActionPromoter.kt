@@ -10,11 +10,19 @@ import ee.carlrobert.codegpt.predictions.OpenPredictionAction
 import ee.carlrobert.codegpt.predictions.TriggerCustomPredictionAction
 import ee.carlrobert.codegpt.inlineedit.AcceptCurrentInlineEditAction
 import ee.carlrobert.codegpt.actions.editor.AcceptInlineEditAction
+import ee.carlrobert.codegpt.actions.editor.InlineEditContextMenuAction
+import ee.carlrobert.codegpt.actions.editor.InlineEditFloatingMenuAction
 import ee.carlrobert.codegpt.inlineedit.RejectCurrentInlineEditAction
 
 class InlayActionPromoter : ActionPromoter {
     override fun promote(actions: List<AnAction>, context: DataContext): List<AnAction> {
         val editor = CommonDataKeys.EDITOR.getData(context) ?: return emptyList()
+
+        if (editor.document.textLength > 0) {
+            actions.filterIsInstance<InlineEditContextMenuAction>().takeIf { it.isNotEmpty() }?.let { return it }
+            actions.filterIsInstance<InlineEditFloatingMenuAction>().takeIf { it.isNotEmpty() }?.let { return it }
+        }
+
         val hasInlineEdit = editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION) != null ||
                 editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER) != null
         if (hasInlineEdit) {

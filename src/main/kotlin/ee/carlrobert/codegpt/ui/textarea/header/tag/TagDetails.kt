@@ -89,7 +89,11 @@ class EditorSelectionTagDetails(
     val virtualFile: VirtualFile,
     val selectionModel: SelectionModel
 ) : TagDetails(
-    "${virtualFile.name} (${selectionModel.selectionStartPosition?.line}:${selectionModel.selectionEndPosition?.line})",
+    try {
+        "${virtualFile.name} (${selectionModel.selectionStartPosition?.line}:${selectionModel.selectionEndPosition?.line})"
+    } catch (e: Exception) {
+        virtualFile.name
+    },
     virtualFile.fileType.icon
 ) {
     var selectedText: String? = selectionModel.selectedText

@@ -28,31 +28,31 @@ class FileWatcher : Disposable {
                     val watchService = FileSystems.getDefault().newWatchService()
                     path.register(watchService, ENTRY_CREATE)
                     watchServices.add(watchService)
-                    logger.debug("Successfully registered watch service for path: $pathString (absolute: ${path.toAbsolutePath()})")
+                    logger.info("Successfully registered watch service for path: $pathString (absolute: ${path.toAbsolutePath()})")
 
                     val monitor = thread {
                         try {
-                            logger.debug("File watch monitor thread started for path: $pathString")
+                            logger.info("File watch monitor thread started for path: $pathString")
                             generateSequence { watchService.take() }.forEach { key ->
-                                logger.trace("Watch event received for path: $pathString")
+                                logger.info("Watch event received for path: $pathString")
                                 key.pollEvents().forEach { event ->
                                     val fileName = event.context() as Path
                                     val fullPath = path.resolve(fileName)
-                                    logger.debug("File event detected: ${event.kind()} - fileName=$fileName, fullPath=$fullPath")
+                                    logger.info("File event detected: ${event.kind()} - fileName=$fileName, fullPath=$fullPath")
                                     onFileCreated(fileName, pathString)
                                 }
                                 val resetResult = key.reset()
                                 if (!resetResult) {
-                                    logger.warn("Watch key reset failed for path: $pathString - watch may have become invalid")
+                                    logger.info("Watch key reset failed for path: $pathString - watch may have become invalid")
                                 }
                             }
                         } catch (e: InterruptedException) {
-                            logger.debug("File watch monitor thread interrupted for path: $pathString")
+                            logger.error("File watch monitor thread interrupted for path: $pathString", e)
                             Thread.currentThread().interrupt()
                         } catch (e: Exception) {
-                            logger.warn("Error in file watcher for path: $pathString", e)
+                            logger.error("Error in file watcher for path: $pathString", e)
                         } finally {
-                            logger.debug("File watch monitor thread stopped for path: $pathString")
+                            logger.error("File watch monitor thread stopped for path: $pathString")
                         }
                     }
                     fileMonitors.add(monitor)

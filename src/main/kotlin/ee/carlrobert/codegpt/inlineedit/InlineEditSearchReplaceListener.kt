@@ -4,6 +4,7 @@ import com.intellij.diff.DiffManager
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.notification.NotificationAction
+import com.intellij.openapi.components.service
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
@@ -23,20 +24,28 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
+import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SseMessageParser
-import ee.carlrobert.codegpt.ui.InlineEditPopover
-import ee.carlrobert.codegpt.ui.ObservableProperties
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Text
+import ee.carlrobert.codegpt.toolwindow.chat.parser.CodeHeader
+import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
+import ee.carlrobert.codegpt.toolwindow.chat.parser.CodeEnd
 import ee.carlrobert.codegpt.ui.OverlayUtil
+import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.util.EditorDiffUtil
+import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
+import ee.carlrobert.codegpt.conversations.ConversationService
+import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 import ee.carlrobert.llm.completion.CompletionEventListener
 import okhttp3.sse.EventSource
 import java.awt.Color
 import java.awt.Font
 import java.util.*
+import javax.swing.Box
 import javax.swing.JComponent
 import javax.swing.JLabel
 import kotlin.concurrent.schedule
@@ -50,14 +59,16 @@ class InlineEditSearchReplaceListener(
     private val observableProperties: ObservableProperties,
     private val selectionTextRange: TextRange,
     private val requestId: Long,
-    private val userPrompt: String
+    private val conversation: Conversation
 ) : CompletionEventListener<String> {
 
     private val project: Project = editor.project!!
     private val logger = Logger.getInstance(InlineEditSearchReplaceListener::class.java)
     private val sseMessageParser = SseMessageParser()
     private val accumulatedSearchReplaceSegments = mutableListOf<SearchReplace>()
+    private val assistantResponseBuilder = StringBuilder()
     private var isStreamingComplete = false
+    private var isStopping = false
     private var previewSessionStarted = false
     private var hasReceivedMessage = false
 
@@ -65,14 +76,15 @@ class InlineEditSearchReplaceListener(
     private var currentSearchPattern: String? = null
     private val highlightDebounceAlarm = Alarm()
     private var hintComponent: JComponent? = null
+    private var lastHintMessage: String? = null
     private val waitingAlarm = Alarm()
 
-    private val SEARCH_HIGHLIGHT_COLOR = JBColor(
+    private val searchHighlightColor = JBColor(
         Color(255, 235, 59, 80),
         Color(255, 235, 59, 60)
     )
 
-    private val REPLACE_READY_COLOR = JBColor(
+    private val replaceReadyColor = JBColor(
         Color(59, 255, 149, 80),
         Color(59, 255, 149, 60)
     )
@@ -249,13 +261,14 @@ class InlineEditSearchReplaceListener(
 
     override fun onMessage(message: String, eventSource: EventSource) {
         if (!isCurrentRequest()) return
+        if (isStopping) return
         hasReceivedMessage = true
+
+        assistantResponseBuilder.append(message)
 
         sseMessageParser.parse(message).forEachIndexed { _, segment ->
             when (segment) {
                 is SearchReplace -> {
-                    runInEdt { clearAllHighlights() }
-
                     when (val validation =
                         validateSearchReplacePattern(segment.search, segment.replace)) {
                         is ValidationResult.Success -> {
@@ -275,9 +288,12 @@ class InlineEditSearchReplaceListener(
                 }
 
                 is ReplaceWaiting -> {
-                    if (currentSearchPattern != null) {
+                    val pattern = currentSearchPattern
+                    if (pattern != null) {
                         runInEdt {
-                            highlightSearchRegions(currentSearchPattern!!, true)
+                            if (searchHighlighters.isEmpty()) {
+                                highlightSearchRegions(pattern, true)
+                            }
                             updateHighlightState(
                                 HighlightState.FOUND,
                                 CodeGPTBundle.get("inlineEdit.status.preparingReplacement")
@@ -288,11 +304,12 @@ class InlineEditSearchReplaceListener(
 
                 is SearchWaiting -> {
                     currentSearchPattern = segment.search
-
                     if (segment.search.isNotEmpty()) {
-                        runInEdt {
-                            highlightSearchRegions(segment.search, false)
-                        }
+                        val pattern = segment.search
+                        highlightDebounceAlarm.cancelAllRequests()
+                        highlightDebounceAlarm.addRequest({
+                            runInEdt { if (!isStopping) highlightSearchRegions(pattern, false) }
+                        }, 120)
                     }
                 }
 
@@ -315,66 +332,92 @@ class InlineEditSearchReplaceListener(
                 hintComponent = null
             }
 
-            val userMessage = InlineEditConversationManager.addUserMessage(editor, userPrompt)
-            val assistantSummary = buildAssistantSummaryForConversation()
-            if (assistantSummary.isNotBlank()) {
-                InlineEditConversationManager.addAssistantResponse(userMessage, assistantSummary)
-            }
+            val message = conversation.messages.last()
+            message.response = computeAssistantResponse()
 
             val hadChanges = showFinalDiff()
 
-            val popover = editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
-            popover?.observableProperties?.hasPendingChanges?.set(hadChanges)
-            popover?.setThinkingVisible(false)
-            popover?.setInlineEditControlsVisible(hadChanges)
+            val inlay = editor.getUserData(InlineEditInlay.INLAY_KEY)
+            inlay?.observableProperties?.hasPendingChanges?.set(hadChanges)
+            inlay?.setThinkingVisible(false)
+            inlay?.setInlineEditControlsVisible(hadChanges)
+            inlay?.onCompletionFinished()
+
+            val statusComponent = (editor.scrollPane as JBScrollPane).statusComponent
+            editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP)
+                ?.let { statusComponent.remove(it) }
+            editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP)
+                ?.let { statusComponent.remove(it) }
+            editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK)
+                ?.let { statusComponent.remove(it) }
 
             if (hadChanges) {
-                val statusComponent = (editor.scrollPane as JBScrollPane).statusComponent
-                editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK)?.let { existing ->
-                    statusComponent.remove(existing)
-                }
-                val compareLink = ActionLink("Open in Diff Viewer") {
-                    try {
-                        val originalDocText = runReadAction { editor.document.text }
-                        val usedRange = targetRange()
-                        val originalSelection = runReadAction { editor.document.getText(usedRange) }
-                        val modifiedSelection = applyAllSearchReplaceOperations(
-                            originalSelection,
-                            accumulatedSearchReplaceSegments
-                        )
+                val acceptChip = InlineEditChips.acceptAll {
+                    AcceptAllInlineEditAction.acceptAll(editor)
+                }.apply { border = JBUI.Borders.empty(0, 6) }
+                val rejectChip = InlineEditChips.rejectAll {
+                    RejectAllInlineEditAction.rejectAll(editor)
+                }.apply { border = JBUI.Borders.empty(0, 6) }
 
-                        val newContent =
-                            if (usedRange.startOffset == 0 && usedRange.endOffset == originalDocText.length) {
-                                modifiedSelection
-                            } else buildString(originalDocText.length + modifiedSelection.length) {
-                                append(originalDocText, 0, usedRange.startOffset)
-                                append(modifiedSelection)
-                                append(originalDocText, usedRange.endOffset, originalDocText.length)
-                            }
+                val compareLink = createDiffViewerLink()
 
-                        val originalVf = editor.virtualFile ?: return@ActionLink
-                        val tempFile = LightVirtualFile(originalVf.name, newContent)
-                        val diffRequest =
-                            EditorDiffUtil.createDiffRequest(project, tempFile, originalVf)
-                        DiffManager.getInstance().showDiff(project, diffRequest)
-                    } catch (e: Exception) {
-                        OverlayUtil.showNotification(
-                            "Failed to open diff: ${e.message}",
-                            NotificationType.ERROR
-                        )
-                    }
-                }.apply {
-                    icon = AllIcons.Actions.Diff
-                    toolTipText = CodeGPTBundle.get("editor.diff.title")
-                    border = JBUI.Borders.empty(0, 6)
+                if (statusComponent != null) {
+                    statusComponent.border = JBUI.Borders.empty(6)
+                    statusComponent.add(compareLink)
+                    statusComponent.add(acceptChip)
+                    statusComponent.add(Box.createHorizontalStrut(6))
+                    statusComponent.add(rejectChip)
                 }
 
-                statusComponent.add(compareLink)
+                editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP, acceptChip)
+                editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP, rejectChip)
                 editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK, compareLink)
+
+                statusComponent.revalidate()
+                statusComponent.repaint()
+            } else {
                 statusComponent.revalidate()
                 statusComponent.repaint()
             }
             stopLoading()
+        }
+    }
+
+    private fun createDiffViewerLink(): ActionLink {
+        return ActionLink("Open in Diff Viewer") {
+            try {
+                val originalDocText = runReadAction { editor.document.text }
+                val usedRange = targetRange()
+                val originalSelection = runReadAction { editor.document.getText(usedRange) }
+                val modifiedSelection = applyAllSearchReplaceOperations(
+                    originalSelection,
+                    accumulatedSearchReplaceSegments
+                )
+
+                val newContent =
+                    if (usedRange.startOffset == 0 && usedRange.endOffset == originalDocText.length) {
+                        modifiedSelection
+                    } else buildString(originalDocText.length + modifiedSelection.length) {
+                        append(originalDocText, 0, usedRange.startOffset)
+                        append(modifiedSelection)
+                        append(originalDocText, usedRange.endOffset, originalDocText.length)
+                    }
+
+                val originalVf = editor.virtualFile ?: return@ActionLink
+                val tempFile = LightVirtualFile(originalVf.name, newContent)
+                val diffRequest =
+                    EditorDiffUtil.createDiffRequest(project, tempFile, originalVf)
+                DiffManager.getInstance().showDiff(project, diffRequest)
+            } catch (e: Exception) {
+                OverlayUtil.showNotification(
+                    "Failed to open diff: ${e.message}",
+                    NotificationType.ERROR
+                )
+            }
+        }.apply {
+            icon = AllIcons.Actions.Diff
+            toolTipText = CodeGPTBundle.get("editor.diff.title")
+            border = JBUI.Borders.empty(0, 6)
         }
     }
 
@@ -401,6 +444,39 @@ class InlineEditSearchReplaceListener(
         return sb.toString()
     }
 
+    private fun computeAssistantResponse(): String {
+        val raw = assistantResponseBuilder.toString().trim()
+        if (raw.isNotEmpty()) return raw
+        return buildAssistantSummaryForConversation()
+    }
+
+    private fun openConversationInNewChat() {
+        val inlay = editor.getUserData(InlineEditInlay.INLAY_KEY)
+        if (inlay != null) {
+            inlay.openOrCreateChatFromSession(conversation)
+            return
+        }
+
+        val newConversation = Conversation().apply {
+            title = conversation.title
+            projectPath = conversation.projectPath
+        }
+
+        conversation.messages.forEach { original ->
+            val copy = Message(original.prompt, original.response)
+            copy.referencedFilePaths = original.referencedFilePaths
+            copy.conversationsHistoryIds = original.conversationsHistoryIds
+            copy.imageFilePath = original.imageFilePath
+            copy.documentationDetails = original.documentationDetails
+            copy.personaName = original.personaName
+            newConversation.addMessage(copy)
+        }
+
+        ConversationService.getInstance().addConversation(newConversation)
+        ConversationService.getInstance().saveConversation(newConversation)
+        project.service<ChatToolWindowContentManager>().displayConversation(newConversation)
+    }
+
     override fun onError(error: ErrorDetails, ex: Throwable) {
         if (!isCurrentRequest()) return
 
@@ -411,7 +487,7 @@ class InlineEditSearchReplaceListener(
                 editor.contentComponent.remove(it)
                 hintComponent = null
             }
-            val pop = editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
+            val pop = editor.getUserData(InlineEditInlay.INLAY_KEY)
             pop?.setThinkingVisible(false)
             pop?.setInlineEditControlsVisible(false)
         }
@@ -446,7 +522,6 @@ class InlineEditSearchReplaceListener(
                     project,
                     editor,
                     range,
-                    originalContent,
                     modifiedSoFar
                 )
                 session.setInteractive(true)
@@ -472,25 +547,78 @@ class InlineEditSearchReplaceListener(
             if (modifiedContent == originalContent) {
                 val noChangesMsg = CodeGPTBundle.get("inlineEdit.status.noChanges")
                 showInlineHint(noChangesMsg)
-                OverlayUtil.showNotification(noChangesMsg, NotificationType.INFORMATION)
+                val action = NotificationAction.createSimpleExpiring(
+                    CodeGPTBundle.get("inlineEdit.action.openInChat")
+                ) {
+                    openConversationInNewChat()
+                }
+                OverlayUtil.showNotification(noChangesMsg, NotificationType.INFORMATION, action)
                 return false
             }
 
             val existingSession = editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)
             if (existingSession == null) {
-                InlineEditSession.start(project, editor, range, originalContent, modifiedContent)
+                InlineEditSession.start(project, editor, range, modifiedContent)
             } else {
                 existingSession.updateProposedText(modifiedContent, interactive = true)
                 if (!existingSession.hasPendingHunks()) {
                     val noChangesMsg = CodeGPTBundle.get("inlineEdit.status.noChanges")
                     showInlineHint(noChangesMsg)
-                    OverlayUtil.showNotification(noChangesMsg, NotificationType.INFORMATION)
+                    val action = NotificationAction.createSimpleExpiring(
+                        CodeGPTBundle.get("inlineEdit.action.openInChat")
+                    ) {
+                        openConversationInNewChat()
+                    }
+                    OverlayUtil.showNotification(noChangesMsg, NotificationType.INFORMATION, action)
                     return false
                 }
             }
             editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)?.setInteractive(true)
         } catch (e: Exception) {
             logger.warn("Failed to build final diff", e)
+            return false
+        }
+        return true
+    }
+
+    private fun finalizePartialResults(): Boolean {
+        try {
+            val range = targetRange()
+            val originalContent = runReadAction { editor.document.getText(range) }
+            val modifiedContent =
+                applyAllSearchReplaceOperations(originalContent, accumulatedSearchReplaceSegments)
+            if (modifiedContent == originalContent) {
+                val noChangesMsg = CodeGPTBundle.get("inlineEdit.status.noChanges")
+                showInlineHint(noChangesMsg)
+                val action = NotificationAction.createSimpleExpiring(
+                    CodeGPTBundle.get("inlineEdit.action.openInChat")
+                ) {
+                    openConversationInNewChat()
+                }
+                OverlayUtil.showNotification(noChangesMsg, NotificationType.INFORMATION, action)
+                return false
+            }
+
+            val existingSession = editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)
+            if (existingSession == null) {
+                InlineEditSession.start(project, editor, range, modifiedContent)
+            } else {
+                existingSession.updateProposedText(modifiedContent, interactive = true)
+                if (!existingSession.hasPendingHunks()) {
+                    val noChangesMsg = CodeGPTBundle.get("inlineEdit.status.noChanges")
+                    showInlineHint(noChangesMsg)
+                    val action = NotificationAction.createSimpleExpiring(
+                        CodeGPTBundle.get("inlineEdit.action.openInChat")
+                    ) {
+                        openConversationInNewChat()
+                    }
+                    OverlayUtil.showNotification(noChangesMsg, NotificationType.INFORMATION, action)
+                    return false
+                }
+            }
+            editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)?.setInteractive(true)
+        } catch (e: Exception) {
+            logger.warn("Failed to finalize partial results", e)
             return false
         }
         return true
@@ -528,8 +656,8 @@ class InlineEditSearchReplaceListener(
             CompletionProgressNotifier.Companion.update(it, false)
         }
 
-        val popover = editor.getUserData(InlineEditPopover.Companion.POPOVER_KEY)
-        popover?.onCompletionFinished()
+        val inlay = editor.getUserData(InlineEditInlay.INLAY_KEY)
+        inlay?.onCompletionFinished()
     }
 
     private fun unlockEditorOnError() {
@@ -538,12 +666,37 @@ class InlineEditSearchReplaceListener(
         }
     }
 
+    fun stopGenerating() {
+        runInEdt {
+            isStopping = true
+            highlightDebounceAlarm.cancelAllRequests()
+            waitingAlarm.cancelAllRequests()
+
+            clearAllHighlights()
+
+            hintComponent?.let {
+                editor.contentComponent.remove(it)
+                hintComponent = null
+                lastHintMessage = null
+            }
+
+            if (accumulatedSearchReplaceSegments.isNotEmpty()) {
+                finalizePartialResults()
+            }
+
+            showInlineHint("Generation stopped")
+        }
+    }
+
     fun dispose() {
         clearAllHighlights()
         highlightDebounceAlarm.cancelAllRequests()
+        waitingAlarm.cancelAllRequests()
         hintComponent?.let {
             editor.contentComponent.remove(it)
         }
+        hintComponent = null
+        lastHintMessage = null
 
         editor.putUserData(LISTENER_KEY, null)
     }
@@ -713,6 +866,7 @@ class InlineEditSearchReplaceListener(
 
     private fun highlightSearchRegions(pattern: String, isReplaceReady: Boolean = false) {
         runInEdt {
+            if (isStopping) return@runInEdt
             clearAllHighlights()
 
             if (pattern.isEmpty()) {
@@ -736,7 +890,7 @@ class InlineEditSearchReplaceListener(
 
                 val absoluteRange =
                     TextRange(baseOffset + range.startOffset, baseOffset + range.endOffset)
-                val color = if (isReplaceReady) REPLACE_READY_COLOR else SEARCH_HIGHLIGHT_COLOR
+                val color = if (isReplaceReady) replaceReadyColor else searchHighlightColor
                 val tooltip = if (isReplaceReady) CodeGPTBundle.get("inlineEdit.tooltip.ready")
                 else CodeGPTBundle.get("inlineEdit.tooltip.searching")
 
@@ -750,9 +904,10 @@ class InlineEditSearchReplaceListener(
     }
 
     private fun updateHighlightState(state: HighlightState, message: String? = null) {
+        if (isStopping) return
         val color = when (state) {
-            HighlightState.SEARCHING -> SEARCH_HIGHLIGHT_COLOR
-            HighlightState.FOUND -> REPLACE_READY_COLOR
+            HighlightState.SEARCHING -> searchHighlightColor
+            HighlightState.FOUND -> replaceReadyColor
             HighlightState.REPLACING -> JBColor(
                 Color(59, 149, 255, 80),
                 Color(59, 149, 255, 60)
@@ -761,8 +916,15 @@ class InlineEditSearchReplaceListener(
             HighlightState.ERROR -> JBColor(Color(255, 59, 59, 80), Color(255, 59, 59, 60))
         }
 
-        searchHighlighters.forEach { highlighter ->
-            highlighter.getTextAttributes(editor.colorsScheme)?.backgroundColor = color
+        val ranges = searchHighlighters.map { TextRange(it.startOffset, it.endOffset) }
+        clearAllHighlights()
+        val tooltip = when (state) {
+            HighlightState.SEARCHING -> CodeGPTBundle.get("inlineEdit.tooltip.searching")
+            HighlightState.FOUND, HighlightState.REPLACING -> CodeGPTBundle.get("inlineEdit.tooltip.ready")
+            HighlightState.ERROR -> message ?: CodeGPTBundle.get("inlineEdit.tooltip.searching")
+        }
+        ranges.forEach { r ->
+            searchHighlighters.add(createHighlighter(r, color, tooltip))
         }
 
         if (message != null) {
@@ -779,16 +941,37 @@ class InlineEditSearchReplaceListener(
 
     private fun showInlineHint(message: String) {
         runInEdt {
-            hintComponent?.let {
-                editor.contentComponent.remove(it)
-            }
+            if (lastHintMessage == message && hintComponent != null) return@runInEdt
+            hintComponent?.let { editor.contentComponent.remove(it) }
 
-            val hint = JLabel(message).apply {
-                foreground = JBColor.GRAY
-                font = font.deriveFont(Font.ITALIC, 12f)
-                border = JBUI.Borders.empty(2, 8)
-                background = editor.backgroundColor
-                isOpaque = true
+            val hintComponentToAdd: JComponent = run {
+                val noChangesMsg = CodeGPTBundle.get("inlineEdit.status.noChanges")
+                if (message == noChangesMsg) {
+                    val container = Box.createHorizontalBox()
+                    val label = JLabel(message).apply {
+                        foreground = JBColor.GRAY
+                        font = font.deriveFont(Font.ITALIC, 12f)
+                    }
+                    val link = ActionLink(CodeGPTBundle.get("inlineEdit.action.openInChat")) {
+                        openConversationInNewChat()
+                    }.apply {
+                        border = JBUI.Borders.emptyLeft(8)
+                    }
+                    container.border = JBUI.Borders.empty(2, 8)
+                    container.background = editor.backgroundColor
+                    container.isOpaque = true
+                    container.add(label)
+                    container.add(link)
+                    container
+                } else {
+                    JLabel(message).apply {
+                        foreground = JBColor.GRAY
+                        font = font.deriveFont(Font.ITALIC, 12f)
+                        border = JBUI.Borders.empty(2, 8)
+                        background = editor.backgroundColor
+                        isOpaque = true
+                    }
+                }
             }
 
             val targetOffset = if (searchHighlighters.isNotEmpty()) {
@@ -813,17 +996,19 @@ class InlineEditSearchReplaceListener(
             if (y + prefH > visible.y + visible.height) y =
                 visible.y + visible.height - prefH - JBUI.scale(8)
 
-            hint.setBounds(x, y, prefW, prefH)
+            hintComponentToAdd.setBounds(x, y, prefW, prefH)
 
-            comp.add(hint)
-            hintComponent = hint
+            comp.add(hintComponentToAdd)
+            hintComponent = hintComponentToAdd
+            lastHintMessage = message
 
             Timer().schedule(3000) {
                 runInEdt {
-                    if (hintComponent == hint) {
-                        comp.remove(hint)
+                    if (hintComponent == hintComponentToAdd) {
+                        comp.remove(hintComponentToAdd)
                         comp.repaint()
                         hintComponent = null
+                        lastHintMessage = null
                     }
                 }
             }

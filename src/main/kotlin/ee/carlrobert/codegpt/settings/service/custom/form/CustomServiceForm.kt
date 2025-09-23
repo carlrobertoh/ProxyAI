@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.settings.service.custom.form
 
 import com.intellij.icons.AllIcons
 import com.intellij.icons.AllIcons.General
+import com.intellij.ide.BrowserUtil
 import com.intellij.ide.HelpTooltip
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -13,10 +14,14 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.ui.*
 import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
 import com.intellij.ui.EnumComboBoxModel
+import com.intellij.ui.JBColor
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.*
+import com.intellij.ui.components.ActionLink
+// removed: com.intellij.ui.dsl.builder.panel
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.FormBuilder
+import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.credentials.CredentialsStore
@@ -264,9 +269,15 @@ class CustomServiceForm(
 
     fun getForm(): JPanel =
         BorderLayoutPanel(8, 0)
-            .addToTop(createImportExportPanel())
+            .addToTop(createTopPanel())
             .addToLeft(createToolbarDecorator().createPanel())
             .addToCenter(createContentPanel())
+
+    private fun createTopPanel(): JPanel = FormBuilder.createFormBuilder()
+        .addComponent(createMarketingPanel())
+        .addVerticalGap(6)
+        .addComponent(createImportExportPanel())
+        .panel
 
     private fun createImportExportPanel() = FormBuilder.createFormBuilder()
         .addComponent(
@@ -281,6 +292,37 @@ class CustomServiceForm(
         )
         .addVerticalGap(4)
         .panel
+
+    private fun createMarketingPanel(): JPanel {
+        val marketingText = CodeGPTBundle.get("settingsConfigurable.service.custom.openai.marketing.text").trim()
+        val learnMoreText = CodeGPTBundle.get("settingsConfigurable.service.custom.openai.marketing.learnMore").trim()
+
+        val html = """
+            <html>
+              <body style='margin:0; padding:0;'>
+                <div style='line-height:1.45;'>
+                  $marketingText <a href='https://docs.tryproxy.io/enterprise/custom-extension'>$learnMoreText</a>
+                </div>
+              </body>
+            </html>
+        """.trimIndent()
+
+        val fixedWidth = JBUI.scale(600)
+        val content = UIUtil.createTextPane(html, false).apply {
+            isOpaque = false
+            size = Dimension(fixedWidth, Short.MAX_VALUE.toInt())
+            preferredSize = Dimension(fixedWidth, preferredSize.height)
+            maximumSize = Dimension(fixedWidth, Int.MAX_VALUE)
+        }
+
+        val wrapper = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            isOpaque = false
+            border = JBUI.Borders.empty(6, 8)
+            add(content)
+        }
+
+        return wrapper
+    }
 
     private fun createToolbarDecorator(): ToolbarDecorator =
         ToolbarDecorator.createDecorator(customProvidersJBList)

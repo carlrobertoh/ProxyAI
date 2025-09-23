@@ -18,11 +18,13 @@ import com.intellij.openapi.fileTypes.FileTypes
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.ToolWindow
 import com.intellij.ui.EditorTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
@@ -31,6 +33,7 @@ import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import kotlinx.coroutines.*
 import java.awt.Dimension
 import java.util.*
+import javax.swing.JComponent
 
 class PromptTextField(
     private val project: Project,
@@ -40,6 +43,7 @@ class PromptTextField(
     private val onLookupAdded: (LookupActionItem) -> Unit,
     private val onSubmit: (String) -> Unit,
     private val onFilesDropped: (List<VirtualFile>) -> Unit = {},
+    private val featureType: FeatureType? = null
 ) : EditorTextField(project, FileTypes.PLAIN_TEXT), Disposable {
 
     companion object {
@@ -48,7 +52,7 @@ class PromptTextField(
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val lookupManager = PromptTextFieldLookupManager(project, onLookupAdded)
-    private val searchManager = SearchManager(project, tagManager)
+    private val searchManager = SearchManager(project, tagManager, featureType)
 
     private var showSuggestionsJob: Job? = null
     private var searchState = SearchState()
@@ -67,7 +71,7 @@ class PromptTextField(
 
     override fun onEditorAdded(editor: Editor) {
         IdeEventQueue.getInstance().addDispatcher(
-            PromptTextFieldEventDispatcher(dispatcherId, onBackSpace, lookup) { event ->
+            PromptTextFieldEventDispatcher(dispatcherId, onBackSpace) { event ->
                 val shown = lookup?.let { it.isShown && !it.isLookupDisposed } == true
                 if (shown) {
                     return@PromptTextFieldEventDispatcher
@@ -78,8 +82,8 @@ class PromptTextField(
             },
             this
         )
-        val highlightTarget = (this.parent as? javax.swing.JComponent) ?: this
-        FileDragAndDrop.install(editor.contentComponent as javax.swing.JComponent, highlightTarget) { onFilesDropped(it) }
+        val highlightTarget = (this.parent as? JComponent) ?: this
+        FileDragAndDrop.install(editor.contentComponent, highlightTarget) { onFilesDropped(it) }
     }
 
     fun clear() {
@@ -359,14 +363,15 @@ class PromptTextField(
     }
 
     private fun adjustHeight(editor: EditorEx) {
-        val toolWindow = project.service<ToolWindowManager>().getToolWindow("ProxyAI")
-        if (toolWindow == null || !toolWindow.component.isAncestorOf(this)) {
-            return
-        }
-        
         val contentHeight =
             editor.contentComponent.preferredSize.height + PromptTextFieldConstants.HEIGHT_PADDING
-        val maxHeight = JBUI.scale(getToolWindowHeight() / 2)
+
+        val toolWindow = project.service<ToolWindowManager>().getToolWindow("ProxyAI")
+        val maxHeight = if (toolWindow == null || !toolWindow.component.isAncestorOf(this)) {
+            JBUI.scale(600)
+        } else {
+            JBUI.scale(getToolWindowHeight(toolWindow) / 2)
+        }
         val newHeight = minOf(contentHeight, maxHeight)
 
         runInEdt {
@@ -376,9 +381,8 @@ class PromptTextField(
         }
     }
 
-    private fun getToolWindowHeight(): Int {
-        return project.service<ToolWindowManager>()
-            .getToolWindow("ProxyAI")?.component?.visibleRect?.height
+    private fun getToolWindowHeight(toolWindow: ToolWindow): Int {
+        return toolWindow.component.visibleRect?.height
             ?: PromptTextFieldConstants.DEFAULT_TOOL_WINDOW_HEIGHT
     }
 }

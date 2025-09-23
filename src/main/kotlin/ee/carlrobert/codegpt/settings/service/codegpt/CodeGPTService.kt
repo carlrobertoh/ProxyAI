@@ -12,8 +12,9 @@ import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.service.ModelReplacementDialog
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier.Companion.CODEGPT_USER_DETAILS_TOPIC
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import kotlinx.coroutines.*
-import javax.swing.SwingUtilities
 
 @Service(Service.Level.PROJECT)
 class CodeGPTService private constructor(val project: Project) {
@@ -28,7 +29,7 @@ class CodeGPTService private constructor(val project: Project) {
         syncUserDetailsAsync(getCredential(CodeGptApiKey))
     }
 
-    fun syncUserDetailsAsync(apiKey: String?, showDialog: Boolean = false) {
+    fun syncUserDetailsAsync(apiKey: String?, showDialog: Boolean = false, modalityState: ModalityState? = null) {
         serviceScope.launch {
             try {
                 val userDetails = withContext(Dispatchers.IO) {
@@ -47,9 +48,10 @@ class CodeGPTService private constructor(val project: Project) {
                 CODEGPT_USER_DETAILS.set(project, userDetails)
 
                 if (showDialog) {
-                    SwingUtilities.invokeLater {
-                        ModelReplacementDialog.showDialogIfNeeded(ServiceType.PROXYAI)
-                    }
+                    val modality = modalityState ?: ModalityState.NON_MODAL
+                    ApplicationManager.getApplication().invokeLater({
+                        ModelReplacementDialog.showDialog(ServiceType.PROXYAI)
+                    }, modality)
                 }
                 project.messageBus
                     .syncPublisher<CodeGPTUserDetailsNotifier>(CODEGPT_USER_DETAILS_TOPIC)

@@ -4,6 +4,7 @@ import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.keymap.KeymapManager
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.ui.JBColor
+import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import java.awt.Color
 import java.awt.event.InputEvent
@@ -19,9 +20,9 @@ object InlineEditChips {
     fun keyY(onClick: () -> Unit) = BadgeChip(
         currentShortcutLabel(
             actionId = "CodeGPT.AcceptCurrentInlineEdit",
-            preferredKeyCode = KeyEvent.VK_Y,
-            macFallback = "⌘Y",
-            otherFallback = "Ctrl+Y"
+            preferredKeyCode = KeyEvent.VK_ENTER,
+            macFallback = "⌘Enter",
+            otherFallback = "Ctrl+Enter"
         ),
         GREEN,
         onClick,
@@ -31,9 +32,9 @@ object InlineEditChips {
     fun keyN(onClick: () -> Unit) = BadgeChip(
         currentShortcutLabel(
             actionId = "CodeGPT.RejectCurrentInlineEdit",
-            preferredKeyCode = KeyEvent.VK_N,
-            macFallback = "⌘N",
-            otherFallback = "Ctrl+N"
+            preferredKeyCode = KeyEvent.VK_BACK_SPACE,
+            macFallback = "⌘Backspace",
+            otherFallback = "Ctrl+Backspace"
         ),
         RED,
         onClick,

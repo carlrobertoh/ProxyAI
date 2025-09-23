@@ -19,6 +19,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.readText
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.testFramework.LightVirtualFile
@@ -189,6 +190,23 @@ object EditorUtil {
                         endOffset
                     )
                 }
+            }
+        }
+    }
+
+    @JvmStatic
+    fun getFileContent(virtualFile: VirtualFile): String {
+        return try {
+            val fileDocumentManager = FileDocumentManager.getInstance()
+            return runReadAction {
+                val doc = fileDocumentManager.getDocument(virtualFile)
+                doc?.text ?: virtualFile.readText()
+            }
+        } catch (e: Exception) {
+            try {
+                virtualFile.readText()
+            } catch (_: Exception) {
+                ""
             }
         }
     }
