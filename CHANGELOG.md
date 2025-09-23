@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Inline edit (replaces the old Edit Code feature)
+- Configurable screenshot detection
+- Diagnostics tag
+- Drag-and-drop files and folders from the Project tool window [#1124](https://github.com/carlrobertoh/ProxyAI/issues/1124)
+
+### Fixed
+
+- Migrated Custom OpenAI services to use UUIDs and addressed related issues
+
 ## [3.5.1-233] - 2025-09-03
 
 ### Added
