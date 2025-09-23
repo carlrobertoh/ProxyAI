@@ -214,6 +214,7 @@ class UserMessagePanel(
                                 })
                             actionLink.icon =
                                 if (it.isDirectory) AllIcons.Nodes.Folder else it.fileType.icon
+                            actionLink.toolTipText = it.path
                             actionLink
                         }
                         .toList()

@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.icons.AllIcons.Actions.Close
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
@@ -23,8 +24,8 @@ abstract class TagPanel(
     var tagDetails: TagDetails,
     private val tagManager: TagManager,
     private val shouldPreventDeselection: Boolean = true,
+    protected val project: Project,
 ) : JToggleButton() {
-
     private val label = TagLabel(tagDetails.name, tagDetails.icon, tagDetails.selected)
     private val closeButton = CloseButton {
         isVisible = isSelected && tagDetails.isRemovable
@@ -43,6 +44,11 @@ abstract class TagPanel(
     fun update(text: String, icon: Icon? = null) {
         closeButton.isVisible = isSelected && tagDetails.isRemovable
         label.update(text, icon, isSelected)
+        tagDetails.getTooltipText()?.let { tooltip ->
+            val relativeTooltipText = toProjectRelative(tooltip)
+            this.toolTipText = relativeTooltipText
+            label.toolTipText = relativeTooltipText
+        }
         revalidate()
         repaint()
     }
@@ -67,6 +73,11 @@ abstract class TagPanel(
         cursor = Cursor(Cursor.HAND_CURSOR)
         isSelected = tagDetails.selected
         closeButton.isVisible = isSelected && tagDetails.isRemovable
+        tagDetails.getTooltipText()?.let { tooltip ->
+            val relativeTooltipText = toProjectRelative(tooltip)
+            this.toolTipText = relativeTooltipText
+            label.toolTipText = relativeTooltipText
+        }
 
         val gbc = GridBagConstraints().apply {
             gridx = 0
@@ -98,6 +109,14 @@ abstract class TagPanel(
 
         revalidate()
         repaint()
+    }
+
+    private fun toProjectRelative(path: String): String? {
+        val base = project.basePath ?: return path
+        val baseTrim = base.trimEnd('/', '\\')
+        return if (path.startsWith("$baseTrim/") || path.startsWith("$baseTrim\\")) {
+            path.substring(baseTrim.length + 1)
+        } else path
     }
 
     private class TagLabel(
@@ -158,7 +177,8 @@ class SelectionTagPanel(
     tagDetails: EditorSelectionTagDetails,
     tagManager: TagManager,
     private val promptTextField: PromptTextField,
-) : TagPanel(tagDetails, tagManager, true) {
+    project: Project,
+) : TagPanel(tagDetails, tagManager, true, project) {
 
     init {
         cursor = Cursor(Cursor.DEFAULT_CURSOR)

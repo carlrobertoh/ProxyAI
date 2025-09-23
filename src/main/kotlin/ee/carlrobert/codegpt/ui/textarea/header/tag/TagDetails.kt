@@ -20,6 +20,8 @@ sealed class TagDetails(
 
     var selected: Boolean = true
 
+    abstract fun getTooltipText(): String?
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is TagDetails) return false
@@ -35,6 +37,8 @@ class EditorTagDetails(val virtualFile: VirtualFile, isRemovable: Boolean = true
     TagDetails(virtualFile.name, virtualFile.fileType.icon, isRemovable = isRemovable) {
 
     private val type: String = "EditorTagDetails"
+
+    override fun getTooltipText(): String = virtualFile.path
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -57,6 +61,8 @@ class FileTagDetails(val virtualFile: VirtualFile) :
     TagDetails(virtualFile.name, virtualFile.fileType.icon) {
 
     private val type: String = "FileTagDetails"
+
+    override fun getTooltipText(): String = virtualFile.path
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -83,6 +89,8 @@ data class SelectionTagDetails(
 ) {
     var selectedText: String? = selectionModel.selectedText
         private set
+
+    override fun getTooltipText(): String = virtualFile.path
 }
 
 class EditorSelectionTagDetails(
@@ -99,6 +107,8 @@ class EditorSelectionTagDetails(
     var selectedText: String? = selectionModel.selectedText
         private set
 
+    override fun getTooltipText(): String = virtualFile.path
+
     override fun equals(other: Any?): Boolean {
         if (other === null) return false
         return other::class == this::class
@@ -110,33 +120,55 @@ class EditorSelectionTagDetails(
 }
 
 data class DocumentationTagDetails(var documentationDetails: DocumentationDetails) :
-    TagDetails(documentationDetails.name, AllIcons.Toolwindows.Documentation)
+    TagDetails(documentationDetails.name, AllIcons.Toolwindows.Documentation) {
+    override fun getTooltipText(): String? = documentationDetails.url
+}
 
 data class PersonaTagDetails(var personaDetails: PersonaDetails) :
-    TagDetails(personaDetails.name, AllIcons.General.User)
+    TagDetails(personaDetails.name, AllIcons.General.User) {
+    override fun getTooltipText(): String? = null
+}
 
 data class GitCommitTagDetails(var gitCommit: GitCommit) :
-    TagDetails(gitCommit.id.asString().take(6), AllIcons.Vcs.CommitNode)
+    TagDetails(gitCommit.id.asString().take(6), AllIcons.Vcs.CommitNode) {
+    override fun getTooltipText(): String? = gitCommit.fullMessage
+}
 
 class CurrentGitChangesTagDetails :
-    TagDetails("Current Git Changes", AllIcons.Vcs.CommitNode)
+    TagDetails("Current Git Changes", AllIcons.Vcs.CommitNode) {
+    override fun getTooltipText(): String? = null
+}
 
 data class FolderTagDetails(var folder: VirtualFile) :
-    TagDetails(folder.name, AllIcons.Nodes.Folder)
+    TagDetails(folder.name, AllIcons.Nodes.Folder) {
+    override fun getTooltipText(): String = folder.path
+}
 
-class WebTagDetails : TagDetails("Web", AllIcons.General.Web)
+class WebTagDetails : TagDetails("Web", AllIcons.General.Web) {
+    override fun getTooltipText(): String? = null
+}
 
 data class ImageTagDetails(val imagePath: String) :
-    TagDetails(imagePath.substringAfterLast('/'), AllIcons.FileTypes.Image)
+    TagDetails(imagePath.substringAfterLast('/'), AllIcons.FileTypes.Image) {
+    override fun getTooltipText(): String = imagePath
+}
 
 data class HistoryTagDetails(
     val conversationId: UUID,
     val title: String,
-) : TagDetails(title, AllIcons.General.Balloon)
+) : TagDetails(title, AllIcons.General.Balloon) {
+    override fun getTooltipText(): String? = null
+}
 
-class EmptyTagDetails : TagDetails("")
+class EmptyTagDetails : TagDetails("") {
+    override fun getTooltipText(): String? = null
+}
 
-class CodeAnalyzeTagDetails : TagDetails("Code Analyze", AllIcons.Actions.DependencyAnalyzer)
+class CodeAnalyzeTagDetails : TagDetails("Code Analyze", AllIcons.Actions.DependencyAnalyzer) {
+    override fun getTooltipText(): String? = null
+}
 
 data class DiagnosticsTagDetails(val virtualFile: VirtualFile) :
-    TagDetails("${virtualFile.name} Problems", AllIcons.General.InspectionsEye)
+    TagDetails("${virtualFile.name} Problems", AllIcons.General.InspectionsEye) {
+    override fun getTooltipText(): String = virtualFile.path
+}

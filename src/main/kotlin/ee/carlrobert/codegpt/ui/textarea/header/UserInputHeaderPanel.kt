@@ -140,9 +140,9 @@ class UserInputHeaderPanel(
 
     private fun createTagPanel(tagDetails: TagDetails) =
         (if (tagDetails is EditorSelectionTagDetails) {
-            SelectionTagPanel(tagDetails, tagManager, promptTextField)
+            SelectionTagPanel(tagDetails, tagManager, promptTextField, project)
         } else {
-            object : TagPanel(tagDetails, tagManager, false) {
+            object : TagPanel(tagDetails, tagManager, false, project) {
 
                 init {
                     cursor = if (tagDetails is FileTagDetails)

@@ -52,7 +52,7 @@ class DiffAcceptedPanel(
             LocalFileSystem.getInstance().findFileByPath(filePath)?.let { vFile ->
                 FileEditorManager.getInstance(project).openFile(vFile, true)
             }
-        }
+        }.apply { toolTipText = filePath }
 
     private fun createLeftPanel(fileLink: ActionLink, statsPanel: JPanel): JPanel =
         JPanel().apply {

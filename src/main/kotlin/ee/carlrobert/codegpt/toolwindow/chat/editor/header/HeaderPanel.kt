@@ -138,6 +138,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
                 OpenFileAction.openFile(virtualFile, config.project)
             }.apply {
                 setExternalLinkIcon()
+                toolTipText = virtualFile.path
             })
             add(statsComponent)
         }
@@ -176,7 +177,10 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
                     ProjectView.getInstance(config.project).select(null, newFile, true)
                 }
             }
-        }.apply { icon = AllIcons.General.InlineAdd }
+        }.apply {
+            icon = AllIcons.General.InlineAdd
+            toolTipText = filePath
+        }
         return actionLink
     }
 
