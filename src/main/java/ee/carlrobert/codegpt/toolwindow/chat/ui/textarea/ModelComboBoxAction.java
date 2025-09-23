@@ -41,7 +41,6 @@ import ee.carlrobert.codegpt.settings.service.ModelChangeNotifierAdapter;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState;
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings;
-import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings;
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings;
 import ee.carlrobert.codegpt.toolwindow.ui.CodeGPTModelsListPopupAction;
@@ -485,20 +484,9 @@ public class ModelComboBoxAction extends ComboBoxAction {
         Icons.Google,
         comboBoxPresentation,
         () -> {
-          // Persist selection in the unified ModelSettings used across features
-          ApplicationManager.getApplication()
-              .getService(ModelSettings.class)
+          var application = ApplicationManager.getApplication();
+          application.getService(ModelSettings.class)
               .setModel(featureType, model.getCode(), GOOGLE);
-
-          // Also mirror the selection into GoogleSettings for any legacy UI reads
-          try {
-            ApplicationManager.getApplication()
-                .getService(GoogleSettings.class)
-                .getState()
-                .setModel(model.getCode());
-          } catch (Exception ignored) {
-            // Best-effort sync; lack of GoogleSettings should not block selection
-          }
         });
   }
 
