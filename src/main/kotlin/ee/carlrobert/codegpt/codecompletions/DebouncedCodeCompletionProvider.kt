@@ -12,6 +12,7 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
+import ee.carlrobert.codegpt.settings.service.mistral.MistralSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import kotlinx.coroutines.channels.awaitClose
@@ -110,7 +111,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
             ServiceType.LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             ServiceType.OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
-            ServiceType.MISTRAL -> true  // Mistral supports code completions
+            ServiceType.MISTRAL -> MistralSettings.getCurrentState().isCodeCompletionsEnabled
             ServiceType.ANTHROPIC,
             ServiceType.GOOGLE,
             null -> false

@@ -13,6 +13,7 @@ import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
+import ee.carlrobert.codegpt.settings.service.mistral.MistralSettings
 
 abstract class CodeCompletionFeatureToggleActions(
     private val enableFeatureAction: Boolean
@@ -45,9 +46,12 @@ abstract class CodeCompletionFeatureToggleActions(
                     .codeCompletionSettings.codeCompletionsEnabled = enableFeatureAction
             }
 
-            ANTHROPIC,
-            GOOGLE,
             MISTRAL -> {
+                MistralSettings.getCurrentState().isCodeCompletionsEnabled = enableFeatureAction
+            }
+
+            ANTHROPIC,
+            GOOGLE -> {
             }
         }
     }
