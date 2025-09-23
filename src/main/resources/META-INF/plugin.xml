@@ -141,18 +141,6 @@
             <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
         </action>
 
-        <action
-                id="codegpt.acceptNextInlayWord"
-                text="Apply next word"
-                use-shortcut-of="EditorNextWord"
-                class="ee.carlrobert.codegpt.codecompletions.AcceptNextWordInlayAction"/>
-
-        <action
-                id="codegpt.acceptNextInlayLine"
-                text="Apply next line"
-                use-shortcut-of="EditorLineEnd"
-                class="ee.carlrobert.codegpt.codecompletions.AcceptNextLineInlayAction"/>
-
         <group id="CodeGPTEditorPopup">
             <group id="action.editor.group.EditorActionGroup"
                    text="ProxyAI"
