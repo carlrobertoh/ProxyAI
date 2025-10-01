@@ -5,6 +5,8 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
@@ -20,6 +22,7 @@ import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.IconUtil
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
@@ -105,9 +108,16 @@ class UserInputPanel @JvmOverloads constructor(
             onSubmit = ::handleSubmit,
             onFilesDropped = { files ->
                 includeFiles(files.toMutableList())
-                totalTokensPanel.updateReferencedFilesTokens(files.map {
-                    ReferencedFile.from(it).fileContent()
-                })
+                ReadAction
+                    .nonBlocking<List<String>> {
+                        files.map { ReferencedFile.from(it).fileContent() }
+                    }
+                    .inSmartMode(project)
+                    .expireWith(project)
+                    .finishOnUiThread(ModalityState.any()) { contents ->
+                        totalTokensPanel.updateReferencedFilesTokens(contents)
+                    }
+                    .submit(AppExecutorUtil.getAppExecutorService())
             },
             featureType = featureType
         )
@@ -192,9 +202,16 @@ class UserInputPanel @JvmOverloads constructor(
         }
         FileDragAndDrop.install(this) { files ->
             includeFiles(files.toMutableList())
-            totalTokensPanel.updateReferencedFilesTokens(
-                files.map { ReferencedFile.from(it).fileContent() }
-            )
+            ReadAction
+                .nonBlocking<List<String>> {
+                    files.map { ReferencedFile.from(it).fileContent() }
+                }
+                .inSmartMode(project)
+                .expireWith(project)
+                .finishOnUiThread(ModalityState.any()) { contents ->
+                    totalTokensPanel.updateReferencedFilesTokens(contents)
+                }
+                .submit(AppExecutorUtil.getAppExecutorService())
         }
     }
 

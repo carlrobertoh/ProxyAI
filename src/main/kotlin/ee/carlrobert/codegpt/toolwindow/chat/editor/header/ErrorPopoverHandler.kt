@@ -52,7 +52,7 @@ class ErrorPopoverHandler(
 
     private fun showErrorPopoverWithHover() {
         if (errorContent == null) return
-        if (errorPopup != null && errorPopup!!.isVisible) return
+        if (errorPopup?.isVisible == true) return
 
         val documentationHint = DocumentationHintEditorPane(
             project,

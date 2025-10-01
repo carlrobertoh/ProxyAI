@@ -7,6 +7,7 @@ import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
+import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.groups.Tuple
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -33,10 +34,12 @@ class CompletionRequestProviderTest : IntegrationTest() {
 
         val request = OpenAIRequestFactory().createChatRequest(callParameters)
 
+        val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+        val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
         assertThat(request.messages)
             .extracting("role", "content")
             .containsExactly(
-                Tuple.tuple("system", "TEST_SYSTEM_PROMPT\n"),
+                Tuple.tuple("system", expectedSystem),
                 Tuple.tuple("user", "TEST_PROMPT"),
                 Tuple.tuple("assistant", firstMessage.response),
                 Tuple.tuple("user", "TEST_PROMPT"),
@@ -64,10 +67,12 @@ class CompletionRequestProviderTest : IntegrationTest() {
 
         val request = OpenAIRequestFactory().createChatRequest(callParameters)
 
+        val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+        val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
         assertThat(request.messages)
             .extracting("role", "content")
             .containsExactly(
-                Tuple.tuple("system", "TEST_SYSTEM_PROMPT\n"),
+                Tuple.tuple("system", expectedSystem),
                 Tuple.tuple("user", "FIRST_TEST_PROMPT"),
                 Tuple.tuple("assistant", firstMessage.response),
                 Tuple.tuple("user", "SECOND_TEST_PROMPT")

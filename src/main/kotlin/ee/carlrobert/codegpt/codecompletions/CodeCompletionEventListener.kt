@@ -116,19 +116,20 @@ class CodeCompletionEventListener(
             }
 
             if (firstLineSent.get() && firstLine != null) {
-                val remainingContent = finalResult.removePrefix(firstLine!!).toString()
+                val first = firstLine ?: return
+                val remainingContent = finalResult.removePrefix(first).toString()
                 if (remainingContent.trim().isEmpty()) {
                     return
                 }
 
-                val parsedContent = parseOutput(firstLine + remainingContent)
+                val parsedContent = parseOutput(first + remainingContent)
                 if (parsedContent.isNotEmpty()) {
                     cache?.setCache(prefix, suffix, parsedContent)
 
                     CodeGPTKeys.REMAINING_CODE_COMPLETION.set(
                         editor,
                         PartialCodeCompletionResponse.newBuilder()
-                            .setPartialCompletion(parsedContent.removePrefix(firstLine ?: ""))
+                            .setPartialCompletion(parsedContent.removePrefix(first))
                             .build()
                     )
                 }

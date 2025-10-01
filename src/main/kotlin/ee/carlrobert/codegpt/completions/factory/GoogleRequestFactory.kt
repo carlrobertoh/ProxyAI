@@ -10,10 +10,8 @@ import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
-import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
-import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionContent
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest
@@ -130,15 +128,16 @@ class GoogleRequestFactory : BaseRequestFactory() {
             messages.add(GoogleCompletionContent("model", listOf(prevMessage.response)))
         }
 
-        if (params.imageDetails != null) {
+        val imageDetails = params.imageDetails
+        if (imageDetails != null) {
             messages.add(
                 GoogleCompletionContent(
                     listOf(
                         GoogleContentPart(
                             null,
                             GoogleContentPart.Blob(
-                                params.imageDetails!!.mediaType,
-                                params.imageDetails!!.data
+                                imageDetails.mediaType,
+                                imageDetails.data
                             )
                         ),
                         GoogleContentPart(message.prompt)
@@ -192,16 +191,17 @@ class GoogleRequestFactory : BaseRequestFactory() {
         return when (params.conversationType) {
             ConversationType.DEFAULT -> {
                 val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
-                return if (!selectedPersona.disabled) {
-                    service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode)
-                } else {
-                    null
-                }
+                if (!selectedPersona.disabled) {
+                    val base = service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode)
+                    service<FilteredPromptsService>().applyClickableLinks(base)
+                } else null
             }
 
-            ConversationType.FIX_COMPILE_ERRORS -> service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
+            ConversationType.FIX_COMPILE_ERRORS -> service<FilteredPromptsService>()
+                .applyClickableLinks(service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions.orEmpty())
 
-            ConversationType.REVIEW_CHANGES -> service<PromptsSettings>().state.coreActions.reviewChanges.instructions
+            ConversationType.REVIEW_CHANGES -> service<FilteredPromptsService>()
+                .applyClickableLinks(service<PromptsSettings>().state.coreActions.reviewChanges.instructions.orEmpty())
 
             else -> null
         }

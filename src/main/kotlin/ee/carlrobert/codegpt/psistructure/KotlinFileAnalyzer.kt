@@ -241,7 +241,7 @@ class KotlinFileAnalyzer(
         val parameters = constructor.valueParameters.map { parameter ->
             val type = parameter.typeReference?.text ?: "TypeUnknown"
             val resolvedType = resolveType(type)
-            ParameterInfo(parameter.name!!, resolvedType, getModifiers(parameter))
+            ParameterInfo(parameter.name.orEmpty(), resolvedType, getModifiers(parameter))
         }
         val modifierList = getModifiers(constructor)
         return ConstructorStructure(parameters, modifierList)
@@ -260,10 +260,10 @@ class KotlinFileAnalyzer(
         val parameters = function.valueParameters.map { parameter ->
             val type = parameter.typeReference?.text ?: "TypeUnknown"
             val resolvedType = resolveType(type)
-            ParameterInfo(parameter.name!!, resolvedType, getModifiers(parameter))
+            ParameterInfo(parameter.name.orEmpty(), resolvedType, getModifiers(parameter))
         }
         val modifierList = getModifiers(function)
-        return MethodStructure(function.name!!, resolvedReturnType, parameters, modifierList)
+        return MethodStructure(function.name.orEmpty(), resolvedReturnType, parameters, modifierList)
     }
 
     private fun resolveType(shortType: String): ClassName {

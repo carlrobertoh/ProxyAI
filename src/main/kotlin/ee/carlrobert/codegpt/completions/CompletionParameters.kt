@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.completions
 
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.conversations.Conversation
@@ -26,6 +27,7 @@ class ChatCompletionParameters private constructor(
     var referencedFiles: List<ReferencedFile>?,
     var personaDetails: PersonaDetails?,
     var psiStructure: Set<ClassStructure>?,
+    var project: Project?,
     var chatMode: ChatMode = ChatMode.ASK,
     var featureType: FeatureType = FeatureType.CHAT
 ) : CompletionParameters {
@@ -39,6 +41,7 @@ class ChatCompletionParameters private constructor(
             referencedFiles(this@ChatCompletionParameters.referencedFiles)
             personaDetails(this@ChatCompletionParameters.personaDetails)
             psiStructure(this@ChatCompletionParameters.psiStructure)
+            project(this@ChatCompletionParameters.project)
             chatMode(this@ChatCompletionParameters.chatMode)
             featureType(this@ChatCompletionParameters.featureType)
         }
@@ -54,6 +57,7 @@ class ChatCompletionParameters private constructor(
         private var personaDetails: PersonaDetails? = null
         private var psiStructure: Set<ClassStructure>? = null
         private var gitDiff: String = ""
+        private var project: Project? = null
         private var chatMode: ChatMode = ChatMode.ASK
         private var featureType: FeatureType = FeatureType.CHAT
 
@@ -83,6 +87,8 @@ class ChatCompletionParameters private constructor(
 
         fun psiStructure(psiStructure: Set<ClassStructure>?) = apply { this.psiStructure = psiStructure }
 
+        fun project(project: Project?) = apply { this.project = project }
+
         fun chatMode(chatMode: ChatMode) = apply { this.chatMode = chatMode }
 
         fun featureType(featureType: FeatureType) = apply { this.featureType = featureType }
@@ -99,6 +105,7 @@ class ChatCompletionParameters private constructor(
                 referencedFiles,
                 personaDetails,
                 psiStructure,
+                project,
                 chatMode,
                 featureType
             )

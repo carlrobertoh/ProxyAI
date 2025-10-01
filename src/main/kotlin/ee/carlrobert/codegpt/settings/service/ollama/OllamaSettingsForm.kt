@@ -113,13 +113,8 @@ class OllamaSettingsForm {
         .addComponentFillVertically(JPanel(), 0)
         .panel
 
-    fun getModel(featureType: FeatureType): String? {
-        return if (modelComboBoxes[featureType]!!.isEnabled) {
-            modelComboBoxes[featureType]!!.item
-        } else {
-            null
-        }
-    }
+    fun getModel(featureType: FeatureType): String? =
+        modelComboBoxes[featureType]?.let { combo -> if (combo.isEnabled) combo.item else null }
 
     fun getApiKey(): String? = String(apiKeyField.password).ifEmpty { null }
 
@@ -137,11 +132,11 @@ class OllamaSettingsForm {
     fun applyChanges() {
         service<OllamaSettings>().state.run {
             host = hostField.text
-            if (modelComboBoxes[FeatureType.CHAT]!!.isEnabled)
-                model = modelComboBoxes[FeatureType.CHAT]!!.item
+            if (modelComboBoxes[FeatureType.CHAT]?.isEnabled == true)
+                model = modelComboBoxes[FeatureType.CHAT]?.item
             codeCompletionsEnabled = codeCompletionConfigurationForm.isCodeCompletionsEnabled
-            fimTemplate = codeCompletionConfigurationForm.fimTemplate!!
-            fimOverride = codeCompletionConfigurationForm.fimOverride ?: false
+            fimTemplate = codeCompletionConfigurationForm.fimTemplate ?: fimTemplate
+            fimOverride = codeCompletionConfigurationForm.fimOverride == true
         }
         setCredential(OllamaApikey, getApiKey())
     }

@@ -49,6 +49,7 @@ class ChatCompletionSettingsState : BaseState() {
     var editorContextTagEnabled by property(true)
     var psiStructureEnabled by property(true)
     var psiStructureAnalyzeDepth by property(3)
+    var clickableLinksEnabled by property(true)
 }
 
 class CodeCompletionSettingsState : BaseState() {

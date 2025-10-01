@@ -14,6 +14,7 @@ import ee.carlrobert.llm.client.util.JSONUtil.*
 import org.apache.http.HttpHeaders
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
+import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 
 class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
@@ -31,6 +32,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
+            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting(
                     "model",
@@ -39,7 +42,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
+                        mapOf("role" to "system", "content" to expectedSystem),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )
@@ -75,6 +78,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         conversation.addMessage(Message("Ping", "Pong"))
         expectLlama(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/completion")
+            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting(
                     "prompt",
@@ -83,7 +88,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 )
                 .containsExactly(
                     LLAMA.buildPrompt(
-                        "TEST_SYSTEM_PROMPT",
+                        expectedSystem,
                         "TEST_PROMPT",
                         conversation.messages
                     ),
@@ -122,6 +127,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
+            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting(
                     "model",
@@ -130,7 +137,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     HuggingFaceModel.LLAMA_3_8B_Q6_K.code,
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
+                        mapOf("role" to "system", "content" to expectedSystem),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
                     )
                 )
@@ -154,6 +161,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
 
     fun testGoogleChatCompletionCall() {
         useGoogleService()
+        service<ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings>().state
+            .chatCompletionSettings.clickableLinksEnabled = true
         val customPersona = PersonaPromptDetailsState().apply {
             id = 999L
             name = "Test Persona"
@@ -166,13 +175,15 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             assertThat(request.uri.path).isEqualTo("/v1/models/gemini-2.0-flash:streamGenerateContent")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.uri.query).isEqualTo("key=TEST_API_KEY&alt=sse")
+            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting("contents", "systemInstruction")
                 .containsExactly(
                     listOf(
                         mapOf("parts" to listOf(mapOf("text" to "TEST_PROMPT")), "role" to "user"),
                     ),
-                    mapOf("parts" to listOf(mapOf("text" to "TEST_SYSTEM_PROMPT")))
+                    mapOf("parts" to listOf(mapOf("text" to expectedSystem)))
                 )
             listOf(
                 jsonMapResponse(
@@ -212,6 +223,8 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
+            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting(
                     "model",
@@ -220,9 +233,9 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-5-mini",
                     listOf(
-                        mapOf("role" to "user", "content" to "TEST_SYSTEM_PROMPT\n"),
+                        mapOf("role" to "user", "content" to expectedSystem),
                         mapOf("role" to "user", "content" to "TEST_PROMPT")
-                    )
+                )
                 )
             listOf(
                 jsonMapResponse(

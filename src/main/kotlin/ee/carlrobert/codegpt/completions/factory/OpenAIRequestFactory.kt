@@ -253,9 +253,12 @@ class OpenAIRequestFactory : BaseRequestFactory() {
             val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
             if (callParameters.conversationType == ConversationType.DEFAULT && !selectedPersona.disabled) {
                 val sessionPersonaDetails = callParameters.personaDetails
-                val instructions = sessionPersonaDetails?.instructions?.addProjectPath()
-                    ?: service<FilteredPromptsService>().getFilteredPersonaPrompt(callParameters.chatMode)
+                val baseInstructions = sessionPersonaDetails?.instructions?.addProjectPath()
+                    ?: service<FilteredPromptsService>()
+                        .getFilteredPersonaPrompt(callParameters.chatMode)
                         .addProjectPath()
+                val instructions = service<FilteredPromptsService>()
+                    .applyClickableLinks(baseInstructions)
                 val history = if (conversationsHistory.isNullOrEmpty()) {
                     ""
                 } else {
@@ -265,29 +268,22 @@ class OpenAIRequestFactory : BaseRequestFactory() {
                 }
 
                 if (instructions.isNotEmpty()) {
+                    val content = if (history.isBlank()) instructions else instructions.trimEnd() + "\n" + history
                     messages.add(
                         OpenAIChatCompletionStandardMessage(
                             role,
-                            instructions + "\n" + history
+                            content
                         )
                     )
                 }
             }
             if (callParameters.conversationType == ConversationType.REVIEW_CHANGES) {
-                messages.add(
-                    OpenAIChatCompletionStandardMessage(
-                        role,
-                        service<PromptsSettings>().state.coreActions.reviewChanges.instructions
-                    )
-                )
+                val base = service<PromptsSettings>().state.coreActions.reviewChanges.instructions
+                messages.add(OpenAIChatCompletionStandardMessage(role, base))
             }
             if (callParameters.conversationType == ConversationType.FIX_COMPILE_ERRORS) {
-                messages.add(
-                    OpenAIChatCompletionStandardMessage(
-                        role,
-                        service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
-                    )
-                )
+                val base = service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
+                messages.add(OpenAIChatCompletionStandardMessage(role, base))
             }
 
             for (prevMessage in callParameters.conversation.messages) {
@@ -333,15 +329,16 @@ class OpenAIRequestFactory : BaseRequestFactory() {
                 )
             }
 
-            if (callParameters.imageDetails != null) {
+            val imageDetails = callParameters.imageDetails
+            if (imageDetails != null) {
                 messages.add(
                     OpenAIChatCompletionDetailedMessage(
                         "user",
                         listOf(
                             OpenAIMessageImageURLContent(
                                 OpenAIImageUrl(
-                                    callParameters.imageDetails!!.mediaType,
-                                    callParameters.imageDetails!!.data
+                                    imageDetails.mediaType,
+                                    imageDetails.data
                                 )
                             ),
                             OpenAIMessageTextContent(message.prompt)
@@ -355,7 +352,7 @@ class OpenAIRequestFactory : BaseRequestFactory() {
                     CompletionRequestUtil.getPromptWithContext(
                         referencedFiles,
                         message.prompt,
-                        psiStructure
+                        psiStructure,
                     )
                 }
                 messages.add(OpenAIChatCompletionStandardMessage("user", prompt))

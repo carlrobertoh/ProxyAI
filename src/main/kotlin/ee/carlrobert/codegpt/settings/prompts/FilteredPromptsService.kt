@@ -4,6 +4,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 
 /**
@@ -25,17 +26,15 @@ class FilteredPromptsService {
 
     fun getFilteredPersonaPrompt(chatMode: ChatMode): String {
         val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
-        
+
         return when (chatMode) {
             ChatMode.EDIT -> DEFAULT_PERSONA_EDIT_MODE_PROMPT
             ChatMode.ASK -> {
-                if (isDefaultPersona(selectedPersona)) {
-                    PersonasState.DEFAULT_PERSONA_PROMPT
-                } else {
-                    val originalPrompt = getOriginalPersonaPrompt()
-                    filterOutSearchReplaceInstructions(originalPrompt)
-                }
+                val originalPrompt = getOriginalPersonaPrompt()
+                if (isDefaultPersona(selectedPersona)) originalPrompt
+                else filterOutSearchReplaceInstructions(originalPrompt)
             }
+
             ChatMode.AGENT -> PersonasState.DEFAULT_PERSONA_PROMPT
         }
     }
@@ -46,6 +45,14 @@ class FilteredPromptsService {
             ChatMode.ASK -> getSimpleEditCodePrompt()
             ChatMode.AGENT -> getSimpleEditCodePrompt()
         }
+
+    fun applyClickableLinks(prompt: String): String {
+        val enabled =
+            service<ConfigurationSettings>().state.chatCompletionSettings.clickableLinksEnabled
+        if (!enabled) return prompt
+
+        return prompt + "\n" + PSI_LINKS_GUIDELINES
+    }
 
     private fun isDefaultPersona(persona: PersonaPromptDetailsState) =
         persona.id == DEFAULT_PERSONA_ID
@@ -60,7 +67,7 @@ class FilteredPromptsService {
 
     private fun getOriginalPersonaPrompt(): String {
         val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
-        
+
         return selectedPersona.instructions ?: when {
             isDefaultPersona(selectedPersona) -> PersonasState.DEFAULT_PERSONA_PROMPT
             else -> ""
@@ -100,6 +107,9 @@ class FilteredPromptsService {
             "For refactoring or editing an existing file, provide the complete modified code."
 
         val DEFAULT_PERSONA_EDIT_MODE_PROMPT = getResourceContent(EDIT_MODE_PROMPT_RESOURCE)
+
+        private val PSI_LINKS_GUIDELINES =
+            getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
 
         private val SEARCH_REPLACE_BLOCKS_REGEX = Regex(
             "When generating SEARCH/REPLACE blocks:.*?Keep SEARCH blocks concise while including necessary surrounding lines\\.",

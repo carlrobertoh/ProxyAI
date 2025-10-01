@@ -34,12 +34,13 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         val request = OpenAIRequestFactory().createChatRequest(callParameters)
 
         val systemMessages = request.messages
-            .filterIsInstance<ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage>()
+            .filterIsInstance<OpenAIChatCompletionStandardMessage>()
             .filter { it.role == "system" }
             .map { it.content }
         assertThat(systemMessages).isNotEmpty()
         val systemContent = systemMessages.first()
-        assertThat(systemContent).isEqualTo(
+        val guidelinesEdit = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+        assertThat(systemContent).startsWith(
             "You are an AI programming assistant integrated into a JetBrains IDE plugin. Your role is to answer coding questions, suggest new code, and perform refactoring or editing tasks. You have access to the following project information:\n" +
                     "\n" +
                     "Before we proceed with the main instructions, here is the content of relevant files in the project:\n" +
@@ -122,6 +123,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
                     "\n" +
                     "7. When refactoring an entire file, output multiple code blocks as needed, keeping changes concise unless a more extensive update is required.\n"
         )
+        assertThat(systemContent).endsWith(guidelinesEdit)
     }
 
     fun testDefaultPersonaIsFilteredInAskMode() {
@@ -137,12 +139,13 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         val request = OpenAIRequestFactory().createChatRequest(callParameters)
 
         val systemMessages = request.messages
-            .filterIsInstance<ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage>()
+            .filterIsInstance<OpenAIChatCompletionStandardMessage>()
             .filter { it.role == "system" }
             .map { it.content }
         assertThat(systemMessages).isNotEmpty()
         val systemContent = systemMessages.first()
-        assertThat(systemContent).isEqualTo(
+        val guidelinesAskDefault = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+        assertThat(systemContent).startsWith(
             "You are an AI programming assistant integrated into a JetBrains IDE plugin. Your role is to answer coding questions, suggest new code, and perform refactoring or editing tasks. You have access to the following project information:\n" +
                     "\n" +
                     "Before we proceed with the main instructions, here is the content of relevant files in the project:\n" +
@@ -217,10 +220,9 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
                     "\n" +
                     "5. Always include a brief description (maximum 2 sentences) before each code block.\n" +
                     "\n" +
-                    "6. Do not provide an implementation plan for pure explanations or general questions.\n" +
-                    "\n" +
-                    "7. When refactoring an entire file, provide the complete updated file content in a single code block.\n"
+                    "6. Do not provide an implementation plan for pure explanations or general questions.\n\n"
         )
+        assertThat(systemContent).endsWith(guidelinesAskDefault)
     }
 
     fun testChatRequestUsesFilteredPersonaPromptInAskMode() {
@@ -256,12 +258,13 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         val request = OpenAIRequestFactory().createChatRequest(callParameters)
 
         val systemMessages = request.messages
-            .filterIsInstance<ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage>()
+            .filterIsInstance<OpenAIChatCompletionStandardMessage>()
             .filter { it.role == "system" }
             .map { it.content }
         assertThat(systemMessages).isNotEmpty()
         val systemContent = systemMessages.first()
-        assertThat(systemContent).isEqualTo(
+        val guidelinesAskCustom = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+        assertThat(systemContent).startsWith(
             "You are a helpful assistant.\n" +
                     "For refactoring or editing an existing file, provide the complete modified code.\n" +
                     "When providing code modifications:\n" +
@@ -279,6 +282,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
                     "   }\n" +
                     "   ```\n"
         )
+        assertThat(systemContent).endsWith(guidelinesAskCustom)
     }
 
     fun testChatRequestKeepsOriginalPersonaPromptInEditMode() {
@@ -304,7 +308,8 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             .map { it.content }
         assertThat(systemMessages).isNotEmpty()
         val systemContent = systemMessages.first()
-        assertThat(systemContent).isEqualTo(
+        val guidelinesEditCustom = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+        assertThat(systemContent).startsWith(
             "You are an AI programming assistant integrated into a JetBrains IDE plugin. Your role is to answer coding questions, suggest new code, and perform refactoring or editing tasks. You have access to the following project information:\n" +
                     "\n" +
                     "Before we proceed with the main instructions, here is the content of relevant files in the project:\n" +
@@ -387,6 +392,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
                     "\n" +
                     "7. When refactoring an entire file, output multiple code blocks as needed, keeping changes concise unless a more extensive update is required.\n"
         )
+        assertThat(systemContent).endsWith(guidelinesEditCustom)
     }
 
     fun testInlineEditSingleRequestNoHistory() {

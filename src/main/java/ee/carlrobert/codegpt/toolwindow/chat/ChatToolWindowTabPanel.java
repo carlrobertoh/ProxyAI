@@ -4,11 +4,14 @@ import static ee.carlrobert.codegpt.ui.UIUtil.createScrollPaneWithSmartScroller;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.JBColor;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.CodeGPTKeys;
 import ee.carlrobert.codegpt.ReferencedFile;
@@ -178,6 +181,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         .referencedFiles(getReferencedFiles(selectedTags))
         .history(getHistory(getSelectedTags()))
         .psiStructure(psiStructure)
+        .project(project)
         .chatMode(userInputPanel.getChatMode());
 
     findTagOfType(selectedTags, PersonaTagDetails.class)
@@ -286,8 +290,15 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   public void includeFiles(List<VirtualFile> referencedFiles) {
     userInputPanel.includeFiles(referencedFiles);
-    totalTokensPanel.updateReferencedFilesTokens(
-        referencedFiles.stream().map(it -> ReferencedFile.from(it).fileContent()).toList());
+    ReadAction.nonBlocking(() ->
+            referencedFiles.stream()
+                .map(it -> ReferencedFile.from(it).fileContent())
+                .toList()
+        )
+        .inSmartMode(project)
+        .expireWith(project)
+        .finishOnUiThread(ModalityState.any(), totalTokensPanel::updateReferencedFilesTokens)
+        .submit(AppExecutorUtil.getAppExecutorService());
   }
 
   private boolean hasReferencedFilePaths(Message message) {
@@ -498,6 +509,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     userMessagePanel.addReloadAction(() -> reloadMessage(
         ChatCompletionParameters.builder(conversation, message)
             .conversationType(ConversationType.DEFAULT)
+            .project(project)
             .chatMode(userInputPanel.getChatMode())
             .build(),
         userMessagePanel));

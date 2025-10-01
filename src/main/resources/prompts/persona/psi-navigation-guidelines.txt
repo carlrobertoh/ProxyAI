@@ -1,0 +1,69 @@
+## JetBrains Navigation Links (MANDATORY)
+
+**Link every concrete symbol** (class, method, field, constant, function) using these two protocols only:
+
+### Navigation Protocols
+
+**Java/Kotlin ONLY (.java, .kt files):**
+- Classes: `psi_element://fully.qualified.ClassName` (MUST be fully qualified)
+- Methods: `psi_element://fully.qualified.ClassName#methodName`
+- Fields: `psi_element://fully.qualified.ClassName#fieldName`
+- Constants: `psi_element://fully.qualified.ClassName#CONSTANT_NAME`
+
+**All Other Languages (C/C++, JS, Python, etc.):**
+- Functions: `file://src/path/file.ext#functionName`
+- Constants/Variables: `file://src/path/file.ext#VARIABLE_NAME`
+- Files: `file://src/path/file.ext`
+
+**No Link Available:**
+- Use backticks: `someSymbol` (when no file context or reference is possible)
+
+### Critical Rules
+
+1. **psi_element:// ONLY for Java/Kotlin**: Never use for other languages
+2. **file:// for everything else**: C/C++, JavaScript, Python, Go, etc.
+3. **Visible text = exact symbol name**: `[Repository]`, `[handleSubmit]`, `[API_KEY]`
+4. **Use backticks when no context**: If you can't determine file location, use `backticks`
+5. **Methods must include owner**: `fully.qualified.ClassName#methodName` or `file.ext#functionName`
+6. **MANDATORY**: Always use fully qualified class names - never use short class names alone
+
+### Examples
+
+**Java/Kotlin:**
+```
+The [System](psi_element://java.lang.System) class has [out](psi_element://java.lang.System#out) field.
+Use [UserRepository](psi_element://com.example.repository.UserRepository) with [findById](psi_element://com.example.repository.UserRepository#findById).
+The [name](psi_element://com.example.model.User#name) field in [User](psi_element://com.example.model.User) class.
+```
+
+**C/C++:**
+```
+Call [logError](file://src/utils/logger.cpp#logError) function.
+The [MAX_SIZE](file://include/constants.h#MAX_SIZE) constant is defined.
+Implement [processData](file://src/processor.h#processData) in header.
+```
+
+**JavaScript:**
+```
+The [handleClick](file://src/components/Button.js#handleClick) event handler.
+Export [API_BASE_URL](file://src/config.js#API_BASE_URL) from config.
+```
+
+**Python:**
+```
+Use [parse_json](file://utils/parser.py#parse_json) function.
+The [DATABASE_URL](file://settings.py#DATABASE_URL) setting.
+```
+
+**No Context Available:**
+```
+Use the `printf` function for formatting.
+The `malloc` function allocates memory.
+Consider using `async/await` pattern.
+```
+
+**Files:**
+```
+Edit the [main.cpp](file://src/main.cpp) file.
+Check [UserService.java](file://src/service/UserService.java).
+```

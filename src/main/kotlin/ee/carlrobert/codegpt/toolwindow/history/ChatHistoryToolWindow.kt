@@ -198,9 +198,9 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
             lastFilteredConversations = null
             projectFiltered
         } else if (searchText == lastSearchText && lastFilteredConversations != null) {
-            lastFilteredConversations!!.filter { conversation ->
+            lastFilteredConversations?.filter { conversation ->
                 projectFiltered.contains(conversation)
-            }
+            }.orEmpty()
         } else {
             val startList = getOptimizedSearchStartList(searchText).filter { conversation ->
                 projectFiltered.contains(conversation)
@@ -215,7 +215,7 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
 
     private fun getOptimizedSearchStartList(searchText: String): List<Conversation> {
         return if (lastSearchText.isNotEmpty() && searchText.startsWith(lastSearchText) && lastFilteredConversations != null) {
-            lastFilteredConversations!!
+            lastFilteredConversations.orEmpty()
         } else {
             allConversations
         }

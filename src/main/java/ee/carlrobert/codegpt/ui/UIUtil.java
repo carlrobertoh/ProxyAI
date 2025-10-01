@@ -3,16 +3,20 @@ package ee.carlrobert.codegpt.ui;
 import static javax.swing.event.HyperlinkEvent.EventType.ACTIVATED;
 
 import com.intellij.ide.BrowserUtil;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.roots.ui.componentsList.components.ScrollablePanel;
 import com.intellij.openapi.ui.panel.ComponentPanelBuilder;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.components.JBRadioButton;
 import com.intellij.ui.components.JBTextArea;
+import com.intellij.util.ui.HTMLEditorKitBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UI;
 import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.SmartScroller;
+import ee.carlrobert.codegpt.util.PsiLinkNavigator;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Component;
@@ -43,6 +47,8 @@ import javax.swing.text.DefaultCaret;
 
 public class UIUtil {
 
+  private static final Logger LOG = Logger.getInstance(UIUtil.class);
+
   public static JTextPane createTextPane(String text) {
     return createTextPane(text, true);
   }
@@ -54,6 +60,7 @@ public class UIUtil {
   public static JTextPane createTextPane(String text, boolean opaque, HyperlinkListener listener) {
     var textPane = new JTextPane();
     textPane.putClientProperty(JTextPane.HONOR_DISPLAY_PROPERTIES, true);
+    textPane.setEditorKit(HTMLEditorKitBuilder.simple());
     textPane.addHyperlinkListener(listener);
     textPane.setContentType("text/html");
     textPane.setEditable(false);
@@ -103,12 +110,23 @@ public class UIUtil {
   }
 
   public static void handleHyperlinkClicked(HyperlinkEvent event) {
+    if (!ACTIVATED.equals(event.getEventType())) {
+      return;
+    }
+
+    String desc = event.getDescription();
+    if (desc != null && PsiLinkNavigator.isValidNavigationLink(desc)) {
+      ApplicationManager.getApplication()
+          .executeOnPooledThread(() -> PsiLinkNavigator.handle(desc));
+      return;
+    }
+
     var url = event.getURL();
-    if (ACTIVATED.equals(event.getEventType()) && url != null) {
+    if (url != null) {
       try {
         BrowserUtil.browse(url.toURI());
       } catch (URISyntaxException e) {
-        throw new RuntimeException(e);
+        LOG.warn("Failed to browse URL: " + url, e);
       }
     }
   }
@@ -118,7 +136,6 @@ public class UIUtil {
     textArea.getInputMap().put(KeyStroke.getKeyStroke("ENTER"), "text-submit");
     textArea.getActionMap().put("text-submit", onSubmit);
   }
-
 
   public static JPanel createRadioButtonsPanel(List<JBRadioButton> radioButtons) {
     var buttonGroup = new ButtonGroup();

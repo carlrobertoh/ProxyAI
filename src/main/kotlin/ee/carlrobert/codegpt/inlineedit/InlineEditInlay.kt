@@ -66,12 +66,12 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
     private var isUpdatingInlaySize = false
     private var resizeTimer: Timer? = null
 
-    private val project = editor.project!!
+    private val project = requireNotNull(editor.project) { "Editor project is null" }
     private var inlayDisposable: Disposable? = null
 
     private val psiStructureRepository = PsiStructureRepository(
         this,
-        editor.project!!,
+        project,
         tagManager,
         PsiStructureProvider(),
         CoroutineDispatchers()
@@ -85,7 +85,7 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
     )
 
     private val userInputPanel = UserInputPanel(
-        project = editor.project!!,
+        project = project,
         totalTokensPanel = dummyTokensPanel,
         parentDisposable = this,
         featureType = FeatureType.INLINE_EDIT,
@@ -497,7 +497,7 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
                 try {
                     val refs = collectSelectedReferencedFiles()
                     val diff = try {
-                        GitUtil.getCurrentChanges(editor.project!!)
+                        GitUtil.getCurrentChanges(project)
                     } catch (_: Exception) {
                         null
                     }

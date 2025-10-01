@@ -43,7 +43,7 @@ object CompletionRequestUtil {
     fun getPromptWithContext(
         referencedFiles: List<ReferencedFile>,
         userPrompt: String?,
-        psiStructure: Set<ClassStructure>?
+        psiStructure: Set<ClassStructure>?,
     ): String {
         val includedFilesSettings = service<IncludedFilesSettings>().state
         val repeatableContext = includedFilesSettings.repeatableContext
@@ -77,7 +77,10 @@ object CompletionRequestUtil {
             }
 
         return includedFilesSettings.promptTemplate
-            .replace("{REPEATABLE_CONTEXT}", fileContext + structureContext.orEmpty())
+            .replace("{REPEATABLE_CONTEXT}", buildString {
+                append(fileContext)
+                append(structureContext.orEmpty())
+            })
             .replace("{QUESTION}", userPrompt!!)
     }
 }

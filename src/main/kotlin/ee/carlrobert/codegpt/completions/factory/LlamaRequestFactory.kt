@@ -13,14 +13,13 @@ import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
-import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 
 class LlamaRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): LlamaCompletionRequest {
         val promptTemplate = getPromptTemplate()
-        val systemPrompt =
+        var systemPrompt =
             if (params.conversationType == ConversationType.FIX_COMPILE_ERRORS) {
                 service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
             } else {
@@ -30,6 +29,7 @@ class LlamaRequestFactory : BaseRequestFactory() {
                     ).addProjectPath()
                 }
             }
+        systemPrompt = systemPrompt?.let { service<FilteredPromptsService>().applyClickableLinks(it) }
 
         val prompt = promptTemplate.buildPrompt(
             systemPrompt,

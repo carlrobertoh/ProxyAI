@@ -4,7 +4,6 @@ import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -22,7 +21,8 @@ class ClaudeRequestFactory : BaseRequestFactory() {
 
             val selectedPersona = service<PromptsSettings>().state.personas.selectedPersona
             if (!selectedPersona.disabled) {
-                system = service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode)
+                val base = service<FilteredPromptsService>().getFilteredPersonaPrompt(params.chatMode)
+                system = service<FilteredPromptsService>().applyClickableLinks(base)
             }
 
             messages = params.conversation.messages

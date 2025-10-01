@@ -16,6 +16,7 @@ import ee.carlrobert.llm.client.http.RequestEntity
 import ee.carlrobert.llm.client.http.exchange.StreamHttpExchange
 import ee.carlrobert.llm.client.util.JSONUtil.*
 import org.apache.http.HttpHeaders
+import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import java.io.IOException
@@ -36,6 +37,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
+            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting(
                     "model",
@@ -44,7 +47,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
+                        mapOf("role" to "system", "content" to expectedSystem),
                         mapOf("role" to "user", "content" to "Hello!")
                     )
                 )
@@ -108,6 +111,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
+            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting(
                     "model",
@@ -116,7 +121,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                 .containsExactly(
                     "gpt-4o",
                     listOf(
-                        mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
+                        mapOf("role" to "system", "content" to expectedSystem),
                         mapOf(
                             "role" to "user",
                             "content" to """
@@ -203,6 +208,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
             try {
+                val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
+                val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
                 val testImageUrl = ("data:image/png;base64,"
                         + Base64.getEncoder()
                     .encodeToString(Files.readAllBytes(Path.of(testImagePath))))
@@ -211,7 +218,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     .containsExactly(
                         "gpt-4-vision-preview",
                         listOf(
-                            mapOf("role" to "system", "content" to "TEST_SYSTEM_PROMPT\n"),
+                            mapOf("role" to "system", "content" to expectedSystem),
                             mapOf(
                                 "role" to "user", "content" to listOf(
                                     mapOf(
@@ -408,7 +415,9 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                 )
                 .containsExactly(
                     LLAMA.buildPrompt(
-                        "TEST_SYSTEM_PROMPT",
+                        (getResourceContent("/prompts/persona/psi-navigation-guidelines.txt").let { g ->
+                            "TEST_SYSTEM_PROMPT\n$g"
+                        }),
                         "TEST_PROMPT",
                         conversation.messages
                     ),

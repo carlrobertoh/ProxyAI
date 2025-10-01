@@ -73,5 +73,3 @@ Formatting Guidelines:
 5. Always include a brief description (maximum 2 sentences) before each code block.
 
 6. Do not provide an implementation plan for pure explanations or general questions.
-
-7. When refactoring an entire file, provide the complete updated file content in a single code block.
