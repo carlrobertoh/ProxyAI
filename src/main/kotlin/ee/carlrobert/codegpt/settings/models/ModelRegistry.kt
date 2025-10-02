@@ -123,8 +123,8 @@ class ModelRegistry {
             ),
             FeatureType.INLINE_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
-                GPT_5_MINI,
-                "GPT-5 Mini"
+                GEMINI_FLASH_2_5,
+                "Gemini Flash 2.5"
             ),
             FeatureType.LOOKUP to ModelSelection(
                 ServiceType.PROXYAI,
@@ -202,7 +202,11 @@ class ModelRegistry {
             GPT_5_MINI,
             "GPT-5 Mini"
         ),
-        FeatureType.INLINE_EDIT to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
+        FeatureType.INLINE_EDIT to ModelSelection(
+            ServiceType.PROXYAI,
+            GEMINI_FLASH_2_5,
+            "Gemini Flash 2.5"
+        ),
         FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
         FeatureType.CODE_COMPLETION to ModelSelection(
             ServiceType.PROXYAI,

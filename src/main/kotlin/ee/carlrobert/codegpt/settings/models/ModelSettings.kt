@@ -60,6 +60,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
 
         migrateCustomOpenAIModelCodesToIds()
         migrateMissingProviderInformation()
+        migrateEditCodeModel()
         notifyIfChanged(oldState, this.state)
     }
 
@@ -113,7 +114,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
             val newModel = getModelFromState(newState, featureType)
 
             if (oldModel != newModel) {
-                val service = findServiceTypeForModel(featureType, newModel)
+                val service = getProviderForFeature(featureType) ?: return
                 notifyModelChange(featureType, newModel, service)
             }
         }
@@ -121,10 +122,6 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
 
     private fun getModelFromState(state: ModelSettingsState, featureType: FeatureType): String? {
         return state.getModelSelection(featureType)?.model
-    }
-
-    private fun findServiceTypeForModel(featureType: FeatureType, modelId: String?): ServiceType {
-        return ServiceType.CUSTOM_OPENAI
     }
 
     private fun migrateMissingProviderInformation() {
@@ -137,6 +134,13 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
                 val inferredProvider = inferProviderFromModelCode(featureType, modelCode)
                 inferredProvider?.let { state.setModelSelection(featureType, modelCode, it) }
             }
+        }
+    }
+
+    private fun migrateEditCodeModel() {
+        state.modelSelections["EDIT_CODE"]?.let {
+            state.setModelSelection(FeatureType.INLINE_EDIT, it.model, it.provider!!)
+            state.modelSelections.remove("EDIT_CODE")
         }
     }
 

@@ -41,7 +41,7 @@ class ModelSettingsTest : IntegrationTest() {
                 lastNotification.set(NotificationData(FeatureType.COMMIT_MESSAGE, newModel, serviceType, "commitMessage"))
             }
             override fun inlineEditModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.INLINE_EDIT, newModel, serviceType, "editCode"))
+                lastNotification.set(NotificationData(FeatureType.INLINE_EDIT, newModel, serviceType, "inlineEdit"))
             }
             override fun nextEditModelChanged(newModel: String, serviceType: ServiceType) {
                 lastNotification.set(NotificationData(FeatureType.NEXT_EDIT, newModel, serviceType, "nextEdit"))
@@ -129,7 +129,7 @@ class ModelSettingsTest : IntegrationTest() {
     }
 
     fun `test setModelWithProvider with next edit triggers next edit notification`() {
-        modelSettings.state.modelSelections.remove(FeatureType.NEXT_EDIT)
+        modelSettings.state.modelSelections.remove("NEXT_EDIT")
         lastNotification.set(null)
         
         modelSettings.setModelWithProvider(FeatureType.NEXT_EDIT, "zeta", ServiceType.PROXYAI)
@@ -204,7 +204,7 @@ class ModelSettingsTest : IntegrationTest() {
         val detailsState = ModelDetailsState()
         detailsState.model = "gpt-4o"
         detailsState.provider = null
-        state.modelSelections[FeatureType.CHAT] = detailsState
+        state.modelSelections["CHAT"] = detailsState
 
         modelSettings.loadState(state)
 
@@ -217,7 +217,7 @@ class ModelSettingsTest : IntegrationTest() {
         val detailsState = ModelDetailsState()
         detailsState.model = "unknown-model"
         detailsState.provider = null
-        state.modelSelections[FeatureType.CHAT] = detailsState
+        state.modelSelections["CHAT"] = detailsState
 
         modelSettings.loadState(state)
 

@@ -1,9 +1,7 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.completions.factory.*
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
