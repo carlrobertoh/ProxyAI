@@ -8,14 +8,12 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.pom.Navigatable
-import com.intellij.psi.JavaPsiFacade
-import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiNamedElement
+import com.intellij.psi.*
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.concurrency.AppExecutorUtil
+import org.jetbrains.kotlin.psi.KtClass
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -99,9 +97,7 @@ class PsiElementResolver : NavigationResolver() {
 
         findByJavaFQN(project, target)?.let { return it }
 
-        findByMemberSeparation(project, target)?.let { return it }
-
-        return searchInModels(project, target)
+        return findByMemberSeparation(project, target)
     }
 
     private fun findByJavaFQN(project: Project, target: String): Navigatable? {
@@ -151,15 +147,20 @@ class PsiElementResolver : NavigationResolver() {
 
     private fun findByMemberSeparation(project: Project, target: String): Navigatable? {
         val memberSeparatorIndex = target.indexOf('#')
-        if (memberSeparatorIndex <= 0) return null
-
-        val owner = target.substring(0, memberSeparatorIndex)
-        val member = target.substring(memberSeparatorIndex + 1)
+        val owner =
+            if (memberSeparatorIndex > 0) target.substring(0, memberSeparatorIndex) else target
 
         searchInModels(project, owner)?.let { ownerElement ->
-            if (ownerElement is PsiClass) {
-                findMemberInClass(ownerElement, member)?.let { return it }
+            val member = target.substring(memberSeparatorIndex + 1)
+            if (memberSeparatorIndex > 0) {
+                if (ownerElement is PsiClass) {
+                    findMemberInClass(ownerElement, member)?.let { return it }
+                }
+                if (ownerElement is PsiElement) {
+                    findNavigatableElement(ownerElement, member)?.let { return it }
+                }
             }
+            return ownerElement
         }
 
         return null
@@ -169,7 +170,13 @@ class PsiElementResolver : NavigationResolver() {
         psiClass.findMethodsByName(memberName, false).firstOrNull()?.let { return it }
         psiClass.findFieldByName(memberName, false)?.let { return it }
         psiClass.findInnerClassByName(memberName, false)?.let { return it }
-        return null
+
+        return findNavigatableElement(psiClass, memberName)
+    }
+
+    private fun findNavigatableElement(psiElement: PsiElement, memberName: String): Navigatable? {
+        return PsiTreeUtil.findChildrenOfType(psiElement, PsiNamedElement::class.java)
+            .firstOrNull { it.name == memberName } as? Navigatable
     }
 
     private fun searchInModels(project: Project, searchTerm: String): Navigatable? {

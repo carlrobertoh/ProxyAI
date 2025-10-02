@@ -6,6 +6,7 @@ import com.vladsch.flexmark.ast.BulletListItem;
 import com.vladsch.flexmark.ast.Code;
 import com.vladsch.flexmark.ast.CodeBlock;
 import com.vladsch.flexmark.ast.Heading;
+import com.vladsch.flexmark.ast.Link;
 import com.vladsch.flexmark.ast.OrderedListItem;
 import com.vladsch.flexmark.ast.Paragraph;
 import com.vladsch.flexmark.html.HtmlWriter;
@@ -51,7 +52,9 @@ public class ResponseNodeRenderer implements NodeRenderer {
   }
 
   private void renderCode(Code node, NodeRendererContext context, HtmlWriter html) {
-    html.attr("style", "color: " + ColorUtil.toHex(new JBColor(0x00627A, 0xCC7832)));
+    if (!(node.getParent() instanceof Link)) {
+      html.attr("style", "color: " + ColorUtil.toHex(new JBColor(0x00627A, 0xCC7832)));
+    }
     context.delegateRender();
   }
 
