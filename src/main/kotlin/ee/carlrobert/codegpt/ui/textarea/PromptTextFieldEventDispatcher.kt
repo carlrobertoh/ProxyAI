@@ -12,6 +12,8 @@ import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
 import java.util.*
+import com.intellij.openapi.ide.CopyPasteManager
+import java.awt.datatransfer.DataFlavor
 
 class PromptTextFieldEventDispatcher(
     private val dispatcherId: UUID,
@@ -32,6 +34,13 @@ class PromptTextFieldEventDispatcher(
 
                         KeyEvent.VK_DELETE -> handleDelete(e)
                         KeyEvent.VK_A -> if (e.isControlDown || e.isMetaDown) handleSelectAll(e)
+                        KeyEvent.VK_V -> {
+                            if (e.isControlDown || e.isMetaDown) {
+                                if (handlePaste(e)) {
+                                    return true
+                                }
+                            }
+                        }
                         KeyEvent.VK_ENTER -> {
                             if (e.isShiftDown) {
                                 handleShiftEnter(e)
@@ -94,6 +103,10 @@ class PromptTextFieldEventDispatcher(
         val parent = findParent()
         if (parent is PromptTextField) {
             parent.editor?.let { editor ->
+                if (parent.handlePlaceholderDelete(isBackspace = false)) {
+                    e.consume()
+                    return
+                }
                 runUndoTransparentWriteAction {
                     val document = editor.document
                     val caretModel = editor.caretModel
@@ -116,10 +129,26 @@ class PromptTextFieldEventDispatcher(
         }
     }
 
+    private fun handlePaste(e: KeyEvent): Boolean {
+        val parent = findParent()
+        if (parent is PromptTextField) {
+            val clipText: String? = try { CopyPasteManager.getInstance().getContents(DataFlavor.stringFlavor) as? String } catch (_: Exception) { null }
+            if (clipText.isNullOrEmpty()) return false
+            parent.insertPlaceholderFor(clipText)
+            e.consume()
+            return true
+        }
+        return false
+    }
+
     private fun handleBackspace(e: KeyEvent): Boolean {
         val parent = findParent()
         if (parent is PromptTextField) {
             parent.editor?.let { editor ->
+                if (parent.handlePlaceholderDelete(isBackspace = true)) {
+                    e.consume()
+                    return true
+                }
                 val selectionModel = editor.selectionModel
                 if (selectionModel.hasSelection()) {
                     runUndoTransparentWriteAction {

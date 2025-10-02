@@ -8,6 +8,7 @@ object PromptTextFieldConstants {
     const val BORDER_PADDING = 4
     const val BORDER_SIDE_PADDING = 8
     const val HEIGHT_PADDING = 8
+    const val PASTE_PLACEHOLDER_MIN_LENGTH = 250
 
     val DEFAULT_GROUP_NAMES = listOf(
         "files", "file", "f",

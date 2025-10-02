@@ -157,7 +157,7 @@ class UserInputPanel @JvmOverloads constructor(
             IconUtil.scale(Icons.Send, null, 0.85f)
         ) {
             override fun actionPerformed(e: AnActionEvent) {
-                handleSubmit(promptTextField.text)
+                handleSubmit(promptTextField.getExpandedText())
             }
         },
         "SUBMIT"
