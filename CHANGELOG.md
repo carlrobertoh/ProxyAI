@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Copy-paste placeholder for prompt text field
+- Quick link navigation
+- Tooltips for input editor tags [#1109](https://github.com/carlrobertoh/ProxyAI/issues/1109)
+
+### Fixed
+
+- EDIT_CODE model backward compatibility [#1129](https://github.com/carlrobertoh/ProxyAI/issues/1129)
+- Google model selection [#1111](https://github.com/carlrobertoh/ProxyAI/issues/1111)
+- Mistral autocompletion toggle [#1114](https://github.com/carlrobertoh/ProxyAI/issues/1114)
+
 ## [3.6.0-233] - 2025-09-23
 
 ### Added
