@@ -10,15 +10,10 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.header.PaintUtil
-import java.awt.Cursor
-import java.awt.Dimension
-import java.awt.Graphics
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import javax.swing.BorderFactory
-import javax.swing.Icon
-import javax.swing.JButton
-import javax.swing.JToggleButton
+import java.awt.*
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import javax.swing.*
 
 abstract class TagPanel(
     var tagDetails: TagDetails,
@@ -42,7 +37,7 @@ abstract class TagPanel(
     abstract fun onClose()
 
     fun update(text: String, icon: Icon? = null) {
-        closeButton.isVisible = isSelected && tagDetails.isRemovable
+        closeButton.isVisible = tagDetails.isRemovable
         label.update(text, icon, isSelected)
         tagDetails.getTooltipText()?.let { tooltip ->
             val relativeTooltipText = toProjectRelative(tooltip)
@@ -72,7 +67,7 @@ abstract class TagPanel(
         border = JBUI.Borders.empty(2, 6)
         cursor = Cursor(Cursor.HAND_CURSOR)
         isSelected = tagDetails.selected
-        closeButton.isVisible = isSelected && tagDetails.isRemovable
+        closeButton.isVisible = tagDetails.isRemovable
         tagDetails.getTooltipText()?.let { tooltip ->
             val relativeTooltipText = toProjectRelative(tooltip)
             this.toolTipText = relativeTooltipText
@@ -90,6 +85,18 @@ abstract class TagPanel(
         gbc.gridx = 1
         add(closeButton, gbc)
 
+        label.inheritsPopupMenu = true
+        closeButton.inheritsPopupMenu = true
+
+        label.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                if (SwingUtilities.isLeftMouseButton(e)) {
+                    this@TagPanel.doClick()
+                    e.consume()
+                }
+            }
+        })
+
         addActionListener {
             if (isRevertingSelection) return@addActionListener
 
@@ -101,7 +108,7 @@ abstract class TagPanel(
                 isRevertingSelection = false
             }
 
-            closeButton.isVisible = isSelected && tagDetails.isRemovable
+            closeButton.isVisible = tagDetails.isRemovable
             tagDetails.selected = isSelected
             tagManager.notifySelectionChanged(tagDetails)
             label.update(isSelected)

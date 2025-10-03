@@ -65,7 +65,7 @@ class UserInputPanel @JvmOverloads constructor(
     private val onAcceptAll: (() -> Unit)? = null,
     private val onRejectAll: (() -> Unit)? = null,
     private val showModeSelector: Boolean = true,
-    withRemovableSelectedEditorTag: Boolean = false,
+    withRemovableSelectedEditorTag: Boolean = true,
 ) : BorderLayoutPanel() {
 
     constructor(

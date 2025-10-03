@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.ui.textarea.header
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.SelectionModel
@@ -18,7 +17,6 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
@@ -35,6 +33,7 @@ import java.awt.*
 import java.awt.event.ActionListener
 import javax.swing.JButton
 import javax.swing.JPanel
+import javax.swing.SwingUtilities
 
 class UserInputHeaderPanel(
     private val project: Project,
@@ -172,7 +171,12 @@ class UserInputHeaderPanel(
     private fun addInitialTags() {
         val selectedFile = getSelectedEditor(project)?.virtualFile
         if (selectedFile != null) {
-            tagManager.addTag(EditorTagDetails(selectedFile, isRemovable = withRemovableSelectedEditorTag))
+            tagManager.addTag(
+                EditorTagDetails(
+                    selectedFile,
+                    isRemovable = withRemovableSelectedEditorTag
+                )
+            )
         }
 
         EditorUtil.getOpenLocalFiles(project)
@@ -265,13 +269,24 @@ class UserInputHeaderPanel(
                 val hasTag = tagManager.getTags()
                     .any { it is EditorTagDetails && it.virtualFile == newFile }
                 if (!hasTag) {
-                    tagManager.addTag(EditorTagDetails(newFile, isRemovable = false))
+                    tagManager.addTag(
+                        EditorTagDetails(
+                            newFile,
+                            isRemovable = withRemovableSelectedEditorTag
+                        )
+                    )
                 } else {
                     tagManager.getTags()
                         .filterIsInstance<EditorTagDetails>()
-                        .firstOrNull { it.virtualFile == newFile && it.isRemovable }?.let { existing ->
+                        .firstOrNull { it.virtualFile == newFile && it.isRemovable }
+                        ?.let { existing ->
                             tagManager.remove(existing)
-                            tagManager.addTag(EditorTagDetails(newFile, isRemovable = false))
+                            tagManager.addTag(
+                                EditorTagDetails(
+                                    newFile,
+                                    isRemovable = withRemovableSelectedEditorTag
+                                )
+                            )
                         }
                 }
 
@@ -280,7 +295,9 @@ class UserInputHeaderPanel(
                     .filter { it.virtualFile != newFile && !it.isRemovable }
                     .forEach { prev ->
                         tagManager.remove(prev)
-                        tagManager.addTag(EditorTagDetails(prev.virtualFile).apply { selected = false })
+                        tagManager.addTag(EditorTagDetails(prev.virtualFile).apply {
+                            selected = false
+                        })
                     }
 
                 emptyText.isVisible = false
@@ -293,7 +310,9 @@ class UserInputHeaderPanel(
             createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.close")) {
                 val tagPanel = invoker as? TagPanel
                 tagPanel?.let {
-                    tagManager.remove(it.tagDetails)
+                    if (it.tagDetails.isRemovable) {
+                        tagManager.remove(it.tagDetails)
+                    }
                 }
             }
 
@@ -303,14 +322,16 @@ class UserInputHeaderPanel(
                 tagPanel?.let { currentPanel ->
                     val currentTag = currentPanel.tagDetails
                     tagManager.getTags()
-                        .filter { it != currentTag }
+                        .filter { it != currentTag && it.isRemovable }
                         .forEach { tagManager.remove(it) }
                 }
             }
 
         private val closeAllTagsMenuItem =
             createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.closeAll")) {
-                tagManager.clear()
+                tagManager.getTags()
+                    .filter { it.isRemovable }
+                    .forEach { tagManager.remove(it) }
             }
 
         private val closeTagsToLeftMenuItem =
@@ -343,7 +364,9 @@ class UserInputHeaderPanel(
 
                 rangeSelector(components, currentIndex)
                     .filterIsInstance<TagPanel>()
-                    .forEach { tagManager.remove(it.tagDetails) }
+                    .map { it.tagDetails }
+                    .filter { it.isRemovable }
+                    .forEach { tagManager.remove(it) }
             }
         }
 
@@ -356,17 +379,35 @@ class UserInputHeaderPanel(
         }
 
         override fun show(invoker: Component, x: Int, y: Int) {
-            if (invoker is TagPanel) {
-                if (!invoker.isEnabled) return
-                val components = this@UserInputHeaderPanel.components.filterIsInstance<TagPanel>()
-                val currentIndex = components.indexOf(invoker)
+            val tagPanel = when (invoker) {
+                is TagPanel -> invoker
+                else -> SwingUtilities.getAncestorOfClass(
+                    TagPanel::class.java,
+                    invoker
+                ) as? TagPanel
+            } ?: return
+            if (!tagPanel.isEnabled) return
+            val components = this@UserInputHeaderPanel.components.filterIsInstance<TagPanel>()
+            val currentIndex = components.indexOf(tagPanel)
 
-                closeTagsToLeftMenuItem.isEnabled = currentIndex > 0
-                closeTagsToRightMenuItem.isEnabled = currentIndex < components.size - 1
-                closeOtherTagsMenuItem.isEnabled = components.size > 1
+            val removableLeft = if (currentIndex > 0) {
+                components.take(currentIndex).any { it.tagDetails.isRemovable }
+            } else false
+            val removableRight = if (currentIndex >= 0 && currentIndex < components.size - 1) {
+                components.drop(currentIndex + 1).any { it.tagDetails.isRemovable }
+            } else false
+            val removableOthers = components
+                .filterIndexed { index, _ -> index != currentIndex }
+                .any { it.tagDetails.isRemovable }
+            val anyRemovable = components.any { it.tagDetails.isRemovable }
 
-                super.show(invoker, x, y)
-            }
+            closeMenuItem.isEnabled = tagPanel.tagDetails.isRemovable
+            closeTagsToLeftMenuItem.isEnabled = removableLeft
+            closeTagsToRightMenuItem.isEnabled = removableRight
+            closeOtherTagsMenuItem.isEnabled = removableOthers
+            closeAllTagsMenuItem.isEnabled = anyRemovable
+
+            super.show(tagPanel, x, y)
         }
 
         private fun createPopupMenuItem(label: String, listener: ActionListener): JBMenuItem {
