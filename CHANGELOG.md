@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Unresponsive prompt textfield tags that couldn't be removed or clicked
+
 ## [3.6.1-233] - 2025-10-03
 
 ### Added
