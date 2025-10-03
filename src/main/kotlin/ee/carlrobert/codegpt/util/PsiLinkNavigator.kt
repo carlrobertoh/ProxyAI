@@ -1,7 +1,6 @@
 package ee.carlrobert.codegpt.util
 
 import com.intellij.ide.util.gotoByName.GotoClassModel2
-import com.intellij.ide.util.gotoByName.GotoFileModel
 import com.intellij.ide.util.gotoByName.GotoSymbolModel2
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
@@ -13,7 +12,6 @@ import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.concurrency.AppExecutorUtil
-import org.jetbrains.kotlin.psi.KtClass
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -76,9 +74,8 @@ object PsiLinkNavigator {
     private fun navigate(target: Navigatable) {
         if (target.canNavigate()) {
             target.navigate(true)
-            logger.info("Successfully navigated to: $target")
         } else {
-            logger.info("Target cannot navigate: $target")
+            logger.warn("Cannot navigate to target: $target")
         }
     }
 }
@@ -93,7 +90,6 @@ abstract class NavigationResolver {
 class PsiElementResolver : NavigationResolver() {
     override fun resolve(target: String): Navigatable? {
         val project = getProject() ?: return null
-        logger.info("Resolving PSI element: $target")
 
         findByJavaFQN(project, target)?.let { return it }
 
@@ -157,7 +153,7 @@ class PsiElementResolver : NavigationResolver() {
                     findMemberInClass(ownerElement, member)?.let { return it }
                 }
                 if (ownerElement is PsiElement) {
-                    findNavigatableElement(ownerElement, member)?.let { return it }
+                    ownerElement.findNavigatableChildElement(member)?.let { return it }
                 }
             }
             return ownerElement
@@ -171,12 +167,7 @@ class PsiElementResolver : NavigationResolver() {
         psiClass.findFieldByName(memberName, false)?.let { return it }
         psiClass.findInnerClassByName(memberName, false)?.let { return it }
 
-        return findNavigatableElement(psiClass, memberName)
-    }
-
-    private fun findNavigatableElement(psiElement: PsiElement, memberName: String): Navigatable? {
-        return PsiTreeUtil.findChildrenOfType(psiElement, PsiNamedElement::class.java)
-            .firstOrNull { it.name == memberName } as? Navigatable
+        return psiClass.findNavigatableChildElement(memberName)
     }
 
     private fun searchInModels(project: Project, searchTerm: String): Navigatable? {
@@ -203,7 +194,6 @@ class FileResolver : NavigationResolver() {
 
     override fun resolve(target: String): Navigatable? {
         val project = getProject() ?: return null
-        logger.info("Resolving file: $target")
 
         val memberSeparatorIndex = target.indexOf('#')
         val filePath = if (memberSeparatorIndex > 0) {
@@ -224,25 +214,47 @@ class FileResolver : NavigationResolver() {
             if (psiFile != null) {
                 if (memberSeparatorIndex > 0) {
                     val memberName = target.substring(memberSeparatorIndex + 1)
-                    val memberElement =
-                        PsiTreeUtil.findChildrenOfType(psiFile, PsiNamedElement::class.java)
-                            .firstOrNull { it.name == memberName }
-
-                    return (memberElement as? Navigatable) ?: psiFile
+                    val memberElement = psiFile.findNavigatableChildElement(memberName)
+                    return memberElement ?: psiFile
                 }
                 return psiFile
             }
         }
 
         return try {
-            val fileModel = GotoFileModel(project)
-            fileModel.getElementsByName(fileName, true, fileName)
-                .filterIsInstance<Navigatable>()
-                .firstOrNull { it.canNavigate() }
+            val fileNameWithoutExtension = fileName.takeWhile { it == '.' }
+            searchInModels(project, fileNameWithoutExtension)?.let { ownerElement ->
+                val member = target.substring(memberSeparatorIndex + 1)
+                if (memberSeparatorIndex > 0) {
+                    if (ownerElement is PsiElement) {
+                        ownerElement.findNavigatableChildElement(member)?.let { return it }
+                    }
+                }
+                return ownerElement
+            }
         } catch (t: Throwable) {
             logger.warn("File search failed for: $target", t)
             null
         }
+    }
+
+    private fun searchInModels(project: Project, searchTerm: String): Navigatable? {
+        try {
+            val classModel = GotoClassModel2(project)
+            classModel.getElementsByName(searchTerm, true, searchTerm)
+                .filterIsInstance<Navigatable>()
+                .firstOrNull { it.canNavigate() }
+                ?.let { return it }
+
+            val symbolModel = GotoSymbolModel2(project, project)
+            symbolModel.getElementsByName(searchTerm, true, searchTerm)
+                .filterIsInstance<Navigatable>()
+                .firstOrNull { it.canNavigate() }
+                ?.let { return it }
+        } catch (e: Exception) {
+            logger.warn("Search failed for term: $searchTerm", e)
+        }
+        return null
     }
 }
 
@@ -254,4 +266,9 @@ object NavigationResolverFactory {
             else -> throw IllegalArgumentException("Unsupported protocol: $protocol")
         }
     }
+}
+
+private fun PsiElement.findNavigatableChildElement(memberName: String): Navigatable? {
+    return PsiTreeUtil.findChildrenOfType(this, PsiNamedElement::class.java)
+        .firstOrNull { it.name == memberName } as? Navigatable
 }

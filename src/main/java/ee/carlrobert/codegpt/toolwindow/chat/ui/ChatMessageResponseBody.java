@@ -61,6 +61,7 @@ import ee.carlrobert.codegpt.toolwindow.ui.ResponseBodyProgressPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.WebpageList;
 import ee.carlrobert.codegpt.ui.ThoughtProcessPanel;
 import ee.carlrobert.codegpt.ui.UIUtil;
+import ee.carlrobert.codegpt.ui.hover.PsiLinkHoverPreview;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.MarkdownUtil;
 import java.awt.BorderLayout;
@@ -441,6 +442,8 @@ public class ChatMessageResponseBody extends JPanel {
     textPane.setBorder(JBUI.Borders.empty());
 
     installPopupMenu(textPane);
+
+    PsiLinkHoverPreview.install(project, textPane);
 
     return textPane;
   }
