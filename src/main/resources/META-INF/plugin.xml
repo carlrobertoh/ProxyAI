@@ -56,6 +56,9 @@
         <applicationConfigurable id="settings.codegpt.services.ollama" parentId="settings.codegpt.services"
                                  displayName="Ollama (Offline)"
                                  instance="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettingsConfigurable"/>
+        <applicationConfigurable id="settings.codegpt.services.inception" parentId="settings.codegpt.services"
+                                 displayName="Inception"
+                                 instance="ee.carlrobert.codegpt.settings.service.InceptionServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.models" parentId="settings.codegpt" bundle="messages.codegpt"
                                  key="settings.models.displayName"
                                  instance="ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable"/>
@@ -87,6 +90,7 @@
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.mistral.MistralSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.llama.LlamaSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings"/>
+        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.inception.InceptionSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.models.ModelSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.IncludedFilesSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.advanced.AdvancedSettings"/>

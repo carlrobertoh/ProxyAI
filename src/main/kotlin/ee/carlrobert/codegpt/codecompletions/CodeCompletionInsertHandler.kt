@@ -9,7 +9,7 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.codegpt.codecompletions.edit.NextEditCoordinator
 import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,23 +32,23 @@ class CodeCompletionInsertHandler : InlineCompletionInsertHandler {
             val prefix = editor.document.text.substring(0, caretOffset)
             val suffix = editor.document.text.substring(caretOffset)
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                editor.project?.service<GrpcClientService>()
-                    ?.getNextEdit(
-                        editor,
-                        prefix + remainingCompletion.partialCompletion + suffix,
-                        caretOffset + remainingCompletion.partialCompletion.length,
-                        true
-                    )
+                NextEditCoordinator.requestNextEdit(
+                    editor,
+                    prefix + remainingCompletion.partialCompletion + suffix,
+                    caretOffset + remainingCompletion.partialCompletion.length,
+                    true
+                )
             }
             return
         } else {
             if (CodeGPTKeys.REMAINING_PREDICTION_RESPONSE.get(editor) == null) {
                 val caretOffset = runReadAction { editor.caretModel.offset }
                 CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                    editor.project?.service<GrpcClientService>()?.getNextEdit(
+                    NextEditCoordinator.requestNextEdit(
                         editor,
                         editor.document.text,
                         caretOffset,
+                        false
                     )
                 }
                 return

@@ -401,41 +401,30 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         val conversation = ConversationService.getInstance().startConversation(project)
         val panel = ChatToolWindowTabPanel(project, conversation)
         expectLlama(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/completion")
+            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
+            val expectedSystem = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt").let { g ->
+                "TEST_SYSTEM_PROMPT\n$g"
+            }
             assertThat(request.body)
                 .extracting(
-                    "prompt",
-                    "n_predict",
-                    "stream",
-                    "temperature",
-                    "top_k",
-                    "top_p",
-                    "min_p",
-                    "repeat_penalty"
+                    "model",
+                    "messages"
                 )
                 .containsExactly(
-                    LLAMA.buildPrompt(
-                        (getResourceContent("/prompts/persona/psi-navigation-guidelines.txt").let { g ->
-                            "TEST_SYSTEM_PROMPT\n$g"
-                        }),
-                        "TEST_PROMPT",
-                        conversation.messages
-                    ),
-                    configurationState.maxTokens,
-                    true,
-                    configurationState.temperature.toDouble(),
-                    llamaSettings.topK,
-                    llamaSettings.topP,
-                    llamaSettings.minP,
-                    llamaSettings.repeatPenalty
+                    HuggingFaceModel.CODE_LLAMA_7B_Q4.code,
+                    listOf(
+                        mapOf("role" to "system", "content" to expectedSystem),
+                        mapOf("role" to "user", "content" to "TEST_PROMPT")
+                    )
                 )
-            listOf<String?>(
-                jsonMapResponse("content", "Hel"),
-                jsonMapResponse("content", "lo!"),
+            listOf(
                 jsonMapResponse(
-                    e("content", ""),
-                    e("stop", true)
-                )
+                    "choices",
+                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
+                ),
+                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
+                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
+                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
             )
         })
 

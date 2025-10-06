@@ -14,6 +14,7 @@ import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import ee.carlrobert.codegpt.settings.service.mistral.MistralSettings
+import ee.carlrobert.codegpt.settings.service.inception.InceptionSettings
 
 abstract class CodeCompletionFeatureToggleActions(
     private val enableFeatureAction: Boolean
@@ -50,6 +51,10 @@ abstract class CodeCompletionFeatureToggleActions(
                 MistralSettings.getCurrentState().isCodeCompletionsEnabled = enableFeatureAction
             }
 
+            INCEPTION -> {
+                service<InceptionSettings>().state.codeCompletionsEnabled = enableFeatureAction
+            }
+
             ANTHROPIC,
             GOOGLE -> {
             }
@@ -68,7 +73,8 @@ abstract class CodeCompletionFeatureToggleActions(
             CUSTOM_OPENAI,
             LLAMA_CPP,
             OLLAMA,
-            MISTRAL -> true
+            MISTRAL,
+            INCEPTION -> true
 
             ANTHROPIC,
             GOOGLE -> false

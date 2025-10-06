@@ -39,6 +39,7 @@ class ServiceConfigurableComponent {
             "Mistral" to MistralServiceConfigurable::class.java,
             "LLaMA C/C++" to LlamaServiceConfigurable::class.java,
             "Ollama" to OllamaSettingsConfigurable::class.java,
+            "Inception" to InceptionServiceConfigurable::class.java,
         ).entries.forEach { (name, configurableClass) ->
             formBuilder.addComponent(ActionLink(name) {
                 val context = service<DataManager>().getDataContext(it.source as ActionLink)

@@ -77,31 +77,31 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         val conversation = ConversationService.getInstance().startConversation(project)
         conversation.addMessage(Message("Ping", "Pong"))
         expectLlama(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/completion")
+            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
             val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
             assertThat(request.body)
                 .extracting(
-                    "prompt",
-                    "n_predict",
-                    "stream"
+                    "model",
+                    "messages"
                 )
                 .containsExactly(
-                    LLAMA.buildPrompt(
-                        expectedSystem,
-                        "TEST_PROMPT",
-                        conversation.messages
-                    ),
-                    99,
-                    true
+                    HuggingFaceModel.CODE_LLAMA_7B_Q4.code,
+                    listOf(
+                        mapOf("role" to "system", "content" to expectedSystem),
+                        mapOf("role" to "user", "content" to "Ping"),
+                        mapOf("role" to "assistant", "content" to "Pong"),
+                        mapOf("role" to "user", "content" to "TEST_PROMPT")
+                    )
                 )
-            listOf<String?>(
-                jsonMapResponse("content", "Hel"),
-                jsonMapResponse("content", "lo!"),
+            listOf(
                 jsonMapResponse(
-                    e("content", ""),
-                    e("stop", true)
-                )
+                    "choices",
+                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
+                ),
+                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
+                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
+                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
             )
         })
         val requestHandler =

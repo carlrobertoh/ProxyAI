@@ -33,6 +33,7 @@ interface CompletionRequestFactory {
                 ServiceType.MISTRAL -> MistralRequestFactory()
                 ServiceType.OLLAMA -> OllamaRequestFactory()
                 ServiceType.LLAMA_CPP -> LlamaRequestFactory()
+                ServiceType.INCEPTION -> InceptionRequestFactory()
             }
         }
 

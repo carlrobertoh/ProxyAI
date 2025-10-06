@@ -43,7 +43,7 @@ object GitUtil {
                     .filter { change ->
                         change.virtualFile?.let { !it.fileType.isBinary } ?: false
                     }
-                    .sortedBy { it.virtualFile?.timeStamp }
+                    .sortedByDescending { it.virtualFile?.timeStamp }
 
                 val patches = IdeaTextPatchBuilder.buildPatch(
                     project, changes, repoRootPath, false, true
@@ -52,7 +52,7 @@ object GitUtil {
                 UnifiedDiffWriter.write(
                     null, repoRootPath, patches, diffWriter, "\n\n", null, null
                 )
-                diffWriter.toString().cleanDiff().truncateText(1024, false)
+                diffWriter.toString().cleanDiff().truncateText(1024, true)
             } catch (e: VcsException) {
                 logger.error("Failed to get git context", e)
                 null

@@ -4,6 +4,7 @@ import com.intellij.codeInsight.inline.completion.elements.InlineCompletionEleme
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
+import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.service.PartialCodeCompletionResponse
 import io.grpc.Status
@@ -45,6 +46,7 @@ class CodeCompletionStreamObserver(
                 NotificationType.ERROR
             )
         }
+        eventListener.onError(ErrorDetails(t?.message ?: "Code completion error"), t ?: Throwable())
         channel.close(t)
     }
 

@@ -104,6 +104,10 @@ object LegacySettingsMigration {
                 ServiceType.MISTRAL -> {
                     ModelRegistry.DEVSTRAL_MEDIUM_2507
                 }
+
+                ServiceType.INCEPTION -> {
+                    ModelRegistry.MERCURY_CODER
+                }
             }
         } catch (e: Exception) {
             logger.warn("Failed to get legacy chat model for $serviceType", e)
@@ -151,6 +155,10 @@ object LegacySettingsMigration {
 
                 ServiceType.MISTRAL -> {
                     ModelRegistry.CODESTRAL_LATEST
+                }
+
+                ServiceType.INCEPTION -> {
+                    ModelRegistry.MERCURY_CODER
                 }
             }
         } catch (e: Exception) {

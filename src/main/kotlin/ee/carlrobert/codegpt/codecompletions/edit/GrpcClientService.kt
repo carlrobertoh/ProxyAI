@@ -31,8 +31,7 @@ import java.util.concurrent.TimeUnit
 class GrpcClientService(private val project: Project) : Disposable {
 
     private var channel: ManagedChannel? = null
-    private var codeCompletionStub: CodeCompletionServiceImplGrpc.CodeCompletionServiceImplStub? =
-        null
+    private var codeCompletionStub: CodeCompletionServiceImplGrpc.CodeCompletionServiceImplStub? = null
     private var codeCompletionObserver: CodeCompletionStreamObserver? = null
     private var nextEditStub: NextEditServiceImplGrpc.NextEditServiceImplStub? = null
     private var nextEditStreamObserver: NextEditStreamObserver? = null
@@ -63,7 +62,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         caretOffset: Int,
         addToQueue: Boolean = false,
     ) {
-        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
+        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.NEXT_EDIT) != ServiceType.PROXYAI
             || !service<CodeGPTServiceSettings>().state.nextEditsEnabled
         ) {
             return

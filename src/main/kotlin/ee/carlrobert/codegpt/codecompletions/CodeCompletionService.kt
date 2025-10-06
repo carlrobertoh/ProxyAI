@@ -5,6 +5,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildChatBasedFIMHttpRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCustomRequest
+import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildInceptionRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildLlamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOllamaRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildOpenAIRequest
@@ -17,6 +18,7 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
+import ee.carlrobert.codegpt.settings.service.inception.InceptionSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.mistral.MistralSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
@@ -46,9 +48,11 @@ class CodeCompletionService(private val project: Project) {
                 .customServiceStateForFeatureType(FeatureType.CODE_COMPLETION)
                 .codeCompletionSettings
                 .codeCompletionsEnabled
+
             MISTRAL -> MistralSettings.getCurrentState().isCodeCompletionsEnabled
             LLAMA_CPP -> LlamaSettings.isCodeCompletionsPossible()
             OLLAMA -> service<OllamaSettings>().state.codeCompletionsEnabled
+            INCEPTION -> service<InceptionSettings>().state.codeCompletionsEnabled
             else -> false
         }
 
@@ -73,7 +77,11 @@ class CodeCompletionService(private val project: Project) {
                 val isChatBasedFIM =
                     customSettings.infillTemplate == InfillPromptTemplate.CHAT_COMPLETION
                 if (isChatBasedFIM) {
-                    val credential = getCredential(CredentialKey.CustomServiceApiKeyById(requireNotNull(activeService.id)))
+                    val credential = getCredential(
+                        CredentialKey.CustomServiceApiKeyById(
+                            requireNotNull(activeService.id)
+                        )
+                    )
                     createFactory(
                         CompletionClientProvider.getDefaultClientBuilder().build()
                     ).newEventSource(
@@ -107,7 +115,10 @@ class CodeCompletionService(private val project: Project) {
                 .getCompletionAsync(buildOllamaRequest(infillRequest), eventListener)
 
             LLAMA_CPP -> CompletionClientProvider.getLlamaClient()
-                .getChatCompletionAsync(buildLlamaRequest(infillRequest), eventListener)
+                .getCodeCompletionAsync(buildLlamaRequest(infillRequest), eventListener)
+
+            INCEPTION -> CompletionClientProvider.getInceptionClient()
+                .getFimCompletionAsync(buildInceptionRequest(infillRequest), eventListener)
 
             else -> throw IllegalArgumentException("Code completion not supported for ${selectedService.name}")
         }

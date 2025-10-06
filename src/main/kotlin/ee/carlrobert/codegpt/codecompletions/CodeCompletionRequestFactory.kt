@@ -13,6 +13,7 @@ import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettingsState
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
+import ee.carlrobert.llm.client.inception.request.InceptionFIMRequest
 import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaCompletionRequest
 import ee.carlrobert.llm.client.ollama.completion.request.OllamaParameters
@@ -234,6 +235,16 @@ object CodeCompletionRequestFactory {
                     .build()
             )
             .setRaw(true)
+            .build()
+    }
+
+    fun buildInceptionRequest(details: InfillRequest): InceptionFIMRequest {
+        val model = service<ModelSelectionService>().getModelForFeature(FeatureType.CODE_COMPLETION)
+        return InceptionFIMRequest.Builder()
+            .setPrompt(details.prefix)
+            .setSuffix(details.suffix)
+            .setModel(model)
+            .setStream(true)
             .build()
     }
 

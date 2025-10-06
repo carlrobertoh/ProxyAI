@@ -12,6 +12,9 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
 import com.intellij.ui.components.AnActionLink
 import com.intellij.util.ui.JBUI
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
 import ee.carlrobert.codegpt.util.EditorUtil
 import javax.swing.JComponent
 
@@ -33,6 +36,15 @@ class AutoApplyAction(
     }
 
     override fun update(e: AnActionEvent) {
+        val autoApplyProvider =
+            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AUTO_APPLY)
+        if (autoApplyProvider == INCEPTION) {
+            anActionLink.text = "Apply"
+            anActionLink.isEnabled = false
+            anActionLink.toolTipText = "Auto Apply is temporarily disabled for Inception provider"
+            return
+        }
+
         if (virtualFile != null) {
             anActionLink.text = "Apply"
             anActionLink.isEnabled = true

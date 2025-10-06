@@ -2,42 +2,28 @@ package ee.carlrobert.codegpt.completions.factory
 
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
-import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
-import ee.carlrobert.codegpt.completions.ConversationType
-import ee.carlrobert.codegpt.completions.llama.LlamaModel
-import ee.carlrobert.codegpt.completions.llama.PromptTemplate
+import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
-import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
-import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
-import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
+import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 
 class LlamaRequestFactory : BaseRequestFactory() {
 
-    override fun createChatRequest(params: ChatCompletionParameters): LlamaCompletionRequest {
-        val promptTemplate = getPromptTemplate()
-        var systemPrompt =
-            if (params.conversationType == ConversationType.FIX_COMPILE_ERRORS) {
-                service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
-            } else {
-                service<PromptsSettings>().state.personas.selectedPersona.let {
-                    if (it.disabled) null else service<FilteredPromptsService>().getFilteredPersonaPrompt(
-                        params.chatMode
-                    ).addProjectPath()
-                }
-            }
-        systemPrompt = systemPrompt?.let { service<FilteredPromptsService>().applyClickableLinks(it) }
-
-        val prompt = promptTemplate.buildPrompt(
-            systemPrompt,
-            getPromptWithFilesContext(params),
-            params.conversation.messages
+    override fun createChatRequest(params: ChatCompletionParameters): OpenAIChatCompletionRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+        val configuration = service<ConfigurationSettings>().state
+        return OpenAIChatCompletionRequest.Builder(
+            OpenAIRequestFactory.buildOpenAIMessages(model, params)
         )
-
-        return buildLlamaRequest(prompt, promptTemplate.stopTokens, true)
+            .setModel(model)
+            .setStream(true)
+            .setMaxTokens(null)
+            .setMaxCompletionTokens(configuration.maxTokens)
+            .setTemperature(configuration.temperature.toDouble())
+            .build()
     }
 
     override fun createBasicCompletionRequest(
@@ -46,46 +32,32 @@ class LlamaRequestFactory : BaseRequestFactory() {
         maxTokens: Int,
         stream: Boolean,
         featureType: FeatureType
-    ): LlamaCompletionRequest {
-        val promptTemplate = getPromptTemplate(featureType)
-        val finalPrompt =
-            promptTemplate.buildPrompt(systemPrompt, userPrompt, listOf())
-
-        return buildLlamaRequest(finalPrompt, emptyList(), stream)
-    }
-
-    override fun createInlineEditRequest(params: InlineEditCompletionParameters): LlamaCompletionRequest {
-        val prepared = prepareInlineEditPrompts(params)
-        val promptTemplate = getPromptTemplate(FeatureType.INLINE_EDIT)
-        val history = params.conversation?.messages?.filter { !it.response.isNullOrBlank() } ?: listOf()
-        val finalPrompt = promptTemplate.buildPrompt(prepared.systemPrompt, prepared.userPrompt, history)
-        return buildLlamaRequest(finalPrompt, emptyList(), stream = true)
-    }
-
-    private fun getPromptTemplate(featureType: FeatureType? = null): PromptTemplate {
-        val settings = service<LlamaSettings>().state
-        return if (settings.isUseCustomModel)
-            settings.localModelPromptTemplate
-        else
-            LlamaModel.findByHuggingFaceModel(settings.huggingFaceModel).promptTemplate
-    }
-
-    private fun buildLlamaRequest(
-        prompt: String,
-        stopTokens: List<String>,
-        stream: Boolean = false
-    ): LlamaCompletionRequest {
-        val configSettings = service<ConfigurationSettings>().state
-        val llamaSettings = service<LlamaSettings>().state
-        return LlamaCompletionRequest.Builder(prompt)
-            .setN_predict(configSettings.maxTokens)
-            .setTemperature(configSettings.temperature.toDouble())
-            .setTop_k(llamaSettings.topK)
-            .setTop_p(llamaSettings.topP)
-            .setMin_p(llamaSettings.minP)
-            .setRepeat_penalty(llamaSettings.repeatPenalty)
-            .setStop(stopTokens)
+    ): OpenAIChatCompletionRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(featureType)
+        val configuration = service<ConfigurationSettings>().state
+        return OpenAIChatCompletionRequest.Builder(
+            listOf(
+                OpenAIChatCompletionStandardMessage("system", systemPrompt),
+                OpenAIChatCompletionStandardMessage("user", userPrompt)
+            )
+        )
+            .setModel(model)
             .setStream(stream)
+            .setMaxTokens(null)
+            .setMaxCompletionTokens(maxTokens)
+            .setTemperature(configuration.temperature.toDouble())
+            .build()
+    }
+
+    override fun createInlineEditRequest(params: InlineEditCompletionParameters): OpenAIChatCompletionRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.INLINE_EDIT)
+        val prepared = prepareInlineEditPrompts(params)
+        val messages = OpenAIRequestFactory.buildInlineEditMessages(prepared, params.conversation)
+        val configuration = service<ConfigurationSettings>().state
+        return OpenAIChatCompletionRequest.Builder(messages)
+            .setModel(model)
+            .setStream(true)
+            .setTemperature(configuration.temperature.toDouble())
             .build()
     }
 }

@@ -12,7 +12,7 @@ import com.intellij.testFramework.LightVirtualFile
 import com.intellij.util.application
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
-import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.codegpt.codecompletions.edit.NextEditCoordinator
 import ee.carlrobert.codegpt.util.EditorDiffUtil.createDiffRequest
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -26,6 +26,7 @@ class PredictionService {
     fun acceptPrediction(editor: Editor) {
         val diffViewer = editor.getUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER)
         if (diffViewer != null && diffViewer.isVisible()) {
+
             diffViewer.applyChanges()
             return
         }
@@ -36,10 +37,11 @@ class PredictionService {
         try {
             application.executeOnPooledThread {
                 CompletionProgressNotifier.update(project, true)
-                project.service<GrpcClientService>().getNextEdit(
+                NextEditCoordinator.requestNextEdit(
                     editor,
                     editor.document.text,
                     runReadAction { editor.caretModel.offset },
+                    false
                 )
             }
         } catch (e: CancellationException) {

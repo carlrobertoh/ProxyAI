@@ -22,8 +22,12 @@ class TriggerCustomPredictionAction : EditorAction(Handler()), HintManagerImpl.A
     private class Handler : EditorWriteActionHandler() {
 
         override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
-            if (ModelSelectionService.getInstance()
-                    .getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
+            val nextEditModelProvider = ModelSelectionService.getInstance()
+                .getServiceForFeature(FeatureType.NEXT_EDIT)
+            if (!listOf(
+                    ServiceType.PROXYAI,
+                    ServiceType.INCEPTION
+                ).contains(nextEditModelProvider)
             ) {
                 return
             }

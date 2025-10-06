@@ -12,7 +12,8 @@ public enum ServiceType {
   GOOGLE("GOOGLE", "service.google.title", "google.chat.completion"),
   MISTRAL("MISTRAL", "service.mistral.title", "mistral.chat.completion"),
   LLAMA_CPP("LLAMA_CPP", "service.llama.title", "llama.chat.completion"),
-  OLLAMA("OLLAMA", "service.ollama.title", "ollama.chat.completion");
+  OLLAMA("OLLAMA", "service.ollama.title", "ollama.chat.completion"),
+  INCEPTION("INCEPTION", "service.inception.title", "inception.chat.completion");
 
   private final String code;
   private final String label;

@@ -77,5 +77,9 @@ object CredentialsStore {
         data object MistralApiKey : CredentialKey() {
             override val value: String = "MISTRAL_API_KEY"
         }
+
+        data object InceptionApiKey : CredentialKey() {
+            override val value: String = "INCEPTION_API_KEY"
+        }
     }
 }

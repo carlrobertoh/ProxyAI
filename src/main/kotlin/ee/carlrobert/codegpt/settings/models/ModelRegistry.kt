@@ -101,6 +101,14 @@ class ModelRegistry {
                 FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
                 FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
+        ),
+        ServiceType.INCEPTION to ModelCapability(
+            ServiceType.INCEPTION,
+            setOf(
+                FeatureType.CODE_COMPLETION,
+                FeatureType.AUTO_APPLY,
+                FeatureType.NEXT_EDIT
+            )
         )
     )
 
@@ -272,6 +280,7 @@ class ModelRegistry {
             addAll(getLlamaModels())
             addAll(getOllamaModels())
             addAll(getCustomOpenAIModels())
+            addAll(getInceptionModels())
         }
     }
 
@@ -283,6 +292,7 @@ class ModelRegistry {
             addAll(getLlamaModels())
             addAll(getCustomOpenAICodeModels())
             addAll(getOllamaModels())
+            addAll(getInceptionModels())
         }
     }
 
@@ -307,7 +317,16 @@ class ModelRegistry {
     }
 
     private fun getNextEditModels(): List<ModelSelection> {
-        return listOf(ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta"))
+        return listOf(
+            ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta"),
+            ModelSelection(ServiceType.INCEPTION, MERCURY_CODER, "Mercury Coder")
+        )
+    }
+
+    private fun getInceptionModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(ServiceType.INCEPTION, MERCURY_CODER, "Mercury Coder")
+        )
     }
 
     fun getProxyAIChatModels(): List<ModelSelection> {
@@ -603,6 +622,8 @@ class ModelRegistry {
 
         // Llama.cpp default models
         const val LLAMA_3_2_3B_INSTRUCT = "llama-3.2-3b-instruct"
+
+        const val MERCURY_CODER = "mercury-coder"
 
         @JvmStatic
         fun getInstance(): ModelRegistry {

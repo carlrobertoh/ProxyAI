@@ -105,15 +105,6 @@ class ResponseEditorPanel(
         replaceEditor(oldEditor, newState.editor)
     }
 
-    fun removeCurrentEditor() {
-        runInEdt {
-            removeAll()
-            stateManager.clearCurrentState()
-            revalidate()
-            repaint()
-        }
-    }
-
     fun applyCodeAsync(content: String, virtualFile: VirtualFile, editor: EditorEx, headerPanel: DefaultHeaderPanel? = null) {
         val eventSource = CompletionRequestService.getInstance().autoApplyAsync(
             AutoApplyParameters(content, virtualFile),

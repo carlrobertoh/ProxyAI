@@ -13,6 +13,7 @@ import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings;
 import ee.carlrobert.llm.client.anthropic.ClaudeClient;
 import ee.carlrobert.llm.client.codegpt.CodeGPTClient;
 import ee.carlrobert.llm.client.google.GoogleClient;
+import ee.carlrobert.llm.client.inception.InceptionClient;
 import ee.carlrobert.llm.client.llama.LlamaClient;
 import ee.carlrobert.llm.client.mistral.MistralClient;
 import ee.carlrobert.llm.client.ollama.OllamaClient;
@@ -76,6 +77,11 @@ public class CompletionClientProvider {
 
   public static MistralClient getMistralClient() {
     return new MistralClient(getCredential(CredentialKey.MistralApiKey.INSTANCE), getDefaultClientBuilder());
+  }
+
+  public static InceptionClient getInceptionClient() {
+    return new InceptionClient.Builder(getCredential(CredentialKey.InceptionApiKey.INSTANCE))
+        .build(getDefaultClientBuilder());
   }
 
   public static OkHttpClient.Builder getDefaultClientBuilder() {

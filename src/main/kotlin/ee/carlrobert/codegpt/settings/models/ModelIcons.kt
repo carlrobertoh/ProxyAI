@@ -37,6 +37,7 @@ object ModelIcons {
             ServiceType.OLLAMA -> Icons.Ollama
             ServiceType.CUSTOM_OPENAI -> Icons.OpenAI
             ServiceType.LLAMA_CPP -> Icons.Llama
+            ServiceType.INCEPTION -> Icons.Inception
         }
     }
 }

@@ -10,11 +10,15 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
 import ee.carlrobert.codegpt.CodeGPTKeys
+import ee.carlrobert.codegpt.codecompletions.edit.NextEditCoordinator
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
+import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.treesitter.CodeCompletionParserFactory
 import ee.carlrobert.codegpt.ui.OverlayUtil.showNotification
@@ -27,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class CodeCompletionEventListener(
     private val editor: Editor,
-    private val channel: ProducerScope<InlineCompletionElement>
+    private val channel: ProducerScope<InlineCompletionElement>,
 ) : CompletionEventListener<String> {
 
     companion object {
@@ -178,10 +182,12 @@ class CodeCompletionEventListener(
         setLoading(false)
 
         if (messageBuilder.isEmpty()) {
-            editor.project?.service<GrpcClientService>()?.getNextEdit(
+            NextEditCoordinator.requestNextEdit(
                 editor,
                 prefix + suffix,
-                runReadAction { editor.caretModel.offset })
+                runReadAction { editor.caretModel.offset },
+                false
+            )
         }
     }
 

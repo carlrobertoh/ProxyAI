@@ -115,15 +115,16 @@ class ModelRegistryTest : IntegrationTest() {
             ServiceType.MISTRAL,
             ServiceType.OLLAMA,
             ServiceType.LLAMA_CPP,
-            ServiceType.CUSTOM_OPENAI
+            ServiceType.CUSTOM_OPENAI,
+            ServiceType.INCEPTION
         )
         assertThat(result).doesNotContain(ServiceType.ANTHROPIC, ServiceType.GOOGLE)
     }
 
-    fun `test getProvidersForFeature with next edit returns proxyai only`() {
+    fun `test getProvidersForFeature with next edit returns proxyai and inception`() {
         val result = modelRegistry.getProvidersForFeature(FeatureType.NEXT_EDIT)
 
-        assertThat(result).containsExactly(ServiceType.PROXYAI)
+        assertThat(result).containsExactlyInAnyOrder(ServiceType.PROXYAI, ServiceType.INCEPTION)
     }
 
     fun `test isFeatureSupportedByProvider with valid chat provider returns true`() {

@@ -9,6 +9,7 @@ import static ee.carlrobert.codegpt.settings.service.ServiceType.MISTRAL;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.OLLAMA;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.OPENAI;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI;
+import static ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
@@ -242,6 +243,13 @@ public class ModelComboBoxAction extends ComboBoxAction {
       actionGroup.add(mistralGroup);
     }
 
+    if (availableProviders.contains(INCEPTION)) {
+      var inceptionGroup = DefaultActionGroup.createPopupGroup(() -> "Inception");
+      inceptionGroup.getTemplatePresentation().setIcon(Icons.Inception);
+      inceptionGroup.add(createInceptionModelAction(presentation));
+      actionGroup.add(inceptionGroup);
+    }
+
     if (availableProviders.contains(LLAMA_CPP) || availableProviders.contains(OLLAMA)) {
       actionGroup.addSeparator("Offline");
 
@@ -343,6 +351,11 @@ public class ModelComboBoxAction extends ComboBoxAction {
       case MISTRAL:
         templatePresentation.setText(getMistralPresentationText());
         templatePresentation.setIcon(Icons.Mistral);
+        break;
+      case INCEPTION:
+        templatePresentation.setIcon(Icons.Inception);
+        var inceptionModelName = ModelRegistry.getInstance().getModelDisplayName(INCEPTION, modelCode);
+        templatePresentation.setText(inceptionModelName);
         break;
       default:
         break;
@@ -523,6 +536,18 @@ public class ModelComboBoxAction extends ComboBoxAction {
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
             .setModel(featureType, modelCode, MISTRAL));
+  }
+
+  private AnAction createInceptionModelAction(Presentation comboBoxPresentation) {
+    var modelCode = ModelRegistry.MERCURY_CODER;
+    var modelName = ModelRegistry.getInstance().getModelDisplayName(INCEPTION, modelCode);
+    return createModelAction(
+        INCEPTION,
+        modelName,
+        Icons.Inception,
+        comboBoxPresentation,
+        () -> ApplicationManager.getApplication().getService(ModelSettings.class)
+            .setModel(featureType, modelCode, INCEPTION));
   }
 
   private String getMistralPresentationText() {
