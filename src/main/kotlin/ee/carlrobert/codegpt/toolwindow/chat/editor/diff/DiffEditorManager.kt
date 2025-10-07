@@ -17,13 +17,12 @@ import com.intellij.util.application
 class DiffEditorManager(
     private val project: Project,
     private val diffViewer: UnifiedDiffViewer,
-    private val virtualFile: VirtualFile?
 ) {
 
-    private val operations = mutableMapOf<String, String>()
+    private val operations = LinkedHashMap<String, String>()
 
     fun updateDiffContent(searchContent: String, replaceContent: String) {
-        val originalText = virtualFile?.readText() ?: return
+        val originalText = diffViewer.getDocument(Side.LEFT).text
         val document = diffViewer.getDocument(Side.RIGHT)
 
         operations[searchContent.trim()] = replaceContent.trim()
@@ -68,6 +67,8 @@ class DiffEditorManager(
 
             allChanges.add(change)
         }
+
+        operations.clear()
 
         return allChanges
     }

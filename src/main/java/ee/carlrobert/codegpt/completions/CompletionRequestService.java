@@ -1,6 +1,8 @@
 package ee.carlrobert.codegpt.completions;
 
+import static ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION;
+import static ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
@@ -11,12 +13,14 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
+import ee.carlrobert.codegpt.util.ApplicationUtil;
+import ee.carlrobert.codegpt.util.file.FileUtil;
 import ee.carlrobert.llm.client.DeserializationUtil;
 import ee.carlrobert.llm.client.anthropic.completion.ClaudeCompletionRequest;
+import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest;
 import ee.carlrobert.llm.client.codegpt.request.InlineEditRequest;
 import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest;
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest;
-import ee.carlrobert.llm.client.inception.request.InceptionApplyRequest;
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionEventSourceListener;
 import ee.carlrobert.llm.client.openai.completion.OpenAITextCompletionEventSourceListener;
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest;

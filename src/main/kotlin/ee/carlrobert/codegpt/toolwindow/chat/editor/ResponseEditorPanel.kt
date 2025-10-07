@@ -4,6 +4,7 @@ import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.LogicalPosition
@@ -16,11 +17,17 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
+import com.intellij.util.application
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.AutoApplyParameters
+import ee.carlrobert.codegpt.completions.CompletionClientProvider
 import ee.carlrobert.codegpt.completions.CompletionRequestService
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.EXPANDED_KEY
@@ -32,6 +39,10 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
+import ee.carlrobert.codegpt.util.ApplicationUtil
+import ee.carlrobert.codegpt.util.EditorUtil
+import ee.carlrobert.codegpt.util.file.FileUtil
+import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest
 
 class ResponseEditorPanel(
     private val project: Project,
@@ -105,7 +116,47 @@ class ResponseEditorPanel(
         replaceEditor(oldEditor, newState.editor)
     }
 
-    fun applyCodeAsync(content: String, virtualFile: VirtualFile, editor: EditorEx, headerPanel: DefaultHeaderPanel? = null) {
+    fun applyCodeAsync(
+        content: String,
+        virtualFile: VirtualFile,
+        editor: EditorEx,
+        headerPanel: DefaultHeaderPanel? = null
+    ) {
+        var selectedService =
+            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AUTO_APPLY);
+
+        if (selectedService == PROXYAI) {
+            val panel = headerPanel ?: (editor.permanentHeaderComponent as? DefaultHeaderPanel)
+            panel?.setLoading()
+            CompletionProgressNotifier.update(project, true)
+            application.executeOnPooledThread {
+                val pricingPlan =
+                    CODEGPT_USER_DETAILS[ApplicationUtil.findCurrentProject()]?.pricingPlan
+                val model = service<ModelSelectionService>()
+                    .getModelForFeature(FeatureType.AUTO_APPLY, pricingPlan)
+                val originalCode = EditorUtil.getFileContent(virtualFile)
+                try {
+                    val request = AutoApplyRequest(model, originalCode, content)
+                    val response = CompletionClientProvider.getCodeGPTClient().applyChanges(request)
+                    stateManager.transitionToDiffState(originalCode, response.mergedCode, virtualFile)
+                } catch (e: Exception) {
+                    logger.error("Failed to apply changes", e)
+                    ApplicationManager.getApplication().invokeLater {
+                        if (!project.isDisposed) {
+                            panel?.handleDone()
+                        }
+                    }
+                } finally {
+                    ApplicationManager.getApplication().invokeLater {
+                        if (!project.isDisposed) {
+                            CompletionProgressNotifier.update(project, false)
+                        }
+                    }
+                }
+            }
+            return
+        }
+
         val eventSource = CompletionRequestService.getInstance().autoApplyAsync(
             AutoApplyParameters(content, virtualFile),
             AutoApplyListener(project, stateManager, virtualFile, content) { oldEditor, newEditor ->
@@ -113,7 +164,7 @@ class ResponseEditorPanel(
                     ?: throw IllegalStateException("Expected parent to be ResponseEditorPanel")
                 responseEditorPanel.replaceEditor(oldEditor, newEditor)
             })
-        
+
         val panel = headerPanel ?: (editor.permanentHeaderComponent as? DefaultHeaderPanel)
         panel?.setLoading(eventSource)
     }
@@ -146,7 +197,7 @@ class ResponseEditorPanel(
             }
 
             val currentText = try {
-                virtualFile.readText()
+                EditorUtil.getFileContent(virtualFile)
             } catch (e: Exception) {
                 logger.error("Failed to read file content for direct apply", e)
                 return

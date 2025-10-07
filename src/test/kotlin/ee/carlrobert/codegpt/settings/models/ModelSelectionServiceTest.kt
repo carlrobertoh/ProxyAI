@@ -48,7 +48,7 @@ class ModelSelectionServiceTest : IntegrationTest() {
         val result = modelSelectionService.getModelSelectionForFeature(FeatureType.CODE_COMPLETION)
 
         assertThat(result.provider).isEqualTo(ServiceType.PROXYAI)
-        assertThat(result.model).isEqualTo("qwen-2.5-32b-code")
+        assertThat(result.model).isEqualTo("mercury-coder")
     }
 
     fun `test getServiceForFeature with valid feature returns correct provider`() {
@@ -76,15 +76,5 @@ class ModelSelectionServiceTest : IntegrationTest() {
             modelSelectionService.getModelForFeature(FeatureType.CHAT, PricingPlan.INDIVIDUAL)
 
         assertThat(result).isEqualTo("claude-4-sonnet-thinking")
-    }
-
-    fun `test multiple feature types have different default models`() {
-        val chatModel = modelSelectionService.getModelForFeature(FeatureType.CHAT)
-        val codeModel = modelSelectionService.getModelForFeature(FeatureType.CODE_COMPLETION)
-        val nextEditModel = modelSelectionService.getModelForFeature(FeatureType.NEXT_EDIT)
-
-        assertThat(chatModel).isNotEqualTo(codeModel)
-        assertThat(codeModel).isNotEqualTo(nextEditModel)
-        assertThat(nextEditModel).isEqualTo("zeta")
     }
 }

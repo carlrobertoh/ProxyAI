@@ -8,10 +8,16 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel.Companion.RESPONSE_EDITOR_STATE_KEY
+import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel.Companion.RESPONSE_EDITOR_DIFF_VIEWER_KEY
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffEditorManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.EditorFactory
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
+import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
+import com.intellij.diff.util.DiffUtil
+import com.intellij.diff.util.Side
+import com.intellij.openapi.util.text.StringUtil
 import okhttp3.sse.EventSource
 
 class EditorStateManager(private val project: Project) {
@@ -35,6 +41,38 @@ class EditorStateManager(private val project: Project) {
         RESPONSE_EDITOR_STATE_KEY.set(editor, state)
         currentState = state
         return state
+    }
+
+    fun transitionToDiffState(originalCode: String, updatedCode: String, virtualFile: VirtualFile) {
+        val oldState = currentState ?: return
+        val oldEditor = oldState.editor
+        val language = oldState.segment.language.ifBlank { virtualFile.extension ?: "Text" }
+        val segment = ReplaceWaiting(originalCode, updatedCode, language, virtualFile.path)
+        val editor = EditorFactory.createEditor(project, segment)
+        val state = createDiffState(editor, segment)
+
+        runInEdt {
+            val headerComponent = state.createHeaderComponent(false)
+            EditorFactory.configureEditor(editor, headerComponent)
+        }
+
+        RESPONSE_EDITOR_STATE_KEY.set(editor, state)
+        currentState = state
+
+        val diffViewer = RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor) ?: return
+        val rightDoc = diffViewer.getDocument(Side.RIGHT)
+
+        runInEdt {
+            if (DiffUtil.executeWriteCommand(rightDoc, project, "Updating document") {
+                    rightDoc.setText(StringUtil.convertLineSeparators(updatedCode))
+                    diffViewer.scheduleRediff()
+                }) {
+                diffViewer.rediff(true)
+            }
+            (oldEditor.component.parent as? ResponseEditorPanel)?.replaceEditor(oldEditor, editor)
+            (editor.permanentHeaderComponent as? DiffHeaderPanel)?.updateDiffStats(diffViewer.diffChanges ?: emptyList())
+            (editor.permanentHeaderComponent as? DiffHeaderPanel)?.handleDone()
+        }
     }
 
     fun transitionToFailedDiffState(searchContent: String, replaceContent: String): EditorState? {
@@ -77,8 +115,8 @@ class EditorStateManager(private val project: Project) {
 
     private fun createDiffState(editor: EditorEx, segment: Segment, eventSource: EventSource? = null, originalSuggestion: String? = null): EditorState {
         val virtualFile = getVirtualFile(segment.filePath)
-        val diffViewer = ResponseEditorPanel.RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor)
-        val diffEditorManager = DiffEditorManager(project, diffViewer, virtualFile)
+        val diffViewer = RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor)
+        val diffEditorManager = DiffEditorManager(project, diffViewer)
         this.diffEditorManager = diffEditorManager
         
         val state = StandardDiffEditorState(

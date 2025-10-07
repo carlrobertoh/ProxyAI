@@ -50,7 +50,7 @@ class AutoApplyAction(
             anActionLink.isEnabled = true
             anActionLink.toolTipText = "Apply changes to ${virtualFile.name}"
 
-            if (virtualFile.readText().trim() == toolwindowEditor.document.text.trim()) {
+            if (EditorUtil.getFileContent(virtualFile).trim() == toolwindowEditor.document.text.trim()) {
                 anActionLink.isEnabled = false
                 anActionLink.isVisible = true
                 anActionLink.toolTipText = "No changes to apply"

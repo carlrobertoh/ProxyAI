@@ -101,7 +101,7 @@ object EditorFactory {
         val leftContent = DiffContentFactory.getInstance().create(project, virtualFile)
 
         val rightContentDoc = EditorFactory.getInstance()
-            .createDocument(StringUtil.convertLineSeparators(virtualFile.readText()))
+            .createDocument(StringUtil.convertLineSeparators(EditorUtil.getFileContent(virtualFile)))
         rightContentDoc.setReadOnly(false)
 
         val rightContent =

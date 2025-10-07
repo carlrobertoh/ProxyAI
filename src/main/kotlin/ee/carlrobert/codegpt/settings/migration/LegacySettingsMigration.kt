@@ -51,7 +51,7 @@ object LegacySettingsMigration {
             setModelSelection(FeatureType.CODE_COMPLETION, codeModel, selectedService)
 
             if (selectedService == ServiceType.PROXYAI) {
-                setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.ZETA, ServiceType.PROXYAI)
+                setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.MERCURY_CODER, ServiceType.PROXYAI)
             } else {
                 setModelSelection(FeatureType.NEXT_EDIT, null, selectedService)
             }

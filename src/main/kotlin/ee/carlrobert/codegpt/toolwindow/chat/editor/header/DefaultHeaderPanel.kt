@@ -89,10 +89,10 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
                 ?: throw IllegalStateException("Could not find editor panel")
 
             val directApplyThreshold = 0.85
-            val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
+            val coefficient = StringUtil.getDiceCoefficient(editor.document.text, EditorUtil.getFileContent(file))
             if (coefficient > directApplyThreshold) {
                 responseEditorPanel.createDiffEditorForDirectApply(
-                    file.readText(),
+                    EditorUtil.getFileContent(file),
                     editor.document.text,
                     file
                 )

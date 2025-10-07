@@ -4,7 +4,9 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.*
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 
 @Service
@@ -61,6 +63,8 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         migrateCustomOpenAIModelCodesToIds()
         migrateMissingProviderInformation()
         migrateEditCodeModel()
+        migrateProxyAIApplyModel()
+        migrateProxyAICodeModels()
         notifyIfChanged(oldState, this.state)
     }
 
@@ -141,6 +145,24 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         state.modelSelections["EDIT_CODE"]?.let {
             state.setModelSelection(FeatureType.INLINE_EDIT, it.model, it.provider!!)
             state.modelSelections.remove("EDIT_CODE")
+        }
+    }
+
+    private fun migrateProxyAIApplyModel() {
+        val modelSelection =
+            service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.AUTO_APPLY)
+        if (modelSelection.provider == PROXYAI
+            && service<ModelRegistry>().getProxyAIApplyModels().none { it == modelSelection }
+        ) {
+            setModelWithProvider(FeatureType.AUTO_APPLY, ModelRegistry.MERCURY_CODER, PROXYAI)
+        }
+    }
+
+    private fun migrateProxyAICodeModels() {
+        val modelSelection =
+            service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.CODE_COMPLETION)
+        if (modelSelection.provider == PROXYAI && modelSelection.model != ModelRegistry.MERCURY_CODER) {
+            setModelWithProvider(FeatureType.CODE_COMPLETION, ModelRegistry.MERCURY_CODER, PROXYAI)
         }
     }
 

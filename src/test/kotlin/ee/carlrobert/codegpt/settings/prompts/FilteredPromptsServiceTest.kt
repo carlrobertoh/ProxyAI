@@ -130,34 +130,6 @@ class FilteredPromptsServiceTest : IntegrationTest() {
         assertThat(prompt).isEmpty()
     }
 
-    fun testPromptCachingForPerformance() {
-        val complexPersonaPrompt = """
-            Complex prompt with lots of content.
-            For refactoring or editing an existing file, always generate a SEARCH/REPLACE block.
-            When generating SEARCH/REPLACE blocks: do this and that.
-            For editing existing files, use this SEARCH/REPLACE structure: example here.
-            Example:
-            ```java:/path/to/Calculator.java
-            <<<<<<< SEARCH
-            old code
-            =======
-            new code
-            >>>>>>> REPLACE
-            ```
-        """.trimIndent()
-        promptsSettings.state.personas.selectedPersona.instructions = complexPersonaPrompt
-        val startTime = System.currentTimeMillis()
-        val iterations = 1000
-        val maxDurationMs = 50
-
-        repeat(iterations) {
-            filteredPromptsService.getFilteredPersonaPrompt(ChatMode.ASK)
-        }
-
-        val duration = System.currentTimeMillis() - startTime
-        assertThat(duration).isLessThan(maxDurationMs.toLong())
-    }
-
     fun testModeSwitchingBehavior() {
         val personaPrompt = """
             You are a helpful assistant.

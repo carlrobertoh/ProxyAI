@@ -121,8 +121,8 @@ class ModelRegistry {
             ),
             FeatureType.AUTO_APPLY to ModelSelection(
                 ServiceType.PROXYAI,
-                GEMINI_FLASH_2_5,
-                "Gemini Flash 2.5"
+                MERCURY_CODER,
+                "Mercury Coder"
             ),
             FeatureType.COMMIT_MESSAGE to ModelSelection(
                 ServiceType.PROXYAI,
@@ -144,14 +144,18 @@ class ModelRegistry {
                 QWEN_2_5_32B_CODE,
                 "Qwen 2.5 32B Code"
             ),
-            FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
+            FeatureType.NEXT_EDIT to ModelSelection(
+                ServiceType.PROXYAI,
+                MERCURY_CODER,
+                "Mercury Coder"
+            )
         ),
         PricingPlan.FREE to mapOf(
             FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
             FeatureType.AUTO_APPLY to ModelSelection(
                 ServiceType.PROXYAI,
-                QWEN3_CODER,
-                "Qwen3 Coder"
+                MERCURY_CODER,
+                "Mercury Coder"
             ),
             FeatureType.COMMIT_MESSAGE to ModelSelection(
                 ServiceType.PROXYAI,
@@ -169,7 +173,11 @@ class ModelRegistry {
                 QWEN_2_5_32B_CODE,
                 "Qwen 2.5 32B Code"
             ),
-            FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
+            FeatureType.NEXT_EDIT to ModelSelection(
+                ServiceType.PROXYAI,
+                MERCURY_CODER,
+                "Mercury Coder"
+            )
         ),
         PricingPlan.INDIVIDUAL to mapOf(
             FeatureType.CHAT to ModelSelection(
@@ -177,7 +185,11 @@ class ModelRegistry {
                 CLAUDE_4_SONNET_THINKING,
                 "Claude 4 Sonnet Thinking"
             ),
-            FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
+            FeatureType.AUTO_APPLY to ModelSelection(
+                ServiceType.PROXYAI,
+                MERCURY_CODER,
+                "Mercury Coder"
+            ),
             FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
             FeatureType.INLINE_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
@@ -190,7 +202,11 @@ class ModelRegistry {
                 QWEN_2_5_32B_CODE,
                 "Qwen 2.5 32B Code"
             ),
-            FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
+            FeatureType.NEXT_EDIT to ModelSelection(
+                ServiceType.PROXYAI,
+                MERCURY_CODER,
+                "Mercury Coder"
+            )
         )
     )
 
@@ -202,8 +218,8 @@ class ModelRegistry {
         ),
         FeatureType.AUTO_APPLY to ModelSelection(
             ServiceType.PROXYAI,
-            GEMINI_FLASH_2_5,
-            "Gemini Flash 2.5"
+            MERCURY_CODER,
+            "Mercury Coder"
         ),
         FeatureType.COMMIT_MESSAGE to ModelSelection(
             ServiceType.PROXYAI,
@@ -221,14 +237,15 @@ class ModelRegistry {
             QWEN_2_5_32B_CODE,
             "Qwen 2.5 32B Code"
         ),
-        FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta")
+        FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, MERCURY_CODER, "Mercury Coder")
     )
 
     fun getAllModelsForFeature(featureType: FeatureType): List<ModelSelection> {
         return when (featureType) {
-            FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
+            FeatureType.CHAT, FeatureType.COMMIT_MESSAGE,
             FeatureType.INLINE_EDIT, FeatureType.LOOKUP -> getAllChatModels()
 
+            FeatureType.AUTO_APPLY -> getAllApplyModels()
             FeatureType.CODE_COMPLETION -> getAllCodeModels()
             FeatureType.NEXT_EDIT -> getNextEditModels()
         }
@@ -264,6 +281,7 @@ class ModelRegistry {
 
     private fun getAllModels(): List<ModelSelection> {
         return buildList {
+            addAll(getAllApplyModels())
             addAll(getAllChatModels())
             addAll(getAllCodeModels())
             addAll(getNextEditModels())
@@ -273,6 +291,20 @@ class ModelRegistry {
     private fun getAllChatModels(): List<ModelSelection> {
         return buildList {
             addAll(getProxyAIChatModels())
+            addAll(getOpenAIChatModels())
+            addAll(getAnthropicModels())
+            addAll(getGoogleModels())
+            addAll(getMistralModels())
+            addAll(getLlamaModels())
+            addAll(getOllamaModels())
+            addAll(getCustomOpenAIModels())
+            addAll(getInceptionModels())
+        }
+    }
+
+    private fun getAllApplyModels(): List<ModelSelection> {
+        return buildList {
+            addAll(getProxyAIApplyModels())
             addAll(getOpenAIChatModels())
             addAll(getAnthropicModels())
             addAll(getGoogleModels())
@@ -318,7 +350,7 @@ class ModelRegistry {
 
     private fun getNextEditModels(): List<ModelSelection> {
         return listOf(
-            ModelSelection(ServiceType.PROXYAI, ZETA, "Zeta"),
+            ModelSelection(ServiceType.PROXYAI, MERCURY_CODER, "Mercury Coder"),
             ModelSelection(ServiceType.INCEPTION, MERCURY_CODER, "Mercury Coder")
         )
     }
@@ -404,6 +436,20 @@ class ModelRegistry {
         )
     }
 
+    fun getProxyAIApplyModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(
+                ServiceType.PROXYAI,
+                MERCURY_CODER,
+                "Mercury Coder",
+                Icons.Inception,
+                PricingPlan.FREE
+            ),
+            ModelSelection(ServiceType.PROXYAI, MORPH, "Morph", Icons.Morph, PricingPlan.FREE),
+            ModelSelection(ServiceType.PROXYAI, RELACE, "Relace", Icons.Relace, PricingPlan.FREE),
+        )
+    }
+
     fun getProxyAIChatModelsForPricingPlan(userPricingPlan: PricingPlan?): List<ModelSelection> {
         val allModels = getProxyAIChatModels()
         return when (userPricingPlan) {
@@ -423,18 +469,11 @@ class ModelRegistry {
         return listOf(
             ModelSelection(
                 ServiceType.PROXYAI,
-                QWEN_2_5_32B_CODE,
-                "Qwen 2.5 Coder",
-                Icons.Qwen,
-                PricingPlan.ANONYMOUS
-            ),
-            ModelSelection(
-                ServiceType.PROXYAI,
-                GPT_3_5_TURBO_INSTRUCT,
-                "GPT-3.5 Turbo Instruct",
-                Icons.OpenAI,
+                MERCURY_CODER,
+                "Mercury Coder",
+                Icons.Inception,
                 PricingPlan.FREE
-            )
+            ),
         )
     }
 
@@ -584,8 +623,9 @@ class ModelRegistry {
         const val DEEPSEEK_R1 = "deepseek-r1"
         const val DEEPSEEK_V3 = "deepseek-v3"
         const val QWEN_2_5_32B_CODE = "qwen-2.5-32b-code"
-        const val ZETA = "zeta"
         const val QWEN3_CODER = "qwen3-coder"
+        const val RELACE = "relace"
+        const val MORPH = "morph"
 
         // OpenAI Models
         const val GPT_3_5_TURBO_INSTRUCT = "gpt-3.5-turbo-instruct"

@@ -132,11 +132,11 @@ class ModelSettingsTest : IntegrationTest() {
         modelSettings.state.modelSelections.remove("NEXT_EDIT")
         lastNotification.set(null)
         
-        modelSettings.setModelWithProvider(FeatureType.NEXT_EDIT, "zeta", ServiceType.PROXYAI)
+        modelSettings.setModelWithProvider(FeatureType.NEXT_EDIT, "mercury-coder", ServiceType.PROXYAI)
 
         val notification = lastNotification.get()
         assertThat(notification!!.featureType).isEqualTo(FeatureType.NEXT_EDIT)
-        assertThat(notification.model).isEqualTo("zeta")
+        assertThat(notification.model).isEqualTo("mercury-coder")
         assertThat(notification.serviceType).isEqualTo(ServiceType.PROXYAI)
     }
 

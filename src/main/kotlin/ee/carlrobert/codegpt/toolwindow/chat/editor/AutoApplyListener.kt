@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
+import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
@@ -84,7 +85,7 @@ class AutoApplyListener(
 
     private fun createDiffEditor(segment: ReplaceWaiting) {
         val oldEditor = stateManager.getCurrentState()?.editor ?: return
-        val currentText = virtualFile.readText()
+        val currentText = EditorUtil.getFileContent(virtualFile)
         val containsText = currentText.contains(segment.search.trim())
 
         val newState = if (containsText) {

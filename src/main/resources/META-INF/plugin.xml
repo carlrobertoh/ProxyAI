@@ -57,7 +57,7 @@
                                  displayName="Ollama (Offline)"
                                  instance="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettingsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.inception" parentId="settings.codegpt.services"
-                                 displayName="Inception"
+                                 displayName="Inception Labs"
                                  instance="ee.carlrobert.codegpt.settings.service.InceptionServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.models" parentId="settings.codegpt" bundle="messages.codegpt"
                                  key="settings.models.displayName"

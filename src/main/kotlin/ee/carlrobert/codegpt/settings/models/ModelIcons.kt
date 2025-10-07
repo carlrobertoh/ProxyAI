@@ -23,6 +23,9 @@ object ModelIcons {
             ModelRegistry.QWEN3_CODER -> Icons.Qwen
             "qwen-2.5-32b-chat", ModelRegistry.QWEN_2_5_32B_CODE -> Icons.Qwen
             "llama-3.1-405b" -> Icons.Meta
+            ModelRegistry.MERCURY_CODER -> Icons.Inception
+            ModelRegistry.MORPH -> Icons.Morph
+            ModelRegistry.RELACE -> Icons.Relace
             else -> Icons.DefaultSmall
         }
     }
