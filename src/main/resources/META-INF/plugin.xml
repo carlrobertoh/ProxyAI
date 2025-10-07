@@ -201,15 +201,15 @@
             <separator/>
         </group>
 
-        <!--
-          Removed add-to-group into deprecated/removed VCS groups for 2025.1+/Remote Dev.
-          The action remains available via "Find Action" to avoid startup errors in Thin Client.
-        -->
         <group id="CodeGPT.VcsLogContextMenu">
             <separator/>
             <action
-                    id="CodeGPT.ExplainGitCommitAction"
-                    class="ee.carlrobert.codegpt.actions.ExplainGitCommitAction"/>
+              id="CodeGPT.ExplainGitCommitAction"
+              class="ee.carlrobert.codegpt.actions.ExplainGitCommitAction"/>
+            <add-to-group
+              group-id="Vcs.Log.ContextMenu"
+              relative-to-action="Vcs.Log.CompareRevisions"
+              anchor="after"/>
             <separator/>
         </group>
 
@@ -338,7 +338,7 @@
                text="ProxyAI"
                popup="true"
                icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
-            <!-- Removed add-to-group to Vcs.MessageActionGroup to prevent startup errors in 251.* -->
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
             <action
                     id="CodeGPT.GenerateGitCommitMessage"
                     text="Generate Commit Message"
