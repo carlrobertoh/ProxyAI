@@ -51,8 +51,6 @@ class FileWatcher : Disposable {
                             Thread.currentThread().interrupt()
                         } catch (e: Exception) {
                             logger.error("Error in file watcher for path: $pathString", e)
-                        } finally {
-                            logger.error("File watch monitor thread stopped for path: $pathString")
                         }
                     }
                     fileMonitors.add(monitor)

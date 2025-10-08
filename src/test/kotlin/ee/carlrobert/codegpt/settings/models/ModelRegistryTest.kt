@@ -51,8 +51,8 @@ class ModelRegistryTest : IntegrationTest() {
         val result = modelRegistry.getDefaultModelForFeature(FeatureType.CODE_COMPLETION, PricingPlan.INDIVIDUAL)
 
         assertThat(result.provider).isEqualTo(ServiceType.PROXYAI)
-        assertThat(result.model).isEqualTo("qwen-2.5-32b-code")
-        assertThat(result.displayName).isEqualTo("Qwen 2.5 32B Code")
+        assertThat(result.model).isEqualTo("mercury-coder")
+        assertThat(result.displayName).isEqualTo("Mercury Coder")
     }
 
     fun `test getDefaultModelForFeature with next edit returns zeta model`() {

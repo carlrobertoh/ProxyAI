@@ -4,7 +4,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.*
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -63,8 +62,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         migrateCustomOpenAIModelCodesToIds()
         migrateMissingProviderInformation()
         migrateEditCodeModel()
-        migrateProxyAIApplyModel()
-        migrateProxyAIAutocompleteAndNextEditModels()
+        migrateProxyAIModels()
         notifyIfChanged(oldState, this.state)
     }
 
@@ -148,21 +146,10 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         }
     }
 
-    private fun migrateProxyAIApplyModel() {
-        val modelSelection =
-            service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.AUTO_APPLY)
-        if (modelSelection.provider == PROXYAI
-            && service<ModelRegistry>().getProxyAIApplyModels().none { it == modelSelection }
-        ) {
-            setModelWithProvider(FeatureType.AUTO_APPLY, ModelRegistry.MERCURY_CODER, PROXYAI)
-        }
-    }
-
-    private fun migrateProxyAIAutocompleteAndNextEditModels() {
-        val modelService = service<ModelSelectionService>()
-        listOf(FeatureType.CODE_COMPLETION, FeatureType.NEXT_EDIT).forEach {
-            val modelSelection = modelService.getModelSelectionForFeature(it)
-            if (modelSelection.provider == PROXYAI && modelSelection.model != ModelRegistry.MERCURY_CODER) {
+    private fun migrateProxyAIModels() {
+        listOf(FeatureType.AUTO_APPLY, FeatureType.CODE_COMPLETION, FeatureType.NEXT_EDIT).forEach {
+            val modelSelection = state.getModelSelection(it)
+            if (modelSelection?.provider == PROXYAI && modelSelection.model != ModelRegistry.MERCURY_CODER) {
                 setModelWithProvider(it, ModelRegistry.MERCURY_CODER, PROXYAI)
             }
         }

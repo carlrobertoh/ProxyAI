@@ -141,8 +141,8 @@ class ModelRegistry {
             ),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
-                QWEN_2_5_32B_CODE,
-                "Qwen 2.5 32B Code"
+                MERCURY_CODER,
+                "Mercury Coder"
             ),
             FeatureType.NEXT_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
@@ -170,8 +170,8 @@ class ModelRegistry {
             FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
-                QWEN_2_5_32B_CODE,
-                "Qwen 2.5 32B Code"
+                MERCURY_CODER,
+                "Mercury Coder"
             ),
             FeatureType.NEXT_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
@@ -199,8 +199,8 @@ class ModelRegistry {
             FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
-                QWEN_2_5_32B_CODE,
-                "Qwen 2.5 32B Code"
+                MERCURY_CODER,
+                "Mercury Coder"
             ),
             FeatureType.NEXT_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
@@ -234,8 +234,8 @@ class ModelRegistry {
         FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
         FeatureType.CODE_COMPLETION to ModelSelection(
             ServiceType.PROXYAI,
-            QWEN_2_5_32B_CODE,
-            "Qwen 2.5 32B Code"
+            MERCURY_CODER,
+            "Mercury Coder"
         ),
         FeatureType.NEXT_EDIT to ModelSelection(ServiceType.PROXYAI, MERCURY_CODER, "Mercury Coder")
     )
