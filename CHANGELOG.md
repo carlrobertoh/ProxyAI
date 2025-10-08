@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.3-233] - 2025-10-08
+
 ### Added
 
 - New Inception Labs provider (BYOK) supporting all the in-built features
@@ -1149,7 +1151,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-233...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-233...HEAD
+[3.6.3-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-233...v3.6.3-233
 [3.6.2-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.1-233...v3.6.2-233
 [3.6.1-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.0-233...v3.6.1-233
 [3.6.0-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.5.1-233...v3.6.0-233
