@@ -84,10 +84,6 @@ public final class CompletionRequestService {
     var selectedService =
         ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AUTO_APPLY);
 
-    if (selectedService == INCEPTION) {
-      return null;
-    }
-
     var request = CompletionRequestFactory
         .getFactory(selectedService)
         .createAutoApplyRequest(params);

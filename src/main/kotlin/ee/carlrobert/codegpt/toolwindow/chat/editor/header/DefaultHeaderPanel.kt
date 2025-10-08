@@ -8,9 +8,13 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
-import com.intellij.openapi.vfs.readText
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.completions.AutoApplyParameters
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
+import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.*
 import ee.carlrobert.codegpt.util.EditorUtil
@@ -89,7 +93,8 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
                 ?: throw IllegalStateException("Could not find editor panel")
 
             val directApplyThreshold = 0.85
-            val coefficient = StringUtil.getDiceCoefficient(editor.document.text, EditorUtil.getFileContent(file))
+            val coefficient =
+                StringUtil.getDiceCoefficient(editor.document.text, EditorUtil.getFileContent(file))
             if (coefficient > directApplyThreshold) {
                 responseEditorPanel.createDiffEditorForDirectApply(
                     EditorUtil.getFileContent(file),
@@ -98,7 +103,16 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
                 )
                 return
             }
-            responseEditorPanel.applyCodeAsync(editor.document.text, file, editor, this)
+
+            val modelSelection =
+                ModelSelectionService.getInstance()
+                    .getModelSelectionForFeature(FeatureType.AUTO_APPLY);
+            val params = AutoApplyParameters(editor.document.text, file)
+            if (listOf(PROXYAI, INCEPTION).any { it == modelSelection.provider }) {
+                responseEditorPanel.applyCode(modelSelection, params, this)
+            } else {
+                responseEditorPanel.applyCodeAsync(editor.document.text, file, editor, this)
+            }
         } catch (e: Exception) {
             logger.error(e.message, e)
         }

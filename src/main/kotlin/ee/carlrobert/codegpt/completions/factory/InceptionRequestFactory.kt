@@ -36,10 +36,10 @@ class InceptionRequestFactory : BaseRequestFactory() {
             .build()
     }
 
-    override fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest {
+    override fun createAutoApplyRequest(params: AutoApplyParameters): InceptionApplyRequest {
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.AUTO_APPLY)
         val prompt =
-            "<|original_code|>\n" + EditorUtil.getFileContent(params.destination) + "\n<|/original_code|>\n\n<|update_snippet|>\n// ... existing code ...\n" + params.source + "\n// ... existing code ...\n<|/update_snippet|>"
+            "<|original_code|>\n" + EditorUtil.getFileContent(params.destination) + "\n<|/original_code|>\n\n<|update_snippet|>\n" + params.source + "\n<|/update_snippet|>"
 
         return InceptionApplyRequest.Builder()
             .setModel(model)

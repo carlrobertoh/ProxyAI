@@ -36,15 +36,6 @@ class AutoApplyAction(
     }
 
     override fun update(e: AnActionEvent) {
-        val autoApplyProvider =
-            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AUTO_APPLY)
-        if (autoApplyProvider == INCEPTION) {
-            anActionLink.text = "Apply"
-            anActionLink.isEnabled = false
-            anActionLink.toolTipText = "Auto Apply is temporarily disabled for Inception provider"
-            return
-        }
-
         if (virtualFile != null) {
             anActionLink.text = "Apply"
             anActionLink.isEnabled = true

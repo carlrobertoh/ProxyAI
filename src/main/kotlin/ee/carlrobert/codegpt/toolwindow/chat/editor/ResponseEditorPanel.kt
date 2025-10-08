@@ -16,17 +16,18 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.readText
 import com.intellij.util.application
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
-import ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.AutoApplyParameters
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
 import ee.carlrobert.codegpt.completions.CompletionRequestService
+import ee.carlrobert.codegpt.completions.factory.InceptionRequestFactory
+import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
 import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory
@@ -39,10 +40,9 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
-import ee.carlrobert.codegpt.util.ApplicationUtil
 import ee.carlrobert.codegpt.util.EditorUtil
-import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest
+import java.util.regex.Pattern
 
 class ResponseEditorPanel(
     private val project: Project,
@@ -116,47 +116,59 @@ class ResponseEditorPanel(
         replaceEditor(oldEditor, newState.editor)
     }
 
+    fun applyCode(
+        modelSelection: ModelSelection,
+        params: AutoApplyParameters,
+        headerPanel: DefaultHeaderPanel
+    ) {
+        headerPanel.setLoading()
+        CompletionProgressNotifier.update(project, true)
+
+        application.executeOnPooledThread {
+            val model = service<ModelSelectionService>().getModelForFeature(FeatureType.AUTO_APPLY)
+            val originalCode = EditorUtil.getFileContent(params.destination)
+            try {
+                val response = if (modelSelection.provider == INCEPTION) {
+                    val request = InceptionRequestFactory().createAutoApplyRequest(params)
+                    val responseContent = CompletionClientProvider.getInceptionClient()
+                        .getApplyEditCompletion(request)
+                        .choices[0]
+                        .message
+                        .content
+                    extractUpdatedCode(responseContent)
+                } else if (modelSelection.provider == PROXYAI) {
+                    val request = AutoApplyRequest(model, originalCode, params.source)
+                    CompletionClientProvider.getCodeGPTClient().applyChanges(request).mergedCode
+                } else {
+                    null
+                }
+
+                if (!response.isNullOrBlank()) {
+                    stateManager.transitionToDiffState(originalCode, response, params.destination)
+                }
+            } catch (e: Exception) {
+                logger.error("Failed to apply changes", e)
+                ApplicationManager.getApplication().invokeLater {
+                    if (!project.isDisposed) {
+                        headerPanel.handleDone()
+                    }
+                }
+            } finally {
+                if (!project.isDisposed) {
+                    runInEdt {
+                        CompletionProgressNotifier.update(project, false)
+                    }
+                }
+            }
+        }
+    }
+
     fun applyCodeAsync(
         content: String,
         virtualFile: VirtualFile,
         editor: EditorEx,
-        headerPanel: DefaultHeaderPanel? = null
+        headerPanel: DefaultHeaderPanel
     ) {
-        var selectedService =
-            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AUTO_APPLY);
-
-        if (selectedService == PROXYAI) {
-            val panel = headerPanel ?: (editor.permanentHeaderComponent as? DefaultHeaderPanel)
-            panel?.setLoading()
-            CompletionProgressNotifier.update(project, true)
-            application.executeOnPooledThread {
-                val pricingPlan =
-                    CODEGPT_USER_DETAILS[ApplicationUtil.findCurrentProject()]?.pricingPlan
-                val model = service<ModelSelectionService>()
-                    .getModelForFeature(FeatureType.AUTO_APPLY, pricingPlan)
-                val originalCode = EditorUtil.getFileContent(virtualFile)
-                try {
-                    val request = AutoApplyRequest(model, originalCode, content)
-                    val response = CompletionClientProvider.getCodeGPTClient().applyChanges(request)
-                    stateManager.transitionToDiffState(originalCode, response.mergedCode, virtualFile)
-                } catch (e: Exception) {
-                    logger.error("Failed to apply changes", e)
-                    ApplicationManager.getApplication().invokeLater {
-                        if (!project.isDisposed) {
-                            panel?.handleDone()
-                        }
-                    }
-                } finally {
-                    ApplicationManager.getApplication().invokeLater {
-                        if (!project.isDisposed) {
-                            CompletionProgressNotifier.update(project, false)
-                        }
-                    }
-                }
-            }
-            return
-        }
-
         val eventSource = CompletionRequestService.getInstance().autoApplyAsync(
             AutoApplyParameters(content, virtualFile),
             AutoApplyListener(project, stateManager, virtualFile, content) { oldEditor, newEditor ->
@@ -165,8 +177,7 @@ class ResponseEditorPanel(
                 responseEditorPanel.replaceEditor(oldEditor, newEditor)
             })
 
-        val panel = headerPanel ?: (editor.permanentHeaderComponent as? DefaultHeaderPanel)
-        panel?.setLoading(eventSource)
+        headerPanel.setLoading(eventSource)
     }
 
     internal fun createReplaceWaitingSegment(
@@ -308,6 +319,17 @@ class ResponseEditorPanel(
                 LogicalPosition(logicalPosition.line, 0),
                 ScrollType.MAKE_VISIBLE
             )
+        }
+    }
+
+    private fun extractUpdatedCode(content: String): String {
+        val pattern =
+            Pattern.compile("<\\|updated_code\\|>(.*?)<\\|/updated_code\\|>", Pattern.DOTALL)
+        val matcher = pattern.matcher(content)
+        return if (matcher.find()) {
+            matcher.group(1).trim()
+        } else {
+            content
         }
     }
 }
