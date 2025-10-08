@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New Inception Labs provider (BYOK) supporting all the in-built features
+- Different set of specialized apply models for ProxyAI Cloud users (`mercury-coder`, `relace` and `morph`)
+
+### Replaced
+
+- ProxyAI Next Edit `zeta` model with `mercury-coder`
+
+### Fixed
+
+- Commit Message action from disappearing [#1134](https://github.com/carlrobertoh/ProxyAI/issues/1134)
+
 ## [3.6.2-233] - 2025-10-03
 
 ### Fixed
