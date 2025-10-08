@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Commit Message action from disappearing [#1134](https://github.com/carlrobertoh/ProxyAI/issues/1134)
+- Read access exception on GoLand [#1139](https://github.com/carlrobertoh/ProxyAI/issues/1139)
 
 ## [3.6.2-233] - 2025-10-03
 

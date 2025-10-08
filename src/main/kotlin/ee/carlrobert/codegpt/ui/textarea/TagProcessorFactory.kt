@@ -4,6 +4,7 @@ import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressManager
@@ -87,7 +88,7 @@ class SelectionTagProcessor(
         )
 
         tagDetails.selectionModel.let {
-            if (it.hasSelection()) {
+            if (runReadAction { it.hasSelection() }) {
                 it.removeSelection()
             }
         }
