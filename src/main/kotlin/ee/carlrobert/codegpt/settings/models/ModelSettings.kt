@@ -64,7 +64,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         migrateMissingProviderInformation()
         migrateEditCodeModel()
         migrateProxyAIApplyModel()
-        migrateProxyAICodeModels()
+        migrateProxyAIAutocompleteAndNextEditModels()
         notifyIfChanged(oldState, this.state)
     }
 
@@ -158,11 +158,13 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         }
     }
 
-    private fun migrateProxyAICodeModels() {
-        val modelSelection =
-            service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.CODE_COMPLETION)
-        if (modelSelection.provider == PROXYAI && modelSelection.model != ModelRegistry.MERCURY_CODER) {
-            setModelWithProvider(FeatureType.CODE_COMPLETION, ModelRegistry.MERCURY_CODER, PROXYAI)
+    private fun migrateProxyAIAutocompleteAndNextEditModels() {
+        val modelService = service<ModelSelectionService>()
+        listOf(FeatureType.CODE_COMPLETION, FeatureType.NEXT_EDIT).forEach {
+            val modelSelection = modelService.getModelSelectionForFeature(it)
+            if (modelSelection.provider == PROXYAI && modelSelection.model != ModelRegistry.MERCURY_CODER) {
+                setModelWithProvider(it, ModelRegistry.MERCURY_CODER, PROXYAI)
+            }
         }
     }
 
