@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor
 
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
@@ -40,8 +41,10 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
+import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest
+import ee.carlrobert.llm.client.codegpt.response.CodeGPTException
 import java.util.regex.Pattern
 
 class ResponseEditorPanel(
@@ -149,6 +152,10 @@ class ResponseEditorPanel(
             } catch (e: Exception) {
                 logger.error("Failed to apply changes", e)
                 ApplicationManager.getApplication().invokeLater {
+                    if (e is CodeGPTException) {
+                        OverlayUtil.showNotification(e.detail, NotificationType.ERROR)
+                    }
+
                     if (!project.isDisposed) {
                         headerPanel.handleDone()
                     }
