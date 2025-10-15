@@ -6,7 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.6.3-233] - 2025-10-08
+### Added
+
+- GPT-5 Codex and Claude Sonnet 4.5 models (ProxyAI)
+
+## [3.6.3-241.1] - 2025-10-08
 
 ### Added
 
