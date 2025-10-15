@@ -544,8 +544,8 @@ class UserInputPanel @JvmOverloads constructor(
             ModelRegistry.GPT_4_1_MINI,
             ModelRegistry.GEMINI_PRO_2_5,
             ModelRegistry.GEMINI_FLASH_2_5,
-            ModelRegistry.CLAUDE_4_SONNET,
-            ModelRegistry.CLAUDE_4_SONNET_THINKING
+            ModelRegistry.CLAUDE_4_5_SONNET,
+            ModelRegistry.CLAUDE_4_5_SONNET_THINKING
         )
     }
 

@@ -40,7 +40,7 @@ class ModelSelectionServiceTest : IntegrationTest() {
         val freeResult =
             modelSelectionService.getModelSelectionForFeature(FeatureType.CHAT, PricingPlan.FREE)
 
-        assertThat(individualResult.model).isEqualTo("claude-4-sonnet-thinking")
+        assertThat(individualResult.model).isEqualTo("claude-sonnet-4-5-thinking")
         assertThat(freeResult.model).isEqualTo("qwen3-coder")
     }
 
@@ -75,6 +75,6 @@ class ModelSelectionServiceTest : IntegrationTest() {
         val result =
             modelSelectionService.getModelForFeature(FeatureType.CHAT, PricingPlan.INDIVIDUAL)
 
-        assertThat(result).isEqualTo("claude-4-sonnet-thinking")
+        assertThat(result).isEqualTo("claude-sonnet-4-5-thinking")
     }
 }

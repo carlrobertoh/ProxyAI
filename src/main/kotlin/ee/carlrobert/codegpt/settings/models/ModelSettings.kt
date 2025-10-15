@@ -7,6 +7,7 @@ import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
+import java.time.Month
 
 @Service
 @State(
@@ -151,6 +152,21 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
             val modelSelection = state.getModelSelection(it)
             if (modelSelection?.provider == PROXYAI && modelSelection.model != ModelRegistry.MERCURY_CODER) {
                 setModelWithProvider(it, ModelRegistry.MERCURY_CODER, PROXYAI)
+            }
+        }
+        listOf(
+            FeatureType.CHAT,
+            FeatureType.COMMIT_MESSAGE,
+            FeatureType.LOOKUP,
+            FeatureType.INLINE_EDIT
+        ).forEach {
+            val modelSelection = state.getModelSelection(it)
+            if (modelSelection?.provider == PROXYAI) {
+                if (modelSelection.model == ModelRegistry.CLAUDE_4_SONNET) {
+                    setModelWithProvider(it, ModelRegistry.CLAUDE_4_5_SONNET, PROXYAI)
+                } else if (modelSelection.model == ModelRegistry.CLAUDE_4_SONNET_THINKING) {
+                    setModelWithProvider(it, ModelRegistry.CLAUDE_4_5_SONNET_THINKING, PROXYAI)
+                }
             }
         }
     }

@@ -120,11 +120,11 @@ class ModelSettingsTest : IntegrationTest() {
     fun `test setModelWithProvider with edit code triggers edit code notification`() {
         lastNotification.set(null)
         
-        modelSettings.setModelWithProvider(FeatureType.INLINE_EDIT, "claude-4-sonnet", ServiceType.PROXYAI)
+        modelSettings.setModelWithProvider(FeatureType.INLINE_EDIT, "claude-4-5-sonnet", ServiceType.PROXYAI)
 
         val notification = lastNotification.get()
         assertThat(notification!!.featureType).isEqualTo(FeatureType.INLINE_EDIT)
-        assertThat(notification.model).isEqualTo("claude-4-sonnet")
+        assertThat(notification.model).isEqualTo("claude-4-5-sonnet")
         assertThat(notification.serviceType).isEqualTo(ServiceType.PROXYAI)
     }
 

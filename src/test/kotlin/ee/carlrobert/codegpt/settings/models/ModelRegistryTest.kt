@@ -19,8 +19,8 @@ class ModelRegistryTest : IntegrationTest() {
         val result = modelRegistry.getDefaultModelForFeature(FeatureType.CHAT, PricingPlan.INDIVIDUAL)
 
         assertThat(result.provider).isEqualTo(ServiceType.PROXYAI)
-        assertThat(result.model).isEqualTo("claude-4-sonnet-thinking")
-        assertThat(result.displayName).isEqualTo("Claude 4 Sonnet Thinking")
+        assertThat(result.model).isEqualTo("claude-sonnet-4-5-thinking")
+        assertThat(result.displayName).isEqualTo("Claude 4.5 Sonnet Thinking")
     }
 
     fun `test getDefaultModelForFeature with free plan returns free model`() {
@@ -66,7 +66,7 @@ class ModelRegistryTest : IntegrationTest() {
     fun `test getAllModelsForFeature with chat returns chat models only`() {
         val result = modelRegistry.getAllModelsForFeature(FeatureType.CHAT)
 
-        assertThat(result).anyMatch { it.provider == ServiceType.PROXYAI && it.model == "claude-4-sonnet-thinking" }
+        assertThat(result).anyMatch { it.provider == ServiceType.PROXYAI && it.model == "claude-sonnet-4-5-thinking" }
         assertThat(result).anyMatch { it.provider == ServiceType.OPENAI && it.model == "gpt-4.1" }
         assertThat(result).anyMatch { it.provider == ServiceType.ANTHROPIC && it.model == "claude-sonnet-4-20250514" }
         assertThat(result).anyMatch { it.provider == ServiceType.GOOGLE && it.model.contains("gemini") }

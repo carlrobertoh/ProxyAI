@@ -182,21 +182,21 @@ class ModelRegistry {
         PricingPlan.INDIVIDUAL to mapOf(
             FeatureType.CHAT to ModelSelection(
                 ServiceType.PROXYAI,
-                CLAUDE_4_SONNET_THINKING,
-                "Claude 4 Sonnet Thinking"
+                CLAUDE_4_5_SONNET_THINKING,
+                "Claude 4.5 Sonnet Thinking"
             ),
             FeatureType.AUTO_APPLY to ModelSelection(
                 ServiceType.PROXYAI,
                 MERCURY_CODER,
                 "Mercury Coder"
             ),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_5_CODEX, "GPT-5 Codex"),
             FeatureType.INLINE_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
-                CLAUDE_4_SONNET,
+                CLAUDE_4_5_SONNET,
                 "Claude 4 Sonnet"
             ),
-            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
+            FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5_CODEX, "GPT-5 Codex"),
             FeatureType.CODE_COMPLETION to ModelSelection(
                 ServiceType.PROXYAI,
                 MERCURY_CODER,
@@ -365,8 +365,8 @@ class ModelRegistry {
         return listOf(
             ModelSelection(
                 ServiceType.PROXYAI,
-                GPT_5,
-                "GPT-5",
+                GPT_5_CODEX,
+                "GPT-5 Codex",
                 Icons.OpenAI,
                 PricingPlan.INDIVIDUAL
             ),
@@ -379,22 +379,15 @@ class ModelRegistry {
             ),
             ModelSelection(
                 ServiceType.PROXYAI,
-                O4_MINI,
-                "o4-mini",
-                Icons.OpenAI,
-                PricingPlan.INDIVIDUAL
-            ),
-            ModelSelection(
-                ServiceType.PROXYAI,
-                CLAUDE_4_SONNET_THINKING,
-                "Claude Sonnet 4 (thinking)",
+                CLAUDE_4_5_SONNET_THINKING,
+                "Claude Sonnet 4.5 (thinking)",
                 Icons.Anthropic,
                 PricingPlan.INDIVIDUAL
             ),
             ModelSelection(
                 ServiceType.PROXYAI,
-                CLAUDE_4_SONNET,
-                "Claude Sonnet 4",
+                CLAUDE_4_5_SONNET,
+                "Claude Sonnet 4.5",
                 Icons.Anthropic,
                 PricingPlan.INDIVIDUAL
             ),
@@ -490,12 +483,12 @@ class ModelRegistry {
             GPT_4_1_NANO,
             O1_PREVIEW,
             O1_MINI,
-            GPT_5,
             GPT_5_MINI,
             GPT_4O,
             GPT_4_0125_PREVIEW,
             GPT_3_5_TURBO_INSTRUCT,
-            GPT_4_VISION_PREVIEW
+            GPT_4_VISION_PREVIEW,
+            GPT_5_CODEX,
         )
 
         return openAIModels.mapNotNull { modelId ->
@@ -620,6 +613,8 @@ class ModelRegistry {
         const val GEMINI_FLASH_2_5 = "gemini-flash-2.5"
         const val CLAUDE_4_SONNET = "claude-4-sonnet"
         const val CLAUDE_4_SONNET_THINKING = "claude-4-sonnet-thinking"
+        const val CLAUDE_4_5_SONNET = "claude-sonnet-4-5"
+        const val CLAUDE_4_5_SONNET_THINKING = "claude-sonnet-4-5-thinking"
         const val DEEPSEEK_R1 = "deepseek-r1"
         const val DEEPSEEK_V3 = "deepseek-v3"
         const val QWEN_2_5_32B_CODE = "qwen-2.5-32b-code"
@@ -644,6 +639,7 @@ class ModelRegistry {
         const val GPT_4_VISION_PREVIEW = "gpt-4-vision-preview"
         const val GPT_5 = "gpt-5"
         const val GPT_5_MINI = "gpt-5-mini"
+        const val GPT_5_CODEX = "gpt-5-codex"
 
         // Anthropic Models
         const val CLAUDE_OPUS_4_20250514 = "claude-opus-4-20250514"
