@@ -228,11 +228,10 @@ class ConversationTagProcessor(
 ) : TagProcessor {
 
     companion object {
-        fun getConversation(conversationId: UUID) =
-            ConversationsState.getCurrentConversation()?.takeIf {
-                it.id.equals(conversationId)
-            } ?: ConversationsState.getInstance().conversations.find {
-                it.id.equals(conversationId)
+        fun getConversation(project: Project, conversationId: UUID): Conversation? {
+            val state = ConversationsState.getInstance(project)
+            return state.currentConversation?.takeIf { it.id == conversationId }
+                ?: state.conversations.find { it.id == conversationId }
             }
 
         fun formatConversation(conversation: Conversation): String {

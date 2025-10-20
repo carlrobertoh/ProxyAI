@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.testFramework.LightVirtualFile;
@@ -29,7 +30,13 @@ public class OpenInEditorAction extends AnAction {
   @Override
   public void update(@NotNull AnActionEvent event) {
     super.update(event);
-    var currentConversation = ConversationsState.getCurrentConversation();
+    Project project = event.getProject();
+    if (project == null) {
+      event.getPresentation().setEnabled(false);
+      return;
+    }
+
+    var currentConversation = ConversationsState.getInstance(project).getCurrentConversation();
     var isEnabled = currentConversation != null && !currentConversation.getMessages().isEmpty();
     event.getPresentation().setEnabled(isEnabled);
   }
@@ -38,8 +45,9 @@ public class OpenInEditorAction extends AnAction {
   public void actionPerformed(@NotNull AnActionEvent e) {
     try {
       var project = e.getProject();
-      var currentConversation = ConversationsState.getCurrentConversation();
-      if (project != null && currentConversation != null) {
+      if (project != null) {
+        var currentConversation = ConversationsState.getInstance(project).getCurrentConversation();
+        if (currentConversation != null) {
         var dateTimeStamp = currentConversation.getUpdatedOn()
             .format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"));
         var fileName = format("proxyai_conversation_%s.md", dateTimeStamp);
@@ -54,6 +62,7 @@ public class OpenInEditorAction extends AnAction {
         var toolWindow = requireNonNull(
             ToolWindowManager.getInstance(project).getToolWindow("ProxyAI"));
         toolWindow.hide();
+      }
       }
     } finally {
       TelemetryAction.IDE_ACTION.createActionMessage()

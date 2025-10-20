@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.completions.factory
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.vfs.readText
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.ReferencedFile
@@ -233,7 +234,7 @@ class OpenAIRequestFactory : BaseRequestFactory() {
             }
             return tryReducingMessagesOrThrow(
                 messages,
-                callParameters.conversation.isDiscardTokenLimit,
+                callParameters.conversation,
                 totalUsage,
                 modelMaxTokens
             )
@@ -362,16 +363,23 @@ class OpenAIRequestFactory : BaseRequestFactory() {
 
         private fun tryReducingMessagesOrThrow(
             messages: MutableList<OpenAIChatCompletionMessage>,
-            discardTokenLimit: Boolean,
+            conversation: Conversation,
             totalInputUsage: Int,
             modelMaxTokens: Int
         ): List<OpenAIChatCompletionMessage> {
             val result: MutableList<OpenAIChatCompletionMessage?> = messages.toMutableList()
             var totalUsage = totalInputUsage
-            if (!ConversationsState.getInstance().discardAllTokenLimits) {
-                if (!discardTokenLimit) {
+            val project = ProjectManager.getInstance().openProjects.find { it.basePath == conversation.projectPath }
+            if (project == null) {
+                if (!conversation.isDiscardTokenLimit) {
                     throw TotalUsageExceededException()
                 }
+            } else {
+                if (!ConversationsState.getInstance(project).discardAllTokenLimits) {
+                    if (!conversation.isDiscardTokenLimit) {
+                    throw TotalUsageExceededException()
+                }
+            }
             }
             val encodingManager = EncodingManager.getInstance()
             // skip the system prompt

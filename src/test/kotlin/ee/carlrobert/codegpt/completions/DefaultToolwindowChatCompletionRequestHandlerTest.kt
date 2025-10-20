@@ -27,7 +27,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
@@ -74,7 +74,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         conversation.addMessage(Message("Ping", "Pong"))
         expectLlama(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
@@ -122,7 +122,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         expectOllama(NdJsonStreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
@@ -170,7 +170,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         expectGoogle(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/models/gemini-2.0-flash:streamGenerateContent")
             assertThat(request.method).isEqualTo("POST")
@@ -218,7 +218,7 @@ class DefaultToolwindowChatCompletionRequestHandlerTest : IntegrationTest() {
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
         val message = Message("TEST_PROMPT")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         expectCodeGPT(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")

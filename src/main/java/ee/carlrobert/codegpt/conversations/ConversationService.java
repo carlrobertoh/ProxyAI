@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.conversations;
 
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
@@ -12,19 +11,23 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-@Service
+@Service(Service.Level.PROJECT)
 public final class ConversationService {
 
   private static final Logger LOG = Logger.getInstance(ConversationService.class);
 
-  private final ConversationsState conversationState = ConversationsState.getInstance();
+  private final Project project;
+  private final ConversationsState conversationState;
 
-  private ConversationService() {
+  public ConversationService(Project project) {
+    this.project = project;
+    this.conversationState = ConversationsState.getInstance(project);
   }
 
-  public static ConversationService getInstance() {
-    return ApplicationManager.getApplication().getService(ConversationService.class);
+  public static ConversationService getInstance(@NotNull Project project) {
+    return project.getService(ConversationService.class);
   }
 
   public List<Conversation> getSortedConversations() {
@@ -75,11 +78,8 @@ public final class ConversationService {
     conversationState.setCurrentConversation(conversation);
   }
 
-  public Conversation startConversation(Project project) {
-    return startConversation(project != null ? project.getBasePath() : null);
-  }
-
-  private Conversation startConversation(String projectPath) {
+  public Conversation startConversation() {
+    var projectPath = project.getBasePath();
     var conversation = createConversation();
     conversation.setProjectPath(projectPath);
     conversationState.setCurrentConversation(conversation);
@@ -102,7 +102,7 @@ public final class ConversationService {
       nextConversation = getNextConversation();
     }
 
-    var currentConversation = ConversationsState.getCurrentConversation();
+    var currentConversation = getCurrentConversation();
     if (currentConversation != null) {
       deleteConversation(currentConversation);
       nextConversation.ifPresent(conversationState::setCurrentConversation);
@@ -116,6 +116,10 @@ public final class ConversationService {
     saveConversation(conversation);
   }
 
+  public @Nullable Conversation getCurrentConversation() {
+    return conversationState.getCurrentConversation();
+  }
+
   public Optional<Conversation> getPreviousConversation() {
     return tryGetNextOrPreviousConversation(true);
   }
@@ -125,7 +129,7 @@ public final class ConversationService {
   }
 
   private Optional<Conversation> tryGetNextOrPreviousConversation(boolean isPrevious) {
-    var currentConversation = ConversationsState.getCurrentConversation();
+    var currentConversation = getCurrentConversation();
     if (currentConversation != null) {
       var sortedConversations = getSortedConversations();
       for (int i = 0; i < sortedConversations.size(); i++) {

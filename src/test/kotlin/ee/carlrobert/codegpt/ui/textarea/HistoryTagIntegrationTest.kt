@@ -21,8 +21,8 @@ class HistoryTagIntegrationTest : IntegrationTest() {
 
     public override fun setUp() {
         super.setUp()
-        conversationService = service<ConversationService>()
-        ConversationsState.getInstance().conversations.clear()
+        conversationService = project.service<ConversationService>()
+        ConversationsState.getInstance(project).conversations.clear()
     }
 
     fun testShouldDisplayCorrectNameForHistoryActionItem() {
@@ -88,7 +88,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
     }
 
     fun testShouldFilterConversationsBySearchText() {
-        val historyGroupItem = HistoryGroupItem()
+        val historyGroupItem = HistoryGroupItem(project)
         val javaConversation = conversationService.createConversation()
         javaConversation.addMessage(Message("How to write Java code?").apply { response = "Use Java syntax" })
         conversationService.addConversation(javaConversation)
@@ -106,7 +106,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
     }
 
     fun testShouldHandleEmptyConversationsList() {
-        val historyGroupItem = HistoryGroupItem()
+        val historyGroupItem = HistoryGroupItem(project)
 
         val results = runBlocking { historyGroupItem.getLookupItems("") }
 
@@ -114,7 +114,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
     }
 
     fun testShouldPerformCaseInsensitiveSearch() {
-        val historyGroupItem = HistoryGroupItem()
+        val historyGroupItem = HistoryGroupItem(project)
         val conversation = conversationService.createConversation()
         conversation.addMessage(Message("JavaScript Tutorial").apply { response = "Learn JS" })
         conversationService.addConversation(conversation)
@@ -165,7 +165,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
         conversation.addMessage(Message("Test question").apply { response = "Test answer" })
         conversationService.addConversation(conversation)
 
-        val foundConversation = ConversationTagProcessor.getConversation(conversation.id)
+        val foundConversation = ConversationTagProcessor.getConversation(project, conversation.id)
 
         assertThat(foundConversation).isNotNull
         assertThat(foundConversation!!.id).isEqualTo(conversation.id)
@@ -176,7 +176,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
     fun testShouldReturnNullForNonExistentConversation() {
         val nonExistentId = UUID.randomUUID()
 
-        val foundConversation = ConversationTagProcessor.getConversation(nonExistentId)
+        val foundConversation = ConversationTagProcessor.getConversation(project, nonExistentId)
 
         assertThat(foundConversation).isNull()
     }
@@ -208,7 +208,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
     }
 
     fun testShouldSortConversationsByUpdatedDateDescending() {
-        val historyGroupItem = HistoryGroupItem()
+        val historyGroupItem = HistoryGroupItem(project)
         val now = LocalDateTime.now()
         val oldConversation = conversationService.createConversation()
         oldConversation.updatedOn = now.minusDays(3)

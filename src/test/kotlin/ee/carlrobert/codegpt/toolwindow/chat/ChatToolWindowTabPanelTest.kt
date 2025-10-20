@@ -31,7 +31,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         service<PromptsSettings>().state.personas.selectedPersona.instructions =
             "TEST_SYSTEM_PROMPT"
         val message = Message("Hello!")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         val panel = ChatToolWindowTabPanel(project, conversation)
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
@@ -100,7 +100,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         val message = Message("TEST_MESSAGE")
         message.referencedFilePaths =
             listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         val panel = ChatToolWindowTabPanel(project, conversation)
         panel.includeFiles(listOf(
             LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1"),
@@ -201,7 +201,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         service<PromptsSettings>().state.personas.selectedPersona.instructions =
             "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_MESSAGE")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         val panel = ChatToolWindowTabPanel(project, conversation)
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
@@ -287,7 +287,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         val message = Message("TEST_MESSAGE")
         message.referencedFilePaths =
             listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         val panel = ChatToolWindowTabPanel(project, conversation)
         panel.includeFiles(
             listOf(
@@ -398,7 +398,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         llamaSettings.minP = 0.03
         llamaSettings.repeatPenalty = 1.3
         val message = Message("TEST_PROMPT")
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         val panel = ChatToolWindowTabPanel(project, conversation)
         expectLlama(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")

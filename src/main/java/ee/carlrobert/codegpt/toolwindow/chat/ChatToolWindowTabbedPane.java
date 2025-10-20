@@ -26,6 +26,7 @@ import javax.swing.JPopupMenu;
 
 public class ChatToolWindowTabbedPane extends JBTabbedPane {
 
+  private final Project project;
   private final Map<String, ChatToolWindowTabPanel> activeTabMapping = new TreeMap<>(
       (o1, o2) -> {
         String nums1 = o1.replaceAll("\\D", "");
@@ -48,7 +49,8 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
       });
   private final Disposable parentDisposable;
 
-  public ChatToolWindowTabbedPane(Disposable parentDisposable) {
+  public ChatToolWindowTabbedPane(Project project, Disposable parentDisposable) {
+    this.project = project;
     this.parentDisposable = parentDisposable;
     setTabComponentInsets(null);
     setComponentPopupMenu(new TabPopupMenu());
@@ -180,7 +182,7 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     if (toolWindowPanel != null) {
       var conversation = toolWindowPanel.getConversation();
       if (conversation != null) {
-        ConversationsState.getInstance().setCurrentConversation(conversation);
+        ConversationsState.getInstance(project).setCurrentConversation(conversation);
       }
     }
   }
@@ -192,7 +194,7 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
       removeTabAt(getSelectedIndex());
       addNewTab(new ChatToolWindowTabPanel(
           project,
-          ConversationService.getInstance().startConversation(project)));
+          ConversationService.getInstance(project).startConversation()));
       repaint();
       revalidate();
     });

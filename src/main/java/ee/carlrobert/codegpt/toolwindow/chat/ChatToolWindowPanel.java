@@ -62,7 +62,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     upgradePlanLink.setVisible(false);
 
     var tabPanel = new ChatToolWindowTabPanel(project, getConversation());
-    tabbedPane = new ChatToolWindowTabbedPane(parentDisposable);
+    tabbedPane = new ChatToolWindowTabbedPane(project, parentDisposable);
     tabbedPane.addNewTab(tabPanel);
 
     initToolWindowPanel(project);
@@ -72,9 +72,9 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
   }
 
   private Conversation getConversation() {
-    var conversation = ConversationsState.getCurrentConversation();
+    var conversation = ConversationsState.getInstance(project).getCurrentConversation();
     if (conversation == null) {
-      return ConversationService.getInstance().startConversation(project);
+      return ConversationService.getInstance(project).startConversation();
     }
     return conversation;
   }
@@ -120,7 +120,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     Runnable onAddNewTab = () -> {
       tabbedPane.addNewTab(new ChatToolWindowTabPanel(
           project,
-          ConversationService.getInstance().startConversation(project)));
+          ConversationService.getInstance(project).startConversation()));
       repaint();
       revalidate();
     };
