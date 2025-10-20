@@ -44,12 +44,21 @@ class EditorStateManager(private val project: Project) {
     }
 
     fun transitionToDiffState(originalCode: String, updatedCode: String, virtualFile: VirtualFile) {
+        transitionToDiffState(originalCode, updatedCode, virtualFile, null)
+    }
+
+    fun transitionToDiffState(
+        originalCode: String,
+        updatedCode: String,
+        virtualFile: VirtualFile,
+        originalSuggestion: String?
+    ) {
         val oldState = currentState ?: return
         val oldEditor = oldState.editor
         val language = oldState.segment.language.ifBlank { virtualFile.extension ?: "Text" }
         val segment = ReplaceWaiting(originalCode, updatedCode, language, virtualFile.path)
         val editor = EditorFactory.createEditor(project, segment)
-        val state = createDiffState(editor, segment)
+        val state = createDiffState(editor, segment, null, originalSuggestion)
 
         runInEdt {
             val headerComponent = state.createHeaderComponent(false)

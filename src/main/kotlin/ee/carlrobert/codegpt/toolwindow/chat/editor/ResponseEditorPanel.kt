@@ -147,7 +147,7 @@ class ResponseEditorPanel(
                 }
 
                 if (!response.isNullOrBlank()) {
-                    stateManager.transitionToDiffState(originalCode, response, params.destination)
+                    stateManager.transitionToDiffState(originalCode, response, params.destination, params.source)
                 }
             } catch (e: Exception) {
                 logger.error("Failed to apply changes", e)
@@ -224,7 +224,8 @@ class ResponseEditorPanel(
             val containsText = currentText.contains(segment.search.trim())
 
             val newState = if (containsText) {
-                stateManager.createFromSegment(segment)
+                val finalSegment = createReplaceWaitingSegment(searchContent, replaceContent, virtualFile)
+                stateManager.createFromSegment(finalSegment, readOnly = false, eventSource = null, originalSuggestion = replaceContent)
             } else {
                 stateManager.transitionToFailedDiffState(
                     segment.search,

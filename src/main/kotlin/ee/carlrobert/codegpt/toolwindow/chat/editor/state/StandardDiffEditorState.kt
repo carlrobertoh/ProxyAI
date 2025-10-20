@@ -28,6 +28,11 @@ class StandardDiffEditorState(
     eventSource: EventSource? = null,
     private val originalSuggestion: String? = null
 ) : DiffEditorState(editor, segment, project, diffViewer, virtualFile, eventSource) {
+    private var latestSuggestion: String? = when (segment) {
+        is SearchReplace -> segment.replace.takeIf { it.isNotBlank() }
+        is ReplaceWaiting -> segment.replace.takeIf { it.isNotBlank() }
+        else -> null
+    } ?: originalSuggestion?.takeIf { it.isNotBlank() }
 
     override fun applyAllChanges() {
         val before = diffViewer?.getDocument(Side.LEFT)?.text ?: return
@@ -50,6 +55,10 @@ class StandardDiffEditorState(
                 return
             }
 
+            if (replace.isNotBlank()) {
+                latestSuggestion = replace
+            }
+
             diffEditorManager.updateDiffContent(search, replace)
             (editor.permanentHeaderComponent as? DiffHeaderPanel)
                 ?.updateDiffStats(diffViewer?.diffChanges ?: emptyList())
@@ -67,11 +76,15 @@ class StandardDiffEditorState(
     override fun handleClose() {
         runInEdt {
             val responsePanel = editor.component.parent as? ResponseEditorPanel ?: return@runInEdt
-            val contentToKeep = originalSuggestion ?: when (segment) {
-                is SearchReplace -> segment.replace
-                is ReplaceWaiting -> segment.replace
-                else -> diffViewer?.getDocument(Side.RIGHT)?.text ?: ""
-            }
+            val contentToKeep =
+                originalSuggestion?.takeIf { it.isNotBlank() }
+                    ?: latestSuggestion?.takeIf { it.isNotBlank() }
+                    ?: when (segment) {
+                        is SearchReplace -> segment.replace
+                        is ReplaceWaiting -> segment.replace
+                        else -> null
+                    }?.takeIf { it.isNotBlank() }
+                    ?: (diffViewer?.getDocument(Side.RIGHT)?.text ?: "")
             responsePanel.replaceEditorWithSegment(
                 Code(contentToKeep, segment.language, segment.filePath)
             )
