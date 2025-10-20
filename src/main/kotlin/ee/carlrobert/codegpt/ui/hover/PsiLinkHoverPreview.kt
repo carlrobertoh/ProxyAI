@@ -3,14 +3,12 @@ package ee.carlrobert.codegpt.ui.hover
 import com.intellij.codeInsight.documentation.DocumentationHintEditorPane
 import com.intellij.codeInsight.documentation.DocumentationManager
 import com.intellij.lang.documentation.DocumentationImageResolver
-import com.intellij.lang.documentation.psi.createPsiDocumentationTarget
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
-import com.intellij.platform.backend.documentation.DocumentationTarget
 import com.intellij.psi.PsiElement
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.awt.RelativePoint
@@ -31,10 +29,11 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.swing.JComponent
-import javax.swing.SwingUtilities
 import javax.swing.JTextPane
+import javax.swing.SwingUtilities
 import javax.swing.event.HyperlinkEvent
 import javax.swing.event.HyperlinkListener
+import kotlin.math.min
 
 object PsiLinkHoverPreview {
     private val logger = thisLogger()
@@ -90,10 +89,8 @@ object PsiLinkHoverPreview {
             scheduledClose?.cancel(true)
             scheduledClose = null
 
-            try {
-                val comp = popupComponent
-                if (comp != null && isMouseOverComponent(comp)) return
-            } catch (_: Throwable) {}
+            val comp = popupComponent
+            if (comp != null && isMouseOverComponent(comp)) return
 
             pending?.cancel(true)
             pending = null
@@ -135,6 +132,7 @@ object PsiLinkHoverPreview {
                         val target = decode(desc.removePrefix(prefix))
                         resolvePsiLikeAndShow(prefix, target, desc, where)
                     }
+
                     else -> {
                         if (desc != lastDesc) return
                         val html = "<html><body>${escape(desc)}</body></html>"
@@ -175,34 +173,39 @@ object PsiLinkHoverPreview {
             }
 
             val safeHtml = if (html.contains("<body", ignoreCase = true)) {
-                html.replaceFirst(Regex("<body(\\s|>)", RegexOption.IGNORE_CASE), "<body style=\"margin:0;padding:0\"$1")
+                html.replaceFirst(
+                    Regex("<body(\\s|>)", RegexOption.IGNORE_CASE),
+                    "<body style=\"margin:0;padding:0\"$1"
+                )
             } else {
                 "<html><body style=\"margin:0;padding:0\">$html</body></html>"
             }
 
             val editor = DocumentationHintEditorPane(project, emptyMap(), imageResolver).apply {
                 isEditable = false
-                try { contentType = "text/html" } catch (_: Throwable) {}
+                contentType = "text/html"
                 text = safeHtml
                 caretPosition = 0
-                try { font = JBFont.label() } catch (_: Throwable) {}
-                background = UIUtil.getToolTipBackground()
+                font = JBFont.label()
+                background = UIUtil.getPanelBackground()
+                foreground = UIUtil.getLabelForeground()
                 isOpaque = true
-                try { margin = JBUI.insets(8) } catch (_: Throwable) {}
+                margin = JBUI.insets(8)
             }
 
             val scroll = ScrollPaneFactory.createScrollPane(editor).apply {
                 border = JBUI.Borders.empty()
                 viewportBorder = null
-                viewport.background = UIUtil.getToolTipBackground()
+                viewport.background = UIUtil.getPanelBackground()
+                background = UIUtil.getPanelBackground()
             }
 
             val maxW = JBUI.scale(600)
             val maxH = JBUI.scale(400)
             editor.size = Dimension(maxW, Int.MAX_VALUE)
             val pref = editor.preferredSize
-            val w = kotlin.math.min(pref.width.coerceAtLeast(200), maxW)
-            val h = kotlin.math.min(pref.height.coerceAtLeast(50), maxH)
+            val w = min(pref.width.coerceAtLeast(200), maxW)
+            val h = min(pref.height.coerceAtLeast(50), maxH)
             scroll.preferredSize = Dimension(w, h)
 
             val newPopup = PopupFactoryImpl.getInstance()
@@ -215,13 +218,17 @@ object PsiLinkHoverPreview {
                 .setCancelKeyEnabled(true)
                 .createPopup()
 
-            try { editor.setHint(newPopup) } catch (_: Throwable) {}
+            editor.setHint(newPopup)
 
             popup = newPopup
             popupComponent = scroll
 
             ApplicationManager.getApplication().invokeLater({
-                try { popup?.show(where) } catch (t: Throwable) { logger.warn("Failed to show popup", t) }
+                try {
+                    popup?.show(where)
+                } catch (t: Throwable) {
+                    logger.warn("Failed to show popup", t)
+                }
             }, ModalityState.any())
         }
 
