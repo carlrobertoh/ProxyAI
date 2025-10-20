@@ -93,6 +93,10 @@ abstract class TagPanel(
                     this@TagPanel.doClick()
                     e.consume()
                 }
+                if (SwingUtilities.isMiddleMouseButton(e) && tagDetails.isRemovable) {
+                    onClose()
+                    e.consume()
+                }
             }
         })
 
