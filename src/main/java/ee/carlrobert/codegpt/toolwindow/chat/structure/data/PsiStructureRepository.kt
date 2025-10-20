@@ -18,6 +18,7 @@ import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
+import com.intellij.openapi.editor.SelectionModel
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import kotlinx.coroutines.Job
@@ -56,7 +57,7 @@ class PsiStructureRepository(
             updatePsiStructureIfNeeded()
         }
 
-        override fun onTagSelectionChanged(tag: TagDetails) {
+        override fun onTagSelectionChanged(tag: TagDetails, selectionModel: SelectionModel) {
             (tag as? CodeAnalyzeTagDetails)?.let {
                 handleCodeAnalyzeTag(it)
             }

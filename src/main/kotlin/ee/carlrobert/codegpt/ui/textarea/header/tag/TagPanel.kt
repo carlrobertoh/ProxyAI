@@ -17,7 +17,6 @@ import javax.swing.*
 
 abstract class TagPanel(
     var tagDetails: TagDetails,
-    private val tagManager: TagManager,
     private val shouldPreventDeselection: Boolean = true,
     protected val project: Project,
 ) : JToggleButton() {
@@ -110,7 +109,6 @@ abstract class TagPanel(
 
             closeButton.isVisible = tagDetails.isRemovable
             tagDetails.selected = isSelected
-            tagManager.notifySelectionChanged(tagDetails)
             label.update(isSelected)
         }
 
@@ -182,10 +180,9 @@ abstract class TagPanel(
 
 class SelectionTagPanel(
     tagDetails: EditorSelectionTagDetails,
-    tagManager: TagManager,
     private val promptTextField: PromptTextField,
     project: Project,
-) : TagPanel(tagDetails, tagManager, true, project) {
+) : TagPanel(tagDetails, true, project) {
 
     init {
         cursor = Cursor(Cursor.DEFAULT_CURSOR)

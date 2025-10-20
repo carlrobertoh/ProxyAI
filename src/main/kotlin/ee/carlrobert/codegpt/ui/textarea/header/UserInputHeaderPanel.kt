@@ -17,6 +17,7 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
+import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
@@ -72,6 +73,8 @@ class UserInputHeaderPanel(
         add(emptyText)
     }
 
+    private val backgroundScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
     init {
         tagManager.addListener(this)
         initializeUI()
@@ -93,19 +96,49 @@ class UserInputHeaderPanel(
 
     override fun onTagAdded(tag: TagDetails) {
         onTagsChanged()
+        when (tag) {
+            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = true)
+            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = true)
+            else -> Unit
+        }
     }
 
     override fun onTagRemoved(tag: TagDetails) {
         onTagsChanged()
+        when (tag) {
+            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = false)
+            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = false)
+            else -> Unit
+        }
     }
 
-    override fun onTagSelectionChanged(tag: TagDetails) {
-        onTagsChanged()
+    override fun onTagSelectionChanged(tag: TagDetails, selectionModel: SelectionModel) {
+        when (tag) {
+            is EditorSelectionTagDetails -> {
+                components.filterIsInstance<SelectionTagPanel>().forEach { panel ->
+                    val td = panel.tagDetails
+                    if (td is EditorSelectionTagDetails && td.virtualFile == tag.virtualFile) {
+                        panel.update(
+                            "${tag.virtualFile.name}:${selectionModel.selectionStart}-${selectionModel.selectionEnd}",
+                            tag.virtualFile.fileType.icon
+                        )
+                    }
+                }
+            }
+            is SelectionTagDetails -> {
+                components.filterIsInstance<SelectionTagPanel>().forEach { panel ->
+                    panel.update(
+                        "${tag.virtualFile.name}:${selectionModel.selectionStart}-${selectionModel.selectionEnd}",
+                        tag.virtualFile.fileType.icon
+                    )
+                }
+            }
+            else -> Unit
+        }
     }
 
     private fun onTagsChanged() {
-        components.filterIsInstance<TagPanel>()
-            .forEach { remove(it) }
+        components.filterIsInstance<TagPanel>().forEach { remove(it) }
 
         val allTags = tagManager.getTags()
 
@@ -128,7 +161,6 @@ class UserInputHeaderPanel(
             .sortedWith(TagDetailsComparator())
             .toSet()
 
-        updateReferencedFilesTokens(tags)
         emptyText.isVisible = tags.isEmpty()
 
         tags.forEach { add(createTagPanel(it)) }
@@ -139,9 +171,9 @@ class UserInputHeaderPanel(
 
     private fun createTagPanel(tagDetails: TagDetails) =
         (if (tagDetails is EditorSelectionTagDetails) {
-            SelectionTagPanel(tagDetails, tagManager, promptTextField, project)
+            SelectionTagPanel(tagDetails, promptTextField, project)
         } else {
-            object : TagPanel(tagDetails, tagManager, false, project) {
+            object : TagPanel(tagDetails, false, project) {
 
                 init {
                     cursor = if (tagDetails is FileTagDetails)
@@ -150,7 +182,16 @@ class UserInputHeaderPanel(
                         Cursor(Cursor.DEFAULT_CURSOR)
                 }
 
-                override fun onSelect(tagDetails: TagDetails) = Unit
+                override fun onSelect(tagDetails: TagDetails) {
+                    SwingUtilities.invokeLater {
+                        onTagsChanged()
+                        when (tagDetails) {
+                            is FileTagDetails -> adjustReferencedTotal(tagDetails.virtualFile, add = isSelected)
+                            is EditorTagDetails -> adjustReferencedTotal(tagDetails.virtualFile, add = isSelected)
+                            else -> Unit
+                        }
+                    }
+                }
 
                 override fun onClose() {
                     tagManager.remove(tagDetails)
@@ -187,20 +228,15 @@ class UserInputHeaderPanel(
             }
     }
 
-    private fun updateReferencedFilesTokens(tags: Set<TagDetails>) {
-        CoroutineScope(Dispatchers.Default).launch {
-            val referencedFileContents = tags.asSequence()
-                .filter { it.selected }
-                .mapNotNull { tag ->
-                    when (tag) {
-                        is FileTagDetails -> FileUtil.readContent(tag.virtualFile)
-                        is EditorTagDetails -> FileUtil.readContent(tag.virtualFile)
-                        else -> null
-                    }
-                }
-                .toList()
+    private fun adjustReferencedTotal(virtualFile: VirtualFile, add: Boolean) {
+        backgroundScope.launch {
+            val encodingManager = EncodingManager.getInstance()
+            val content = FileUtil.readContent(virtualFile)
+            val tokens = encodingManager.countTokens(content)
             runInEdt {
-                totalTokensPanel.updateReferencedFilesTokens(referencedFileContents)
+                val current = totalTokensPanel.getTokenDetails().referencedFilesTokens
+                val next = if (add) current + tokens else (current - tokens).coerceAtLeast(0)
+                totalTokensPanel.updateReferencedFilesTokens(next)
             }
         }
     }
@@ -247,7 +283,13 @@ class UserInputHeaderPanel(
             virtualFile: VirtualFile
         ) {
             if (selectionModel.hasSelection()) {
-                tagManager.addTag(EditorSelectionTagDetails(virtualFile, selectionModel))
+                val hasSelectionTag = tagManager.getTags()
+                    .any { it is EditorSelectionTagDetails && it.virtualFile == virtualFile }
+                if (hasSelectionTag) {
+                    tagManager.updateSelectionTag(virtualFile, selectionModel)
+                } else {
+                    tagManager.addTag(EditorSelectionTagDetails(virtualFile, selectionModel))
+                }
             } else {
                 tagManager.remove(EditorSelectionTagDetails(virtualFile, selectionModel))
             }

@@ -57,7 +57,7 @@ import javax.swing.JPanel
 class UserInputPanel @JvmOverloads constructor(
     private val project: Project,
     private val totalTokensPanel: TotalTokensPanel,
-    parentDisposable: Disposable,
+    private val parentDisposable: Disposable,
     featureType: FeatureType,
     private val tagManager: TagManager,
     private val onSubmit: (String) -> Unit,
@@ -108,16 +108,6 @@ class UserInputPanel @JvmOverloads constructor(
             onSubmit = ::handleSubmit,
             onFilesDropped = { files ->
                 includeFiles(files.toMutableList())
-                ReadAction
-                    .nonBlocking<List<String>> {
-                        files.map { ReferencedFile.from(it).fileContent() }
-                    }
-                    .inSmartMode(project)
-                    .expireWith(project)
-                    .finishOnUiThread(ModalityState.any()) { contents ->
-                        totalTokensPanel.updateReferencedFilesTokens(contents)
-                    }
-                    .submit(AppExecutorUtil.getAppExecutorService())
             },
             featureType = featureType
         )
@@ -202,16 +192,6 @@ class UserInputPanel @JvmOverloads constructor(
         }
         FileDragAndDrop.install(this) { files ->
             includeFiles(files.toMutableList())
-            ReadAction
-                .nonBlocking<List<String>> {
-                    files.map { ReferencedFile.from(it).fileContent() }
-                }
-                .inSmartMode(project)
-                .expireWith(project)
-                .finishOnUiThread(ModalityState.any()) { contents ->
-                    totalTokensPanel.updateReferencedFilesTokens(contents)
-                }
-                .submit(AppExecutorUtil.getAppExecutorService())
         }
     }
 
@@ -427,7 +407,8 @@ class UserInputPanel @JvmOverloads constructor(
     }
 
     private fun updateUserTokens(text: String) {
-        totalTokensPanel.updateUserPromptTokens(text)
+        val expanded = promptTextField.getExpandedText()
+        totalTokensPanel.updateUserPromptTokens(expanded)
     }
 
     private fun handleBackSpace() {
