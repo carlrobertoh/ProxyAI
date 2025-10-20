@@ -182,7 +182,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
     }
 
     fun testShouldIncludeHistoryGroupInSearchManager() {
-        val tagManager = TagManager(testRootDisposable)
+        val tagManager = TagManager()
         val searchManager = SearchManager(project, tagManager)
 
         val defaultGroups = searchManager.getDefaultGroups()

@@ -18,6 +18,7 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
 import ee.carlrobert.codegpt.EncodingManager
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
@@ -97,8 +98,16 @@ class UserInputHeaderPanel(
     override fun onTagAdded(tag: TagDetails) {
         onTagsChanged()
         when (tag) {
-            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = true)
-            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = true)
+            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(
+                tag.virtualFile,
+                add = true
+            )
+
+            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(
+                tag.virtualFile,
+                add = true
+            )
+
             else -> Unit
         }
     }
@@ -106,8 +115,16 @@ class UserInputHeaderPanel(
     override fun onTagRemoved(tag: TagDetails) {
         onTagsChanged()
         when (tag) {
-            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = false)
-            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(tag.virtualFile, add = false)
+            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(
+                tag.virtualFile,
+                add = false
+            )
+
+            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(
+                tag.virtualFile,
+                add = false
+            )
+
             else -> Unit
         }
     }
@@ -125,6 +142,7 @@ class UserInputHeaderPanel(
                     }
                 }
             }
+
             is SelectionTagDetails -> {
                 components.filterIsInstance<SelectionTagPanel>().forEach { panel ->
                     panel.update(
@@ -133,6 +151,7 @@ class UserInputHeaderPanel(
                     )
                 }
             }
+
             else -> Unit
         }
     }
@@ -186,8 +205,16 @@ class UserInputHeaderPanel(
                     SwingUtilities.invokeLater {
                         onTagsChanged()
                         when (tagDetails) {
-                            is FileTagDetails -> adjustReferencedTotal(tagDetails.virtualFile, add = isSelected)
-                            is EditorTagDetails -> adjustReferencedTotal(tagDetails.virtualFile, add = isSelected)
+                            is FileTagDetails -> adjustReferencedTotal(
+                                tagDetails.virtualFile,
+                                add = isSelected
+                            )
+
+                            is EditorTagDetails -> adjustReferencedTotal(
+                                tagDetails.virtualFile,
+                                add = isSelected
+                            )
+
                             else -> Unit
                         }
                     }
@@ -210,22 +237,26 @@ class UserInputHeaderPanel(
     }
 
     private fun addInitialTags() {
-        val selectedFile = getSelectedEditor(project)?.virtualFile
-        if (selectedFile != null) {
-            tagManager.addTag(
-                EditorTagDetails(
-                    selectedFile,
-                    isRemovable = withRemovableSelectedEditorTag
+        val autoTaggingEnabled =
+            ConfigurationSettings.getState().chatCompletionSettings.editorContextTagEnabled
+        if (autoTaggingEnabled) {
+            val selectedFile = getSelectedEditor(project)?.virtualFile
+            if (selectedFile != null) {
+                tagManager.addTag(
+                    EditorTagDetails(
+                        selectedFile,
+                        isRemovable = withRemovableSelectedEditorTag
+                    )
                 )
-            )
-        }
-
-        EditorUtil.getOpenLocalFiles(project)
-            .filterNot { it == selectedFile }
-            .take(INITIAL_VISIBLE_FILES)
-            .forEach {
-                tagManager.addTag(EditorTagDetails(it).apply { selected = false })
             }
+
+            EditorUtil.getOpenLocalFiles(project)
+                .filterNot { it == selectedFile }
+                .take(INITIAL_VISIBLE_FILES)
+                .forEach {
+                    tagManager.addTag(EditorTagDetails(it).apply { selected = false })
+                }
+        }
     }
 
     private fun adjustReferencedTotal(virtualFile: VirtualFile, add: Boolean) {
@@ -307,40 +338,21 @@ class UserInputHeaderPanel(
 
     private inner class FileSelectionListener : FileEditorManagerListener {
         override fun selectionChanged(event: FileEditorManagerEvent) {
+            if (!ConfigurationSettings.getState().chatCompletionSettings.editorContextTagEnabled) {
+                return
+            }
             event.newFile?.let { newFile ->
-                val hasTag = tagManager.getTags()
-                    .any { it is EditorTagDetails && it.virtualFile == newFile }
-                if (!hasTag) {
-                    tagManager.addTag(
-                        EditorTagDetails(
-                            newFile,
-                            isRemovable = withRemovableSelectedEditorTag
-                        )
-                    )
-                } else {
-                    tagManager.getTags()
-                        .filterIsInstance<EditorTagDetails>()
-                        .firstOrNull { it.virtualFile == newFile && it.isRemovable }
-                        ?.let { existing ->
-                            tagManager.remove(existing)
-                            tagManager.addTag(
-                                EditorTagDetails(
-                                    newFile,
-                                    isRemovable = withRemovableSelectedEditorTag
-                                )
-                            )
-                        }
-                }
-
-                tagManager.getTags()
+                // Maintain a rolling list of up to 2 unselected tags for recently visited files.
+                val existing = tagManager.getTags()
                     .filterIsInstance<EditorTagDetails>()
-                    .filter { it.virtualFile != newFile && !it.isRemovable }
-                    .forEach { prev ->
-                        tagManager.remove(prev)
-                        tagManager.addTag(EditorTagDetails(prev.virtualFile).apply {
-                            selected = false
-                        })
-                    }
+                    .firstOrNull { it.virtualFile == newFile }
+
+                if (existing == null) {
+                    tagManager.addTag(EditorTagDetails(newFile).apply { selected = false })
+                } else if (!existing.selected) {
+                    tagManager.remove(existing)
+                    tagManager.addTag(EditorTagDetails(newFile).apply { selected = false })
+                }
 
                 emptyText.isVisible = false
             }

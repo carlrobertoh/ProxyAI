@@ -91,7 +91,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     this.chatSession = new ChatSession();
     conversationService = ConversationService.getInstance();
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
-    tagManager = new TagManager(this);
+    tagManager = new TagManager();
     this.psiStructureRepository = new PsiStructureRepository(
         this,
         project,

@@ -22,7 +22,7 @@ class HistorySearchIntegrationTest : IntegrationTest() {
         conversationService = service<ConversationService>()
         ConversationsState.getInstance().conversations.clear()
         
-        val tagManager = TagManager(testRootDisposable)
+        val tagManager = TagManager()
         searchManager = SearchManager(project, tagManager)
         historyGroupItem = HistoryGroupItem()
     }

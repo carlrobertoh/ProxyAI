@@ -58,7 +58,7 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val observableProperties = ObservableProperties()
-    private val tagManager = TagManager(this)
+    private val tagManager = TagManager()
     private var changesAccepted = false
     private var submissionHandler: InlineEditSubmissionHandler
     private var openedChatConversation: Conversation? = null
