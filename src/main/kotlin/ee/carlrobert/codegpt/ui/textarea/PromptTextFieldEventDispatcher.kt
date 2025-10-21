@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.ui.textarea
 
-import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.util.TextRange
@@ -13,6 +12,7 @@ import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
 import java.util.*
 import com.intellij.openapi.ide.CopyPasteManager
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import java.awt.datatransfer.DataFlavor
 
 class PromptTextFieldEventDispatcher(
@@ -42,12 +42,31 @@ class PromptTextFieldEventDispatcher(
                             }
                         }
                         KeyEvent.VK_ENTER -> {
-                            if (e.isShiftDown) {
-                                handleShiftEnter(e)
-                            } else if (e.modifiersEx and InputEvent.ALT_DOWN_MASK == 0
-                                && e.modifiersEx and InputEvent.CTRL_DOWN_MASK == 0
-                            ) {
-                                onSubmit(e)
+                            val settings =
+                                ConfigurationSettings.getState().chatCompletionSettings
+                            val anyModifierConfigured =
+                                settings.sendWithCtrlEnter || settings.sendWithAltEnter || settings.sendWithShiftEnter
+
+                            if (anyModifierConfigured) {
+                                var expectedModifiers = 0
+                                if (settings.sendWithCtrlEnter) expectedModifiers = expectedModifiers or InputEvent.CTRL_DOWN_MASK
+                                if (settings.sendWithAltEnter) expectedModifiers = expectedModifiers or InputEvent.ALT_DOWN_MASK
+                                if (settings.sendWithShiftEnter) expectedModifiers = expectedModifiers or InputEvent.SHIFT_DOWN_MASK
+
+                                val eventModifiers = e.modifiersEx and (InputEvent.CTRL_DOWN_MASK or InputEvent.ALT_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK)
+
+                                if (eventModifiers == expectedModifiers) {
+                                    onSubmit(e)
+                                } else {
+                                    handleNewline(e)
+                                }
+                            } else {
+                                // No modifiers configured: send on plain Enter
+                                if (!e.isControlDown && !e.isAltDown && !e.isShiftDown) {
+                                    onSubmit(e)
+                                } else {
+                                    handleNewline(e)
+                                }
                             }
                         }
                     }
@@ -65,7 +84,7 @@ class PromptTextFieldEventDispatcher(
         }
     }
 
-    private fun handleShiftEnter(e: KeyEvent) {
+    private fun handleNewline(e: KeyEvent) {
         val parent = findParent()
         if (parent is PromptTextField) {
             runUndoTransparentWriteAction {

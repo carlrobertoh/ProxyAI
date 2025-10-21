@@ -50,6 +50,9 @@ class ChatCompletionSettingsState : BaseState() {
     var psiStructureEnabled by property(true)
     var psiStructureAnalyzeDepth by property(3)
     var clickableLinksEnabled by property(true)
+    var sendWithAltEnter by property(false)
+    var sendWithCtrlEnter by property(false)
+    var sendWithShiftEnter by property(false)
 }
 
 class CodeCompletionSettingsState : BaseState() {
