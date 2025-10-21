@@ -72,6 +72,9 @@ public final class ConversationService {
 
   public void saveConversation(Conversation conversation) {
     conversation.setUpdatedOn(LocalDateTime.now());
+    var conversations = conversationState.conversations;
+    conversations.removeIf(c -> c.getId().equals(conversation.getId()));
+    conversations.add(conversation);
     conversationState.setCurrentConversation(conversation);
   }
 
@@ -93,7 +96,7 @@ public final class ConversationService {
   }
 
   public void deleteConversation(Conversation conversation) {
-    conversationState.conversations.removeIf(it -> it.getId() == conversation.getId());
+    conversationState.conversations.removeIf(it -> it.getId().equals(conversation.getId()));
   }
 
   public void deleteSelectedConversation() {
