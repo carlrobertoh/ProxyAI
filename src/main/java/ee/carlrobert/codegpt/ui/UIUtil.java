@@ -44,6 +44,8 @@ import javax.swing.KeyStroke;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
 import javax.swing.text.DefaultCaret;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
 
 public class UIUtil {
 
@@ -60,7 +62,10 @@ public class UIUtil {
   public static JTextPane createTextPane(String text, boolean opaque, HyperlinkListener listener) {
     var textPane = new JTextPane();
     textPane.putClientProperty(JTextPane.HONOR_DISPLAY_PROPERTIES, true);
-    textPane.setEditorKit(HTMLEditorKitBuilder.simple());
+    var editorKit = new HTMLEditorKitBuilder().withWordWrapViewFactory().build();
+    StyleSheet styleSheet = editorKit.getStyleSheet();
+    styleSheet.addRule("code { white-space: pre-wrap; word-wrap: break-word; }");
+    textPane.setEditorKit(editorKit);
     textPane.addHyperlinkListener(listener);
     textPane.setContentType("text/html");
     textPane.setEditable(false);
