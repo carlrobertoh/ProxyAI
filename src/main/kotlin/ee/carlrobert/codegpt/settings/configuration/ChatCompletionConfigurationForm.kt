@@ -7,6 +7,7 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
+import java.awt.Toolkit
 
 class ChatCompletionConfigurationForm {
 
@@ -27,6 +28,21 @@ class ChatCompletionConfigurationForm {
     private val clickableLinksCheckBox = JBCheckBox(
         CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.clickableLinks.title"),
         service<ConfigurationSettings>().state.chatCompletionSettings.clickableLinksEnabled
+    )
+
+    private val sendWithAltEnterCheckBox = JBCheckBox(
+        Toolkit.getProperty("AWT.alt", "Alt"),
+        service<ConfigurationSettings>().state.chatCompletionSettings.sendWithAltEnter
+    )
+
+    private val sendWithCtrlEnterCheckBox = JBCheckBox(
+        Toolkit.getProperty("AWT.ctrl", "Ctrl"),
+        service<ConfigurationSettings>().state.chatCompletionSettings.sendWithCtrlEnter
+    )
+
+    private val sendWithShiftEnterCheckBox = JBCheckBox(
+        Toolkit.getProperty("AWT.shift", "Shift"),
+        service<ConfigurationSettings>().state.chatCompletionSettings.sendWithShiftEnter
     )
 
     fun createPanel(): DialogPanel {
@@ -50,6 +66,20 @@ class ChatCompletionConfigurationForm {
                 cell(psiStructureAnalyzeDepthField)
                     .comment(CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.psiStructure.analyzeDepth.comment"))
             }
+            group(CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.sendMessageShortcut.title")) {
+                row {
+                    comment(CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.sendMessageShortcut.description"))
+                }
+                row {
+                    cell(sendWithCtrlEnterCheckBox)
+                }
+                row {
+                    cell(sendWithAltEnterCheckBox)
+                }
+                row {
+                    cell(sendWithShiftEnterCheckBox)
+                }
+            }
         }.withBorder(JBUI.Borders.emptyLeft(16))
     }
 
@@ -58,6 +88,9 @@ class ChatCompletionConfigurationForm {
         psiStructureCheckBox.isSelected = prevState.psiStructureEnabled
         psiStructureAnalyzeDepthField.number = prevState.psiStructureAnalyzeDepth
         clickableLinksCheckBox.isSelected = prevState.clickableLinksEnabled
+        sendWithAltEnterCheckBox.isSelected = prevState.sendWithAltEnter
+        sendWithCtrlEnterCheckBox.isSelected = prevState.sendWithCtrlEnter
+        sendWithShiftEnterCheckBox.isSelected = prevState.sendWithShiftEnter
     }
 
     fun getFormState(): ChatCompletionSettingsState {
@@ -66,6 +99,9 @@ class ChatCompletionConfigurationForm {
             this.psiStructureEnabled = psiStructureCheckBox.isSelected
             this.psiStructureAnalyzeDepth = psiStructureAnalyzeDepthField.number
             this.clickableLinksEnabled = clickableLinksCheckBox.isSelected
+            this.sendWithAltEnter = sendWithAltEnterCheckBox.isSelected
+            this.sendWithCtrlEnter = sendWithCtrlEnterCheckBox.isSelected
+            this.sendWithShiftEnter = sendWithShiftEnterCheckBox.isSelected
         }
     }
 }
