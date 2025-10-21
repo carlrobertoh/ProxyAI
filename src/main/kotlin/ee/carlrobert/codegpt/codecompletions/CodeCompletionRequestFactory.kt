@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.codecompletions
 
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
@@ -24,6 +25,7 @@ import ee.carlrobert.service.GrpcCodeCompletionRequest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.apache.commons.text.StringEscapeUtils
 import java.nio.charset.StandardCharsets
 
 object CodeCompletionRequestFactory {
@@ -175,7 +177,21 @@ object CodeCompletionRequestFactory {
             requestBuilder.addHeader(entry.key, value)
         }
         val transformedBody = body.entries.associate { (key, value) ->
-            key to transformValue(value, infillTemplate, details)
+            when (key.lowercase()) {
+                "stop" -> {
+                    if (value is String) {
+                        if (value.isEmpty())
+                            null
+                        if (value.startsWith("[") && value.endsWith("]"))
+                            key to ObjectMapper().readValue(value, object : TypeReference<List<String>>() {})
+                        else
+                            key to value.split(",").map { StringEscapeUtils.unescapeJava(it.trim()) }
+                    } else {
+                        key to value
+                    }
+                }
+                else -> key to transformValue(value, infillTemplate, details)
+            }
         }
 
         try {
