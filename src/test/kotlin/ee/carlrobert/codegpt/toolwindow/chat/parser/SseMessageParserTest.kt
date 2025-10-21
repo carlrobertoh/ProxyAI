@@ -225,4 +225,38 @@ class SseMessageParserStreamTest {
             assertThat(finalCode).contains("println(\"Hello\")")
         }
     }
+
+    @Test
+    fun shouldHandleIndentedCodeBlockWithInnerBackticks() {
+        val parser = SseMessageParser()
+        val input = """
+            Here is a code block:
+              ```kotlin
+              fun main() {
+                  val text = ""${'"'}
+                      ```
+                      This should not end the block.
+                      ```
+                  ""${'"'}
+                  println(text)
+              }
+              ```
+            Done.
+        """.trimIndent()
+
+        val segments = simulateStreaming(parser, input, seed = 42)
+
+        val codeSegments = segments.filterIsInstance<Code>()
+        assertThat(codeSegments).isNotEmpty
+
+        val finalCodeContent = codeSegments.last().content
+        assertThat(finalCodeContent).contains("This should not end the block.")
+        assertThat(finalCodeContent).contains("println(text)")
+
+        val textSegments = segments.filterIsInstance<Text>()
+        assertThat(textSegments.any { it.content.contains("Done.") }).isTrue
+
+        val codeEndSegments = segments.filterIsInstance<CodeEnd>()
+        assertThat(codeEndSegments).hasSize(1)
+    }
 }

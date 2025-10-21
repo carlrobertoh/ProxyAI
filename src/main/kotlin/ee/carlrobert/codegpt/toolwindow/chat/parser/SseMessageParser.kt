@@ -12,7 +12,7 @@ class SseMessageParser : MessageParser {
         const val NEWLINE = "\n"
         const val HEADER_DELIMITER = ":"
         const val HEADER_PARTS_LIMIT = 2
-        
+
         val SEARCH_START_REGEX = Regex("""^\s*<{3,}(\s*SEARCH.*)?$""", RegexOption.IGNORE_CASE)
         val SEPARATOR_REGEX = Regex("""^\s*={3,}\s*$""")
         val REPLACE_END_REGEX = Regex("""^\s*>{3,}(\s*REPLACE.*)?$""", RegexOption.IGNORE_CASE)
@@ -62,9 +62,16 @@ class SseMessageParser : MessageParser {
 
         return when {
             shouldProcessCodeFence(fenceIdx, thinkStartIdx) -> {
-                extractTextBeforeIndex(fenceIdx)?.let { segments.add(it) }
+                val textBeforeFence = buffer.substring(0, fenceIdx)
+                val lineStartIdx = textBeforeFence.lastIndexOf(NEWLINE) + 1
+                val indentation = textBeforeFence.substring(lineStartIdx)
+
+                // Emit text that comes before the line with the code fence.
+                extractTextBeforeIndex(lineStartIdx)?.let { segments.add(it) }
+
                 consumeFromBuffer(fenceIdx + CODE_FENCE.length)
-                parserState = ParserState.CodeHeaderWaiting()
+                // Transition to CodeHeaderWaiting with the captured indentation.
+                parserState = ParserState.CodeHeaderWaiting(indentation = indentation)
                 true
             }
 
@@ -94,11 +101,11 @@ class SseMessageParser : MessageParser {
 
         return if (header != null) {
             segments.add(header)
-            parserState = ParserState.InCode(header)
+            parserState = ParserState.InCode(header, indentation = state.indentation)
             true
         } else {
             segments.add(CodeHeaderWaiting(updatedHeader))
-            parserState = ParserState.CodeHeaderWaiting(updatedHeader)
+            parserState = ParserState.CodeHeaderWaiting(updatedHeader, state.indentation)
             false
         }
     }
@@ -114,7 +121,7 @@ class SseMessageParser : MessageParser {
         consumeFromBuffer(nlIdx + 1)
 
         return when {
-            line.trim() == CODE_FENCE -> {
+            line.trimEnd() == state.indentation + CODE_FENCE -> {
                 if (state.content.isNotEmpty()) {
                     segments.add(Code(state.content, state.header.language, state.header.filePath))
                 }
@@ -129,14 +136,14 @@ class SseMessageParser : MessageParser {
                     segments.add(Code(state.content, state.header.language, state.header.filePath))
                 }
                 segments.add(SearchWaiting("", state.header.language, state.header.filePath))
-                parserState = ParserState.InSearch(state.header, "")
+                parserState = ParserState.InSearch(state.header, "", state.indentation)
                 true
             }
 
             else -> {
                 val newContent =
                     if (state.content.isEmpty()) line else state.content + NEWLINE + line
-                parserState = ParserState.InCode(state.header, newContent)
+                parserState = ParserState.InCode(state.header, newContent, state.indentation)
                 true
             }
         }
@@ -161,13 +168,14 @@ class SseMessageParser : MessageParser {
                     state.header.filePath
                 )
             )
-            parserState = ParserState.InReplace(state.header, state.searchContent, "")
+            parserState =
+                ParserState.InReplace(state.header, state.searchContent, "", state.indentation)
             true
         } else {
             val newSearch =
                 if (state.searchContent.isEmpty()) line else state.searchContent + NEWLINE + line
             segments.add(SearchWaiting(newSearch, state.header.language, state.header.filePath))
-            parserState = ParserState.InSearch(state.header, newSearch)
+            parserState = ParserState.InSearch(state.header, newSearch, state.indentation)
             false
         }
     }
@@ -192,11 +200,11 @@ class SseMessageParser : MessageParser {
                         filePath = state.header.filePath
                     )
                 )
-                parserState = ParserState.InCode(state.header)
+                parserState = ParserState.InCode(state.header, indentation = state.indentation)
                 true
             }
 
-            line.trim() == CODE_FENCE -> {
+            line.trimEnd() == state.indentation + CODE_FENCE -> {
                 segments.add(CodeEnd(""))
                 parserState = ParserState.Outside
                 true
@@ -213,7 +221,12 @@ class SseMessageParser : MessageParser {
                         state.header.filePath
                     )
                 )
-                parserState = ParserState.InReplace(state.header, state.searchContent, newReplace)
+                parserState = ParserState.InReplace(
+                    state.header,
+                    state.searchContent,
+                    newReplace,
+                    state.indentation
+                )
                 true
             }
         }
@@ -257,7 +270,7 @@ class SseMessageParser : MessageParser {
             is ParserState.InCode -> {
                 val segments = mutableListOf<Segment>()
 
-                if (buffer.toString().trim() == CODE_FENCE) {
+                if (buffer.toString().trimEnd() == state.indentation + CODE_FENCE) {
                     if (state.content.isNotBlank()) {
                         segments.add(
                             Code(state.content, state.header.language, state.header.filePath)
@@ -342,27 +355,32 @@ class SseMessageParser : MessageParser {
         return trimmed.startsWith(REPLACE_MARKER) || REPLACE_END_REGEX.matches(trimmed)
     }
 
+    // Step 1: Update parser states to hold indentation information.
     private sealed class ParserState {
         object Outside : ParserState()
 
         data class CodeHeaderWaiting(
-            val content: String = ""
+            val content: String = "",
+            val indentation: String = ""
         ) : ParserState()
 
         data class InCode(
             val header: CodeHeader,
-            val content: String = ""
+            val content: String = "",
+            val indentation: String = ""
         ) : ParserState()
 
         data class InSearch(
             val header: CodeHeader,
-            val searchContent: String = ""
+            val searchContent: String = "",
+            val indentation: String = ""
         ) : ParserState()
 
         data class InReplace(
             val header: CodeHeader,
             val searchContent: String,
-            val replaceContent: String = ""
+            val replaceContent: String = "",
+            val indentation: String = ""
         ) : ParserState()
 
         data class InThinking(
