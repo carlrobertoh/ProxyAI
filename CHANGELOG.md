@@ -1174,6 +1174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
 [Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.4-233...HEAD
+[3.6.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-241.1...v3.6.4-241.1
 [3.6.4-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-241.1...v3.6.4-233
 [3.6.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-233...v3.6.3-241.1
 [3.6.3-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-233...v3.6.3-233
