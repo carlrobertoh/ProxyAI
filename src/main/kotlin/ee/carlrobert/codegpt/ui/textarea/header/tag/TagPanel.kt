@@ -87,18 +87,13 @@ abstract class TagPanel(
         label.inheritsPopupMenu = true
         closeButton.inheritsPopupMenu = true
 
-        label.addMouseListener(object : MouseAdapter() {
+        val mouseAdapter = object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
-                if (SwingUtilities.isLeftMouseButton(e)) {
-                    this@TagPanel.doClick()
-                    e.consume()
-                }
-                if (SwingUtilities.isMiddleMouseButton(e) && tagDetails.isRemovable) {
-                    onClose()
-                    e.consume()
-                }
+                handleMousePress(e)
             }
-        })
+        }
+        label.addMouseListener(mouseAdapter)
+        addMouseListener(mouseAdapter)
 
         addActionListener {
             if (isRevertingSelection) return@addActionListener
@@ -118,6 +113,17 @@ abstract class TagPanel(
 
         revalidate()
         repaint()
+    }
+
+    private fun handleMousePress(e: MouseEvent) {
+        if (SwingUtilities.isLeftMouseButton(e)) {
+            this@TagPanel.doClick()
+            e.consume()
+        }
+        if (SwingUtilities.isMiddleMouseButton(e) && tagDetails.isRemovable) {
+            onClose()
+            e.consume()
+        }
     }
 
     private fun toProjectRelative(path: String): String? {

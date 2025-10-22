@@ -360,20 +360,21 @@ class UserInputHeaderPanel(
     }
 
     private inner class TagPopupMenu : JBPopupMenu() {
+        private fun resolveTagPanel(from: Component): TagPanel? = when (from) {
+            is TagPanel -> from
+            else -> SwingUtilities.getAncestorOfClass(TagPanel::class.java, from) as? TagPanel
+        }
+
         private val closeMenuItem =
             createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.close")) {
-                val tagPanel = invoker as? TagPanel
-                tagPanel?.let {
-                    if (it.tagDetails.isRemovable) {
-                        tagManager.remove(it.tagDetails)
-                    }
+                resolveTagPanel(invoker)?.let {
+                    if (it.tagDetails.isRemovable) tagManager.remove(it.tagDetails)
                 }
             }
 
         private val closeOtherTagsMenuItem =
             createPopupMenuItem(CodeGPTBundle.get("tagPopupMenuItem.closeOthers")) {
-                val tagPanel = invoker as? TagPanel
-                tagPanel?.let { currentPanel ->
+                resolveTagPanel(invoker)?.let { currentPanel ->
                     val currentTag = currentPanel.tagDetails
                     tagManager.getTags()
                         .filter { it != currentTag && it.isRemovable }
@@ -411,8 +412,7 @@ class UserInputHeaderPanel(
             }
 
         private fun closeTagsInRange(rangeSelector: (Array<Component>, Int) -> List<Component>) {
-            val tagPanel = invoker as? TagPanel
-            tagPanel?.let { currentPanel ->
+            resolveTagPanel(invoker)?.let { currentPanel ->
                 val components = this@UserInputHeaderPanel.components
                 val currentIndex = components.indexOf(currentPanel)
 
@@ -433,13 +433,7 @@ class UserInputHeaderPanel(
         }
 
         override fun show(invoker: Component, x: Int, y: Int) {
-            val tagPanel = when (invoker) {
-                is TagPanel -> invoker
-                else -> SwingUtilities.getAncestorOfClass(
-                    TagPanel::class.java,
-                    invoker
-                ) as? TagPanel
-            } ?: return
+            val tagPanel = resolveTagPanel(invoker) ?: return
             if (!tagPanel.isEnabled) return
             val components = this@UserInputHeaderPanel.components.filterIsInstance<TagPanel>()
             val currentIndex = components.indexOf(tagPanel)
