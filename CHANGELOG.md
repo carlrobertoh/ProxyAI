@@ -6,12 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Configurable send shortcut [#1149](https://github.com/carlrobertoh/ProxyAI/issues/1149)
+- Middle-click to remove files from context [#1148](https://github.com/carlrobertoh/ProxyAI/issues/1148)
+- Code completion request handling for the `stop` parameter [#1125](https://github.com/carlrobertoh/ProxyAI/issues/1125)
+
 ### Fixed
 
 - Performance issues caused by token calculation
 - PSI preview link theme issues
 - Updated code not restored when closing the 'Apply' view
 - Maintain a rolling list (up to 2) of unselected tags when switching between editors
+- Message deletion [#1147](https://github.com/carlrobertoh/ProxyAI/issues/1147)
+- Code blocks containing nested backticks [#1144](https://github.com/carlrobertoh/ProxyAI/issues/1144)
+- Backtick-formatted code overflowing and going out of view [#1145](https://github.com/carlrobertoh/ProxyAI/issues/1145)
 
 ## [3.6.4-241.1] - 2025-10-15
 
