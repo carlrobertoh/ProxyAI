@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- gRPC request timeouts during autocompletion and next-edits
+
 ## [3.6.5-233] - 2025-10-22
 
 ### Added

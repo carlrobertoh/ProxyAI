@@ -24,6 +24,7 @@ import ee.carlrobert.service.*
 import io.grpc.ManagedChannel
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
+import io.grpc.netty.shaded.io.netty.channel.ChannelOption
 import kotlinx.coroutines.channels.ProducerScope
 import java.util.concurrent.TimeUnit
 
@@ -118,6 +119,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         if (codeCompletionStub == null) {
             codeCompletionStub = CodeCompletionServiceImplGrpc.newStub(channel)
                 .withCallCredentials(createCallCredentials())
+                .withDeadlineAfter(300, TimeUnit.SECONDS)
         }
     }
 
@@ -128,6 +130,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         if (nextEditStub == null) {
             nextEditStub = NextEditServiceImplGrpc.newStub(channel)
                 .withCallCredentials(createCallCredentials())
+                .withDeadlineAfter(300, TimeUnit.SECONDS)
         }
     }
 
@@ -161,6 +164,12 @@ class GrpcClientService(private val project: Project) : Disposable {
                 .trustManager(CertificateManager.getInstance().trustManager)
                 .build()
         )
+        .withOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
+        .keepAliveTime(30, TimeUnit.SECONDS)
+        .keepAliveTimeout(10, TimeUnit.SECONDS)
+        .keepAliveWithoutCalls(true)
+        .idleTimeout(5, TimeUnit.MINUTES)
+        .maxInboundMessageSize(32 * 1024 * 1024)
         .build()
 
     private fun ensureActiveChannel() {
