@@ -1,9 +1,10 @@
 package ee.carlrobert.codegpt.conversations;
 
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.openapi.components.Service;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
+import com.intellij.openapi.project.Project;
 import com.intellij.util.xmlb.XmlSerializerUtil;
 import com.intellij.util.xmlb.annotations.OptionTag;
 import ee.carlrobert.codegpt.conversations.converter.ConversationConverter;
@@ -16,9 +17,10 @@ import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+@Service(Service.Level.PROJECT)
 @State(
-    name = "ee.carlrobert.codegpt.state.conversations.ConversationsState",
-    storages = @Storage("ChatGPTConversations_170.xml"))
+    name = "ee.carlrobert.codegpt.conversations.ConversationsState",
+    storages = @Storage("proxyai_conversations.xml"))
 public class ConversationsState implements PersistentStateComponent<ConversationsState> {
 
   @Deprecated
@@ -33,8 +35,8 @@ public class ConversationsState implements PersistentStateComponent<Conversation
 
   public boolean discardAllTokenLimits;
 
-  public static ConversationsState getInstance() {
-    return ApplicationManager.getApplication().getService(ConversationsState.class);
+  public static ConversationsState getInstance(@NotNull Project project) {
+    return project.getService(ConversationsState.class);
   }
 
   @Nullable
@@ -65,7 +67,8 @@ public class ConversationsState implements PersistentStateComponent<Conversation
     this.currentConversation = conversation;
   }
 
-  public static @Nullable Conversation getCurrentConversation() {
-    return getInstance().currentConversation;
+  @Nullable
+  public Conversation getCurrentConversation() {
+    return currentConversation;
   }
 }

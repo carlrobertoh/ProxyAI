@@ -9,7 +9,7 @@ import org.assertj.core.api.Assertions.assertThat
 class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
 
   fun testClearAllTabs() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+    val tabbedPane = ChatToolWindowTabbedPane(project, Disposer.newDisposable())
     tabbedPane.addNewTab(createNewTabPanel())
 
     tabbedPane.clearAll()
@@ -19,7 +19,7 @@ class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
 
 
   fun testAddingNewTabs() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+    val tabbedPane = ChatToolWindowTabbedPane(project, Disposer.newDisposable())
 
     tabbedPane.addNewTab(createNewTabPanel())
     tabbedPane.addNewTab(createNewTabPanel())
@@ -30,8 +30,8 @@ class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
   }
 
   fun testResetCurrentlyActiveTabPanel() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
-    val conversation = ConversationService.getInstance().startConversation(project)
+    val tabbedPane = ChatToolWindowTabbedPane(project, Disposer.newDisposable())
+    val conversation = ConversationService.getInstance(project).startConversation()
     conversation.addMessage(Message("TEST_PROMPT", "TEST_RESPONSE"))
     tabbedPane.addNewTab(ChatToolWindowTabPanel(project, conversation))
 
@@ -44,7 +44,7 @@ class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
   private fun createNewTabPanel(): ChatToolWindowTabPanel {
     return ChatToolWindowTabPanel(
       project,
-      ConversationService.getInstance().startConversation(project)
+      ConversationService.getInstance(project).startConversation()
     )
   }
 }

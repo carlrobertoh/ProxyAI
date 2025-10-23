@@ -2,22 +2,18 @@ package ee.carlrobert.codegpt.conversations
 
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
 import org.assertj.core.api.Assertions.assertThat
 
 class ConversationsStateTest : BasePlatformTestCase() {
 
   fun testStartNewDefaultConversation() {
-    val conversation = ConversationService.getInstance().startConversation(project)
+    val conversation = ConversationService.getInstance(project).startConversation()
 
-    assertThat(conversation).isEqualTo(ConversationsState.getCurrentConversation())
+    assertThat(conversation).isEqualTo(ConversationService.getInstance(project).currentConversation)
   }
 
   fun testSaveConversation() {
-    val service = ConversationService.getInstance()
+    val service = ConversationService.getInstance(project)
     val conversation = service.createConversation()
     service.addConversation(conversation)
     val message = Message("TEST_PROMPT")
@@ -26,7 +22,7 @@ class ConversationsStateTest : BasePlatformTestCase() {
 
     service.saveConversation(conversation)
 
-    val currentConversation = ConversationsState.getCurrentConversation()
+    val currentConversation = ConversationService.getInstance(project).currentConversation
     assertThat(currentConversation).isNotNull()
     assertThat(currentConversation!!.messages)
       .flatExtracting("prompt", "response")
@@ -34,9 +30,9 @@ class ConversationsStateTest : BasePlatformTestCase() {
   }
 
   fun testGetPreviousConversation() {
-    val service = ConversationService.getInstance()
-    val firstConversation = service.startConversation(project)
-    service.startConversation(project)
+    val service = ConversationService.getInstance(project)
+    val firstConversation = service.startConversation()
+    service.startConversation()
 
     val previousConversation = service.previousConversation
 
@@ -45,10 +41,10 @@ class ConversationsStateTest : BasePlatformTestCase() {
   }
 
   fun testGetNextConversation() {
-    val service = ConversationService.getInstance()
-    val firstConversation = service.startConversation(project)
-    val secondConversation = service.startConversation(project)
-    ConversationsState.getInstance().setCurrentConversation(firstConversation)
+    val service = ConversationService.getInstance(project)
+    val firstConversation = service.startConversation()
+    val secondConversation = service.startConversation()
+    ConversationsState.getInstance(project).setCurrentConversation(firstConversation)
 
     val nextConversation = service.nextConversation
 
@@ -57,13 +53,13 @@ class ConversationsStateTest : BasePlatformTestCase() {
   }
 
   fun testDeleteSelectedConversation() {
-    val service = ConversationService.getInstance()
-    val firstConversation = service.startConversation(project)
-    service.startConversation(project)
+    val service = ConversationService.getInstance(project)
+    val firstConversation = service.startConversation()
+    service.startConversation()
 
     service.deleteSelectedConversation()
 
-    assertThat(ConversationsState.getCurrentConversation()).isEqualTo(firstConversation)
+    assertThat(ConversationService.getInstance(project).currentConversation).isEqualTo(firstConversation)
     assertThat(service.sortedConversations.size).isEqualTo(1)
     assertThat(service.sortedConversations)
       .extracting("id")
@@ -71,13 +67,13 @@ class ConversationsStateTest : BasePlatformTestCase() {
   }
 
   fun testClearAllConversations() {
-    val service = ConversationService.getInstance()
-    service.startConversation(project)
-    service.startConversation(project)
+    val service = ConversationService.getInstance(project)
+    service.startConversation()
+    service.startConversation()
 
     service.clearAll()
 
-    assertThat(ConversationsState.getCurrentConversation()).isNull()
+    assertThat(ConversationService.getInstance(project).currentConversation).isNull()
     assertThat(service.sortedConversations.size).isEqualTo(0)
   }
 }

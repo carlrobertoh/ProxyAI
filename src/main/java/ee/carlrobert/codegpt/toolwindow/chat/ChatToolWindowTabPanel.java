@@ -89,7 +89,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     this.project = project;
     this.conversation = conversation;
     this.chatSession = new ChatSession();
-    conversationService = ConversationService.getInstance();
+    conversationService = ConversationService.getInstance(project);
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
     tagManager = new TagManager();
     this.psiStructureRepository = new PsiStructureRepository(
@@ -220,6 +220,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         .map(it -> {
           if (it instanceof HistoryTagDetails tagDetails) {
             return ConversationTagProcessor.Companion.getConversation(
+                project,
                 tagDetails.getConversationId());
           }
           return null;

@@ -17,6 +17,6 @@ public class MoveUpAction extends MoveAction {
 
   @Override
   protected Optional<Conversation> getConversation(@NotNull Project project) {
-    return ConversationService.getInstance().getNextConversation();
+    return ConversationService.getInstance(project).getNextConversation();
   }
 }

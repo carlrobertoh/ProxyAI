@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import ee.carlrobert.codegpt.actions.ActionType;
 import ee.carlrobert.codegpt.actions.editor.EditorActionsUtil;
@@ -24,7 +25,12 @@ public class DeleteConversationAction extends AnAction {
 
   @Override
   public void update(@NotNull AnActionEvent event) {
-    event.getPresentation().setEnabled(ConversationsState.getCurrentConversation() != null);
+    Project project = event.getProject();
+    if (project == null) {
+      event.getPresentation().setEnabled(false);
+      return;
+    }
+    event.getPresentation().setEnabled(ConversationsState.getInstance(project).getCurrentConversation() != null);
   }
 
   @Override

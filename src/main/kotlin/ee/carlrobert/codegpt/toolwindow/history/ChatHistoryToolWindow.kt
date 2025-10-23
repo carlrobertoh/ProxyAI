@@ -19,7 +19,6 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.actions.toolwindow.DeleteAllConversationsAction
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationService
-import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
 import ee.carlrobert.codegpt.util.ProjectPathUtils
 import javax.swing.JOptionPane
@@ -37,7 +36,7 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
         private const val MAX_MESSAGES_TO_SEARCH = 5
     }
 
-    private val conversationService = ConversationService.getInstance()
+    private val conversationService = project.getService(ConversationService::class.java)
     private val chatHistoryListPanel = ChatHistoryListPanel()
     private val searchField = SearchTextField()
     private var allConversations = mutableListOf<Conversation>()
@@ -106,7 +105,7 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
     private fun setupUI() {
         chatHistoryListPanel.apply {
             setOnConversationSelected { conversation ->
-                ConversationsState.getInstance().setCurrentConversation(conversation)
+                conversationService.saveConversation(conversation)
             }
 
             setOnConversationDoubleClicked { conversation ->
@@ -580,7 +579,7 @@ class ChatHistoryToolWindow(private val project: Project) : BorderLayoutPanel() 
     }
 
     private fun updateSelectedConversation(conversations: List<Conversation>) {
-        ConversationsState.getCurrentConversation()?.let { current ->
+        conversationService.currentConversation?.let { current ->
             conversations.find { it.id == current.id }?.let { conversation ->
                 chatHistoryListPanel.setSelectedConversation(conversation)
             }

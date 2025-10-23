@@ -39,7 +39,7 @@ class SearchManager(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
         GitGroupItem(project),
-        HistoryGroupItem(),
+        HistoryGroupItem(project),
         DiagnosticsActionItem(tagManager)
     ).filter { it.enabled }
 
@@ -47,7 +47,7 @@ class SearchManager(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
         GitGroupItem(project),
-        HistoryGroupItem(),
+        HistoryGroupItem(project),
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
         CodeAnalyzeActionItem(tagManager),

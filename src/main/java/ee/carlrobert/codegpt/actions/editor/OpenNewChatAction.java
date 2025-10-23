@@ -23,7 +23,7 @@ public class OpenNewChatAction extends AnAction {
   public void actionPerformed(@NotNull AnActionEvent event) {
     var project = event.getProject();
     if (project != null) {
-      ConversationsState.getInstance().setCurrentConversation(null);
+      ConversationsState.getInstance(project).setCurrentConversation(null);
       var tabPanel =
           project.getService(ChatToolWindowContentManager.class).createNewTabPanel();
       if (tabPanel != null) {

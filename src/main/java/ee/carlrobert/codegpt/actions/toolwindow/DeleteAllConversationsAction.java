@@ -28,7 +28,7 @@ public class DeleteAllConversationsAction extends AnAction {
   public void update(@NotNull AnActionEvent event) {
     var project = event.getProject();
     if (project != null) {
-      var sortedConversations = ConversationService.getInstance().getSortedConversations();
+      var sortedConversations = ConversationService.getInstance(project).getSortedConversations();
       event.getPresentation().setEnabled(!sortedConversations.isEmpty());
     }
   }
@@ -43,7 +43,7 @@ public class DeleteAllConversationsAction extends AnAction {
       var project = event.getProject();
       if (project != null) {
         try {
-          ConversationService.getInstance().clearAll();
+          ConversationService.getInstance(project).clearAll();
           project.getService(ChatToolWindowContentManager.class).resetAll();
         } finally {
           TelemetryAction.IDE_ACTION.createActionMessage()

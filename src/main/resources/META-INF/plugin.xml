@@ -44,7 +44,7 @@
         <applicationConfigurable id="settings.codegpt.services.anthropic" parentId="settings.codegpt.services"
                                  displayName="Anthropic"
                                  instance="ee.carlrobert.codegpt.settings.service.AnthropicServiceConfigurable"/>
-        <applicationConfigurable id="settings.codegpt.services.google" parentId="settings.codegpt.services"
+        <applicationConfigurable id="settings.codegegpt.services.google" parentId="settings.codegpt.services"
                                  displayName="Google"
                                  instance="ee.carlrobert.codegpt.settings.service.google.GoogleSettingsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.services.mistral" parentId="settings.codegpt.services"
@@ -94,7 +94,8 @@
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.models.ModelSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.IncludedFilesSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.advanced.AdvancedSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.conversations.ConversationsState"/>
+        <projectService serviceImplementation="ee.carlrobert.codegpt.conversations.ConversationsState"/>
+        <projectService serviceImplementation="ee.carlrobert.codegpt.conversations.ConversationService"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.codecompletions.psi.CompletionContextService"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.services.llama.ServerLogsManager"/>
         <projectService serviceImplementation="ee.carlrobert.codegpt.services.ExecutableRunnerService"/>

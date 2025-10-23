@@ -48,7 +48,7 @@ public final class ChatToolWindowContentManager {
         .getState()
         .getChatActions()
         .getStartInNewWindow();
-    if (startInNewWindow || ConversationsState.getCurrentConversation() == null) {
+    if (startInNewWindow || ConversationsState.getInstance(project).getCurrentConversation() == null) {
       createNewTabPanel().sendMessage(message, conversationType);
       return;
     }
@@ -78,7 +78,7 @@ public final class ChatToolWindowContentManager {
         .map(item -> {
           var panel = new ChatToolWindowTabPanel(
               project,
-              ConversationService.getInstance().startConversation(project));
+              ConversationService.getInstance(project).startConversation());
           item.addNewTab(panel);
           return panel;
         })
@@ -117,7 +117,7 @@ public final class ChatToolWindowContentManager {
       tabbedPane.clearAll();
       tabbedPane.addNewTab(new ChatToolWindowTabPanel(
           project,
-          ConversationService.getInstance().startConversation(project)));
+          ConversationService.getInstance(project).startConversation()));
     });
   }
 

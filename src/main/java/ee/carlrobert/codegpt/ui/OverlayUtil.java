@@ -105,7 +105,7 @@ public class OverlayUtil {
         Default);
   }
 
-  public static int showTokenLimitExceededDialog() {
+  public static int showTokenLimitExceededDialog(Project project) {
     return MessageDialogBuilder.okCancel(
             CodeGPTBundle.get("dialog.tokenLimitExceeded.title"),
             CodeGPTBundle.get("dialog.tokenLimitExceeded.description"))
@@ -116,7 +116,7 @@ public class OverlayUtil {
           @Override
           public void rememberChoice(boolean isSelected, int exitCode) {
             if (isSelected) {
-              ConversationsState.getInstance().discardAllTokenLimits();
+              ConversationsState.getInstance(project).discardAllTokenLimits();
             }
           }
 

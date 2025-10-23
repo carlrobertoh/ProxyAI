@@ -23,7 +23,7 @@ class CompletionRequestProviderTest : IntegrationTest() {
             instructions = "TEST_SYSTEM_PROMPT"
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         val firstMessage = createDummyMessage(500)
         val secondMessage = createDummyMessage(250)
         conversation.addMessage(firstMessage)
@@ -56,7 +56,7 @@ class CompletionRequestProviderTest : IntegrationTest() {
             instructions = "TEST_SYSTEM_PROMPT"
         }
         service<PromptsSettings>().state.personas.selectedPersona = customPersona
-        val conversation = ConversationService.getInstance().startConversation(project)
+        val conversation = ConversationService.getInstance(project).startConversation()
         val firstMessage = createDummyMessage("FIRST_TEST_PROMPT", 500)
         val secondMessage = createDummyMessage("SECOND_TEST_PROMPT", 250)
         conversation.addMessage(firstMessage)
