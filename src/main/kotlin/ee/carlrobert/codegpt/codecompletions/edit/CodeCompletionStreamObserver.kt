@@ -40,9 +40,17 @@ class CodeCompletionStreamObserver(
 
     override fun onError(t: Throwable?) {
         logger.error("Error occurred while fetching code completion", t)
-        if (t is StatusRuntimeException && t.status.code != Status.Code.UNAVAILABLE) {
+        if (t is StatusRuntimeException) {
+            val code = t.status.code
+            if (code != Status.Code.UNAVAILABLE && code != Status.Code.DEADLINE_EXCEEDED) {
+                OverlayUtil.showNotification(
+                    t.message ?: "Something went wrong",
+                    NotificationType.ERROR
+                )
+            }
+        } else {
             OverlayUtil.showNotification(
-                t.message ?: "Something went wrong",
+                t?.message ?: "Something went wrong",
                 NotificationType.ERROR
             )
         }

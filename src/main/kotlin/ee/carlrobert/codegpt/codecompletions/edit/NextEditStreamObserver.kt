@@ -54,6 +54,9 @@ class NextEditStreamObserver(
 
         try {
             if (ex is StatusRuntimeException) {
+                if (ex.status.code == Status.Code.DEADLINE_EXCEEDED) {
+                    return
+                }
                 OverlayUtil.showNotification(
                     ex.status.description ?: ex.localizedMessage,
                     NotificationType.ERROR,

@@ -54,7 +54,9 @@ class GrpcClientService(private val project: Project) : Disposable {
 
         val grpcRequest = createCodeCompletionGrpcRequest(request)
         codeCompletionObserver = CodeCompletionStreamObserver(channel, eventListener)
-        codeCompletionStub?.getCodeCompletion(grpcRequest, codeCompletionObserver)
+        codeCompletionStub
+            ?.withDeadlineAfter(300, TimeUnit.SECONDS)
+            ?.getCodeCompletion(grpcRequest, codeCompletionObserver)
     }
 
     fun getNextEdit(
@@ -73,7 +75,9 @@ class GrpcClientService(private val project: Project) : Disposable {
 
         val request = createNextEditGrpcRequest(editor, fileContent, caretOffset)
         nextEditStreamObserver = NextEditStreamObserver(editor, addToQueue) { dispose() }
-        nextEditStub?.nextEdit(request, nextEditStreamObserver)
+        nextEditStub
+            ?.withDeadlineAfter(300, TimeUnit.SECONDS)
+            ?.nextEdit(request, nextEditStreamObserver)
     }
 
     fun acceptEdit(responseId: UUID, acceptedEdit: String) {
