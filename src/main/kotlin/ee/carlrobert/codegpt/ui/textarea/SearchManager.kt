@@ -50,9 +50,8 @@ class SearchManager(
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
-        CodeAnalyzeActionItem(tagManager),
-        DiagnosticsActionItem(tagManager),
         MCPGroupItem(),
+        DiagnosticsActionItem(tagManager),
         WebActionItem(tagManager),
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
