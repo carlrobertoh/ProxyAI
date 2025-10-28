@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Order of search tags in the prompt lookup
 - Custom OpenAI serialization issues [#1142](https://github.com/carlrobertoh/ProxyAI/issues/1142), [#1151](https://github.com/carlrobertoh/ProxyAI/issues/1151)
 
-## [3.6.5-241.1] - 2025-10-22
+## [3.6.5-233] - 2025-10-22
 
 ### Added
 
@@ -1181,8 +1181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.6-233...HEAD
-[3.6.6-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.5-233...v3.6.6-233
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.5-233...HEAD
 [3.6.5-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.4-241.1...v3.6.5-233
 [3.6.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-241.1...v3.6.4-241.1
 [3.6.4-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-241.1...v3.6.4-233
