@@ -244,7 +244,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
     }
 
     if (availableProviders.contains(INCEPTION)) {
-      var inceptionGroup = DefaultActionGroup.createPopupGroup(() -> "Inception Labs");
+      var inceptionGroup = DefaultActionGroup.createPopupGroup(() -> "Inception");
       inceptionGroup.getTemplatePresentation().setIcon(Icons.Inception);
       inceptionGroup.add(createInceptionModelAction(presentation));
       actionGroup.add(inceptionGroup);
