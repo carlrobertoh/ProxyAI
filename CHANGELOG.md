@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - gRPC request timeouts during autocompletion and next-edits
+- Order of search tags in the prompt lookup
+- Custom OpenAI serialization issues [#1142](https://github.com/carlrobertoh/ProxyAI/issues/1142), [#1151](https://github.com/carlrobertoh/ProxyAI/issues/1151)
 
 ## [3.6.5-241.1] - 2025-10-22
 
