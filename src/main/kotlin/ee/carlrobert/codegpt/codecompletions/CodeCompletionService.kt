@@ -2,7 +2,6 @@ package ee.carlrobert.codegpt.codecompletions
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildChatBasedFIMHttpRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildCustomRequest
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory.buildInceptionRequest
@@ -29,8 +28,8 @@ import ee.carlrobert.llm.completion.CompletionEventListener
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSources.createFactory
 
-@Service(Service.Level.PROJECT)
-class CodeCompletionService(private val project: Project) {
+@Service
+class CodeCompletionService {
 
     fun getSelectedModelCode(): String? {
         return ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
@@ -63,9 +62,6 @@ class CodeCompletionService(private val project: Project) {
         return when (val selectedService =
             ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CODE_COMPLETION)) {
             OPENAI -> {
-                val openAISettings = OpenAISettings.getCurrentState()
-                // Check if user wants to use chat-based FIM (we'll add this setting later)
-                // For now, default to traditional completion
                 CompletionClientProvider.getOpenAIClient()
                     .getCompletionAsync(buildOpenAIRequest(infillRequest), eventListener)
             }

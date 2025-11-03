@@ -1,19 +1,19 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
-import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
-import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer
+import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
-import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
-import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.settings.service.inception.InceptionSettings
+import ee.carlrobert.codegpt.settings.service.ServiceType
 
 object NextEditCoordinator {
+
+    private val providers: Map<ServiceType, NextEditProvider> = mapOf(
+        ServiceType.PROXYAI to ProxyAINextEditProvider(),
+        ServiceType.INCEPTION to InceptionNextEditProvider()
+    )
 
     fun requestNextEdit(
         editor: Editor,
@@ -21,45 +21,11 @@ object NextEditCoordinator {
         caretOffset: Int = runReadAction { editor.caretModel.offset },
         addToQueue: Boolean = false,
     ) {
-        val provider = service<ModelSelectionService>().getServiceForFeature(FeatureType.NEXT_EDIT)
-        when (provider) {
-            PROXYAI -> {
-                if (!service<CodeGPTServiceSettings>().state.nextEditsEnabled) {
-                    return
-                }
+        val serviceType =
+            service<ModelSelectionService>().getServiceForFeature(FeatureType.NEXT_EDIT)
+        val provider = providers[serviceType] ?: return
 
-                editor.project?.service<GrpcClientService>()?.getNextEdit(
-                    editor,
-                    fileContent,
-                    caretOffset,
-                    addToQueue
-                )
-            }
-
-            INCEPTION -> {
-                if (!service<InceptionSettings>().state.nextEditsEnabled) {
-                    return
-                }
-
-                InceptionNextEditRunner.run(
-                    editor,
-                    fileContent,
-                    caretOffset,
-                    addToQueue
-                ) { response ->
-                    if (addToQueue) {
-                        CodeGPTKeys.REMAINING_PREDICTION_RESPONSE.set(editor, response)
-                    } else {
-                        runInEdt {
-                            if (editor.document.text == response.oldRevision) {
-                                CodeSuggestionDiffViewer.displayInlineDiff(editor, response)
-                            }
-                        }
-                    }
-                }
-            }
-
-            else -> null
-        }
+        editor.project?.let { CompletionProgressNotifier.update(it, true) }
+        provider.request(editor, fileContent, caretOffset, addToQueue)
     }
 }

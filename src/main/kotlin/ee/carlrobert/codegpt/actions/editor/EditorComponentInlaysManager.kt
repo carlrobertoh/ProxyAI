@@ -59,9 +59,7 @@ class EditorComponentInlaysManager(val editor: EditorImpl) : Disposable {
             )
             ?.also {
                 managedInlays[wrappedComponent] = it
-                Disposer.register(it, Disposable {
-                    managedInlays.remove(wrappedComponent)
-                })
+                Disposer.register(it, Disposable { managedInlays.remove(wrappedComponent) })
             }
     }
 

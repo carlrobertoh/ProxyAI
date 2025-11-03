@@ -64,8 +64,8 @@ abstract class CodeCompletionFeatureToggleActions(
     override fun update(e: AnActionEvent) {
         val selectedService =
             service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION)
-        val codeCompletionEnabled = e.project?.service<CodeCompletionService>()
-            ?.isCodeCompletionsEnabled(selectedService) == true
+        val codeCompletionEnabled =
+            service<CodeCompletionService>().isCodeCompletionsEnabled(selectedService) == true
         e.presentation.isVisible = codeCompletionEnabled != enableFeatureAction
         e.presentation.isEnabled = when (selectedService) {
             PROXYAI,

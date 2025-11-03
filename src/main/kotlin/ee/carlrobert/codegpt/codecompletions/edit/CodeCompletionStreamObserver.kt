@@ -1,6 +1,8 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
+import com.intellij.openapi.editor.Editor
+import ee.carlrobert.codegpt.CodeGPTKeys
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
@@ -15,6 +17,7 @@ import okhttp3.Request
 import okhttp3.sse.EventSource
 
 class CodeCompletionStreamObserver(
+    private val editor: Editor,
     private val channel: ProducerScope<InlineCompletionElement>,
     private val eventListener: CodeCompletionEventListener,
 ) : StreamObserver<PartialCodeCompletionResponse> {
@@ -34,11 +37,17 @@ class CodeCompletionStreamObserver(
     }
 
     override fun onNext(value: PartialCodeCompletionResponse) {
+        CodeGPTKeys.LAST_COMPLETION_RESPONSE_ID.set(editor, value.id)
         messageBuilder.append(value.partialCompletion)
         eventListener.onMessage(value.partialCompletion, emptyEventSource)
     }
 
     override fun onError(t: Throwable?) {
+        if (t is StatusRuntimeException && t.status.code == Status.Code.CANCELLED) {
+            eventListener.onCancelled(messageBuilder)
+            channel.close()
+            return
+        }
         logger.error("Error occurred while fetching code completion", t)
         if (t is StatusRuntimeException) {
             val code = t.status.code

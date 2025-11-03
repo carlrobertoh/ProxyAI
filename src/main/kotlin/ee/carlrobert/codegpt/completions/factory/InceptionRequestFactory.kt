@@ -8,6 +8,7 @@ import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.llm.client.inception.request.InceptionApplyRequest
+import ee.carlrobert.llm.client.inception.request.InceptionNextEditRequest
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 import ee.carlrobert.llm.completion.CompletionRequest
@@ -43,11 +44,17 @@ class InceptionRequestFactory : BaseRequestFactory() {
 
         return InceptionApplyRequest.Builder()
             .setModel(model)
-            .setMessages(
-                listOf(
-                    OpenAIChatCompletionStandardMessage("user", prompt)
-                )
-            )
+            .setMessages(listOf(OpenAIChatCompletionStandardMessage("user", prompt)))
+            .build()
+    }
+
+    override fun createNextEditRequest(params: NextEditParameters): InceptionNextEditRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.NEXT_EDIT)
+        val content = composeNextEditMessage(params)
+        val message = OpenAIChatCompletionStandardMessage("user", content)
+        return InceptionNextEditRequest.Builder()
+            .setModel(model)
+            .setMessages(listOf(message))
             .build()
     }
 
@@ -103,4 +110,3 @@ class InceptionRequestFactory : BaseRequestFactory() {
             .build()
     }
 }
-

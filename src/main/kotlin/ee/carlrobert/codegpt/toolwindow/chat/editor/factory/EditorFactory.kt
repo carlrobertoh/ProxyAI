@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor.factory
 
 import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffContext
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.openapi.application.ApplicationManager
@@ -11,16 +12,16 @@ import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.impl.ContextMenuPopupHandler
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.readText
 import com.intellij.ui.ColorUtil
 import com.intellij.util.application
 import com.intellij.util.ui.JBUI
 import com.intellij.vcsUtil.VcsUtil.getVirtualFile
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer.MyDiffContext
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ToolWindowEditorFileDetails
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
@@ -122,5 +123,17 @@ object EditorFactory {
                 || segment is SearchWaiting
                 || segment is SearchReplace
                 || content.startsWith("<<<")
+    }
+}
+
+private class MyDiffContext(private val prj: Project?) : DiffContext() {
+    private val data = UserDataHolderBase()
+    override fun getProject(): Project? = prj
+    override fun isFocusedInWindow(): Boolean = false
+    override fun isWindowFocused(): Boolean = false
+    override fun requestFocusInWindow() {}
+    override fun <T : Any?> getUserData(key: Key<T>): T? = data.getUserData(key)
+    override fun <T : Any?> putUserData(key: Key<T>, value: T?) {
+        data.putUserData(key, value)
     }
 }

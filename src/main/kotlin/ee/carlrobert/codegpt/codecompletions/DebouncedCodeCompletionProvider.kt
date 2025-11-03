@@ -53,6 +53,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
         return InlineCompletionSuggestion.Default(channelFlow {
             try {
+                currentCallRef.getAndSet(null)?.cancel()
                 val remainingCodeCompletion = REMAINING_CODE_COMPLETION.get(editor)
                 if (remainingCodeCompletion != null && request.event is InlineCompletionEvent.DirectCall) {
                     REMAINING_CODE_COMPLETION.set(editor, null)
@@ -72,13 +73,14 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
                 var eventListener = CodeCompletionEventListener(request.editor, this)
 
                 if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI) {
+                    project.service<GrpcClientService>().cancelCodeCompletion()
                     project.service<GrpcClientService>()
                         .getCodeCompletionAsync(eventListener, request, this)
                     return@channelFlow
                 }
 
                 val infillRequest = InfillRequestUtil.buildInfillRequest(request)
-                val call = project.service<CodeCompletionService>().getCodeCompletionAsync(
+                val call = service<CodeCompletionService>().getCodeCompletionAsync(
                     infillRequest,
                     CodeCompletionEventListener(request.editor, this)
                 )
@@ -97,7 +99,14 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
     }
 
     override suspend fun getDebounceDelay(request: InlineCompletionRequest): Duration {
-        return 300.toDuration(DurationUnit.MILLISECONDS)
+        val force = request.event is InlineCompletionEvent.DirectCall
+        return if (!force) {
+            val debounceMs = CompletionTracker.calcDebounceTime(request.editor)
+            CompletionTracker.updateLastCompletionRequestTime(request.editor)
+            debounceMs.toDuration(DurationUnit.MILLISECONDS)
+        } else {
+            0.toDuration(DurationUnit.MILLISECONDS)
+        }
     }
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
@@ -115,23 +124,19 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             ServiceType.MISTRAL -> MistralSettings.getCurrentState().isCodeCompletionsEnabled
             ServiceType.INCEPTION -> service<InceptionSettings>().state.codeCompletionsEnabled
             ServiceType.ANTHROPIC,
-            ServiceType.GOOGLE,
-            null -> false
+            ServiceType.GOOGLE -> false
         }
 
-        if (event is LookupInlineCompletionEvent) {
+        if (!codeCompletionsEnabled) {
+            return false
+        }
+
+        if (event is LookupInlineCompletionEvent || event is InlineCompletionEvent.DirectCall) {
             return true
         }
 
         val hasActiveCompletion =
             REMAINING_CODE_COMPLETION.get(event.toRequest()?.editor)?.partialCompletion?.isNotEmpty() == true
-
-        if (!codeCompletionsEnabled) {
-            return event is InlineCompletionEvent.DocumentChange
-                    && selectedService == ServiceType.PROXYAI
-                    && service<CodeGPTServiceSettings>().state.nextEditsEnabled
-                    && !hasActiveCompletion
-        }
 
         return event is InlineCompletionEvent.DocumentChange || hasActiveCompletion
     }

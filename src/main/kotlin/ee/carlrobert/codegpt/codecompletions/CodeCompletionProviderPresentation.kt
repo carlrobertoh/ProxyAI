@@ -13,7 +13,7 @@ class CodeCompletionProviderPresentation : InlineCompletionProviderPresentation 
 
     override fun getTooltip(project: Project?): JComponent {
         val selectedModelCode =
-            project?.service<CodeCompletionService>()?.getSelectedModelCode() ?: ""
+            service<CodeCompletionService>().getSelectedModelCode() ?: ""
         val text = if (selectedModelCode.isNotEmpty()) {
             "CodeGPT: $selectedModelCode"
         } else {

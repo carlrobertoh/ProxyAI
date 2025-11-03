@@ -15,7 +15,8 @@ message NextEditRequest {
   string file_name = 2;
   int32 cursor_position = 3;
   string git_diff = 4;
-  bool enable_telemetry = 5;
+  map<string, string> recently_viewed_files = 5;
+  string plugin_version = 6;
 }
 
 message NextEditResponse {
@@ -26,5 +27,7 @@ message NextEditResponse {
 
 message AcceptEditRequest {
   string response_id = 1;
-  string accepted_edit = 2;
+  string old_hunk = 2;
+  string new_hunk = 3;
+  int32 cursor_position = 4;
 }

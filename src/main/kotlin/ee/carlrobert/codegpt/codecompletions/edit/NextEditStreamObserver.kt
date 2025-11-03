@@ -9,7 +9,8 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
-import ee.carlrobert.codegpt.predictions.CodeSuggestionDiffViewer
+import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.predictions.NextEditSuggestionNavigator
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.service.NextEditResponse
@@ -30,7 +31,7 @@ class NextEditStreamObserver(
 
     override fun onNext(response: NextEditResponse) {
         if (addToQueue) {
-            CodeGPTKeys.REMAINING_PREDICTION_RESPONSE.set(editor, response)
+            CodeGPTKeys.REMAINING_NEXT_EDITS.set(editor, response)
         } else {
             runInEdt {
                 val documentText = editor.document.text
@@ -38,7 +39,7 @@ class NextEditStreamObserver(
                     && documentText != response.nextRevision
                     && documentText == response.oldRevision
                 ) {
-                    CodeSuggestionDiffViewer.displayInlineDiff(editor, response)
+                    NextEditSuggestionNavigator.display(editor, response)
                 }
             }
         }
@@ -57,13 +58,6 @@ class NextEditStreamObserver(
                 if (ex.status.code == Status.Code.DEADLINE_EXCEEDED) {
                     return
                 }
-                OverlayUtil.showNotification(
-                    ex.status.description ?: ex.localizedMessage,
-                    NotificationType.ERROR,
-                    createSimpleExpiring("Disable multi-line edits") {
-                        service<CodeGPTServiceSettings>().state.nextEditsEnabled =
-                            false
-                    })
             } else {
                 logger.error("Something went wrong", ex)
             }

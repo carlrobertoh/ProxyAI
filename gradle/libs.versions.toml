@@ -39,6 +39,7 @@ grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
 grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
 protobuf-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
 protobuf-java = { module = "io.grpc:protoc-gen-grpc-java", version.ref = "grpc" }
+protobuf-runtime = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }

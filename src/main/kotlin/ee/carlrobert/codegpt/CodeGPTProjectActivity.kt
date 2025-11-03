@@ -4,6 +4,7 @@ import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import ee.carlrobert.codegpt.actions.editor.EditorActionsUtil
@@ -12,7 +13,6 @@ import ee.carlrobert.codegpt.settings.configuration.ScreenshotPathDetector
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTService
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier
 import ee.carlrobert.codegpt.ui.OverlayUtil
-import com.intellij.openapi.diagnostic.thisLogger
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
@@ -38,17 +38,19 @@ class CodeGPTProjectActivity : ProjectActivity {
             logger.debug("Valid watch paths after filtering: $validPaths")
             if (validPaths.isNotEmpty()) {
                 logger.info("Starting screenshot file watching for ${validPaths.size} paths")
-                project.service<FileWatcher>().watchMultiplePaths(validPaths) { fileName, watchPath ->
-                    val fileExtension = getFileExtension(fileName)
-                    logger.trace("File detected: fileName=$fileName, extension='$fileExtension', watchPath=$watchPath")
-                    if (watchExtensions.contains(fileExtension)) {
-                        val fullPath = Paths.get(watchPath).resolve(fileName).absolutePathString()
-                        logger.info("New screenshot file created: $fullPath (extension='$fileExtension')")
-                        showImageAttachmentNotification(project, fullPath)
-                    } else {
-                        logger.trace("File extension '$fileExtension' not in watch list: $watchExtensions")
+                project.service<FileWatcher>()
+                    .watchMultiplePaths(validPaths) { fileName, watchPath ->
+                        val fileExtension = getFileExtension(fileName)
+                        logger.trace("File detected: fileName=$fileName, extension='$fileExtension', watchPath=$watchPath")
+                        if (watchExtensions.contains(fileExtension)) {
+                            val fullPath =
+                                Paths.get(watchPath).resolve(fileName).absolutePathString()
+                            logger.info("New screenshot file created: $fullPath (extension='$fileExtension')")
+                            showImageAttachmentNotification(project, fullPath)
+                        } else {
+                            logger.trace("File extension '$fileExtension' not in watch list: $watchExtensions")
+                        }
                     }
-                }
             } else {
                 logger.warn("No valid screenshot watch paths found - screenshot detection disabled")
             }
@@ -70,21 +72,23 @@ class CodeGPTProjectActivity : ProjectActivity {
             CodeGPTBundle.get("imageAttachmentNotification.content"),
             NotificationType.INFORMATION
         )
-            .addAction(NotificationAction.createSimpleExpiring(
-                CodeGPTBundle.get("imageAttachmentNotification.action")
-            ) {
-                CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.set(project, filePath)
-                project.messageBus
-                    .syncPublisher<AttachImageNotifier>(
-                        AttachImageNotifier.IMAGE_ATTACHMENT_FILE_PATH_TOPIC
-                    )
-                    .imageAttached(filePath)
-            })
-            .addAction(NotificationAction.createSimpleExpiring(
-                CodeGPTBundle.get("shared.notification.doNotShowAgain")
-            ) {
-                service<ConfigurationSettings>().state.checkForNewScreenshots = false
-            })
+            .addAction(
+                NotificationAction.createSimpleExpiring(
+                    CodeGPTBundle.get("imageAttachmentNotification.action")
+                ) {
+                    CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.set(project, filePath)
+                    project.messageBus
+                        .syncPublisher<AttachImageNotifier>(
+                            AttachImageNotifier.IMAGE_ATTACHMENT_FILE_PATH_TOPIC
+                        )
+                        .imageAttached(filePath)
+                })
+            .addAction(
+                NotificationAction.createSimpleExpiring(
+                    CodeGPTBundle.get("shared.notification.doNotShowAgain")
+                ) {
+                    service<ConfigurationSettings>().state.checkForNewScreenshots = false
+                })
             .notify(project)
     }
 }

@@ -47,7 +47,8 @@ class CodeCompletionFormatter(private val editor: Editor) {
         this.normalizedCompletion = completion.trim()
         this.originalCompletion = completion
 
-        return matchCompletionBrackets()
+         return withDebug()
+             .matchCompletionBrackets()
             .removeSuffix()
             .removeDuplicateQuotes()
             .removeMiddleQuotes()

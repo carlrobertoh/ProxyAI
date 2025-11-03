@@ -5,7 +5,9 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.CodeGPTPlugin
-import ee.carlrobert.codegpt.completions.*
+import ee.carlrobert.codegpt.completions.BaseRequestFactory
+import ee.carlrobert.codegpt.completions.ChatCompletionParameters
+import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.buildOpenAIMessages
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings

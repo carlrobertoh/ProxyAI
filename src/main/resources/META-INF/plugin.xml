@@ -116,24 +116,17 @@
 
     <actions>
         <action
-                id="codegpt.acceptNextPrediction"
-                text="Accept Prediction"
-                class="ee.carlrobert.codegpt.predictions.AcceptNextPredictionRevisionAction">
+                id="codegpt.acceptNextEdit"
+                text="Accept Next-Edit"
+                class="ee.carlrobert.codegpt.predictions.AcceptNextEditAction">
             <keyboard-shortcut first-keystroke="TAB" keymap="$default"/>
         </action>
 
         <action
-                id="codegpt.triggerCustomPrediction"
-                text="Trigger Prediction Manually"
-                class="ee.carlrobert.codegpt.predictions.TriggerCustomPredictionAction">
+                id="codegpt.triggerCompletion"
+                text="Trigger Completion Manually"
+                class="ee.carlrobert.codegpt.predictions.TriggerCompletionAction">
             <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
-        </action>
-
-        <action
-                id="codegpt.openPrediction"
-                text="Open Prediction"
-                class="ee.carlrobert.codegpt.predictions.OpenPredictionAction">
-            <keyboard-shortcut first-keystroke="ctrl shift ENTER" keymap="$default"/>
         </action>
 
         <action

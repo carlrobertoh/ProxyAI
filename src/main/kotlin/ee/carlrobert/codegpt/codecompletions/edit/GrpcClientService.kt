@@ -5,23 +5,22 @@ import com.intellij.codeInsight.inline.completion.elements.InlineCompletionEleme
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.util.net.ssl.CertificateManager
-import com.jetbrains.rd.util.UUID
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
+import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
-import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.telemetry.core.configuration.TelemetryConfiguration
 import ee.carlrobert.codegpt.util.GitUtil
+import ee.carlrobert.codegpt.util.RecentlyViewedFilesUtil
+import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.service.*
 import io.grpc.ManagedChannel
+import io.grpc.Context
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import io.grpc.netty.shaded.io.netty.channel.ChannelOption
@@ -32,10 +31,13 @@ import java.util.concurrent.TimeUnit
 class GrpcClientService(private val project: Project) : Disposable {
 
     private var channel: ManagedChannel? = null
-    private var codeCompletionStub: CodeCompletionServiceImplGrpc.CodeCompletionServiceImplStub? = null
+    private var codeCompletionStub: CodeCompletionServiceImplGrpc.CodeCompletionServiceImplStub? =
+        null
     private var codeCompletionObserver: CodeCompletionStreamObserver? = null
     private var nextEditStub: NextEditServiceImplGrpc.NextEditServiceImplStub? = null
     private var nextEditStreamObserver: NextEditStreamObserver? = null
+    private var codeCompletionContext: Context.CancellableContext? = null
+    private var nextEditContext: Context.CancellableContext? = null
 
     companion object {
         private const val HOST = "grpc.tryproxy.io"
@@ -53,10 +55,25 @@ class GrpcClientService(private val project: Project) : Disposable {
         ensureCodeCompletionConnection()
 
         val grpcRequest = createCodeCompletionGrpcRequest(request)
-        codeCompletionObserver = CodeCompletionStreamObserver(channel, eventListener)
-        codeCompletionStub
-            ?.withDeadlineAfter(300, TimeUnit.SECONDS)
-            ?.getCodeCompletion(grpcRequest, codeCompletionObserver)
+        codeCompletionObserver = CodeCompletionStreamObserver(request.editor, channel, eventListener)
+        codeCompletionContext?.cancel(null)
+        val ctx = Context.current().withCancellation()
+        codeCompletionContext = ctx
+        val prev = ctx.attach()
+        try {
+            codeCompletionStub
+                ?.withDeadlineAfter(10, TimeUnit.SECONDS)
+                ?.getCodeCompletion(grpcRequest, codeCompletionObserver)
+        } finally {
+            ctx.detach(prev)
+        }
+    }
+
+    @Synchronized
+    fun cancelCodeCompletion() {
+        codeCompletionContext?.cancel(null)
+        codeCompletionContext = null
+        codeCompletionObserver = null
     }
 
     fun getNextEdit(
@@ -65,40 +82,67 @@ class GrpcClientService(private val project: Project) : Disposable {
         caretOffset: Int,
         addToQueue: Boolean = false,
     ) {
-        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.NEXT_EDIT) != ServiceType.PROXYAI
-            || !service<CodeGPTServiceSettings>().state.nextEditsEnabled
-        ) {
-            return
-        }
-
         ensureNextEditConnection()
 
         val request = createNextEditGrpcRequest(editor, fileContent, caretOffset)
         nextEditStreamObserver = NextEditStreamObserver(editor, addToQueue) { dispose() }
-        nextEditStub
-            ?.withDeadlineAfter(300, TimeUnit.SECONDS)
-            ?.nextEdit(request, nextEditStreamObserver)
+        nextEditContext?.cancel(null)
+
+        val ctx = Context.current().withCancellation()
+        nextEditContext = ctx
+        val prev = ctx.attach()
+        try {
+            nextEditStub
+                ?.withDeadlineAfter(10, TimeUnit.SECONDS)
+                ?.nextEdit(request, nextEditStreamObserver)
+        } finally {
+            ctx.detach(prev)
+        }
     }
 
-    fun acceptEdit(responseId: UUID, acceptedEdit: String) {
-        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) != ServiceType.PROXYAI
-            || !TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled
-        ) {
-            return
-        }
+    @Synchronized
+    fun cancelNextEdit() {
+        nextEditContext?.cancel(null)
+        nextEditContext = null
+        nextEditStreamObserver = null
+    }
+
+    @Synchronized
+    fun acceptEdit(responseId: String, oldHunk: String, newHunk: String, cursorPosition: Int? = null) {
+        ensureActiveChannel()
 
         NextEditServiceImplGrpc
             .newBlockingStub(channel)
             .acceptEdit(
                 AcceptEditRequest.newBuilder()
-                    .setResponseId(responseId.toString())
-                    .setAcceptedEdit(acceptedEdit)
+                    .setResponseId(responseId)
+                    .setOldHunk(oldHunk)
+                    .setNewHunk(newHunk)
+                    .apply { cursorPosition?.let { setCursorPosition(it) } }
+                    .build()
+            )
+    }
+
+    @Synchronized
+    fun acceptCodeCompletion(responseId: String, acceptedCompletion: String) {
+        ensureActiveChannel()
+
+        CodeCompletionServiceImplGrpc
+            .newBlockingStub(channel)
+            .acceptCodeCompletion(
+                AcceptCodeCompletionRequest.newBuilder()
+                    .setResponseId(responseId)
+                    .setAcceptedCompletion(acceptedCompletion)
                     .build()
             )
     }
 
     @Synchronized
     fun refreshConnection() {
+        codeCompletionContext?.cancel(null)
+        codeCompletionContext = null
+        nextEditContext?.cancel(null)
+        nextEditContext = null
         channel?.let {
             if (!it.isShutdown) {
                 try {
@@ -148,18 +192,27 @@ class GrpcClientService(private val project: Project) : Disposable {
             .setFileContent(editor.document.text)
             .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")
             .setCursorPosition(runReadAction { editor.caretModel.offset })
-            .setEnableTelemetry(TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled)
+            .setPluginVersion(CodeGPTPlugin.getVersion())
             .build()
     }
 
-    private fun createNextEditGrpcRequest(editor: Editor, fileContent: String, caretOffset: Int) =
-        NextEditRequest.newBuilder()
+    private fun createNextEditGrpcRequest(
+        editor: Editor,
+        fileContent: String,
+        caretOffset: Int
+    ): NextEditRequest {
+        val recentlyViewedPairs =
+            RecentlyViewedFilesUtil.orderedFiles(project, editor.virtualFile, 3)
+                .map { it.path to FileUtil.readContent(it) }
+        return NextEditRequest.newBuilder()
             .setFileName(editor.virtualFile.name)
             .setFileContent(fileContent)
             .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")
             .setCursorPosition(caretOffset)
-            .setEnableTelemetry(TelemetryConfiguration.getInstance().isCompletionTelemetryEnabled)
+            .putAllRecentlyViewedFiles(recentlyViewedPairs.toMap())
+            .setPluginVersion(CodeGPTPlugin.getVersion())
             .build()
+    }
 
     private fun createChannel(): ManagedChannel = NettyChannelBuilder.forAddress(HOST, PORT)
         .useTransportSecurity()
@@ -169,9 +222,9 @@ class GrpcClientService(private val project: Project) : Disposable {
                 .build()
         )
         .withOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
-        .keepAliveTime(30, TimeUnit.SECONDS)
-        .keepAliveTimeout(10, TimeUnit.SECONDS)
-        .keepAliveWithoutCalls(true)
+        .keepAliveTime(2, TimeUnit.MINUTES)
+        .keepAliveTimeout(20, TimeUnit.SECONDS)
+        .keepAliveWithoutCalls(false)
         .idleTimeout(5, TimeUnit.MINUTES)
         .maxInboundMessageSize(32 * 1024 * 1024)
         .build()
@@ -194,6 +247,10 @@ class GrpcClientService(private val project: Project) : Disposable {
         GrpcCallCredentials(CredentialsStore.getCredential(CodeGptApiKey) ?: "")
 
     override fun dispose() {
+        codeCompletionContext?.cancel(null)
+        codeCompletionContext = null
+        nextEditContext?.cancel(null)
+        nextEditContext = null
         channel?.let { ch ->
             if (!ch.isShutdown) {
                 try {

@@ -150,6 +150,16 @@ data class InlineEditCompletionParameters(
     val cursorOffset: Int? = null
 ) : CompletionParameters
 
+data class NextEditParameters(
+    val project: Project?,
+    val fileName: String,
+    val filePath: String?,
+    val fileContent: String,
+    val caretOffset: Int,
+    val gitDiff: String? = null,
+    val contextTokens: Int = 1024
+) : CompletionParameters
+
 data class ImageDetails(
     val mediaType: String,
     val data: ByteArray

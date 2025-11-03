@@ -21,7 +21,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
         useOpenAIService("gpt-4", FeatureType.CODE_COMPLETION)
         service<CodeGPTServiceSettings>().state.nextEditsEnabled = false
         myFixture.configureByText(
-            "CompletionTest.java",
+            "CompletionTest.txt",
             FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
         )
         myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(3, 0))
@@ -61,7 +61,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
     fun `test code completion with Ollama provider and separate model settings`() {
         useOllamaService(FeatureType.CODE_COMPLETION)
         myFixture.configureByText(
-            "CompletionTest.java",
+            "CompletionTest.txt",
             FileUtil.getResourceContent("/codecompletions/code-completion-file.txt")
         )
         myFixture.editor.caretModel.moveToVisualPosition(VisualPosition(3, 0))

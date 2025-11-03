@@ -6,6 +6,7 @@ import com.intellij.openapi.diff.impl.patch.IdeaTextPatchBuilder
 import com.intellij.openapi.diff.impl.patch.UnifiedDiffWriter
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.util.io.toNioPathOrNull
 import com.intellij.openapi.vcs.VcsException
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import ee.carlrobert.codegpt.codecompletions.truncateText
@@ -17,6 +18,7 @@ import git4idea.history.GitHistoryUtils
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 import java.io.StringWriter
+import kotlin.Throws
 
 object GitUtil {
 
@@ -36,27 +38,30 @@ object GitUtil {
     }
 
     fun getCurrentChanges(project: Project): String? {
-        return getProjectRepository(project)?.let { repository ->
-            try {
-                val repoRootPath = repository.root.toNioPath()
-                val changes = ChangeListManager.getInstance(project).allChanges
-                    .filter { change ->
-                        change.virtualFile?.let { !it.fileType.isBinary } ?: false
-                    }
-                    .sortedByDescending { it.virtualFile?.timeStamp }
+        try {
+            val repoRootPath = project.basePath?.toNioPathOrNull() ?: return null
+            val changes = ChangeListManager.getInstance(project).allChanges
+                .filter { change ->
+                    change.virtualFile?.let { !it.fileType.isBinary } ?: false
+                }
 
-                val patches = IdeaTextPatchBuilder.buildPatch(
-                    project, changes, repoRootPath, false, true
-                )
-                val diffWriter = StringWriter()
-                UnifiedDiffWriter.write(
-                    null, repoRootPath, patches, diffWriter, "\n\n", null, null
-                )
-                diffWriter.toString().cleanDiff().truncateText(1024, true)
-            } catch (e: VcsException) {
-                logger.error("Failed to get git context", e)
-                null
+            val patches = IdeaTextPatchBuilder.buildPatch(
+                project, changes, repoRootPath, false, true
+            ).sortedByDescending { patch ->
+                patch.afterVersionId?.let {
+                    it.substringAfter("(date ")
+                        .substringBefore(")")
+                        .toLongOrNull() ?: 0L
+                } ?: 0L
             }
+            val diffWriter = StringWriter()
+            UnifiedDiffWriter.write(
+                null, repoRootPath, patches, diffWriter, "\n\n", null, null
+            )
+            return diffWriter.toString().cleanDiff().truncateText(1024, true)
+        } catch (e: VcsException) {
+            logger.error("Failed to get git context", e)
+            return null
         }
     }
 
@@ -158,7 +163,7 @@ object GitUtil {
                         line.startsWith("+++") ||
                         line.startsWith("===") ||
                         line.contains("\\ No newline at end of file")
-                        (!showContext && line.startsWith(" "))
+                (!showContext && line.startsWith(" "))
             }
             .joinToString("\n")
 }

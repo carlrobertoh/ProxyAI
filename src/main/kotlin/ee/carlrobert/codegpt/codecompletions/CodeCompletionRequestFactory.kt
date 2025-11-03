@@ -21,7 +21,6 @@ import ee.carlrobert.llm.client.ollama.completion.request.OllamaParameters
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 import ee.carlrobert.llm.client.openai.completion.request.OpenAITextCompletionRequest
-import ee.carlrobert.service.GrpcCodeCompletionRequest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -31,16 +30,6 @@ import java.nio.charset.StandardCharsets
 object CodeCompletionRequestFactory {
 
     private const val MAX_TOKENS = 128
-
-    @JvmStatic
-    fun buildCodeGPTRequest(details: InfillRequest): GrpcCodeCompletionRequest {
-        return GrpcCodeCompletionRequest.newBuilder()
-            .setFilePath(details.fileDetails?.filePath)
-            .setFileContent(details.fileDetails?.fileContent)
-            .setGitDiff("")
-            .setCursorPosition(details.caretOffset)
-            .build()
-    }
 
     @JvmStatic
     fun buildOpenAIRequest(details: InfillRequest): OpenAITextCompletionRequest {
