@@ -45,4 +45,22 @@ object MarkdownUtil {
             .build()
             .render(document)
     }
+
+    /**
+     * Extract raw contents of fenced triple-backtick code blocks (without the fences or language).
+     * Returns only non-blank code block bodies in order of appearance.
+     */
+    @JvmStatic
+    fun extractCodeBlocks(inputMarkdown: String): List<String> {
+        val pattern = Pattern.compile(
+            "(?ms)```([a-zA-Z0-9_+\-]*)\s*\r?\n([\s\S]*?)\r?\n```"
+        )
+        val matcher = pattern.matcher(inputMarkdown)
+        val results = mutableListOf<String>()
+        while (matcher.find()) {
+            val content = matcher.group(2)
+            if (!content.isNullOrBlank()) results.add(content)
+        }
+        return results
+    }
 }

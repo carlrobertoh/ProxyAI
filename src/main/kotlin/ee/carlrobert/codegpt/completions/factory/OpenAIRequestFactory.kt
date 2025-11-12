@@ -28,7 +28,7 @@ import java.nio.file.Path
 class OpenAIRequestFactory : BaseRequestFactory() {
 
     override fun createChatRequest(params: ChatCompletionParameters): OpenAIChatCompletionRequest {
-        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+        val model = ModelSelectionService.getInstance().getModelForFeature(params.featureType)
         val configuration = service<ConfigurationSettings>().state
         val requestBuilder: OpenAIChatCompletionRequest.Builder =
             OpenAIChatCompletionRequest.Builder(buildOpenAIMessages(model, params))

@@ -5,6 +5,7 @@ import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.util.MarkdownUtil
+import ee.carlrobert.codegpt.CodeGPTBundle
 import java.awt.BorderLayout
 import java.awt.event.ItemEvent
 import javax.swing.*
@@ -30,7 +31,7 @@ class ThoughtProcessPanel : JPanel(BorderLayout()) {
     fun setFinished() {
         if (finished) return
 
-        toggleButton.text = "Thought Process"
+        toggleButton.text = CodeGPTBundle.get("thoughtProcess.title")
         toggleButton.isSelected = false
         finished = true
 
@@ -63,7 +64,7 @@ class ThoughtProcessPanel : JPanel(BorderLayout()) {
     }
 
     private fun createToggleButton() =
-        JToggleButton("Thinking...", AllIcons.General.ArrowUp, true).apply {
+        JToggleButton(CodeGPTBundle.get("thoughtProcess.thinking"), AllIcons.General.ArrowUp, true).apply {
             isFocusPainted = false
             isContentAreaFilled = false
             background = background

@@ -338,9 +338,9 @@ class InlineEditSearchReplaceListener(
             val hadChanges = showFinalDiff()
 
             val inlay = editor.getUserData(InlineEditInlay.INLAY_KEY)
-            inlay?.observableProperties?.hasPendingChanges?.set(hadChanges)
             inlay?.setThinkingVisible(false)
             inlay?.setInlineEditControlsVisible(hadChanges)
+            inlay?.hideAskPopup()
             inlay?.onCompletionFinished()
 
             val statusComponent = (editor.scrollPane as JBScrollPane).statusComponent
@@ -1013,10 +1013,6 @@ class InlineEditSearchReplaceListener(
                 }
             }
         }
-    }
-
-    fun showHint(message: String) {
-        showInlineHint(message)
     }
 
     companion object {

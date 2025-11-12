@@ -1,10 +1,13 @@
 package ee.carlrobert.codegpt.inlineedit
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -13,40 +16,49 @@ import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.popup.JBPopup
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Key
 import com.intellij.ui.JBColor
+import com.intellij.ui.awt.RelativePoint
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTKeys
+import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.actions.editor.EditorComponentInlaysManager
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.inlineedit.engine.ApplyContext
+import ee.carlrobert.codegpt.inlineedit.engine.InlineEditEngineImpl
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository
+import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
+import ee.carlrobert.codegpt.ui.IconActionButton
+import ee.carlrobert.codegpt.ui.components.BadgeChip
+import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.util.GitUtil
+import ee.carlrobert.codegpt.util.MarkdownUtil
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import kotlinx.coroutines.*
 import java.awt.*
+import java.awt.datatransfer.StringSelection
 import java.awt.event.ActionEvent
 import java.awt.event.KeyEvent
-import javax.swing.AbstractAction
-import javax.swing.JComponent
-import javax.swing.KeyStroke
-import javax.swing.Timer
+import javax.swing.*
 
 data class ObservableProperties(
     val submitted: AtomicBooleanProperty = AtomicBooleanProperty(false),
     val accepted: AtomicBooleanProperty = AtomicBooleanProperty(false),
     val loading: AtomicBooleanProperty = AtomicBooleanProperty(false),
-    val hasPendingChanges: AtomicBooleanProperty = AtomicBooleanProperty(false),
 )
 
 class InlineEditInlay(private var editor: Editor) : Disposable {
@@ -111,7 +123,6 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
                 submissionHandler.restorePreviousPrompt()
             }
         },
-        showModeSelector = false,
         withRemovableSelectedEditorTag = false
     ).apply {
         isOpaque = true
@@ -125,11 +136,55 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         }
     }
 
+    private var askResponseBody: ChatMessageResponseBody? = null
+    private var askContainer: BorderLayoutPanel? = null
+    private var askPopup: JBPopup? = null
+    private var askApplyChip: BadgeChip? = null
+    private var lastAssistantResponse: String = ""
+    private val askMinHeight: Int = JBUI.scale(200)
+    private val askMaxHeight: Int = JBUI.scale(520)
+
+    private data class AskPanelContext(
+        val editorEx: EditorEx,
+        val editorComp: JComponent,
+        val panelWidth: Int,
+        val panelLeft: Int,
+        val panelTop: Int,
+        val panelBottom: Int,
+        val spaceAbove: Int,
+        val spaceBelow: Int,
+        val placeAbove: Boolean,
+    )
+
+    private fun getAskPanelContext(): AskPanelContext? {
+        val editorEx = editor as? EditorEx ?: return null
+        val editorComp = editorEx.contentComponent
+        val panelSize = if (mainContainer.width > 0) mainContainer.size else mainContainer.preferredSize
+        val panelPoint = SwingUtilities.convertPoint(mainContainer, 0, 0, editorComp)
+        val panelTop = panelPoint.y
+        val panelBottom = panelTop + panelSize.height
+        val visible = editorEx.scrollingModel.visibleArea
+        val spaceAbove = panelTop - visible.y - JBUI.scale(6)
+
+        return AskPanelContext(
+            editorEx = editorEx,
+            editorComp = editorComp,
+            panelWidth = panelSize.width,
+            panelLeft = panelPoint.x,
+            panelTop = panelTop,
+            panelBottom = panelBottom,
+            spaceAbove = spaceAbove,
+            spaceBelow = (visible.y + visible.height) - panelBottom - JBUI.scale(6),
+            placeAbove = spaceAbove >= askMinHeight,
+        )
+    }
+
     private val mainContainer = BorderLayoutPanel().apply {
         isOpaque = true
-        add(userInputPanel, BorderLayout.CENTER)
+        // Place input at SOUTH so it keeps its preferred height and doesn't stretch
+        add(userInputPanel, BorderLayout.SOUTH)
 
-        border = JBUI.Borders.empty(8, 12, 8, 12)
+        border = JBUI.Borders.empty(4, 8, 2, 8)
         background = userInputPanel.background ?: JBColor.background()
 
         isFocusable = true
@@ -190,9 +245,201 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         val editorEx = editor as EditorEx
         val sessionConversation = Conversation().apply {
             projectPath = editorEx.project?.basePath
-            title = "Inline Edit (${editorEx.virtualFile?.name ?: "untitled"})"
+            val fileName = editorEx.virtualFile?.name ?: CodeGPTBundle.get("inlineEdit.conversation.untitled")
+            title = CodeGPTBundle.get("inlineEdit.conversation.title", fileName)
         }
-        submissionHandler = InlineEditSubmissionHandler(editor, observableProperties, sessionConversation)
+        submissionHandler =
+            InlineEditSubmissionHandler(editor, observableProperties, sessionConversation)
+    }
+
+    fun isQuickQuestionEnabled() = userInputPanel.isQuickQuestionEnabled()
+
+    private fun buildAskContainer(): JComponent {
+        val container = BorderLayoutPanel().apply {
+            isOpaque = true
+            background = userInputPanel.background ?: JBColor.background()
+            border = JBUI.Borders.empty(6, 8)
+            minimumSize = Dimension(JBUI.scale(600), JBUI.scale(400))
+        }
+
+        val responseBody = ChatMessageResponseBody(
+            project,
+            true,
+            this
+        ).apply {
+            isOpaque = false
+        }
+        askResponseBody = responseBody
+
+        val scrollPane = JBScrollPane(responseBody).apply {
+            border = JBUI.Borders.empty()
+            horizontalScrollBarPolicy = JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            verticalScrollBarPolicy = JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+            isOpaque = false
+            viewport.isOpaque = false
+        }
+
+        val copyButton = IconActionButton(
+            object :
+                AnAction(
+                    CodeGPTBundle.get("shared.copy"),
+                    CodeGPTBundle.get("shared.copyToClipboard"),
+                    com.intellij.icons.AllIcons.Actions.Copy
+                ) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    val text = lastAssistantResponse
+                    val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+                    clipboard.setContents(StringSelection(text), null)
+                }
+
+                override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = lastAssistantResponse.isNotBlank()
+                }
+            },
+            "COPY_MD"
+        )
+
+        val applyChip = BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, { handleApply() }).apply {
+            isVisible = false
+            isEnabled = false
+        }
+        askApplyChip = applyChip
+
+        val header = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), JBUI.scale(4))).apply {
+            isOpaque = false
+            add(copyButton)
+            add(applyChip)
+        }
+
+        container.add(header, BorderLayout.NORTH)
+        container.add(scrollPane, BorderLayout.CENTER)
+
+        askContainer = container
+        return container
+    }
+
+    private fun showAskPopup() {
+        runInEdt {
+            if (askPopup?.isVisible == true) return@runInEdt
+            val content = askContainer ?: buildAskContainer()
+            val ctx = getAskPanelContext() ?: return@runInEdt
+            val availableHeight = if (ctx.placeAbove) ctx.spaceAbove else ctx.spaceBelow
+            val pref = content.preferredSize
+            val targetH =
+                pref.height.coerceIn(askMinHeight, askMaxHeight).coerceAtMost(availableHeight)
+                    .coerceAtLeast(askMinHeight)
+
+            content.preferredSize = Dimension(ctx.panelWidth, targetH)
+
+            val builder = JBPopupFactory.getInstance()
+                .createComponentPopupBuilder(content, null)
+                .setRequestFocus(false)
+                .setFocusable(false)
+                .setResizable(true)
+                .setMovable(true)
+                .setCancelOnClickOutside(false)
+                .setCancelOnOtherWindowOpen(false)
+                .setCancelOnWindowDeactivation(false)
+                .setMinSize(Dimension(ctx.panelWidth, askMinHeight))
+
+            val popup = builder.createPopup()
+            askPopup = popup
+
+            popup.size = Dimension(ctx.panelWidth, targetH)
+
+            val margin = JBUI.scale(6)
+            val anchorPoint = if (ctx.placeAbove) {
+                Point(ctx.panelLeft, ctx.panelTop + targetH - margin)
+            } else {
+                Point(ctx.panelLeft, ctx.panelBottom + margin)
+            }
+            popup.show(RelativePoint(ctx.editorComp, anchorPoint))
+            adjustAskPopupSize()
+        }
+    }
+
+    fun hideAskPopup() {
+        runInEdt {
+            askPopup?.cancel()
+            askPopup = null
+            resetApplyChip()
+            askResponseBody?.clear()
+        }
+    }
+
+    fun resetAskContainer() {
+        runInEdt {
+            showAskPopup()
+            askResponseBody?.clear()
+            resetApplyChip()
+        }
+    }
+
+    fun updateAskResponseStream(partial: String) {
+        runInEdt {
+            showAskPopup()
+            askResponseBody?.updateMessage(partial)
+            adjustAskPopupSize()
+        }
+    }
+
+    fun setAskLastAssistantResponse(content: String) {
+        lastAssistantResponse = content
+        val hasBlocks = MarkdownUtil.extractCodeBlocks(content).isNotEmpty()
+        setApplyChip(enabled = hasBlocks)
+    }
+
+    fun updateApplyVisibilityAfterComplete(fullMessage: String) {
+        val hasBlocks = MarkdownUtil.extractCodeBlocks(fullMessage).isNotEmpty()
+        setApplyChip(enabled = hasBlocks, visible = hasBlocks)
+        adjustAskPopupSize()
+    }
+
+    private fun adjustAskPopupSize() {
+        val popup = askPopup ?: return
+        val container = askContainer ?: return
+        val ctx = getAskPanelContext() ?: return
+
+        container.revalidate()
+        val pref = container.preferredSize
+        val targetH = pref.height.coerceIn(askMinHeight, askMaxHeight)
+
+        if (popup.size.width != ctx.panelWidth || popup.size.height != targetH) {
+            popup.size = Dimension(ctx.panelWidth, targetH)
+        }
+
+        val margin = JBUI.scale(6)
+        val anchorPoint = if (ctx.placeAbove) {
+            Point(ctx.panelLeft, ctx.panelTop - targetH - margin)
+        } else {
+            Point(ctx.panelLeft, ctx.panelBottom + margin)
+        }
+        popup.setLocation(RelativePoint(ctx.editorComp, anchorPoint).screenPoint)
+    }
+
+    private fun resetApplyChip() {
+        askApplyChip?.isVisible = false
+        askApplyChip?.isEnabled = false
+    }
+
+    private fun setApplyChip(enabled: Boolean, visible: Boolean? = null) {
+        askApplyChip?.isEnabled = enabled
+        if (visible != null) askApplyChip?.isVisible = visible
+    }
+
+    private fun handleApply() {
+        hideAskPopup()
+
+        val editorEx = editor as? EditorEx ?: return
+        val ctx = ApplyContext(
+            editorEx,
+            this,
+            submissionHandler,
+            userInputPanel.text,
+            lastAssistantResponse
+        )
+        InlineEditEngineImpl().apply(ctx)
     }
 
     @RequiresEdt
@@ -241,24 +488,25 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         runInEdt {
             try {
                 val session = editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)
-                val hasPending = (session?.hasPendingHunks() == true) || observableProperties.hasPendingChanges.get()
+                val accepted = observableProperties.accepted.get()
+                val renderer = editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER)
+                val hasPending = (session?.hasPendingHunks() == true) || (renderer?.hasPendingChanges() == true)
+                val shouldPrompt = !accepted && hasPending
 
-                if (hasPending) {
+                if (shouldPrompt) {
                     val result = Messages.showYesNoDialog(
                         project,
-                        "You have pending changes that will be lost. Do you want to close anyway?",
-                        "Pending Changes",
-                        "Close Anyway",
-                        "Cancel",
+                        CodeGPTBundle.get("inlineEdit.closeWarning.message"),
+                        CodeGPTBundle.get("inlineEdit.closeWarning.title"),
+                        CodeGPTBundle.get("inlineEdit.closeWarning.closeAnyway"),
+                        CodeGPTBundle.get("shared.cancel"),
                         Messages.getWarningIcon()
                     )
                     if (result != Messages.YES) {
                         return@runInEdt
                     }
 
-                    invokeLater {
-                        submissionHandler.handleReject()
-                    }
+                    invokeLater { submissionHandler.handleReject() }
                 }
 
                 logger.debug("Closing inline edit inlay")
@@ -274,6 +522,10 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         serviceScope.cancel()
         inlayDisposable?.dispose()
         editor.putUserData(INLAY_KEY, null)
+        askResponseBody = null
+        askContainer = null
+        askPopup?.cancel()
+        askPopup = null
     }
 
     fun openOrCreateChatFromSession(sessionConversation: Conversation) {
@@ -288,10 +540,12 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         val newConversation = Conversation().apply {
             title = sessionConversation.title
             projectPath = sessionConversation.projectPath
-            setMessages(sessionConversation.messages)
+            messages = sessionConversation.messages
         }
-        ee.carlrobert.codegpt.conversations.ConversationService.getInstance().addConversation(newConversation)
-        ee.carlrobert.codegpt.conversations.ConversationService.getInstance().saveConversation(newConversation)
+        ee.carlrobert.codegpt.conversations.ConversationService.getInstance()
+            .addConversation(newConversation)
+        ee.carlrobert.codegpt.conversations.ConversationService.getInstance()
+            .saveConversation(newConversation)
         openedChatConversation = newConversation
         project.service<ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager>()
             .displayConversation(newConversation)
@@ -315,7 +569,7 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         userInputPanel.setInlineEditControlsVisible(visible)
     }
 
-    fun setThinkingVisible(visible: Boolean, text: String = "Thinking…") {
+    fun setThinkingVisible(visible: Boolean, text: String = CodeGPTBundle.get("shared.thinking")) {
         userInputPanel.setThinkingVisible(visible, text)
     }
 
@@ -460,7 +714,7 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         try {
             val currentHeight = userInputPanel.height
             val preferredHeight = userInputPanel.preferredSize.height
-            val minHeight = 80
+            val minHeight = 60
 
             logger.debug("Current sizing - Height: $currentHeight, Preferred: $preferredHeight")
 
@@ -539,6 +793,7 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
                 when (it) {
                     is FileTagDetails -> it.virtualFile
                     is EditorTagDetails -> it.virtualFile
+                    is FolderTagDetails -> it.folder // TODO
                     else -> null
                 }
             }
@@ -565,6 +820,4 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         processor.process(Message("", ""), stringBuilder)
         return stringBuilder.toString().takeIf { it.isNotBlank() }
     }
-
-
 }

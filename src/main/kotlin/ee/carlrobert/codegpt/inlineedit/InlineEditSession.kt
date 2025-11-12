@@ -11,10 +11,8 @@ import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.RangeMarker
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.keymap.KeymapManager
 import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.TextRange
 import com.intellij.ui.components.JBScrollPane
 import ee.carlrobert.codegpt.CodeGPTKeys
@@ -70,7 +68,6 @@ class InlineEditSession(
         hunks.clear()
         hunks.addAll(newHunks)
         renderer.renderHunks(hunks)
-        updateHasPendingChangesFlag()
     }
 
     private fun computeHunks(): List<Hunk> {
@@ -145,7 +142,6 @@ class InlineEditSession(
         hunks.addAll(newHunks)
         renderer.setInteractive(interactive)
         renderer.replaceHunks(hunks)
-        updateHasPendingChangesFlag()
     }
 
     fun acceptNearestToCaret() {
@@ -166,16 +162,20 @@ class InlineEditSession(
 
     fun acceptAll() {
         editor.getUserData(InlineEditInlay.INLAY_KEY)?.markChangesAsAccepted()
-        hunks
-            .filter { !it.accepted && !it.rejected }
-            .sortedByDescending { it.baseMarker.startOffset }
-            .forEach { acceptHunk(it) }
-        removeCompareLinkIfAny()
-        clearAcceptedHunks()
-    }
 
-    private fun clearAcceptedHunks() {
-        hunks.removeIf { it.accepted }
+        WriteCommandAction.runWriteCommandAction(project) {
+            val start = rootMarker.startOffset.coerceAtLeast(0)
+            val end = rootMarker.endOffset.coerceAtLeast(start).coerceAtMost(editor.document.textLength)
+            editor.document.replaceString(start, end, proposedText)
+        }
+
+        hunks.clear()
+        lockedRanges.clear()
+        rejectedRanges.clear()
+        renderer.replaceHunks(emptyList())
+
+        editor.getUserData(InlineEditInlay.INLAY_KEY)?.setInlineEditControlsVisible(false)
+        removeCompareLinkIfAny()
     }
 
     fun rejectAll() {
@@ -186,7 +186,10 @@ class InlineEditSession(
         editor.getUserData(InlineEditInlay.INLAY_KEY)
             ?.restorePreviousPrompt()
         editor.getUserData(InlineEditInlay.INLAY_KEY)?.let {
-            try { it.dispose() } catch (_: Exception) {}
+            try {
+                it.dispose()
+            } catch (_: Exception) {
+            }
             editor.putUserData(InlineEditInlay.INLAY_KEY, null)
         }
         dispose()
@@ -216,7 +219,6 @@ class InlineEditSession(
                 removeCompareLinkIfAny()
             }
         }
-        updateHasPendingChangesFlag()
     }
 
     private fun rejectHunk(hunk: Hunk) {
@@ -244,7 +246,6 @@ class InlineEditSession(
                 ?.setInlineEditControlsVisible(false)
             removeCompareLinkIfAny()
         }
-        updateHasPendingChangesFlag()
     }
 
     fun accept(hunk: Hunk) = acceptHunk(hunk)
@@ -255,14 +256,8 @@ class InlineEditSession(
         return hunks.any { !it.accepted && !it.rejected }
     }
 
-    private fun updateHasPendingChangesFlag() {
-        editor.getUserData(InlineEditInlay.INLAY_KEY)
-            ?.observableProperties
-            ?.hasPendingChanges
-            ?.set(hasPendingHunks())
-    }
-
     private fun rangesOverlap(aStart: Int, aEnd: Int, bStart: Int, bEnd: Int): Boolean {
+        if (aStart == aEnd && bStart == bEnd) return aStart == bStart
         val start = maxOf(aStart, bStart)
         val end = minOf(aEnd, bEnd)
         return start < end

@@ -75,6 +75,14 @@ class InlineEditInlayRenderer(
 
     private val hunkUIs = mutableListOf<HunkUI>()
 
+    fun hasPendingChanges(): Boolean {
+        val session = editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_SESSION)
+        if (session != null) return session.hasPendingHunks()
+        val anyPendingChanges = changes.any { !it.isAccepted && !it.isRejected }
+        val anyPendingHunks = hunkUIs.any { !it.hunk.accepted && !it.hunk.rejected }
+        return anyPendingChanges || anyPendingHunks
+    }
+
     fun renderHunks(hunks: List<InlineEditSession.Hunk>) {
         runInEdt {
             hunks.forEach { renderHunk(it) }
@@ -481,9 +489,40 @@ class InlineEditInlayRenderer(
             session.acceptAll()
             return
         }
-        val changesToAccept = changes.filter { !it.isAccepted && !it.isRejected }
+        val changesToAccept = changes
+            .filter { !it.isAccepted && !it.isRejected }
             .sortedByDescending { it.startOffset }
-        changesToAccept.forEach { acceptChange(it) }
+        if (changesToAccept.isEmpty()) return
+
+        // Apply all pending changes in a single write command to avoid
+        // interleaved recomputation and multiple command entries.
+        WriteCommandAction.runWriteCommandAction(
+            project,
+            ee.carlrobert.codegpt.CodeGPTBundle.get("inlineEdit.undo.acceptAll.commandTitle"),
+            ee.carlrobert.codegpt.CodeGPTBundle.get("inlineEdit.undo.commandGroup"),
+            {
+                changesToAccept.forEach { change ->
+                    try {
+                        editor.getUserData(InlineEditInlay.INLAY_KEY)
+                            ?.markChangesAsAccepted()
+                        editor.document.replaceString(
+                            change.startOffset,
+                            change.endOffset,
+                            change.newText
+                        )
+                        change.isAccepted = true
+                        removeChangeVisuals(change)
+                    } catch (e: Exception) {
+                        logger.debug("Error accepting change during bulk apply", e)
+                    }
+                }
+            }
+        )
+
+        if (changes.isEmpty()) {
+            editor.getUserData(InlineEditInlay.INLAY_KEY)
+                ?.setInlineEditControlsVisible(false)
+        }
     }
 
     fun rejectAll() {

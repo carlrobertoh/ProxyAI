@@ -21,6 +21,12 @@ import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.WrapLayout
+import ee.carlrobert.codegpt.ui.IconActionButton
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import ee.carlrobert.codegpt.ui.components.BadgeChip
+import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.TagDetailsComparator
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
@@ -32,6 +38,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.awt.*
+import java.awt.datatransfer.StringSelection
+import java.awt.Toolkit
 import java.awt.event.ActionListener
 import javax.swing.JButton
 import javax.swing.JPanel
@@ -42,14 +50,16 @@ class UserInputHeaderPanel(
     private val tagManager: TagManager,
     private val totalTokensPanel: TotalTokensPanel,
     private val promptTextField: PromptTextField,
-    private val withRemovableSelectedEditorTag: Boolean
+    private val withRemovableSelectedEditorTag: Boolean,
+    private val onApply: (() -> Unit)? = null,
+    private val getMarkdownContent: (() -> String)? = null
 ) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener {
 
     companion object {
         private const val INITIAL_VISIBLE_FILES = 2
     }
 
-    private val emptyText = JBLabel("No context included").apply {
+    private val emptyText = JBLabel(CodeGPTBundle.get("userInput.noContextIncluded")).apply {
         foreground = JBUI.CurrentTheme.Label.disabledForeground()
         font = JBUI.Fonts.smallFont()
         isVisible = getSelectedEditor(project) == null
@@ -73,6 +83,34 @@ class UserInputHeaderPanel(
         })
         add(emptyText)
     }
+
+    private val applyChip = onApply?.let { handler ->
+        BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, handler)
+            .apply { isVisible = false }
+    }
+
+    private val copyButton = IconActionButton(
+        object : AnAction(
+            CodeGPTBundle.get("shared.copy"),
+            CodeGPTBundle.get("shared.copyToClipboard"),
+            AllIcons.Actions.Copy
+        ) {
+            override fun actionPerformed(e: AnActionEvent) {
+                val text = getMarkdownContent?.invoke().orEmpty()
+                if (text.isNotEmpty()) {
+                    val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+                    clipboard.setContents(StringSelection(text), null)
+                }
+            }
+
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+            override fun update(e: AnActionEvent) {
+                e.presentation.isEnabled = !getMarkdownContent?.invoke().isNullOrEmpty()
+            }
+        },
+        "COPY_MD"
+    ).apply { isVisible = getMarkdownContent != null }
 
     private val backgroundScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -233,7 +271,21 @@ class UserInputHeaderPanel(
         border = JBUI.Borders.empty()
 
         add(defaultHeaderTagsPanel)
+        applyChip?.let { add(it) }
+        add(copyButton)
         addInitialTags()
+    }
+
+    fun setApplyVisible(visible: Boolean) {
+        applyChip?.isVisible = visible
+        revalidate()
+        repaint()
+    }
+
+    fun setApplyEnabled(enabled: Boolean) {
+        applyChip?.isEnabled = enabled
+        revalidate()
+        repaint()
     }
 
     private fun addInitialTags() {
@@ -291,7 +343,7 @@ class UserInputHeaderPanel(
             isContentAreaFilled = false
             isOpaque = false
             border = null
-            toolTipText = "Add Context"
+            toolTipText = CodeGPTBundle.get("userInput.addContextTooltip")
             icon = IconUtil.scale(AllIcons.General.InlineAdd, null, 0.75f)
             rolloverIcon = IconUtil.scale(AllIcons.General.InlineAddHover, null, 0.75f)
             pressedIcon = IconUtil.scale(AllIcons.General.InlineAddHover, null, 0.75f)

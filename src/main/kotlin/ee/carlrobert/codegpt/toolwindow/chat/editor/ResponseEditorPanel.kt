@@ -17,6 +17,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.ui.JBColor
 import com.intellij.util.application
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
@@ -46,11 +47,13 @@ import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest
 import ee.carlrobert.llm.client.codegpt.response.CodeGPTException
 import java.util.regex.Pattern
+import javax.swing.BorderFactory
 
 class ResponseEditorPanel(
     private val project: Project,
     item: Segment,
     readOnly: Boolean,
+    private val compact: Boolean,
     disposableParent: Disposable,
 ) : BorderLayoutPanel(), Disposable {
 
@@ -67,17 +70,29 @@ class ResponseEditorPanel(
     private var searchReplaceHandler: SearchReplaceHandler
 
     init {
-        border = JBUI.Borders.empty(8, 0)
         isOpaque = false
+        if (compact) {
+            val visibleBorderColor = JBColor.namedColor("Component.borderColor", JBColor(0xC4C9D0, 0x44484F))
+            border = BorderFactory.createCompoundBorder(
+                JBUI.Borders.customLine(visibleBorderColor, 1),
+                JBUI.Borders.empty(4, 6)
+            )
+        } else {
+            border = JBUI.Borders.empty(8, 0)
+        }
 
-        val state = stateManager.createFromSegment(item, readOnly)
+        val state = stateManager.createFromSegment(item, readOnly, compact = compact)
         val editor = state.editor
         configureEditor(editor)
         searchReplaceHandler = SearchReplaceHandler(stateManager) { oldEditor, newEditor ->
             replaceEditor(oldEditor, newEditor)
         }
 
-        addToCenter(editor.component)
+        if (compact && editor.editorKind != EditorKind.DIFF) {
+            addToCenter(createCompactEditorContainer(editor))
+        } else {
+            addToCenter(editor.component)
+        }
         updateEditorUI()
 
         Disposer.register(disposableParent, this)
@@ -103,7 +118,11 @@ class ResponseEditorPanel(
             removeAll()
 
             configureEditor(newEditor)
-            addToCenter(newEditor.component)
+            if (compact && newEditor.editorKind != EditorKind.DIFF) {
+                addToCenter(createCompactEditorContainer(newEditor))
+            } else {
+                addToCenter(newEditor.component)
+            }
 
             ComponentFactory.updateEditorPreferredSize(newEditor, expanded)
             updateEditorUI()
@@ -115,7 +134,7 @@ class ResponseEditorPanel(
 
     fun replaceEditorWithSegment(segment: Segment) {
         val oldEditor = stateManager.getCurrentState()?.editor ?: return
-        val newState = stateManager.createFromSegment(segment)
+        val newState = stateManager.createFromSegment(segment, compact = compact)
         replaceEditor(oldEditor, newState.editor)
     }
 
@@ -147,7 +166,12 @@ class ResponseEditorPanel(
                 }
 
                 if (!response.isNullOrBlank()) {
-                    stateManager.transitionToDiffState(originalCode, response, params.destination, params.source)
+                    stateManager.transitionToDiffState(
+                        originalCode,
+                        response,
+                        params.destination,
+                        params.source
+                    )
                 }
             } catch (e: Exception) {
                 logger.error("Failed to apply changes", e)
@@ -224,8 +248,14 @@ class ResponseEditorPanel(
             val containsText = currentText.contains(segment.search.trim())
 
             val newState = if (containsText) {
-                val finalSegment = createReplaceWaitingSegment(searchContent, replaceContent, virtualFile)
-                stateManager.createFromSegment(finalSegment, readOnly = false, eventSource = null, originalSuggestion = replaceContent)
+                val finalSegment =
+                    createReplaceWaitingSegment(searchContent, replaceContent, virtualFile)
+                stateManager.createFromSegment(
+                    finalSegment,
+                    readOnly = false,
+                    eventSource = null,
+                    originalSuggestion = replaceContent
+                )
             } else {
                 stateManager.transitionToFailedDiffState(
                     segment.search,
@@ -277,11 +307,42 @@ class ResponseEditorPanel(
                 }
             }
         })
+
+        if (compact && editor.editorKind != EditorKind.DIFF) {
+            editor.settings.apply {
+                isLineNumbersShown = false
+                isLineMarkerAreaShown = false
+                additionalLinesCount = 0
+                additionalColumnsCount = 0
+                isAdditionalPageAtBottom = false
+                isUseSoftWraps = false
+            }
+            editor.gutterComponentEx.apply {
+                isVisible = false
+                parent.isVisible = false
+            }
+            editor.component.border = JBUI.Borders.empty(0, 0)
+            editor.scrollPane.border = JBUI.Borders.empty(0, 0)
+        }
+    }
+
+    private fun createCompactEditorContainer(editor: EditorEx): javax.swing.JComponent {
+        val container = BorderLayoutPanel().apply {
+            isOpaque = false
+            border = JBUI.Borders.empty()
+        }
+        val inner = BorderLayoutPanel().apply {
+            isOpaque = false
+            border = JBUI.Borders.empty(0)
+            addToCenter(editor.component)
+        }
+        container.add(inner, java.awt.BorderLayout.CENTER)
+        return container
     }
 
     private fun updateEditorUI() {
         updateEditorHeightAndUI()
-        updateExpandLinkVisibility()
+        if (!compact) updateExpandLinkVisibility()
     }
 
     private fun updateEditorHeightAndUI() {

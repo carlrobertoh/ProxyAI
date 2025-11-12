@@ -61,4 +61,5 @@ class CodeCompletionSettingsState : BaseState() {
     var collectDependencyStructure by property(true)
     var contextAwareEnabled by property(false)
     var psiStructureAnalyzeDepth by property(2)
+    var myAwesomeFeatureEnabled by property(true)
 }

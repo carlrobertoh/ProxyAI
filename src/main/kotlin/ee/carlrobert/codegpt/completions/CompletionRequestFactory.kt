@@ -3,17 +3,17 @@ package ee.carlrobert.codegpt.completions
 import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.nextedit.NextEditPromptUtil
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.CURSOR_MARKER
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.DEFAULT_LINES_AFTER
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.DEFAULT_LINES_BEFORE
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.MAX_EDITABLE_REGION_LINES
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.MAX_RECENTLY_VIEWED_SNIPPETS
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.RECENTLY_VIEWED_LINES
 import ee.carlrobert.codegpt.completions.factory.*
+import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.nextedit.NextEditPromptUtil
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
+import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
@@ -26,6 +26,7 @@ import ee.carlrobert.llm.completion.CompletionRequest
 interface CompletionRequestFactory {
     fun createChatRequest(params: ChatCompletionParameters): CompletionRequest
     fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest
+    fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest
     fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest
     fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest
     fun createLookupRequest(params: LookupCompletionParameters): CompletionRequest
@@ -69,6 +70,45 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         private const val LOOKUP_MAX_TOKENS = 512
         private const val AUTO_APPLY_MAX_TOKENS = 8192
         private const val DEFAULT_MAX_TOKENS = 4096
+    }
+
+    override fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest {
+        val systemPrompt = """
+            You are an Inline Edit assistant for a single open file.
+            Respond in two parts:
+
+            1) Explanation (concise):
+               - 3–5 short bullets max.
+               - Summarize what will change and why.
+               - Reference functions/classes by name. Do not paste full files.
+
+            2) Update Snippet(s):
+               - Provide ONLY partial changes as one or more fenced code blocks using triple backticks with the correct language (```python, ```kotlin, etc.).
+               - Do NOT include any special tags.
+               - Use minimal necessary context; indicate gaps with language-appropriate comments like "// ... existing code ..." or "# ... existing code ...".
+               - Include only changed/new lines with at most 1–3 lines of surrounding context when needed.
+               - Prefer stable anchors (function/class signatures, imports) to locate insertion points.
+               - Never output entire files or unrelated edits.
+        """.trimIndent()
+
+        val userPrompt = getPromptWithFilesContext(parameters)
+
+        val newParams = ChatCompletionParameters
+            .builder(parameters.conversation, Message(userPrompt))
+            .sessionId(parameters.sessionId)
+            .conversationType(parameters.conversationType)
+            .retry(parameters.retry)
+            .imageDetails(parameters.imageDetails)
+            .history(parameters.history)
+            .referencedFiles(parameters.referencedFiles)
+            .personaDetails(PersonaDetails(-1L, "Inline Edit Guidance", systemPrompt))
+            .psiStructure(parameters.psiStructure)
+            .project(parameters.project)
+            .chatMode(ChatMode.ASK)
+            .featureType(FeatureType.INLINE_EDIT)
+            .build()
+
+        return createChatRequest(newParams)
     }
 
     data class InlineEditPrompts(val systemPrompt: String, val userPrompt: String)
@@ -259,8 +299,13 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         val (project, fileName, filePath, fileContent, caretOffset, gitDiff, _) = params
 
         val encodingManager = EncodingManager.getInstance()
-        val prefixContent = encodingManager.truncateText(fileContent.substring(0, caretOffset), 4096, true)
-        val suffixContent = encodingManager.truncateText(fileContent.substring(caretOffset, fileContent.length), 4096, false)
+        val prefixContent =
+            encodingManager.truncateText(fileContent.substring(0, caretOffset), 4096, true)
+        val suffixContent = encodingManager.truncateText(
+            fileContent.substring(caretOffset, fileContent.length),
+            4096,
+            false
+        )
 
         val truncatedContent = prefixContent + suffixContent
         val adjustedCaretOffset = prefixContent.length

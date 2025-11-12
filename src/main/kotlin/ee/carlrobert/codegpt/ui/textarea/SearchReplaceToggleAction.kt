@@ -89,12 +89,12 @@ class SearchReplaceToggleAction(
             <html>
             <head></head>
             <body>
-                <div class="content">
-                    <div class="bottom">
-                        <b>${currentMode.displayName} Mode</b>
+                <div class=\"content\">
+                    <div class=\"bottom\">
+                        <b>${'$'}{currentMode.displayName} Mode</b>
                     </div>
-                    <div style="margin-top: 8px; color:#bcbec4;">
-                        ${getModeDescription(currentMode)}
+                    <div style=\"margin-top: 8px; color:#bcbec4;\">
+                        ${'$'}{getModeDescription(currentMode)}
                     </div>
                 </div>
             </body>
@@ -118,3 +118,4 @@ class SearchReplaceToggleAction(
         }
     }
 }
+

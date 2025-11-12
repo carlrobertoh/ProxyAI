@@ -84,6 +84,7 @@ public class ChatMessageResponseBody extends JPanel {
   private final Disposable parentDisposable;
   private final SseMessageParser streamOutputParser;
   private final boolean readOnly;
+  private final boolean compact;
   private final DefaultListModel<WebSearchEventDetails> webpageListModel = new DefaultListModel<>();
   private final WebpageList webpageList = new WebpageList(webpageListModel);
   private final ResponseBodyProgressPanel progressPanel = new ResponseBodyProgressPanel();
@@ -104,13 +105,14 @@ public class ChatMessageResponseBody extends JPanel {
         .withBorder(JBUI.Borders.empty(4, 0));
   }
 
-  public ChatMessageResponseBody(Project project, Disposable parentDisposable) {
-    this(project, false, false, false, false, parentDisposable);
+  public ChatMessageResponseBody(Project project, boolean compact, Disposable parentDisposable) {
+    this(project, false, compact, false, false, false, parentDisposable);
   }
 
   public ChatMessageResponseBody(
       Project project,
       boolean readOnly,
+      boolean compact,
       boolean webSearchIncluded,
       boolean withProgress,
       boolean withLoading,
@@ -119,6 +121,7 @@ public class ChatMessageResponseBody extends JPanel {
     this.parentDisposable = parentDisposable;
     this.streamOutputParser = new SseMessageParser();
     this.readOnly = readOnly;
+    this.compact = compact;
 
     setLayout(new BorderLayout());
     setOpaque(false);
@@ -380,7 +383,7 @@ public class ChatMessageResponseBody extends JPanel {
     hideCaret();
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel =
-        new ResponseEditorPanel(project, item, readOnly, parentDisposable);
+        new ResponseEditorPanel(project, item, readOnly, compact, parentDisposable);
     contentPanel.add(currentlyProcessedEditorPanel);
     contentPanel.revalidate();
     contentPanel.repaint();

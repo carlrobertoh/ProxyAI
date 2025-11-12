@@ -25,17 +25,25 @@ class EditorStateManager(private val project: Project) {
     private var currentState: EditorState? = null
     private var diffEditorManager: DiffEditorManager? = null
 
-    fun createFromSegment(segment: Segment, readOnly: Boolean = false, eventSource: EventSource? = null, originalSuggestion: String? = null): EditorState {
+    fun createFromSegment(
+        segment: Segment,
+        readOnly: Boolean = false,
+        eventSource: EventSource? = null,
+        originalSuggestion: String? = null,
+        compact: Boolean = false
+    ): EditorState {
         val editor = EditorFactory.createEditor(project, segment)
         val state = if (editor.editorKind == EditorKind.DIFF) {
             createDiffState(editor, segment, eventSource, originalSuggestion)
         } else {
             RegularEditorState(editor, segment, project)
         }
-        
-        runInEdt {
-            val headerComponent = state.createHeaderComponent(readOnly)
-            EditorFactory.configureEditor(editor, headerComponent)
+
+        if (!compact) {
+            runInEdt {
+                val headerComponent = state.createHeaderComponent(readOnly)
+                EditorFactory.configureEditor(editor, headerComponent)
+            }
         }
 
         RESPONSE_EDITOR_STATE_KEY.set(editor, state)
@@ -79,7 +87,9 @@ class EditorStateManager(private val project: Project) {
                 diffViewer.rediff(true)
             }
             (oldEditor.component.parent as? ResponseEditorPanel)?.replaceEditor(oldEditor, editor)
-            (editor.permanentHeaderComponent as? DiffHeaderPanel)?.updateDiffStats(diffViewer.diffChanges ?: emptyList())
+            (editor.permanentHeaderComponent as? DiffHeaderPanel)?.updateDiffStats(
+                diffViewer.diffChanges ?: emptyList()
+            )
             (editor.permanentHeaderComponent as? DiffHeaderPanel)?.handleDone()
         }
     }
@@ -122,12 +132,17 @@ class EditorStateManager(private val project: Project) {
         currentState = null
     }
 
-    private fun createDiffState(editor: EditorEx, segment: Segment, eventSource: EventSource? = null, originalSuggestion: String? = null): EditorState {
+    private fun createDiffState(
+        editor: EditorEx,
+        segment: Segment,
+        eventSource: EventSource? = null,
+        originalSuggestion: String? = null
+    ): EditorState {
         val virtualFile = getVirtualFile(segment.filePath)
         val diffViewer = RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor)
         val diffEditorManager = DiffEditorManager(project, diffViewer)
         this.diffEditorManager = diffEditorManager
-        
+
         val state = StandardDiffEditorState(
             editor,
             segment,

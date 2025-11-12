@@ -113,7 +113,6 @@ public class ChatToolWindowTabPanel implements Disposable {
         tagManager,
         this::handleSubmit,
         this::handleCancel,
-        true,
         true);
     userInputPanel.requestFocus();
     rootPanel = createRootPanel();
@@ -334,6 +333,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     panel.addContent(new ChatMessageResponseBody(
         project,
         false,
+        false,
         message.isWebSearchIncluded(),
         fileContextIncluded || message.getDocumentationDetails() != null,
         true,
@@ -523,7 +523,7 @@ public class ChatToolWindowTabPanel implements Disposable {
   private ResponseMessagePanel getResponseMessagePanel(Message message) {
     var response = message.getResponse() == null ? "" : message.getResponse();
     var messageResponseBody =
-        new ChatMessageResponseBody(project, this).withResponse(response);
+        new ChatMessageResponseBody(project, false, this).withResponse(response);
 
     var responseMessagePanel = new ResponseMessagePanel();
     responseMessagePanel.addContent(messageResponseBody);
