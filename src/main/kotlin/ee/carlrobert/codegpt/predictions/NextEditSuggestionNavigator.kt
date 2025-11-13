@@ -25,7 +25,6 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.actions.editor.EditorComponentInlaysManager
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
-import ee.carlrobert.codegpt.telemetry.core.configuration.TelemetryConfiguration
 import ee.carlrobert.service.NextEditResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -298,7 +297,8 @@ class NextEditSuggestionNavigator(private val editor: Editor) : Disposable {
         val line = doc.getLineNumber(safeStart)
         val anchor = doc.getLineEndOffset(line).coerceIn(0, docLen)
         val label = CodeGPTBundle.get("nextEdit.acceptLabel")
-        editor.inlayModel.addInlineElement(anchor, NextEditTagInlineRenderer(label))?.let { previewGhostInlays.add(it) }
+        editor.inlayModel.addInlineElement(anchor, NextEditTagInlineRenderer(label))
+            ?.let { previewGhostInlays.add(it) }
 
         val startLineOffset =
             editor.document.getLineStartOffset(editor.document.getLineNumber(h.start))
@@ -391,9 +391,7 @@ class NextEditSuggestionNavigator(private val editor: Editor) : Disposable {
             editor.getUserData(NAVIGATOR_KEY)?.dispose()
             editor.putUserData(CodeGPTKeys.REMAINING_EDITOR_COMPLETION, null)
             InlineCompletionSession.getOrNull(editor)?.let {
-                if (it.isActive()) {
-                    InlineCompletionContext.getOrNull(editor)?.clear()
-                }
+                InlineCompletionContext.getOrNull(editor)?.clear()
             }
 
             val navigator = NextEditSuggestionNavigator(editor)
