@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Improved
+
+- Autocomplete and Next-Edit suggestions experience
+
+### Added
+
+- Colorful file tags based on its state in VCS (modified/added/removed)
+
 ## [3.6.6-233] - 2025-10-29
 
 ### Fixed
