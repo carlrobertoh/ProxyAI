@@ -22,7 +22,6 @@ class CodeCompletionConfigurationForm {
         CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.collectDependencyStructure.title"),
         service<ConfigurationSettings>().state.codeCompletionSettings.collectDependencyStructure
     )
-
     private val psiStructureAnalyzeDepthField = PortField().apply {
         number = service<ConfigurationSettings>().state.codeCompletionSettings.psiStructureAnalyzeDepth
     }
@@ -48,7 +47,6 @@ class CodeCompletionConfigurationForm {
                 cell(psiStructureAnalyzeDepthField)
                     .comment(CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.analyzeDepth.comment"))
             }
-            
         }.withBorder(JBUI.Borders.emptyLeft(16))
     }
 

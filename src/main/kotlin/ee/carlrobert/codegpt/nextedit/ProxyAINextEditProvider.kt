@@ -1,7 +1,9 @@
-package ee.carlrobert.codegpt.codecompletions.edit
+package ee.carlrobert.codegpt.nextedit
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
+import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.codegpt.nextedit.NextEditProvider
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType

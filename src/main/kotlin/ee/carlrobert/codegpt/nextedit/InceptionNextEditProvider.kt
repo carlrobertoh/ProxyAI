@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.codecompletions.edit
+package ee.carlrobert.codegpt.nextedit
 
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
@@ -8,18 +8,13 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.CompletionClientProvider
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.DEFAULT_LINES_AFTER
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.DEFAULT_LINES_BEFORE
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.MAX_EDITABLE_REGION_LINES
 import ee.carlrobert.codegpt.completions.NextEditParameters
 import ee.carlrobert.codegpt.completions.factory.InceptionRequestFactory
-import ee.carlrobert.codegpt.predictions.NextEditSuggestionNavigator
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.inception.InceptionSettings
 import ee.carlrobert.codegpt.util.GitUtil
-import ee.carlrobert.codegpt.util.MarkdownUtil
 import ee.carlrobert.service.NextEditResponse
 import java.util.*
 
@@ -48,7 +43,7 @@ class InceptionNextEditProvider : NextEditProvider {
                         } else {
                             runInEdt {
                                 if (editor.document.text == response.oldRevision) {
-                                    NextEditSuggestionNavigator.display(editor, response)
+                                    NextEditDiffViewer.displayNextEdit(editor, response)
                                 }
                             }
                         }
@@ -58,7 +53,7 @@ class InceptionNextEditProvider : NextEditProvider {
                     logger.error("Something went wrong while retrieving next edit completion", ex)
                 }
         } finally {
-            editor.project?.let { CompletionProgressNotifier.update(it, false) }
+            editor.project?.let { CompletionProgressNotifier.Companion.update(it, false) }
         }
     }
 
@@ -128,4 +123,4 @@ class InceptionNextEditProvider : NextEditProvider {
     }
 }
 
-private const val DEFAULT_CONTEXT_TOKENS = 4096
+const val DEFAULT_CONTEXT_TOKENS: Int = 2048

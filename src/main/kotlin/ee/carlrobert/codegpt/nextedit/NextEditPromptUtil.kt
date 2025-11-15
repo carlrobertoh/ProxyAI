@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.codecompletions.edit
+package ee.carlrobert.codegpt.nextedit
 
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -117,4 +117,3 @@ object NextEditPromptUtil {
         return sb.toString()
     }
 }
-

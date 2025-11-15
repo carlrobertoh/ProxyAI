@@ -1,18 +1,12 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
 import com.intellij.codeInsight.lookup.LookupManager
-import com.intellij.notification.NotificationAction.createSimpleExpiring
-import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
-import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.predictions.NextEditSuggestionNavigator
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
-import ee.carlrobert.codegpt.ui.OverlayUtil
+import ee.carlrobert.codegpt.nextedit.NextEditDiffViewer
 import ee.carlrobert.service.NextEditResponse
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
@@ -39,7 +33,7 @@ class NextEditStreamObserver(
                     && documentText != response.nextRevision
                     && documentText == response.oldRevision
                 ) {
-                    NextEditSuggestionNavigator.display(editor, response)
+                    NextEditDiffViewer.displayNextEdit(editor, response)
                 }
             }
         }

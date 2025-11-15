@@ -58,7 +58,7 @@ object GitUtil {
             UnifiedDiffWriter.write(
                 null, repoRootPath, patches, diffWriter, "\n\n", null, null
             )
-            return diffWriter.toString().cleanDiff().truncateText(1024, true)
+            return diffWriter.toString().truncateText(16_000, true)
         } catch (e: VcsException) {
             logger.error("Failed to get git context", e)
             return null

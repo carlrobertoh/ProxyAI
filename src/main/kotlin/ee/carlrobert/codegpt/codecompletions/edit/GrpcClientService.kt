@@ -85,7 +85,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         ensureNextEditConnection()
 
         val request = createNextEditGrpcRequest(editor, fileContent, caretOffset)
-        nextEditStreamObserver = NextEditStreamObserver(editor, addToQueue) { dispose() }
+        nextEditStreamObserver = NextEditStreamObserver(editor, addToQueue) { refreshConnection() }
         nextEditContext?.cancel(null)
 
         val ctx = Context.current().withCancellation()

@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt;
 
 import com.intellij.openapi.util.Key;
 import ee.carlrobert.codegpt.inlineedit.InlineEditSession;
+import ee.carlrobert.codegpt.nextedit.NextEditDiffViewer;
 import ee.carlrobert.codegpt.inlineedit.InlineEditInlayRenderer;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ToolWindowEditorFileDetails;
 import ee.carlrobert.llm.client.codegpt.CodeGPTUserDetails;
@@ -44,4 +45,7 @@ public class CodeGPTKeys {
       Key.create("codegpt.lastCompletionResponseId");
   public static final Key<ToolWindowEditorFileDetails> TOOLWINDOW_EDITOR_FILE_DETAILS =
       Key.create("proxyai.toolwindowEditorFileDetails");
+
+  public static final Key<NextEditDiffViewer> EDITOR_PREDICTION_DIFF_VIEWER =
+      Key.create("codegpt.editorPredictionDiffViewer");
 }

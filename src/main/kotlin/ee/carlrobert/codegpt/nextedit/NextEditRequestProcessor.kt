@@ -1,4 +1,6 @@
-package ee.carlrobert.codegpt.codecompletions.edit
+package ee.carlrobert.codegpt.nextedit
+
+import ee.carlrobert.codegpt.nextedit.NextEditPromptUtil
 
 object NextEditRequestProcessor {
     const val EDITABLE_REGION_START = "<|editable_region_start|>"

@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.codecompletions.edit
+package ee.carlrobert.codegpt.nextedit
 
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
@@ -25,7 +25,7 @@ object NextEditCoordinator {
             service<ModelSelectionService>().getServiceForFeature(FeatureType.NEXT_EDIT)
         val provider = providers[serviceType] ?: return
 
-        editor.project?.let { CompletionProgressNotifier.update(it, true) }
+        editor.project?.let { CompletionProgressNotifier.Companion.update(it, true) }
         provider.request(editor, fileContent, caretOffset, addToQueue)
     }
 }

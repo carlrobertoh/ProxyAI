@@ -3,7 +3,7 @@ package ee.carlrobert.codegpt.completions
 import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.codecompletions.edit.NextEditPromptUtil
+import ee.carlrobert.codegpt.nextedit.NextEditPromptUtil
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.CURSOR_MARKER
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.DEFAULT_LINES_AFTER
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.DEFAULT_LINES_BEFORE

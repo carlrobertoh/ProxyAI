@@ -118,14 +118,14 @@
         <action
                 id="codegpt.acceptNextEdit"
                 text="Accept Next-Edit"
-                class="ee.carlrobert.codegpt.predictions.AcceptNextEditAction">
+                class="ee.carlrobert.codegpt.nextedit.AcceptNextEditAction">
             <keyboard-shortcut first-keystroke="TAB" keymap="$default"/>
         </action>
 
         <action
                 id="codegpt.triggerCompletion"
                 text="Trigger Completion Manually"
-                class="ee.carlrobert.codegpt.predictions.TriggerCompletionAction">
+                class="ee.carlrobert.codegpt.nextedit.TriggerNextEditAction">
             <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
         </action>
 

@@ -1,4 +1,4 @@
-package ee.carlrobert.codegpt.predictions
+package ee.carlrobert.codegpt.nextedit
 
 import com.intellij.codeInsight.hint.HintManagerImpl
 import com.intellij.openapi.actionSystem.DataContext
@@ -6,6 +6,7 @@ import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.actionSystem.EditorAction
 import com.intellij.openapi.editor.actionSystem.EditorWriteActionHandler
+import ee.carlrobert.codegpt.CodeGPTKeys
 
 class AcceptNextEditAction : EditorAction(Handler()), HintManagerImpl.ActionToIgnore {
 
@@ -16,16 +17,19 @@ class AcceptNextEditAction : EditorAction(Handler()), HintManagerImpl.ActionToIg
     private class Handler : EditorWriteActionHandler() {
 
         override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
-            val navigator = NextEditSuggestionNavigator.NAVIGATOR_KEY.get(editor)
-            if (navigator != null && navigator.isVisible()) {
-                if (navigator.hasPreview()) navigator.acceptCurrent() else navigator.jumpToNext()
-                return
+            val diffViewer = CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER.get(editor) ?: return
+            if (diffViewer.isVisible()) {
+                diffViewer.applyChanges()
             }
         }
 
-        override fun isEnabledForCaret(editor: Editor, caret: Caret, dataContext: DataContext): Boolean {
-            val navigator = editor.getUserData(NextEditSuggestionNavigator.NAVIGATOR_KEY)
-            return navigator != null && navigator.isVisible()
+        override fun isEnabledForCaret(
+            editor: Editor,
+            caret: Caret,
+            dataContext: DataContext
+        ): Boolean {
+            val diffViewer = CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER.get(editor)
+            return diffViewer != null && diffViewer.isVisible()
         }
     }
 }
