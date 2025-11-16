@@ -181,7 +181,7 @@ class UserMessagePanel(
                     layout = BoxLayout(this, BoxLayout.Y_AXIS)
                     isOpaque = false
                     ids.forEach {
-                        ConversationTagProcessor.getConversation(it)?.let { conversation ->
+                        ConversationTagProcessor.getConversation(project, it)?.let { conversation ->
                             val title = HistoryActionItem.getConversationTitle(conversation)
                             val titleLink = ActionLink(title) {
                                 project.service<ChatToolWindowContentManager>()

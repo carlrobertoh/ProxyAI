@@ -23,7 +23,12 @@ public abstract class MoveAction extends AnAction {
 
   @Override
   public void update(@NotNull AnActionEvent event) {
-    event.getPresentation().setEnabled(ConversationsState.getCurrentConversation() != null);
+    Project project = event.getProject();
+    if (project == null) {
+      event.getPresentation().setEnabled(false);
+      return;
+    }
+    event.getPresentation().setEnabled(ConversationsState.getInstance(project).getCurrentConversation() != null);
   }
 
   @Override
@@ -32,7 +37,7 @@ public abstract class MoveAction extends AnAction {
     if (project != null) {
       getConversation(project)
           .ifPresent(conversation -> {
-            ConversationsState.getInstance().setCurrentConversation(conversation);
+            ConversationsState.getInstance(project).setCurrentConversation(conversation);
             onRefresh.run();
           });
     }

@@ -15,8 +15,8 @@ class ConversationTagProcessorTest : IntegrationTest() {
 
     public override fun setUp() {
         super.setUp()
-        conversationService = service<ConversationService>()
-        ConversationsState.getInstance().conversations.clear()
+        conversationService = project.service<ConversationService>()
+        ConversationsState.getInstance(project).conversations.clear()
     }
 
     fun `test should format conversation with single message`() {
@@ -100,12 +100,12 @@ class ConversationTagProcessorTest : IntegrationTest() {
     }
 
     fun `test should find current conversation by id`() {
-        val conversation = conversationService.startConversation(project)
+        val conversation = conversationService.startConversation()
         conversation.addMessage(Message("Current conversation test").apply {
             response = "This is the current conversation"
         })
 
-        val foundConversation = ConversationTagProcessor.getConversation(conversation.id)
+        val foundConversation = ConversationTagProcessor.getConversation(project, conversation.id)
 
         assertThat(foundConversation).isNotNull
         assertThat(foundConversation!!.id).isEqualTo(conversation.id)
@@ -120,7 +120,7 @@ class ConversationTagProcessorTest : IntegrationTest() {
         })
         conversationService.addConversation(conversation)
 
-        val foundConversation = ConversationTagProcessor.getConversation(conversation.id)
+        val foundConversation = ConversationTagProcessor.getConversation(project, conversation.id)
 
         assertThat(foundConversation).isNotNull
         assertThat(foundConversation!!.id).isEqualTo(conversation.id)
@@ -134,13 +134,13 @@ class ConversationTagProcessorTest : IntegrationTest() {
             response = "This is stored"
         })
         conversationService.addConversation(storedConversation)
-        val currentConversation = conversationService.startConversation(project)
+        val currentConversation = conversationService.startConversation()
         currentConversation.id = storedConversation.id
         currentConversation.addMessage(Message("Current version").apply {
             response = "This is current"
         })
 
-        val foundConversation = ConversationTagProcessor.getConversation(storedConversation.id)
+        val foundConversation = ConversationTagProcessor.getConversation(project, storedConversation.id)
 
         assertThat(foundConversation).isNotNull
         assertThat(foundConversation!!.messages[0].prompt).isEqualTo("Current version")
@@ -149,7 +149,7 @@ class ConversationTagProcessorTest : IntegrationTest() {
     fun `test should return null for non-existent conversation`() {
         val nonExistentId = UUID.randomUUID()
 
-        val foundConversation = ConversationTagProcessor.getConversation(nonExistentId)
+        val foundConversation = ConversationTagProcessor.getConversation(project, nonExistentId)
 
         assertThat(foundConversation).isNull()
     }
@@ -161,7 +161,7 @@ class ConversationTagProcessorTest : IntegrationTest() {
         })
         conversationService.addConversation(conversation)
         val historyActionItem = HistoryActionItem(conversation)
-        val foundConversation = ConversationTagProcessor.getConversation(conversation.id)
+        val foundConversation = ConversationTagProcessor.getConversation(project, conversation.id)
 
         val conversationTitle = historyActionItem.displayName
         val formatted = ConversationTagProcessor.formatConversation(foundConversation!!)

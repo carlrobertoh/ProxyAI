@@ -19,12 +19,12 @@ class HistorySearchIntegrationTest : IntegrationTest() {
 
     public override fun setUp() {
         super.setUp()
-        conversationService = service<ConversationService>()
-        ConversationsState.getInstance().conversations.clear()
-        
+        conversationService = project.service<ConversationService>()
+        ConversationsState.getInstance(project).conversations.clear()
+
         val tagManager = TagManager()
         searchManager = SearchManager(project, tagManager)
-        historyGroupItem = HistoryGroupItem()
+        historyGroupItem = HistoryGroupItem(project)
     }
 
     fun `test should include history group in search manager default groups`() {
@@ -44,7 +44,7 @@ class HistorySearchIntegrationTest : IntegrationTest() {
     }
 
     fun `test should filter conversations by search terms`() {
-        ConversationsState.getInstance().conversations.clear()
+        ConversationsState.getInstance(project).conversations.clear()
         createTestConversations()
         val testCases = mapOf(
             "java" to 3,
@@ -88,8 +88,8 @@ class HistorySearchIntegrationTest : IntegrationTest() {
 
     fun `test should handle special characters in search`() {
         val conversation = conversationService.createConversation()
-        conversation.addMessage(Message("What is C++ programming?").apply { 
-            response = "C++ is a powerful programming language" 
+        conversation.addMessage(Message("What is C++ programming?").apply {
+            response = "C++ is a powerful programming language"
         })
         conversationService.addConversation(conversation)
 
@@ -104,13 +104,13 @@ class HistorySearchIntegrationTest : IntegrationTest() {
             val conversation = conversationService.createConversation()
             val topic = when (i % 5) {
                 0 -> "Java"
-                1 -> "Python" 
+                1 -> "Python"
                 2 -> "JavaScript"
                 3 -> "Database"
                 else -> "General"
             }
-            conversation.addMessage(Message("Question about $topic #$i").apply { 
-                response = "Answer about $topic #$i" 
+            conversation.addMessage(Message("Question about $topic #$i").apply {
+                response = "Answer about $topic #$i"
             })
             conversationService.addConversation(conversation)
         }
@@ -139,13 +139,13 @@ class HistorySearchIntegrationTest : IntegrationTest() {
 
     fun `test should search in conversation titles`() {
         val conversation1 = conversationService.createConversation()
-        conversation1.addMessage(Message("How to use Docker containers?").apply { 
-            response = "Docker containers are lightweight virtualization" 
+        conversation1.addMessage(Message("How to use Docker containers?").apply {
+            response = "Docker containers are lightweight virtualization"
         })
         conversationService.addConversation(conversation1)
         val conversation2 = conversationService.createConversation()
-        conversation2.addMessage(Message("What is virtualization?").apply { 
-            response = "Virtualization allows running multiple Docker instances" 
+        conversation2.addMessage(Message("What is virtualization?").apply {
+            response = "Virtualization allows running multiple Docker instances"
         })
         conversationService.addConversation(conversation2)
 
@@ -160,7 +160,7 @@ class HistorySearchIntegrationTest : IntegrationTest() {
 
     fun `test should match history aliases in search manager`() {
         val historyAliases = listOf("history", "hist", "h")
-        
+
         historyAliases.forEach { alias ->
             val matches = searchManager.matchesAnyDefaultGroup(alias)
             assertThat(matches)
@@ -178,7 +178,7 @@ class HistorySearchIntegrationTest : IntegrationTest() {
     private fun createTestConversations() {
         val testData = listOf(
             "How to write Java code?" to "Use Java syntax and compile with javac",
-            "Python vs JavaScript comparison" to "Python is interpreted, JavaScript runs in browsers", 
+            "Python vs JavaScript comparison" to "Python is interpreted, JavaScript runs in browsers",
             "What is database normalization?" to "Database normalization reduces redundancy",
             "Best practices for programming" to "Write clean, readable, and testable code",
             "JavaScript async/await tutorial" to "Use async/await for asynchronous programming"

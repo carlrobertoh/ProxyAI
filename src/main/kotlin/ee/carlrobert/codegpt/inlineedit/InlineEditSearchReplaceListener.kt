@@ -472,8 +472,8 @@ class InlineEditSearchReplaceListener(
             newConversation.addMessage(copy)
         }
 
-        ConversationService.getInstance().addConversation(newConversation)
-        ConversationService.getInstance().saveConversation(newConversation)
+        ConversationService.getInstance(project).addConversation(newConversation)
+        ConversationService.getInstance(project).saveConversation(newConversation)
         project.service<ChatToolWindowContentManager>().displayConversation(newConversation)
     }
 

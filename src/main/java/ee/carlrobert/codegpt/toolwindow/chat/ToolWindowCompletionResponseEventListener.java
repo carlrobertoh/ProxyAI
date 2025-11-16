@@ -102,13 +102,13 @@ abstract class ToolWindowCompletionResponseEventListener implements
   @Override
   public void handleTokensExceeded(Conversation conversation, Message message) {
     ApplicationManager.getApplication().invokeLater(() -> {
-      var answer = OverlayUtil.showTokenLimitExceededDialog();
+      var answer = OverlayUtil.showTokenLimitExceededDialog(project);
       if (answer == OK) {
         TelemetryAction.IDE_ACTION.createActionMessage()
             .property("action", "DISCARD_TOKEN_LIMIT")
             .send();
 
-        ConversationService.getInstance().discardTokenLimits(conversation);
+        ConversationService.getInstance(project).discardTokenLimits(conversation);
         handleTokensExceededPolicyAccepted();
       } else {
         stopStreaming(responseContainer);
@@ -118,7 +118,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   @Override
   public void handleCompleted(String fullMessage, ChatCompletionParameters callParameters) {
-    ConversationService.getInstance().saveMessage(fullMessage, callParameters);
+    ConversationService.getInstance(project).saveMessage(fullMessage, callParameters);
 
     ApplicationManager.getApplication().invokeLater(() -> {
       try {

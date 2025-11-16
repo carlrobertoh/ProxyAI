@@ -22,6 +22,7 @@ import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.actions.editor.EditorComponentInlaysManager
 import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -290,8 +291,8 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
             projectPath = sessionConversation.projectPath
             setMessages(sessionConversation.messages)
         }
-        ee.carlrobert.codegpt.conversations.ConversationService.getInstance().addConversation(newConversation)
-        ee.carlrobert.codegpt.conversations.ConversationService.getInstance().saveConversation(newConversation)
+        ConversationService.getInstance(project).addConversation(newConversation)
+        ConversationService.getInstance(project).saveConversation(newConversation)
         openedChatConversation = newConversation
         project.service<ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager>()
             .displayConversation(newConversation)
@@ -526,7 +527,7 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
         return tags
             .filter { it.selected && it is HistoryTagDetails }
             .map { (it as HistoryTagDetails).conversationId }
-            .mapNotNull { ConversationTagProcessor.getConversation(it) }
+            .mapNotNull { ConversationTagProcessor.getConversation(project, it) }
             .distinct()
     }
 
