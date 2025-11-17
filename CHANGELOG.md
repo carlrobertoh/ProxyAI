@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Inline Edit quick question in the editor
+- Debug logs support with toggle in Advanced settings
+
+### Fixed
+
+- Re-enabled improved diff editor fragment for Next Edits
+
 ## [3.6.7-233] - 2025-11-13
 
 ### Improved
