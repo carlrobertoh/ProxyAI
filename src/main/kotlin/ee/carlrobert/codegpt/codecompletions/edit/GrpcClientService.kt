@@ -11,7 +11,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.util.net.ssl.CertificateManager
 import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
-import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -20,8 +19,8 @@ import ee.carlrobert.codegpt.util.GitUtil
 import ee.carlrobert.codegpt.util.RecentlyViewedFilesUtil
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.service.*
-import io.grpc.ManagedChannel
 import io.grpc.Context
+import io.grpc.ManagedChannel
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import io.grpc.netty.shaded.io.netty.channel.ChannelOption
@@ -56,7 +55,8 @@ class GrpcClientService(private val project: Project) : Disposable {
         ensureCodeCompletionConnection()
 
         val grpcRequest = createCodeCompletionGrpcRequest(request)
-        codeCompletionObserver = CodeCompletionStreamObserver(request.editor, channel, eventListener)
+        codeCompletionObserver =
+            CodeCompletionStreamObserver(request.editor, channel, eventListener)
         codeCompletionContext?.cancel(null)
         val ctx = Context.current().withCancellation()
         codeCompletionContext = ctx
@@ -109,7 +109,12 @@ class GrpcClientService(private val project: Project) : Disposable {
     }
 
     @Synchronized
-    fun acceptEdit(responseId: String, oldHunk: String, newHunk: String, cursorPosition: Int? = null) {
+    fun acceptEdit(
+        responseId: String,
+        oldHunk: String,
+        newHunk: String,
+        cursorPosition: Int? = null
+    ) {
         ensureActiveChannel()
 
         NextEditServiceImplGrpc

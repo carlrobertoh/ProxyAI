@@ -121,7 +121,7 @@ class CustomServicesSettings :
         val modelSelection = service<ModelSelectionService>()
         val featureSelection = modelSelection.getModelSelectionForFeature(featureType)
 
-        if (featureSelection?.provider != ServiceType.CUSTOM_OPENAI)
+        if (featureSelection.provider != ServiceType.CUSTOM_OPENAI)
             throw IllegalStateException(
                 "Current selected ServiceType (${featureSelection}) is not of type 'CUSTOM_OPENAI'. " +
                         "This function should not be called in this context!"

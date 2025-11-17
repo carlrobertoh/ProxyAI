@@ -111,7 +111,7 @@ class InlineEditSubmissionHandler(
             .referencedFiles(withCurrentFile)
             .history(conversationHistory)
             .chatMode(ChatMode.ASK)
-            .featureType(FeatureType.CHAT)
+            .featureType(FeatureType.INLINE_EDIT)
             .build()
 
         sendAskRequest(editorEx, inlay, selectedService, params)

@@ -430,16 +430,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         assertThat(systemMessage.content).isEqualTo(expectedSystem)
         val userMessage = request.messages[1] as OpenAIChatCompletionStandardMessage
         assertThat(userMessage.role).isEqualTo("user")
-        assertThat(userMessage.content).isEqualTo(
-            """
-            Selected code:
-            ```java
-            myTestMethod()
-            ```
-
-            Request: add logging to this method
-        """.trimIndent()
-        )
+        assertThat(userMessage.content).isEqualTo("Generate SEARCH and REPLACE blocks.")
     }
 
     fun testInlineEditFollowUpWithHistory() {
@@ -515,16 +506,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         assertThat(prevResponse.content).isEqualTo("PREV_RESPONSE")
         val followUpMessage = request.messages[3] as OpenAIChatCompletionStandardMessage
         assertThat(followUpMessage.role).isEqualTo("user")
-        assertThat(followUpMessage.content).isEqualTo(
-            """
-            Selected code:
-            ```java
-            myTestMethod()
-            ```
-
-            Request: TEST_FOLLOW_UP_PROMPT
-        """.trimIndent()
-        )
+        assertThat(followUpMessage.content).isEqualTo("Generate SEARCH and REPLACE blocks.")
     }
 
     private fun buildExpectedInlineEditSystemPrompt(
