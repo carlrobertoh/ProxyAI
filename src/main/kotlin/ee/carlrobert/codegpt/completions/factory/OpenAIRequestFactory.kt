@@ -49,8 +49,8 @@ class OpenAIRequestFactory : BaseRequestFactory() {
 
     override fun createInlineEditRequest(params: InlineEditCompletionParameters): OpenAIChatCompletionRequest {
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.INLINE_EDIT)
-        val prepared = prepareInlineEditPrompts(params)
-        val messages = buildInlineEditMessages(prepared, params.conversation)
+        val systemPrompt = prepareInlineEditSystemPrompt(params)
+        val messages = buildInlineEditMessages(systemPrompt, params.conversation)
 
         val configuration = service<ConfigurationSettings>().state
         return if (isReasoningModel(model)) {
@@ -142,18 +142,18 @@ class OpenAIRequestFactory : BaseRequestFactory() {
 
     companion object {
         fun buildInlineEditMessages(
-            prepared: InlineEditPrompts,
+            systemPrompt: String,
             conversation: Conversation?
         ): MutableList<OpenAIChatCompletionMessage> {
             val messages = mutableListOf<OpenAIChatCompletionMessage>()
-            messages.add(OpenAIChatCompletionStandardMessage("system", prepared.systemPrompt))
+            messages.add(OpenAIChatCompletionStandardMessage("system", systemPrompt))
             conversation?.messages?.forEach { m ->
                 val p = m.prompt?.trim().orEmpty()
                 if (p.isNotEmpty()) messages.add(OpenAIChatCompletionStandardMessage("user", p))
                 val r = m.response?.trim().orEmpty()
                 if (r.isNotEmpty()) messages.add(OpenAIChatCompletionStandardMessage("assistant", r))
             }
-            messages.add(OpenAIChatCompletionStandardMessage("user", prepared.userPrompt))
+            messages.add(OpenAIChatCompletionStandardMessage("user", "Generate SEARCH and REPLACE blocks."))
             return messages
         }
 

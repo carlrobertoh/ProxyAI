@@ -137,7 +137,6 @@ data class AutoApplyParameters(
 )
 
 data class InlineEditCompletionParameters(
-    val prompt: String,
     val selectedText: String? = null,
     val filePath: String? = null,
     val fileExtension: String? = null,

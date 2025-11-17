@@ -181,7 +181,6 @@ class InlineEditSubmissionHandler(
         sessionConversation.addMessage(Message(userPrompt))
 
         val parameters = InlineEditCompletionParameters(
-            userPrompt,
             runReadAction { editor.selectionModel.selectedText },
             file?.path,
             file?.extension,

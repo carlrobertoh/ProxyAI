@@ -402,7 +402,6 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         tempFile.writeText(testFileContent)
         tempFile.deleteOnExit()
         val parameters = InlineEditCompletionParameters(
-            prompt = "add logging to this method",
             selectedText = "myTestMethod()",
             filePath = tempFile.absolutePath,
             fileExtension = "java",
@@ -450,7 +449,6 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         tempFile.writeText(testFileContent)
         tempFile.deleteOnExit()
         val parameters = InlineEditCompletionParameters(
-            prompt = "TEST_FOLLOW_UP_PROMPT",
             selectedText = "myTestMethod()",
             filePath = tempFile.absolutePath,
             fileExtension = "java",

@@ -61,8 +61,9 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
 
     override fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest {
         val service = service<CustomServicesSettings>().customServiceStateForFeatureType(FeatureType.INLINE_EDIT)
-        val prepared = prepareInlineEditPrompts(params)
-        val messages = OpenAIRequestFactory.buildInlineEditMessages(prepared, params.conversation)
+        val systemPrompt = prepareInlineEditSystemPrompt(params)
+        val messages =
+            OpenAIRequestFactory.buildInlineEditMessages(systemPrompt, params.conversation)
         val request = buildCustomOpenAIChatCompletionRequest(
             service.chatCompletionSettings,
             messages,

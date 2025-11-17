@@ -25,7 +25,7 @@ class ProxyAIApplyStrategy : ApplyStrategy {
 
         val modelSelection =
             ModelSelectionService.getInstance().getModelSelectionForFeature(FeatureType.AUTO_APPLY)
-        if (modelSelection.provider != ServiceType.PROXYAI) return
+        if (modelSelection?.provider != ServiceType.PROXYAI) return
 
         val updateSnippet = blocks.joinToString("\n// ... existing code ...\n\n") { it.trimEnd() }
         val original = ctx.editor.document.text

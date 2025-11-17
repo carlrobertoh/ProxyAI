@@ -29,8 +29,9 @@ class InceptionRequestFactory : BaseRequestFactory() {
 
     override fun createInlineEditRequest(params: InlineEditCompletionParameters): OpenAIChatCompletionRequest {
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.INLINE_EDIT)
-        val prepared = prepareInlineEditPrompts(params)
-        val messages = OpenAIRequestFactory.buildInlineEditMessages(prepared, params.conversation)
+        val systemPrompt = prepareInlineEditSystemPrompt(params)
+        val messages =
+            OpenAIRequestFactory.buildInlineEditMessages(systemPrompt, params.conversation)
         return OpenAIChatCompletionRequest.Builder(messages)
             .setModel(model)
             .setStream(true)

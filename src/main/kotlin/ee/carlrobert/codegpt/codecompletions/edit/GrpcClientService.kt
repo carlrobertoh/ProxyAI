@@ -9,6 +9,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.util.net.ssl.CertificateManager
+import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
 import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.credentials.CredentialsStore

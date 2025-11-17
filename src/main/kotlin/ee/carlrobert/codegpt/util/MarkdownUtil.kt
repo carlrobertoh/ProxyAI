@@ -53,7 +53,7 @@ object MarkdownUtil {
     @JvmStatic
     fun extractCodeBlocks(inputMarkdown: String): List<String> {
         val pattern = Pattern.compile(
-            "(?ms)```([a-zA-Z0-9_+\\-]*)\\s*\r?\n([\\s\\S]*?)\r?\n```"
+            "(?ms)```([a-zA-Z0-9_+\\-:/.\\s]*)\\s*\r?\n([\\s\\S]*?)\r?\n```"
         )
         val matcher = pattern.matcher(inputMarkdown)
         val results = mutableListOf<String>()

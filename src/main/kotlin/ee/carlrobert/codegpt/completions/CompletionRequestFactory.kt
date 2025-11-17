@@ -113,13 +113,12 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
 
     data class InlineEditPrompts(val systemPrompt: String, val userPrompt: String)
 
-    protected fun prepareInlineEditPrompts(params: InlineEditCompletionParameters): InlineEditPrompts {
+    protected fun prepareInlineEditSystemPrompt(params: InlineEditCompletionParameters): String {
         val language = params.fileExtension ?: "txt"
         val filePath = params.filePath ?: "untitled"
         var systemPrompt =
             service<PromptsSettings>().state.coreActions.inlineEdit.instructions
                 ?: CoreActionsState.DEFAULT_INLINE_EDIT_PROMPT
-
 
         if (params.projectBasePath != null) {
             val projectContext =
@@ -188,7 +187,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                 append(params.diagnosticsInfo)
             }
         }
-        systemPrompt = if (externalContext.isEmpty()) {
+        return if (externalContext.isEmpty()) {
             systemPrompt.replace(
                 "{{EXTERNAL_CONTEXT}}",
                 "## External Context\n\nNo external context selected."
@@ -199,25 +198,13 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                 "## External Context$externalContext"
             )
         }
-
-        val userPrompt = buildString {
-            if (!params.selectedText.isNullOrBlank()) {
-                append("Selected code:\n")
-                append("```$language\n")
-                append(params.selectedText)
-                append("\n```\n\n")
-            }
-            append("Request: ${params.prompt}")
-        }
-
-        return InlineEditPrompts(systemPrompt, userPrompt)
     }
 
     override fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest {
-        val prepared = prepareInlineEditPrompts(params)
+        val systemPrompt = prepareInlineEditSystemPrompt(params)
         return createBasicCompletionRequest(
-            prepared.systemPrompt,
-            prepared.userPrompt,
+            systemPrompt,
+            "systemPrompt.userPrompt",
             AUTO_APPLY_MAX_TOKENS,
             true,
             FeatureType.INLINE_EDIT

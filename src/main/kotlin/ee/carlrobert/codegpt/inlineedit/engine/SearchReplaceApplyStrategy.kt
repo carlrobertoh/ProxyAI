@@ -20,7 +20,6 @@ class SearchReplaceApplyStrategy : ApplyStrategy {
 
         val file = editor.virtualFile
         val parameters = InlineEditCompletionParameters(
-            ctx.promptText,
             editor.selectionModel.selectedText,
             file?.path,
             file?.extension,
