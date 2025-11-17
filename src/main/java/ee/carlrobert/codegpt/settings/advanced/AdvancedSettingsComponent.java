@@ -9,7 +9,9 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UI;
+import com.intellij.util.ui.components.BorderLayoutPanel;
 import ee.carlrobert.codegpt.CodeGPTBundle;
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import java.awt.event.ItemEvent;
 import java.net.Proxy;
@@ -28,6 +30,7 @@ public class AdvancedSettingsComponent {
   private final JBPasswordField proxyAuthPassword;
   private final PortField connectionTimeoutField;
   private final PortField readTimeoutField;
+  private final JBCheckBox debugModeCheckBox;
 
   public AdvancedSettingsComponent(AdvancedSettingsState advancedSettings) {
     proxyTypeComboBox = new ComboBox<>(new Proxy.Type[]{
@@ -52,6 +55,11 @@ public class AdvancedSettingsComponent {
     connectionTimeoutField = new PortField(advancedSettings.getConnectTimeout());
     readTimeoutField = new PortField(advancedSettings.getReadTimeout());
 
+    debugModeCheckBox = new JBCheckBox(
+        "Enable debug mode",
+        ConfigurationSettings.getState().getDebugModeEnabled()
+    );
+
     mainPanel = FormBuilder.createFormBuilder()
         .addComponent(new TitledSeparator(CodeGPTBundle.get(
             "advancedSettingsConfigurable.proxy.title")))
@@ -60,6 +68,11 @@ public class AdvancedSettingsComponent {
         .addComponent(new TitledSeparator(
             CodeGPTBundle.get("advancedSettingsConfigurable.connectionSettings.title")))
         .addComponent(createConnectionSettingsForm())
+        .addVerticalGap(4)
+        .addComponent(new TitledSeparator("Debug"))
+        .addComponent(new BorderLayoutPanel()
+            .addToLeft(debugModeCheckBox)
+            .withBorder(JBUI.Borders.emptyLeft(16)))
         .addComponentFillVertically(new JPanel(), 0)
         .getPanel();
   }
@@ -151,5 +164,14 @@ public class AdvancedSettingsComponent {
     proxyAuthPassword.setText(advancedSettings.getProxyPassword());
     connectionTimeoutField.setNumber(advancedSettings.getConnectTimeout());
     readTimeoutField.setNumber(advancedSettings.getReadTimeout());
+    debugModeCheckBox.setSelected(ConfigurationSettings.getState().getDebugModeEnabled());
+  }
+
+  public boolean isDebugModeEnabled() {
+    return debugModeCheckBox.isSelected();
+  }
+
+  public void setDebugModeEnabled(boolean enabled) {
+    debugModeCheckBox.setSelected(enabled);
   }
 }

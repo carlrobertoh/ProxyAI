@@ -22,6 +22,7 @@ class ConfigurationSettings :
 }
 
 class ConfigurationSettingsState : BaseState() {
+    var debugModeEnabled by property(false)
     var commitMessagePrompt by string(CoreActionsState.DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT)
     var maxTokens by property(8192)
     var temperature by property(0.1f) { max(0f, min(1f, it)) }
