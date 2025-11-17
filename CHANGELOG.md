@@ -6,8 +6,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.6.8-233] - 2025-11-17
-
 ### Added
 
 - Inline Edit quick question in the editor
@@ -1204,8 +1202,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.8-233...HEAD
-[3.6.8-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.7-233...v3.6.8-233
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.7-233...HEAD
 [3.6.7-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.6-233...v3.6.7-233
 [3.6.6-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.5-233...v3.6.6-233
 [3.6.5-233]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.4-241.1...v3.6.5-233
