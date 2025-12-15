@@ -15,6 +15,7 @@ import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.events.WebSearchEventDetails
 import org.cef.browser.CefRendering
@@ -84,7 +85,7 @@ class WebpageList(model: DefaultListModel<WebSearchEventDetails>) :
                 .cefClient
                 .createBrowser(details.url, CefRendering.DEFAULT, false, null)
 
-            val popupPanel = JPanel(BorderLayout()).apply {
+            val popupPanel = BorderLayoutPanel().apply {
                 add(browser.uiComponent, BorderLayout.CENTER)
                 add(panel {
                     row {

@@ -19,8 +19,6 @@ import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.mcp.ConnectionStatus
-import ee.carlrobert.codegpt.mcp.McpSessionManager
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
@@ -87,7 +85,10 @@ class SelectionTagProcessor(
         }
 
         promptBuilder.append(
-            CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)
+            """
+                # User has highlighted code:
+                ${CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)}
+            """.trimIndent()
         )
     }
 }
@@ -103,7 +104,10 @@ class EditorSelectionTagProcessor(
         }
 
         promptBuilder.append(
-            CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)
+            """
+                # User has highlighted code:
+                ${CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)}
+            """.trimIndent()
         )
     }
 }

@@ -5,6 +5,7 @@ import com.intellij.ide.util.gotoByName.GotoSymbolModel2
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.pom.Navigatable
 import com.intellij.psi.*
@@ -196,10 +197,52 @@ class FileResolver : NavigationResolver() {
         val project = getProject() ?: return null
 
         val memberSeparatorIndex = target.indexOf('#')
-        val filePath = if (memberSeparatorIndex > 0) {
-            target.substring(0, memberSeparatorIndex)
-        } else {
-            target
+        val lineSeparatorIndex = target.indexOf(':')
+
+        val filePath: String
+        val line: Int?
+        val column: Int?
+        val memberName: String?
+
+        when {
+            memberSeparatorIndex > 0 && target.substring(memberSeparatorIndex + 1)
+                .contains(',') -> {
+                filePath = target.substring(0, memberSeparatorIndex)
+                val lineColumn = target.substring(memberSeparatorIndex + 1)
+                val parts = lineColumn.split(',')
+                line = parts[0].toIntOrNull()
+                column = parts.getOrNull(1)?.toIntOrNull()
+                memberName = null
+            }
+
+            memberSeparatorIndex > 0 && target.substring(memberSeparatorIndex + 1).firstOrNull()
+                ?.isDigit() == true -> {
+                filePath = target.substring(0, memberSeparatorIndex)
+                line = target.substring(memberSeparatorIndex + 1).toIntOrNull()
+                column = null
+                memberName = null
+            }
+
+            lineSeparatorIndex > 0 -> {
+                filePath = target.substring(0, lineSeparatorIndex)
+                line = target.substring(lineSeparatorIndex + 1).toIntOrNull()
+                column = null
+                memberName = null
+            }
+
+            memberSeparatorIndex > 0 -> {
+                filePath = target.substring(0, memberSeparatorIndex)
+                line = null
+                column = null
+                memberName = target.substring(memberSeparatorIndex + 1)
+            }
+
+            else -> {
+                filePath = target
+                line = null
+                column = null
+                memberName = null
+            }
         }
 
         val fileName = filePath.substringAfterLast('/')
@@ -210,10 +253,18 @@ class FileResolver : NavigationResolver() {
                 }
 
         if (matchingVirtualFile != null) {
+            if (line != null) {
+                return OpenFileDescriptor(
+                    project,
+                    matchingVirtualFile,
+                    (line - 1).coerceAtLeast(0),
+                    column ?: 0
+                )
+            }
+
             val psiFile = PsiManager.getInstance(project).findFile(matchingVirtualFile)
             if (psiFile != null) {
-                if (memberSeparatorIndex > 0) {
-                    val memberName = target.substring(memberSeparatorIndex + 1)
+                if (memberName != null) {
                     val memberElement = psiFile.findNavigatableChildElement(memberName)
                     return memberElement ?: psiFile
                 }
@@ -224,10 +275,9 @@ class FileResolver : NavigationResolver() {
         return try {
             val fileNameWithoutExtension = fileName.takeWhile { it == '.' }
             searchInModels(project, fileNameWithoutExtension)?.let { ownerElement ->
-                val member = target.substring(memberSeparatorIndex + 1)
-                if (memberSeparatorIndex > 0) {
+                if (memberName != null) {
                     if (ownerElement is PsiElement) {
-                        ownerElement.findNavigatableChildElement(member)?.let { return it }
+                        ownerElement.findNavigatableChildElement(memberName)?.let { return it }
                     }
                 }
                 return ownerElement

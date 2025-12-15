@@ -1,10 +1,28 @@
 package ee.carlrobert.codegpt.settings.models
 
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels.Haiku_4_5
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels.Opus_4_5
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels.Sonnet_4_5
+import ai.koog.prompt.executor.clients.google.GoogleModels.Gemini2_5Flash
+import ai.koog.prompt.executor.clients.google.GoogleModels.Gemini2_5Pro
+import ai.koog.prompt.executor.clients.google.GoogleModels.Gemini3_Pro_Preview
+import ai.koog.prompt.executor.clients.mistralai.MistralAIModels.Chat.DevstralMedium
+import ai.koog.prompt.executor.clients.openai.OpenAIModels.Chat.GPT4_1
+import ai.koog.prompt.executor.clients.openai.OpenAIModels.Chat.GPT4_1Mini
+import ai.koog.prompt.executor.clients.openai.OpenAIModels.Chat.GPT5Mini
+import ai.koog.prompt.executor.clients.openai.OpenAIModels.Chat.GPT5_1
+import ai.koog.prompt.executor.clients.openai.OpenAIModels.Chat.GPT5_1Codex
+import ai.koog.prompt.executor.clients.openai.OpenAIModels.Chat.GPT5_2
+import ai.koog.prompt.llm.LLMCapability
+import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.llm.LLModel
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
+import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -20,7 +38,9 @@ data class ModelSelection(
     val model: String,
     val displayName: String,
     val icon: Icon? = null,
-    val pricingPlan: PricingPlan? = null
+    val pricingPlan: PricingPlan? = null,
+    val llmModel: LLModel? = null,
+    val id: String? = "",
 ) {
     val fullDisplayName: String = if (provider == ServiceType.LLAMA_CPP) {
         displayName
@@ -44,6 +64,7 @@ class ModelRegistry {
         ServiceType.PROXYAI to ModelCapability(
             ServiceType.PROXYAI,
             setOf(
+                FeatureType.AGENT,
                 FeatureType.CHAT,
                 FeatureType.CODE_COMPLETION,
                 FeatureType.AUTO_APPLY,
@@ -56,36 +77,59 @@ class ModelRegistry {
         ServiceType.OPENAI to ModelCapability(
             ServiceType.OPENAI,
             setOf(
-                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
+                FeatureType.AGENT,
+                FeatureType.CHAT,
+                FeatureType.CODE_COMPLETION,
+                FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.INLINE_EDIT,
+                FeatureType.LOOKUP
             )
         ),
         ServiceType.ANTHROPIC to ModelCapability(
             ServiceType.ANTHROPIC,
             setOf(
-                FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
-                FeatureType.INLINE_EDIT, FeatureType.LOOKUP
+                FeatureType.AGENT,
+                FeatureType.CHAT,
+                FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.INLINE_EDIT,
+                FeatureType.LOOKUP
             )
         ),
         ServiceType.GOOGLE to ModelCapability(
             ServiceType.GOOGLE,
             setOf(
-                FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
-                FeatureType.INLINE_EDIT, FeatureType.LOOKUP
+                FeatureType.AGENT,
+                FeatureType.CHAT,
+                FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.INLINE_EDIT,
+                FeatureType.LOOKUP
             )
         ),
         ServiceType.MISTRAL to ModelCapability(
             ServiceType.MISTRAL,
             setOf(
-                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
+                FeatureType.AGENT,
+                FeatureType.CHAT,
+                FeatureType.CODE_COMPLETION,
+                FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.INLINE_EDIT,
+                FeatureType.LOOKUP
             )
         ),
         ServiceType.OLLAMA to ModelCapability(
             ServiceType.OLLAMA,
             setOf(
-                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
+                FeatureType.AGENT,
+                FeatureType.CHAT,
+                FeatureType.CODE_COMPLETION,
+                FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.INLINE_EDIT,
+                FeatureType.LOOKUP
             )
         ),
         ServiceType.LLAMA_CPP to ModelCapability(
@@ -98,8 +142,13 @@ class ModelRegistry {
         ServiceType.CUSTOM_OPENAI to ModelCapability(
             ServiceType.CUSTOM_OPENAI,
             setOf(
-                FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
+                FeatureType.AGENT,
+                FeatureType.CHAT,
+                FeatureType.CODE_COMPLETION,
+                FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.INLINE_EDIT,
+                FeatureType.LOOKUP
             )
         ),
         ServiceType.INCEPTION to ModelCapability(
@@ -114,6 +163,11 @@ class ModelRegistry {
 
     private val pricingPlanBasedDefaults = mapOf(
         PricingPlan.ANONYMOUS to mapOf(
+            FeatureType.AGENT to ModelSelection(
+                ServiceType.OPENAI,
+                PROXYAI_AUTO,
+                "Auto"
+            ),
             FeatureType.CHAT to ModelSelection(
                 ServiceType.PROXYAI,
                 GEMINI_FLASH_2_5,
@@ -151,6 +205,11 @@ class ModelRegistry {
             )
         ),
         PricingPlan.FREE to mapOf(
+            FeatureType.AGENT to ModelSelection(
+                ServiceType.OPENAI,
+                PROXYAI_AUTO,
+                "Auto"
+            ),
             FeatureType.CHAT to ModelSelection(ServiceType.PROXYAI, QWEN3_CODER, "Qwen3 Coder"),
             FeatureType.AUTO_APPLY to ModelSelection(
                 ServiceType.PROXYAI,
@@ -180,6 +239,11 @@ class ModelRegistry {
             )
         ),
         PricingPlan.INDIVIDUAL to mapOf(
+            FeatureType.AGENT to ModelSelection(
+                ServiceType.OPENAI,
+                PROXYAI_AUTO,
+                "Auto"
+            ),
             FeatureType.CHAT to ModelSelection(
                 ServiceType.PROXYAI,
                 CLAUDE_4_5_SONNET_THINKING,
@@ -190,7 +254,11 @@ class ModelRegistry {
                 MERCURY_CODER,
                 "Mercury Coder"
             ),
-            FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_5_CODEX, "GPT-5 Codex"),
+            FeatureType.COMMIT_MESSAGE to ModelSelection(
+                ServiceType.PROXYAI,
+                GPT_5_CODEX,
+                "GPT-5 Codex"
+            ),
             FeatureType.INLINE_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
                 CLAUDE_4_5_SONNET,
@@ -211,6 +279,11 @@ class ModelRegistry {
     )
 
     private val fallbackDefaults = mapOf(
+        FeatureType.AGENT to ModelSelection(
+            ServiceType.OPENAI,
+            PROXYAI_AUTO,
+            "Auto"
+        ),
         FeatureType.CHAT to ModelSelection(
             ServiceType.PROXYAI,
             GEMINI_FLASH_2_5,
@@ -242,6 +315,7 @@ class ModelRegistry {
 
     fun getAllModelsForFeature(featureType: FeatureType): List<ModelSelection> {
         return when (featureType) {
+            FeatureType.AGENT -> getAllAgentModels()
             FeatureType.CHAT, FeatureType.COMMIT_MESSAGE,
             FeatureType.INLINE_EDIT, FeatureType.LOOKUP -> getAllChatModels()
 
@@ -272,20 +346,226 @@ class ModelRegistry {
     fun findModel(provider: ServiceType, modelCode: String): ModelSelection? {
         return getAllModels()
             .filter { it.provider == provider }
-            .find { it.model == modelCode }
+            .find { it.id == modelCode || it.model == modelCode }
     }
 
-    fun getModelDisplayName(provider: ServiceType, modelCode: String): String {
-        return findModel(provider, modelCode)?.displayName ?: modelCode
+    fun getModelDisplayName(provider: ServiceType, modelCode: String?): String {
+        val code = modelCode?.takeIf { it.isNotBlank() }
+        return if (code != null) {
+            findModel(provider, code)?.displayName ?: code
+        } else {
+            // Fallback to the first known model for the provider, or provider name
+            getAllModels().firstOrNull { it.provider == provider }?.displayName ?: provider.name
+        }
     }
 
     private fun getAllModels(): List<ModelSelection> {
         return buildList {
+            addAll(getAllAgentModels())
             addAll(getAllApplyModels())
             addAll(getAllChatModels())
             addAll(getAllCodeModels())
             addAll(getNextEditModels())
         }.distinctBy { "${it.provider}:${it.model}" }
+    }
+
+    fun getAgentModels(serviceType: ServiceType?): List<LLMModelWrapper> {
+        return getAgentModels()[serviceType] ?: emptyList()
+    }
+
+    data class LLMModelWrapper(val model: LLModel, val id: String = "", val name: String = "")
+
+    private fun getProxyAIModelWrapper(id: String, name: String): LLMModelWrapper {
+        return LLMModelWrapper(
+            model = LLModel(
+                id = id,
+                provider = ProxyAILLMClient.ProxyAI,
+                capabilities = listOf(
+                    LLMCapability.Temperature,
+                    LLMCapability.Schema.JSON.Basic,
+                    LLMCapability.Schema.JSON.Standard,
+                    LLMCapability.Speculation,
+                    LLMCapability.Tools,
+                    LLMCapability.ToolChoice,
+                    LLMCapability.Vision.Image,
+                    LLMCapability.Document,
+                    LLMCapability.Completion,
+                    LLMCapability.MultipleChoices,
+                    LLMCapability.OpenAIEndpoint.Completions,
+                ),
+                contextLength = 200_000,
+                maxOutputTokens = 32_768,
+            ),
+            name = name
+        )
+    }
+
+    fun getAgentModels(): Map<ServiceType, List<LLMModelWrapper>> {
+        return mapOf(
+            ServiceType.PROXYAI to listOf(
+                getProxyAIModelWrapper(PROXYAI_AUTO, "Auto"),
+                getProxyAIModelWrapper(GPT5_2.id, "GPT-5.2"),
+                getProxyAIModelWrapper(GPT5_1Codex.id, "GPT-5.1 Codex"),
+                getProxyAIModelWrapper(GPT5Mini.id, "GPT-5 Mini"),
+                getProxyAIModelWrapper(Opus_4_5.id, "Claude Opus 4.5"),
+                getProxyAIModelWrapper(Sonnet_4_5.id, "Claude Sonnet 4.5"),
+                getProxyAIModelWrapper(Haiku_4_5.id, "Claude Haiku 4.5"),
+            ),
+            ServiceType.OPENAI to listOf(
+                LLMModelWrapper(GPT5_2, name = "GPT-5.2"),
+                LLMModelWrapper(GPT5_1, name = "GPT-5.1"),
+                LLMModelWrapper(GPT5_1Codex, name = "GPT-5.1 Codex"),
+                LLMModelWrapper(GPT5Mini, name = "GPT-5 Mini"),
+                LLMModelWrapper(GPT4_1, name = "GPT-4.1"),
+                LLMModelWrapper(GPT4_1Mini, name = "GPT-4.1 Mini")
+            ),
+            ServiceType.ANTHROPIC to listOf(
+                LLMModelWrapper(Opus_4_5, name = "Claude Opus 4.5"),
+                LLMModelWrapper(Sonnet_4_5, name = "Claude Sonnet 4.5"),
+                LLMModelWrapper(Haiku_4_5, name = "Claude Haiku 4.5")
+            ),
+            ServiceType.CUSTOM_OPENAI to getCustomOpenAIModels().map { model ->
+                LLMModelWrapper(
+                    model = LLModel(
+                        id = model.model,
+                        provider = CustomOpenAILLMClient.CustomOpenAI,
+                        capabilities = listOf(
+                            LLMCapability.Temperature,
+                            LLMCapability.Schema.JSON.Basic,
+                            LLMCapability.Schema.JSON.Standard,
+                            LLMCapability.Speculation,
+                            LLMCapability.Tools,
+                            LLMCapability.ToolChoice,
+                            LLMCapability.Vision.Image,
+                            LLMCapability.Document,
+                            LLMCapability.Completion,
+                            LLMCapability.MultipleChoices,
+                            LLMCapability.OpenAIEndpoint.Completions,
+                        ),
+                        contextLength = 200_000,
+                        maxOutputTokens = 32_768,
+                    ),
+                    id = model.id ?: "",
+                    name = model.displayName
+                )
+            },
+            ServiceType.GOOGLE to listOf(
+                LLMModelWrapper(Gemini3_Pro_Preview, name = "Gemini 3 Pro Preview"),
+                LLMModelWrapper(Gemini2_5Pro, name = "Gemini 2.5 Pro"),
+                LLMModelWrapper(Gemini2_5Flash, name = "Gemini 2.5 Flash")
+            ),
+            ServiceType.MISTRAL to listOf(
+                LLMModelWrapper(DevstralMedium, name = "Devstral Medium")
+            ),
+            ServiceType.OLLAMA to getOllamaModels().map { model ->
+                LLMModelWrapper(
+                    LLModel(
+                        id = model.model,
+                        provider = LLMProvider.Ollama,
+                        capabilities = listOf(
+                            LLMCapability.Temperature,
+                            LLMCapability.Schema.JSON.Basic,
+                            LLMCapability.Schema.JSON.Standard,
+                            LLMCapability.Speculation,
+                            LLMCapability.Tools,
+                            LLMCapability.ToolChoice,
+                            LLMCapability.Vision.Image,
+                            LLMCapability.Document,
+                            LLMCapability.Completion,
+                            LLMCapability.MultipleChoices,
+                            LLMCapability.OpenAIEndpoint.Completions,
+                        ),
+                        contextLength = 200_000,
+                        maxOutputTokens = 32_768,
+                    ),
+                    name = model.displayName
+                )
+            }
+        )
+    }
+
+    private fun getAllAgentModels(): List<ModelSelection> {
+        return buildList {
+            addAll(getProxyAIAgentModels())
+            addAll(getAnthropicAgentModels())
+            addAll(getOpenAIAgentModels())
+            addAll(getCustomOpenAIModels())
+            addAll(getGoogleAgentModels())
+            addAll(getMistralAgentModels())
+            addAll(getOllamaModels())
+        }
+    }
+
+    fun getOpenAIAgentModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(ServiceType.OPENAI, GPT5_2.id, "GPT-5.2", Icons.OpenAI),
+            ModelSelection(ServiceType.OPENAI, GPT5_1.id, "GPT-5.1", Icons.OpenAI),
+            ModelSelection(ServiceType.OPENAI, GPT5_1Codex.id, "GPT-5.1 Codex", Icons.OpenAI),
+            ModelSelection(ServiceType.OPENAI, GPT5Mini.id, "GPT-5 Mini", Icons.OpenAI),
+        )
+    }
+
+    private fun getProxyAIAgentModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(ServiceType.PROXYAI, PROXYAI_AUTO, "Auto", Icons.DefaultSmall),
+            ModelSelection(ServiceType.PROXYAI, GPT5_2.id, "GPT-5.2", Icons.OpenAI),
+            ModelSelection(ServiceType.PROXYAI, GPT5_1Codex.id, "GPT-5.1 Codex", Icons.OpenAI),
+            ModelSelection(ServiceType.PROXYAI, GPT5Mini.id, "GPT-5 Mini", Icons.OpenAI),
+            ModelSelection(ServiceType.PROXYAI, Opus_4_5.id, "Claude Opus 4.5", Icons.Anthropic),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                Sonnet_4_5.id,
+                "Claude Sonnet 4.5",
+                Icons.Anthropic
+            ),
+            ModelSelection(
+                ServiceType.PROXYAI,
+                Haiku_4_5.id,
+                "Claude Haiku 4.5",
+                Icons.Anthropic
+            ),
+        )
+    }
+
+    fun getAnthropicAgentModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(ServiceType.ANTHROPIC, Opus_4_5.id, "Claude Opus 4.5", Icons.Anthropic),
+            ModelSelection(
+                ServiceType.ANTHROPIC,
+                Sonnet_4_5.id,
+                "Claude Sonnet 4.5",
+                Icons.Anthropic
+            ),
+            ModelSelection(
+                ServiceType.ANTHROPIC,
+                Haiku_4_5.id,
+                "Claude Haiku 4.5",
+                Icons.Anthropic
+            ),
+        )
+    }
+
+    fun getGoogleAgentModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(ServiceType.GOOGLE, Gemini2_5Pro.id, "Gemini 2.5 Pro", Icons.Google),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                Gemini2_5Flash.id,
+                "Gemini 2.5 Flash",
+                Icons.Google
+            ),
+        )
+    }
+
+    fun getMistralAgentModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(
+                ServiceType.MISTRAL,
+                DevstralMedium.id,
+                "Devstral Medium",
+                Icons.Mistral
+            ),
+        )
     }
 
     private fun getAllChatModels(): List<ModelSelection> {
@@ -575,16 +855,20 @@ class ModelRegistry {
 
     fun getCustomOpenAIModels(): List<ModelSelection> {
         return try {
-            val customServicesSettings = service<CustomServicesSettings>()
-            customServicesSettings.state.services.mapNotNull { service ->
+            service<CustomServicesSettings>().state.services.mapNotNull { service ->
                 val serviceId = service.id ?: return@mapNotNull null
                 val serviceName = service.name ?: ""
-                val modelName = service.chatCompletionSettings.body["model"] as? String
-                val displayName = if (!modelName.isNullOrEmpty()) {
-                    if (modelName.length > 20) "$serviceName (...${modelName.takeLast(20)})" else "$serviceName ($modelName)"
+                val model = service.chatCompletionSettings.body["model"] as? String ?: ""
+                val displayName = if (model.isNotEmpty()) {
+                    if (model.length > 20) "$serviceName (...${model.takeLast(20)})" else "$serviceName ($model)"
                 } else serviceName
 
-                ModelSelection(ServiceType.CUSTOM_OPENAI, serviceId, displayName)
+                ModelSelection(
+                    id = serviceId,
+                    provider = ServiceType.CUSTOM_OPENAI,
+                    model = model,
+                    displayName = displayName
+                )
             }
         } catch (e: Exception) {
             logger.error("Failed to get Custom OpenAI models", e)
@@ -609,6 +893,7 @@ class ModelRegistry {
 
     companion object {
         // ProxyAI Models
+        const val PROXYAI_AUTO = "auto"
         const val GEMINI_PRO_2_5 = "gemini-pro-2.5"
         const val GEMINI_FLASH_2_5 = "gemini-flash-2.5"
         const val CLAUDE_4_SONNET = "claude-4-sonnet"
@@ -640,6 +925,7 @@ class ModelRegistry {
         const val GPT_5 = "gpt-5"
         const val GPT_5_MINI = "gpt-5-mini"
         const val GPT_5_CODEX = "gpt-5-codex"
+        const val GPT_5_1_CODEX = "gpt-5.1-codex"
 
         // Anthropic Models
         const val CLAUDE_OPUS_4_20250514 = "claude-opus-4-20250514"

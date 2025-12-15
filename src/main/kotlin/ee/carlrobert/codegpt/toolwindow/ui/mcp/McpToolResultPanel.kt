@@ -9,7 +9,7 @@ import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import ee.carlrobert.codegpt.Icons
+import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.awt.Graphics
@@ -48,7 +48,7 @@ class McpToolResultPanel(
             layout = FlowLayout(FlowLayout.LEFT, 0, 0)
             isOpaque = false
 
-            add(JBLabel(if (isError) AllIcons.General.Error else Icons.MCP))
+            add(JBLabel(if (isError) AllIcons.General.Error else null))
             add(Box.createHorizontalStrut(8))
             add(JBLabel("Tool: $toolName").apply {
                 font = JBUI.Fonts.label().asBold()
@@ -150,12 +150,12 @@ class McpToolResultPanel(
             }
 
             override fun createCenterPanel(): JComponent {
-                val panel = JPanel(BorderLayout()).apply {
+                val panel = BorderLayoutPanel().apply {
                     border = JBUI.Borders.empty()
                 }
 
                 val headerPanel = JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                    add(JLabel(if (isError) AllIcons.General.Error else Icons.MCP))
+                    add(JLabel(if (isError) AllIcons.General.Error else null))
                     add(Box.createHorizontalStrut(8))
                     add(JLabel("Tool: $toolName").apply {
                         font = JBUI.Fonts.label().asBold()

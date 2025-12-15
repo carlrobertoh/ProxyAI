@@ -28,6 +28,9 @@ class ModelSettingsTest : IntegrationTest() {
         modelSettings = service<ModelSettings>()
         connection = ApplicationManager.getApplication().messageBus.connect()
         connection.subscribe(ModelChangeNotifier.getTopic(), object : ModelChangeNotifier {
+            override fun agentModelChanged(newModel: String, serviceType: ServiceType) {
+                lastNotification.set(NotificationData(FeatureType.AGENT, newModel, serviceType, "agent"))
+            }
             override fun chatModelChanged(newModel: String, serviceType: ServiceType) {
                 lastNotification.set(NotificationData(FeatureType.CHAT, newModel, serviceType, "chat"))
             }

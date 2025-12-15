@@ -42,6 +42,7 @@ class ModelSettingsForm(
                 titleKey = "settings.models.chat.section.title",
                 descriptionKey = "settings.models.chat.section.description",
                 features = listOf(
+                    FeatureConfig(FeatureType.AGENT, "settings.models.agent.label"),
                     FeatureConfig(FeatureType.CHAT, "settings.models.chat.label"),
                     FeatureConfig(FeatureType.AUTO_APPLY, "settings.models.autoApply.label"),
                     FeatureConfig(
@@ -73,6 +74,10 @@ class ModelSettingsForm(
         messageBusConnection.subscribe(
             ModelChangeNotifier.getTopic(),
             object : ModelChangeNotifier {
+                override fun agentModelChanged(newModel: String, serviceType: ServiceType) {
+                    modelChanged(FeatureType.AGENT, newModel, serviceType)
+                }
+
                 override fun chatModelChanged(newModel: String, serviceType: ServiceType) {
                     modelChanged(FeatureType.CHAT, newModel, serviceType)
                 }

@@ -21,11 +21,9 @@ import com.intellij.openapi.ui.VerticalFlowLayout;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBUI;
-import com.intellij.util.ui.components.BorderLayoutPanel;
 import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.actions.ActionType;
@@ -63,8 +61,8 @@ import java.awt.BorderLayout;
 import java.util.Objects;
 import java.util.stream.Stream;
 import javax.swing.DefaultListModel;
+import javax.swing.JComponent;
 import javax.swing.JEditorPane;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
 import javax.swing.event.HyperlinkListener;
@@ -83,22 +81,12 @@ public class ChatMessageResponseBody extends JPanel {
   private final DefaultListModel<WebSearchEventDetails> webpageListModel = new DefaultListModel<>();
   private final WebpageList webpageList = new WebpageList(webpageListModel);
   private final ResponseBodyProgressPanel progressPanel = new ResponseBodyProgressPanel();
-  private final JPanel loadingLabel = createLoadingPanel();
   private final JPanel contentPanel =
       new JPanel(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, 4, true, false));
 
   private ResponseEditorPanel currentlyProcessedEditorPanel;
   private JEditorPane currentlyProcessedTextPane;
   private JPanel webpageListPanel;
-
-  private JPanel createLoadingPanel() {
-    return new BorderLayoutPanel()
-        .addToLeft(new JBLabel(
-            CodeGPTBundle.get("toolwindow.chat.loading"),
-            new AnimatedIcon.Default(),
-            JLabel.LEFT))
-        .withBorder(JBUI.Borders.empty(4, 0));
-  }
 
   public ChatMessageResponseBody(Project project, boolean compact, Disposable parentDisposable) {
     this(project, false, compact, false, false, false, parentDisposable);
@@ -122,10 +110,7 @@ public class ChatMessageResponseBody extends JPanel {
     setOpaque(false);
 
     contentPanel.setOpaque(false);
-    add(contentPanel, BorderLayout.NORTH);
-
-    loadingLabel.setVisible(withLoading);
-    add(loadingLabel, BorderLayout.SOUTH);
+    add(contentPanel, BorderLayout.CENTER);
 
     if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
         == ServiceType.PROXYAI) {
@@ -153,15 +138,11 @@ public class ChatMessageResponseBody extends JPanel {
     return this;
   }
 
-  public void stopLoading() {
-    loadingLabel.setVisible(false);
-  }
-
-  public void addToolStatusPanel(JPanel panel) {
+  public void addToolStatusPanel(JComponent component) {
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel = null;
     streamOutputParser.clear();
-    contentPanel.add(panel);
+    contentPanel.add(component);
   }
 
   public void updateMessage(String partialMessage) {
@@ -197,6 +178,11 @@ public class ChatMessageResponseBody extends JPanel {
             .send();
       }
     });
+  }
+
+  public void displayCreditsExhausted() {
+    String message = "You’ve used all your ProxyAI credits. <a href=\"https://tryproxy.io/dashboard/billing\">Get more credits</a> to continue.";
+    displayErrorMessage(message, UIUtil::handleHyperlinkClicked);
   }
 
   public void displayError(String message) {
@@ -244,7 +230,6 @@ public class ChatMessageResponseBody extends JPanel {
   public void clear() {
     contentPanel.removeAll();
     streamOutputParser.clear();
-    loadingLabel.setVisible(false);
 
     // Reset for the next incoming message
     prepareProcessingText(true);
@@ -257,9 +242,6 @@ public class ChatMessageResponseBody extends JPanel {
 
   private void displayErrorMessage(String message, HyperlinkListener hyperlinkListener) {
     ApplicationManager.getApplication().invokeLater(() -> {
-      if (loadingLabel.isVisible()) {
-        loadingLabel.setVisible(false);
-      }
       if (webpageListPanel != null) {
         webpageListPanel.setVisible(false);
       }

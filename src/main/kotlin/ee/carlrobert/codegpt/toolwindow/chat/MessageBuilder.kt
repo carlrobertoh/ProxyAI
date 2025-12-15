@@ -11,7 +11,7 @@ class MessageBuilder(private val project: Project, private val text: String) {
     private val message = Message("")
     private var inlayContent: String = ""
 
-    fun withInlays(appliedTags: List<TagDetails>): MessageBuilder {
+    fun withTags(appliedTags: List<TagDetails>): MessageBuilder {
         if (appliedTags.isNotEmpty()) {
             inlayContent = processTags(message, appliedTags)
         }

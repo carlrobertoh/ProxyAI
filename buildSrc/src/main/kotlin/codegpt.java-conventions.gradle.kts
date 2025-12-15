@@ -35,6 +35,7 @@ dependencies {
   }
 
   implementation(lib("llm.client"))
+  implementation(lib("kotlinx.serialization.json"))
   constraints {
     implementation(lib("okio")) {
       because("llm-client 0.7.0 uses okio 3.2.0: https://avd.aquasec.com/nvd/cve-2023-3635")

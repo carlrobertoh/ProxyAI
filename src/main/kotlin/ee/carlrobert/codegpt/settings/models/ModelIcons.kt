@@ -32,7 +32,7 @@ object ModelIcons {
 
     fun getIconForProvider(provider: ServiceType): Icon? {
         return when (provider) {
-            ServiceType.PROXYAI -> Icons.CodeGPTModel
+            ServiceType.PROXYAI -> Icons.DefaultSmall
             ServiceType.OPENAI -> Icons.OpenAI
             ServiceType.ANTHROPIC -> Icons.Anthropic
             ServiceType.GOOGLE -> Icons.Google

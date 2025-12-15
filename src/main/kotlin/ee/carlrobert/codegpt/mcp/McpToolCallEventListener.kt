@@ -282,6 +282,8 @@ class McpToolCallEventListener(
                         },
                         onReject = { toolCall, panel ->
                             cleanupAndComplete()
+                            toolCallHandler.cancelAllPendingApprovals()
+                            toolCallHandler.cancelAllExecutions()
                         },
                         onBatchApprove = { panels, _ ->
                             toolCallsWithServer.forEachIndexed { index, (mcpToolCall, openAIToolCall, serverName) ->
@@ -308,6 +310,8 @@ class McpToolCallEventListener(
                         },
                         onBatchReject = { panels ->
                             cleanupAndComplete()
+                            toolCallHandler.cancelAllPendingApprovals()
+                            toolCallHandler.cancelAllExecutions()
                         }
                     )
 
@@ -547,6 +551,7 @@ class McpToolCallEventListener(
                 toolName = toolCall.name,
                 serverName = serverName,
                 initialStatus = "Executing...",
+                args = toolCall.arguments,
             )
             activeStatusPanels[toolCall.id] = statusPanel
             onToolCallUIUpdate(statusPanel)

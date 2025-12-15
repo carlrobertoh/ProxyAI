@@ -128,8 +128,8 @@ public class ToolwindowChatCompletionRequestHandler {
       }
     } catch (Throwable ex) {
       handleCallException(ex);
-      throw ex;
     }
+    return null;
   }
 
   private void handleCallException(Throwable ex) {

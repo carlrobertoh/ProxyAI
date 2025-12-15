@@ -14,6 +14,7 @@ import com.intellij.ui.JBColor;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.CodeGPTKeys;
+import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.actions.ActionType;
@@ -38,6 +39,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody;
+import ee.carlrobert.codegpt.toolwindow.chat.editor.header.LoadingPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensDetails;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel;
@@ -57,10 +59,10 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
+import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import git4idea.GitCommit;
 import java.awt.BorderLayout;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -93,6 +95,8 @@ public class ChatToolWindowTabPanel implements Disposable {
   private final TagManager tagManager;
   private final JPanel mcpApprovalContainer;
   private @Nullable ToolwindowChatCompletionRequestHandler requestHandler;
+  private LoadingPanel inputLoadingPanel;
+  private final JPanel queuedMessageContainer;
 
   public ChatToolWindowTabPanel(@NotNull Project project, @NotNull Conversation conversation) {
     this.project = project;
@@ -129,6 +133,11 @@ public class ChatToolWindowTabPanel implements Disposable {
     mcpApprovalContainer.setLayout(new BoxLayout(mcpApprovalContainer, BoxLayout.Y_AXIS));
     mcpApprovalContainer.setBorder(JBUI.Borders.empty());
     mcpApprovalContainer.setOpaque(false);
+
+    queuedMessageContainer = new JPanel();
+    queuedMessageContainer.setLayout(new BoxLayout(queuedMessageContainer, BoxLayout.Y_AXIS));
+    queuedMessageContainer.setBorder(JBUI.Borders.empty());
+    queuedMessageContainer.setOpaque(false);
 
     rootPanel = createRootPanel();
 
@@ -414,7 +423,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         false,
         message.isWebSearchIncluded(),
         fileContextIncluded || message.getDocumentationDetails() != null,
-        true,
+        false,
         this));
     return panel;
   }
@@ -481,6 +490,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     }
 
     userInputPanel.setSubmitEnabled(false);
+    userInputPanel.setStopEnabled(true);
     userMessagePanel.disableActions(List.of("RELOAD", "DELETE"));
     responseMessagePanel.disableActions(List.of("COPY"));
 
@@ -493,6 +503,29 @@ public class ChatToolWindowTabPanel implements Disposable {
             totalTokensPanel,
             userInputPanel) {
           @Override
+          public void handleRequestOpen() {
+            super.handleRequestOpen();
+            showInputLoading(CodeGPTBundle.get("toolwindow.chat.loading"));
+          }
+
+          @Override
+          public void handleCompleted(String fullMessage, ChatCompletionParameters callParameters) {
+            try {
+              super.handleCompleted(fullMessage, callParameters);
+            } finally {
+              hideInputLoading();
+            }
+          }
+
+          @Override
+          public void handleError(ErrorDetails error, Throwable ex) {
+            try {
+              super.handleError(error, ex);
+            } finally {
+              hideInputLoading();
+            }
+          }
+          @Override
           public void handleTokensExceededPolicyAccepted() {
             call(callParameters, responseMessagePanel, userMessagePanel);
           }
@@ -500,6 +533,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         this);
 
     requestHandler.setResponseMessagePanel(responseMessagePanel);
+    showInputLoading(CodeGPTBundle.get("toolwindow.chat.loading"));
     requestHandler.call(callParameters);
   }
 
@@ -520,7 +554,7 @@ public class ChatToolWindowTabPanel implements Disposable {
           .filter(TagDetails::getSelected)
           .collect(Collectors.toList());
 
-      var messageBuilder = new MessageBuilder(project, text).withInlays(appliedTags);
+      var messageBuilder = new MessageBuilder(project, text).withTags(appliedTags);
 
       List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
       if (!referencedFiles.isEmpty()) {
@@ -547,27 +581,15 @@ public class ChatToolWindowTabPanel implements Disposable {
   private Unit handleCancel() {
     if (requestHandler != null) {
       requestHandler.cancel();
+      ApplicationManager.getApplication().invokeLater(() -> {
+        mcpApprovalContainer.removeAll();
+        updateUserPromptPanel();
+        hideInputLoading();
+        userInputPanel.setSubmitEnabled(true);
+        CompletionProgressNotifier.update(project, false);
+        requestHandler = null;
+      });
     }
-    ApplicationManager.getApplication().invokeLater(() -> {
-      mcpApprovalContainer.removeAll();
-      updateUserPromptPanel();
-      var lastComponent = toolWindowScrollablePanel.getLastComponent();
-      if (lastComponent != null) {
-        Arrays.stream(lastComponent.getComponents())
-            .filter(ResponseMessagePanel.class::isInstance)
-            .findFirst()
-            .ifPresent(panel -> {
-              ResponseMessagePanel responsePanel = (ResponseMessagePanel) panel;
-              var responseComponent = responsePanel.getResponseComponent();
-              if (responseComponent != null) {
-                responseComponent.stopLoading();
-              }
-            });
-      }
-      userInputPanel.setSubmitEnabled(true);
-      CompletionProgressNotifier.update(project, false);
-    });
-    requestHandler = null;
     return Unit.INSTANCE;
   }
 
@@ -580,6 +602,16 @@ public class ChatToolWindowTabPanel implements Disposable {
     var topContainer = new JPanel();
     topContainer.setLayout(new BoxLayout(topContainer, BoxLayout.Y_AXIS));
     topContainer.setOpaque(false);
+
+    inputLoadingPanel = new LoadingPanel(CodeGPTBundle.get("toolwindow.chat.loading"), null, null);
+    inputLoadingPanel.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+    inputLoadingPanel.setVisible(false);
+    topContainer.add(inputLoadingPanel);
+
+    if (queuedMessageContainer.getComponentCount() > 0) {
+      queuedMessageContainer.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+      topContainer.add(queuedMessageContainer);
+    }
 
     if (mcpApprovalContainer.getComponentCount() > 0) {
       mcpApprovalContainer.setAlignmentX(JComponent.LEFT_ALIGNMENT);
@@ -594,6 +626,23 @@ public class ChatToolWindowTabPanel implements Disposable {
     panel.add(topContainer, BorderLayout.NORTH);
     panel.add(userInputPanel, BorderLayout.CENTER);
     return panel;
+  }
+
+  private void showInputLoading(String text) {
+    if (inputLoadingPanel != null) {
+      inputLoadingPanel.setText(text);
+      inputLoadingPanel.setVisible(true);
+      inputLoadingPanel.revalidate();
+      inputLoadingPanel.repaint();
+    }
+  }
+
+  private void hideInputLoading() {
+    if (inputLoadingPanel != null) {
+      inputLoadingPanel.setVisible(false);
+      inputLoadingPanel.revalidate();
+      inputLoadingPanel.repaint();
+    }
   }
 
   private JComponent getLandingView() {

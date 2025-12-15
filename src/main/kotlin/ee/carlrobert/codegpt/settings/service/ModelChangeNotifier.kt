@@ -4,6 +4,7 @@ import com.intellij.util.messages.Topic
 
 interface ModelChangeNotifier {
 
+    fun agentModelChanged(newModel: String, serviceType: ServiceType)
     fun chatModelChanged(newModel: String, serviceType: ServiceType)
     fun codeModelChanged(newModel: String, serviceType: ServiceType)
     fun autoApplyModelChanged(newModel: String, serviceType: ServiceType)
@@ -25,6 +26,7 @@ interface ModelChangeNotifier {
 
 abstract class ModelChangeNotifierAdapter : ModelChangeNotifier {
 
+    override fun agentModelChanged(newModel: String, serviceType: ServiceType) {}
     override fun chatModelChanged(newModel: String, serviceType: ServiceType) {}
     override fun codeModelChanged(newModel: String, serviceType: ServiceType) {}
     override fun autoApplyModelChanged(newModel: String, serviceType: ServiceType) {}

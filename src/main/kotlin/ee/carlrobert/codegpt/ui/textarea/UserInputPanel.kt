@@ -5,6 +5,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
@@ -16,6 +17,7 @@ import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.notification.NotificationType
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
@@ -26,20 +28,22 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.settings.models.ModelRegistry
+import ee.carlrobert.codegpt.agent.PromptEnhancer
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
-import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.ui.components.BadgeChip
+import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
+import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import git4idea.GitCommit
@@ -56,7 +60,7 @@ class UserInputPanel @JvmOverloads constructor(
     private val project: Project,
     private val totalTokensPanel: TotalTokensPanel,
     private val parentDisposable: Disposable,
-    featureType: FeatureType,
+    private val featureType: FeatureType,
     val tagManager: TagManager,
     private val onSubmit: (String) -> Unit,
     private val onStop: () -> Unit,
@@ -65,6 +69,8 @@ class UserInputPanel @JvmOverloads constructor(
     private val onApply: (() -> Unit)? = null,
     private val getMarkdownContent: (() -> String)? = null,
     withRemovableSelectedEditorTag: Boolean = true,
+    private val agentTokenCounterPanel: JComponent? = null,
+    private val sessionIdProvider: (() -> String?)? = null,
 ) : BorderLayoutPanel() {
 
     constructor(
@@ -121,14 +127,16 @@ class UserInputPanel @JvmOverloads constructor(
             promptTextField,
             withRemovableSelectedEditorTag,
             onApply,
-            getMarkdownContent
+            getMarkdownContent,
+            featureType
         )
 
     private var footerPanelRef: JPanel? = null
 
-    private val applyChip = onApply?.let { BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, it) }?.apply {
-        isVisible = false
-    }
+    private val applyChip =
+        onApply?.let { BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, it) }?.apply {
+            isVisible = false
+        }
     private val acceptChip =
         InlineEditChips.acceptAll { onAcceptAll?.invoke() }.apply { isVisible = false }
     private val rejectChip =
@@ -147,6 +155,7 @@ class UserInputPanel @JvmOverloads constructor(
             add(thinkingLabel)
             isVisible = false
         }
+
     private val submitButton = IconActionButton(
         object : AnAction(
             CodeGPTBundle.get("smartTextPane.submitButton.title"),
@@ -176,17 +185,49 @@ class UserInputPanel @JvmOverloads constructor(
         isEnabled = false
         cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
     }
+    private val promptEnhancer = if (featureType == FeatureType.AGENT) {
+        PromptEnhancer(project)
+    } else {
+        null
+    }
+    private val promptEnhancerButton = if (featureType == FeatureType.AGENT) {
+        IconActionButton(
+            object : AnAction(
+                CodeGPTBundle.get("smartTextPane.promptEnhancer.title"),
+                CodeGPTBundle.get("smartTextPane.promptEnhancer.description"),
+                IconUtil.scale(Icons.Sparkle, null, 0.85f)
+            ) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    handlePromptEnhancer()
+                }
+            },
+            "PROMPT_ENHANCER"
+        ).apply {
+            isEnabled = false
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+    } else {
+        null
+    }
+    private val promptEnhancerSeparator = if (featureType == FeatureType.AGENT) {
+        createActionSeparator()
+    } else {
+        null
+    }
     private val imageActionSupported = AtomicBooleanProperty(isImageActionSupported())
 
     private lateinit var modelComboBoxComponent: JComponent
-    private var searchReplaceToggleComponent: JComponent? = null
+    private var separatorRef: JPanel? = null
+    private var isPromptEnhancing: Boolean = false
 
     val text: String
         get() = promptTextField.text
 
     fun isQuickQuestionEnabled(): Boolean = quickQuestionCheckbox.isSelected
     fun getChatMode(): ChatMode = chatMode
-    fun setChatMode(mode: ChatMode) { chatMode = mode }
+    fun setChatMode(mode: ChatMode) {
+        chatMode = mode
+    }
 
 
     init {
@@ -213,6 +254,7 @@ class UserInputPanel @JvmOverloads constructor(
 
         addToTop(userInputHeaderPanel)
         addToCenter(promptTextField)
+        addToBottom(createToolbarSeparator().also { separatorRef = it })
         addToBottom(createFooterPanel(featureType).also { footerPanelRef = it })
 
         if (featureType == FeatureType.INLINE_EDIT) {
@@ -265,7 +307,10 @@ class UserInputPanel @JvmOverloads constructor(
 
     fun setSubmitEnabled(enabled: Boolean) {
         submitButton.isEnabled = enabled
-        stopButton.isEnabled = !enabled
+    }
+
+    fun setStopEnabled(enabled: Boolean) {
+        stopButton.isEnabled = enabled
     }
 
     fun addSelection(editorFile: VirtualFile, selectionModel: SelectionModel) {
@@ -339,6 +384,10 @@ class UserInputPanel @JvmOverloads constructor(
 
     fun setTextAndFocus(text: String) {
         promptTextField.setTextAndFocus(text)
+    }
+
+    fun clearText() {
+        promptTextField.clear()
     }
 
     override fun isFocusable(): Boolean = true
@@ -415,6 +464,7 @@ class UserInputPanel @JvmOverloads constructor(
     private fun updateUserTokens(text: String) {
         val expanded = promptTextField.getExpandedText()
         totalTokensPanel.updateUserPromptTokens(expanded)
+        updatePromptEnhancerState(expanded)
     }
 
     private fun handleBackSpace() {
@@ -431,6 +481,51 @@ class UserInputPanel @JvmOverloads constructor(
         item.execute(project, this)
     }
 
+    private fun handlePromptEnhancer() {
+        val enhancer = promptEnhancer ?: return
+        val sourceText = promptTextField.getExpandedText().trim()
+        if (sourceText.isBlank() || isPromptEnhancing) return
+        val tags = getSelectedTags()
+        val sessionId = sessionIdProvider?.invoke()
+
+        isPromptEnhancing = true
+        promptEnhancerButton?.isEnabled = false
+        setThinkingVisible(true, CodeGPTBundle.get("promptEnhancer.thinking"))
+
+        ApplicationManager.getApplication().executeOnPooledThread {
+            runCatching { enhancer.enhancePrompt(sourceText, tags, sessionId) }
+                .onSuccess { result ->
+                    runInEdt {
+                        if (Disposer.isDisposed(parentDisposable)) return@runInEdt
+                        if (promptTextField.getExpandedText().trim() == sourceText) {
+                            promptTextField.text = result.prompt
+                        }
+                        finishPromptEnhancement()
+                    }
+                }
+                .onFailure { ex ->
+                    runInEdt {
+                        if (Disposer.isDisposed(parentDisposable)) return@runInEdt
+                        finishPromptEnhancement()
+                        OverlayUtil.showNotification(
+                            ex.message ?: CodeGPTBundle.get("error.promptEnhancerFailed"),
+                            NotificationType.ERROR
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun finishPromptEnhancement() {
+        isPromptEnhancing = false
+        setThinkingVisible(false)
+        updatePromptEnhancerState(promptTextField.getExpandedText())
+    }
+
+    private fun updatePromptEnhancerState(text: String) {
+        promptEnhancerButton?.isEnabled = !isPromptEnhancing && text.isNotBlank()
+    }
+
     private fun createToolbarSeparator(): JPanel {
         return JPanel().apply {
             isOpaque = true
@@ -441,14 +536,26 @@ class UserInputPanel @JvmOverloads constructor(
         }
     }
 
+    private fun createActionSeparator(height: Int = 16): JPanel {
+        val scaledHeight = JBUI.scale(height)
+        return JPanel().apply {
+            isOpaque = true
+            background = JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()
+            preferredSize = Dimension(1, scaledHeight)
+            minimumSize = Dimension(1, scaledHeight)
+            maximumSize = Dimension(1, scaledHeight)
+        }
+    }
+
     private fun createFooterPanel(featureType: FeatureType): JPanel {
         val currentService =
             ModelSelectionService.getInstance().getServiceForFeature(featureType)
+        val availableProviders = ModelRegistry.getInstance().getProvidersForFeature(featureType)
         val modelComboBox = ModelComboBoxAction(
             project,
             { imageActionSupported.set(isImageActionSupported()) },
             currentService,
-            ServiceType.entries,
+            availableProviders,
             true,
             featureType
         ).createCustomComponent(ActionPlaces.UNKNOWN).apply {
@@ -456,27 +563,20 @@ class UserInputPanel @JvmOverloads constructor(
         }
         modelComboBoxComponent = modelComboBox
 
-        val searchReplaceToggle = if (featureType == FeatureType.CHAT) {
-            SearchReplaceToggleAction(this).createCustomComponent(ActionPlaces.UNKNOWN).apply {
-                cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-            }
-        } else null
-        searchReplaceToggleComponent = searchReplaceToggle
-
         val pnl = panel {
             twoColumnsRow(
                 {
                     panel {
                         row {
                             cell(modelComboBox).gap(RightGap.SMALL)
+                            if (agentTokenCounterPanel != null) {
+                                cell(agentTokenCounterPanel).gap(RightGap.SMALL)
+                            }
                             cell(thinkingPanel).gap(RightGap.SMALL)
                             cell(acceptChip).gap(RightGap.SMALL)
                             cell(rejectChip).gap(RightGap.SMALL)
-                            cell(createToolbarSeparator()).gap(RightGap.SMALL)
                             if (featureType == FeatureType.INLINE_EDIT) {
                                 cell(quickQuestionCheckbox)
-                            } else if (searchReplaceToggle != null) {
-                                cell(searchReplaceToggle)
                             }
                         }
                     }.align(AlignX.LEFT)
@@ -485,6 +585,10 @@ class UserInputPanel @JvmOverloads constructor(
                     panel {
                         row {
                             if (applyChip != null) cell(applyChip).gap(RightGap.SMALL)
+                            if (promptEnhancerButton != null && promptEnhancerSeparator != null) {
+                                cell(promptEnhancerButton).gap(RightGap.SMALL)
+                                cell(promptEnhancerSeparator).gap(RightGap.SMALL)
+                            }
                             cell(submitButton).gap(RightGap.SMALL)
                             cell(stopButton)
                         }
@@ -517,10 +621,11 @@ class UserInputPanel @JvmOverloads constructor(
         repaint()
     }
 
+
     private fun isImageActionSupported(): Boolean {
-        val currentModel = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
+        val currentModel = ModelSelectionService.getInstance().getModelForFeature(featureType)
         val currentService =
-            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
+            ModelSelectionService.getInstance().getServiceForFeature(featureType)
 
         return when (currentService) {
             ServiceType.CUSTOM_OPENAI,

@@ -41,6 +41,7 @@ object LegacySettingsMigration {
         return ModelSettingsState().apply {
             val chatModel = getLegacyChatModelForService(selectedService)
 
+            setModelSelection(FeatureType.AGENT, "auto", selectedService)
             setModelSelection(FeatureType.CHAT, chatModel, selectedService)
             setModelSelection(FeatureType.AUTO_APPLY, chatModel, selectedService)
             setModelSelection(FeatureType.COMMIT_MESSAGE, chatModel, selectedService)

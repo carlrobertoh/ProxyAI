@@ -35,7 +35,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
   private final UserMessagePanel userMessagePanel;
   private ChatMessageResponseBody responseContainer;
   private final TotalTokensPanel totalTokensPanel;
-  private final UserInputPanel textArea;
+  private final UserInputPanel userInputPanel;
 
   private final Timer updateTimer = new Timer(UPDATE_INTERVAL_MS, e -> processBufferedMessages());
   private final ConcurrentLinkedQueue<String> messageBuffer = new ConcurrentLinkedQueue<>();
@@ -47,13 +47,13 @@ abstract class ToolWindowCompletionResponseEventListener implements
       UserMessagePanel userMessagePanel,
       ResponseMessagePanel responsePanel,
       TotalTokensPanel totalTokensPanel,
-      UserInputPanel textArea) {
+      UserInputPanel userInputPanel) {
     this.encodingManager = EncodingManager.getInstance();
     this.project = project;
     this.userMessagePanel = userMessagePanel;
     this.responsePanel = responsePanel;
     this.totalTokensPanel = totalTokensPanel;
-    this.textArea = textArea;
+    this.userInputPanel = userInputPanel;
   }
 
   public abstract void handleTokensExceededPolicyAccepted();
@@ -146,7 +146,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
             container.withResponse(fullMessage);
           }
         }
-        totalTokensPanel.updateUserPromptTokens(textArea.getText());
+        totalTokensPanel.updateUserPromptTokens(userInputPanel.getText());
         totalTokensPanel.updateConversationTokens(callParameters.getConversation());
       } finally {
         stopStreaming(responseContainer);
@@ -184,11 +184,11 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   private void stopStreaming(ChatMessageResponseBody responseContainer) {
     stopped = true;
-    textArea.setSubmitEnabled(true);
+    userInputPanel.setSubmitEnabled(true);
+    userInputPanel.setStopEnabled(false);
     userMessagePanel.enableAllActions(true);
     responsePanel.enableAllActions(true);
     if (responseContainer != null) {
-      responseContainer.stopLoading();
       responseContainer.hideCaret();
       responseContainer.finishThinking();
     }

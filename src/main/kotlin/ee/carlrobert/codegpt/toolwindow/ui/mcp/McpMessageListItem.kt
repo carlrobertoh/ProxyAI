@@ -19,8 +19,8 @@ class McpMessageListItem(
 
     override fun createDisplayNameLabel(): JBLabel {
         return JBLabel(
-            "MCP Tool",
-            Icons.MCP,
+            "Tool",
+            null,
             SwingConstants.LEADING
         ).apply {
             iconTextGap = 6

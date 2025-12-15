@@ -51,6 +51,8 @@
                                   instance="ee.carlrobert.codegpt.settings.prompts.PromptsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.mcp" parentId="settings.codegpt" displayName="MCP"
                                   instance="ee.carlrobert.codegpt.settings.mcp.McpConfigurable"/>
+        <projectConfigurable id="settings.codegpt.subagents" parentId="settings.codegpt" displayName="Subagents"
+                             instance="ee.carlrobert.codegpt.settings.agents.SubagentsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.documentations" parentId="settings.codegpt" displayName="Documentations"
                                   instance="ee.carlrobert.codegpt.settings.documentation.DocumentationsConfigurable"/>
         <applicationConfigurable id="settings.codegpt.configuration" parentId="settings.codegpt" displayName="Configuration"

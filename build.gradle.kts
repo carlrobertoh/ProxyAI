@@ -37,6 +37,7 @@ plugins {
     id("org.jetbrains.intellij.platform")
     alias(libs.plugins.changelog)
     alias(libs.plugins.protobuf)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 group = properties("pluginGroup").get()
@@ -72,26 +73,37 @@ dependencies {
     implementation(project(":codegpt-telemetry"))
     implementation(project(":codegpt-treesitter"))
 
+    implementation(platform(libs.okhttp.bom))
+    implementation(platform(libs.slf4j.bom))
     implementation(platform(libs.jackson.bom))
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation(platform(libs.mcp.sdk.bom))
+
+    implementation(libs.jackson.datatype.jdk8)
+    implementation(libs.jackson.datatype.jsr310)
+    implementation(libs.jackson.module.kotlin)
+
     implementation(libs.flexmark.all) {
         // vulnerable transitive dependency
         exclude(group = "org.jsoup", module = "jsoup")
     }
-    implementation(kotlin("stdlib"))
-    implementation(kotlin("reflect"))
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlin.reflect)
+    implementation(libs.koog.agents) {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-jdk8")
+    }
     implementation(libs.jsoup)
     implementation(libs.commons.text)
     implementation(libs.jtokkit)
+
     implementation(libs.grpc.protobuf)
     implementation(libs.grpc.stub)
     implementation(libs.grpc.netty.shaded)
     implementation(libs.protobuf.runtime)
-    implementation(platform(libs.mcp.sdk.bom))
+
     implementation(libs.mcp.sdk)
-    testImplementation("junit:junit:4.13.2")
+
+    testImplementation(libs.junit4)
     testImplementation(kotlin("test"))
 }
 

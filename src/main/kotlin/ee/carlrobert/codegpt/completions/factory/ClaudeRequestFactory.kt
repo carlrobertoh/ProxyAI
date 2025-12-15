@@ -65,7 +65,6 @@ class ClaudeRequestFactory : BaseRequestFactory() {
             if (params.toolResults.isNullOrEmpty()) {
                 when {
                     params.imageDetails != null -> {
-                        println("DEBUG [ClaudeRequestFactory]: Adding image message")
                         messages.add(
                             ClaudeCompletionDetailedMessage(
                                 "user",
@@ -142,7 +141,6 @@ class ClaudeRequestFactory : BaseRequestFactory() {
 
                     try {
                         if (isCurrentMessageWithToolResults) {
-                            println("  - This is the current message with tool results, adding them now")
                             return mutableListOf()
                         }
 

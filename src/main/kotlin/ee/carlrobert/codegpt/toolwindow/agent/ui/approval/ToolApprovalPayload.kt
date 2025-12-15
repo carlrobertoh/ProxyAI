@@ -1,0 +1,21 @@
+package ee.carlrobert.codegpt.toolwindow.agent.ui.approval
+
+sealed interface ToolApprovalPayload
+
+data class BashPayload(
+    val command: String,
+    val description: String?
+) : ToolApprovalPayload
+
+data class WritePayload(
+    val filePath: String,
+    val content: String
+) : ToolApprovalPayload
+
+data class EditPayload(
+    val filePath: String,
+    val oldString: String,
+    val newString: String,
+    val replaceAll: Boolean
+) : ToolApprovalPayload
+

@@ -13,8 +13,12 @@ jsoup = "1.21.2"
 jtokkit = "1.1.0"
 junit = "5.13.4"
 kotlin = "2.2.10"
-llm-client = "0.8.56"
+kotlinx-serialization = "1.6.3"
+llm-client = "0.8.58"
+koog = "0.6.0"
+okhttp = "4.12.0"
 okio = "3.15.0"
+slf4j = "2.0.17"
 tree-sitter = "0.24.5"
 grpc = "1.73.0"
 protobuf = "3.25.1"
@@ -28,14 +32,24 @@ flexmark-all = { module = "com.vladsch.flexmark:flexmark-all", version.ref = "fl
 gradle-intellij-plugin = { module = "org.jetbrains.intellij.platform:intellij-platform-gradle-plugin", version.ref = "gradle-intellij-plugin-version" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }
+jackson-datatype-jdk8 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jdk8", version.ref = "jackson" }
+jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
 mcp-sdk = { module = "io.modelcontextprotocol.sdk:mcp", version.ref = "mcp" }
 mcp-sdk-bom = { module = "io.modelcontextprotocol.sdk:mcp-bom", version.ref = "mcp" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 jtokkit = { module = "com.knuddels:jtokkit", version.ref = "jtokkit" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit4 = { module = "junit:junit", version = "4.13.2" }
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+koog-agents = { module = "ai.koog:koog-agents", version.ref = "koog" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 llm-client = { module = "ee.carlrobert:llm-client", version.ref = "llm-client" }
+okhttp-bom = { module = "com.squareup.okhttp3:okhttp-bom", version.ref = "okhttp" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+slf4j-bom = { module = "org.slf4j:slf4j-bom", version.ref = "slf4j" }
 tree-sitter = { module = "io.github.bonede:tree-sitter", version.ref = "tree-sitter" }
 grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
 grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
@@ -46,4 +60,5 @@ protobuf-runtime = { module = "com.google.protobuf:protobuf-java", version.ref =
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }

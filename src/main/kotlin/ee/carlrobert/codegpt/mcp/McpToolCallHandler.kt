@@ -123,6 +123,7 @@ class McpToolCallHandler {
                 toolName = toolCall.name,
                 serverName = actualServerName,
                 initialStatus = "Executing...",
+                args = toolCall.arguments,
             )
             statusPanels[toolCall.id] = statusPanel
             onUIUpdate(statusPanel)

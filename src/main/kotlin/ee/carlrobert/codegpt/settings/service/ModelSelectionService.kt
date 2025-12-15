@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.settings.service
 
+import ai.koog.prompt.llm.LLModel
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -12,6 +13,16 @@ import ee.carlrobert.llm.client.codegpt.PricingPlan
 @Service
 class ModelSelectionService {
 
+    fun getAgentModel(): LLModel {
+        val modelDetailsState = service<ModelSettings>().state.getModelSelection(FeatureType.AGENT)
+        val model = modelDetailsState?.model
+        val provider = modelDetailsState?.provider
+        val models = service<ModelRegistry>().getAgentModels()[provider]
+
+        return models?.find { it.id == model || it.model.id == model }?.model
+            ?: throw IllegalArgumentException("Model '$model' not found for provider $provider")
+    }
+
     fun getModelSelectionForFeature(
         featureType: FeatureType,
         pricingPlan: PricingPlan? = null
@@ -19,14 +30,18 @@ class ModelSelectionService {
         return try {
             val modelSettings = service<ModelSettings>()
             val modelDetailsState = modelSettings.state.getModelSelection(featureType)
-            
+
             if (modelDetailsState != null && modelDetailsState.model != null && modelDetailsState.provider != null) {
-                val foundModel = service<ModelRegistry>().findModel(modelDetailsState.provider!!, modelDetailsState.model!!)
+                val foundModel =
+                    service<ModelRegistry>().findModel(
+                        modelDetailsState.provider!!,
+                        modelDetailsState.model!!
+                    )
                 if (foundModel != null) {
                     return foundModel
                 }
             }
-            
+
             service<ModelRegistry>().getDefaultModelForFeature(featureType, pricingPlan)
         } catch (exception: Exception) {
             logger.warn(
@@ -64,7 +79,11 @@ class ModelSelectionService {
         val settings = service<ModelSettings>()
 
         FeatureType.entries.forEach { featureType ->
-            if (!registry.isFeatureSupportedByProvider(featureType, ServiceType.CUSTOM_OPENAI)) return@forEach
+            if (!registry.isFeatureSupportedByProvider(
+                    featureType,
+                    ServiceType.CUSTOM_OPENAI
+                )
+            ) return@forEach
 
             val current = settings.getModelSelection(featureType)
             if (current?.provider != ServiceType.CUSTOM_OPENAI) return@forEach

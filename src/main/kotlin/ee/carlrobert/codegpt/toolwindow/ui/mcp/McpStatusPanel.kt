@@ -10,6 +10,7 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import java.awt.Cursor
 import java.awt.Graphics
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -21,6 +22,7 @@ class McpStatusPanel(
     private val toolName: String,
     private val serverName: String,
     initialStatus: String = "Executing...",
+    private val args: Map<String, Any>? = null,
 ) : JBPanel<McpStatusPanel>() {
 
     private val startTime = LocalDateTime.now()
@@ -36,6 +38,12 @@ class McpStatusPanel(
     private var currentResult: String? = null
     private var currentError: String? = null
     private var isCompleted = false
+    private var isExpanded = false
+
+    private lateinit var contentContainer: BorderLayoutPanel
+    private val expandIcon = JBLabel(AllIcons.General.ArrowRight).apply {
+        border = JBUI.Borders.emptyRight(6)
+    }
 
     init {
         layout = BorderLayout()
@@ -54,10 +62,15 @@ class McpStatusPanel(
             layout = FlowLayout(FlowLayout.LEFT, 0, 0)
             isOpaque = false
             border = JBUI.Borders.empty(0, 0, 4, 0)
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            addMouseListener(object : java.awt.event.MouseAdapter() {
+                override fun mouseClicked(e: java.awt.event.MouseEvent?) {
+                    toggleExpanded()
+                }
+            })
         }
 
-        headerPanel.add(JBLabel(Icons.MCP))
-        headerPanel.add(Box.createHorizontalStrut(8))
+        headerPanel.add(expandIcon)
 
         val infoLabel = JBLabel("$toolName • $serverName").apply {
             font = JBUI.Fonts.label()
@@ -74,7 +87,9 @@ class McpStatusPanel(
         headerPanel.add(spinner)
 
         add(headerPanel, BorderLayout.NORTH)
-        add(BorderLayoutPanel(), BorderLayout.CENTER)
+        contentContainer = BorderLayoutPanel()
+        contentContainer.isVisible = false
+        add(contentContainer, BorderLayout.CENTER)
     }
 
     fun complete(success: Boolean, message: String? = null, result: String? = null) {
@@ -86,11 +101,21 @@ class McpStatusPanel(
             val durationText = formatDuration(duration)
 
             if (success) {
-                currentResult = result
-                statusLabel.text = "${message ?: "Completed"} • $durationText"
-                statusLabel.foreground = JBUI.CurrentTheme.Label.foreground()
-
-                result?.let { showResultPreview(it) }
+                val lowerName = toolName.lowercase()
+                if (lowerName.contains("write") || lowerName.contains("edit")) {
+                    val filePath = args?.get("file_path") as? String ?: args?.get("path") as? String
+                    val created = (result ?: "").lowercase().contains("created")
+                    statusLabel.text = "${if (created) "Created" else "Updated"}${filePath?.let { ": $it" } ?: ""} • $durationText"
+                    statusLabel.foreground = JBUI.CurrentTheme.Label.foreground()
+                    val content = args?.get("content") as? String
+                    currentResult = content ?: result
+                    showResultPreview(currentResult ?: "")
+                } else {
+                    currentResult = result
+                    statusLabel.text = "${message ?: "Completed"} • $durationText"
+                    statusLabel.foreground = JBUI.CurrentTheme.Label.foreground()
+                    result?.let { showResultPreview(it) }
+                }
             } else {
                 currentError = message ?: result ?: "Failed"
                 statusLabel.text = "Failed • $durationText"
@@ -99,6 +124,7 @@ class McpStatusPanel(
                 currentError?.let { showErrorPreview(it) }
             }
 
+            updateExpansionUi()
             revalidate()
             repaint()
         }
@@ -107,7 +133,7 @@ class McpStatusPanel(
     private fun showResultPreview(result: String) {
         if (result.isBlank()) return
 
-        val previewText = formatResultPreview(result)
+        val previewText = buildToolSpecificPreview(result).ifEmpty { formatResultPreview(result) }
         if (previewText.isNotEmpty()) {
             removeResultComponents()
 
@@ -134,8 +160,9 @@ class McpStatusPanel(
             resultPanel.add(resultPreviewLabel!!, BorderLayout.CENTER)
             resultPanel.add(resultActionsPanel!!, BorderLayout.SOUTH)
 
-            val resultContainer = getComponent(1) as JBPanel<*>
-            resultContainer.add(resultPanel, BorderLayout.CENTER)
+            contentContainer.removeAll()
+            contentContainer.add(resultPanel, BorderLayout.CENTER)
+            updateExpansionUi()
         }
     }
 
@@ -169,13 +196,13 @@ class McpStatusPanel(
         errorPanel.add(resultPreviewLabel!!, BorderLayout.CENTER)
         errorPanel.add(resultActionsPanel!!, BorderLayout.SOUTH)
 
-        val resultContainer = getComponent(1) as JBPanel<*>
-        resultContainer.add(errorPanel, BorderLayout.CENTER)
+        contentContainer.removeAll()
+        contentContainer.add(errorPanel, BorderLayout.CENTER)
+        updateExpansionUi()
     }
 
     private fun removeResultComponents() {
-        val resultContainer = getComponent(1) as JBPanel<*>
-        resultContainer.removeAll()
+        contentContainer.removeAll()
     }
 
     private fun createShowMoreLink(): ActionLink {
@@ -210,6 +237,17 @@ class McpStatusPanel(
         dialog.isVisible = true
     }
 
+    private fun toggleExpanded() {
+        isExpanded = !isExpanded
+        updateExpansionUi()
+    }
+
+    private fun updateExpansionUi() {
+        val hasContent = (currentResult?.isNotBlank() == true) || (currentError?.isNotBlank() == true)
+        contentContainer.isVisible = hasContent && isExpanded
+        expandIcon.icon = if (hasContent && isExpanded) AllIcons.General.ArrowDown else AllIcons.General.ArrowRight
+    }
+
     private fun formatResultPreview(result: String): String {
         val cleaned = result
             .replace("\n", " ")
@@ -242,6 +280,54 @@ class McpStatusPanel(
             }
 
             else -> cleaned
+        }
+    }
+
+    private fun buildToolSpecificPreview(result: String): String {
+        val name = toolName.lowercase()
+
+        return when {
+            name.contains("bash") -> {
+                val cmd = (args?.get("command") as? String)
+                    ?: Regex("^Command:\\s*(.*)$", RegexOption.MULTILINE).find(result)?.groupValues?.getOrNull(1)
+                cmd?.let { "Command: ${it.trim()}" } ?: ""
+            }
+            name.startsWith("read") -> {
+                val filePath = args?.get("file_path") as? String ?: args?.get("path") as? String
+                val count = Regex("^\\d+\\t", RegexOption.MULTILINE).findAll(result).count()
+                if (filePath != null && count > 0) {
+                    "Read ${filePath} • ${count} lines"
+                } else ""
+            }
+            name.contains("grep") || name.contains("search") -> {
+                val total = Regex("Total matches:\\s*(\\d+)").find(result)?.groupValues?.getOrNull(1)
+                val pattern = args?.get("pattern") as? String
+                val path = args?.get("path") as? String
+                buildString {
+                    if (!pattern.isNullOrBlank()) append("pattern: \"${pattern.take(40)}${if (pattern.length>40) "..." else ""}\"")
+                    if (!path.isNullOrBlank()) {
+                        if (isNotEmpty()) append(" • ")
+                        append("in: $path")
+                    }
+                    if (!total.isNullOrBlank()) {
+                        if (isNotEmpty()) append(" • ")
+                        append("${total} matches")
+                    }
+                }
+            }
+            name.contains("write") || name.contains("edit") -> {
+                val filePath = args?.get("file_path") as? String ?: args?.get("path") as? String
+                val content = args?.get("content") as? String
+                val contentPreview = content?.let { it.replace("\n", " ").take(150) + if (it.length>150) "..." else "" }
+                buildString {
+                    if (filePath != null) append("Wrote ${filePath}")
+                    if (!contentPreview.isNullOrBlank()) {
+                        if (isNotEmpty()) append(" • ")
+                        append(contentPreview)
+                    }
+                }
+            }
+            else -> ""
         }
     }
 
@@ -283,7 +369,7 @@ class McpResultDialog(
             border = JBUI.Borders.empty()
             isOpaque = false
 
-            add(JLabel(if (isError) AllIcons.General.Error else Icons.MCP))
+            add(JLabel(if (isError) AllIcons.General.Error else null))
             add(Box.createHorizontalStrut(8))
             add(JLabel("Tool: $toolName").apply {
                 font = JBUI.Fonts.label().asBold()

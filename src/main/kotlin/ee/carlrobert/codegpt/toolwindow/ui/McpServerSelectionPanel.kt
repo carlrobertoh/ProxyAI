@@ -12,6 +12,7 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
+import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.mcp.ConnectionStatus
@@ -31,12 +32,12 @@ import javax.swing.*
 class McpServerSelectionPanel(
     private val project: Project,
     private val userInputPanel: UserInputPanel
-) : JPanel(BorderLayout()) {
+) : BorderLayoutPanel() {
 
     private val serverListModel = DefaultListModel<McpServerItem>()
     private val serverList = JBList(serverListModel)
     private val noServersLabel = JBLabel("No MCP servers configured", SwingConstants.CENTER)
-    private val emptyPanel = JPanel(BorderLayout())
+    private val emptyPanel = BorderLayoutPanel()
 
     init {
         setupUI()

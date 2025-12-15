@@ -2,7 +2,6 @@ package ee.carlrobert.codegpt.settings.service.custom.form
 
 import com.intellij.icons.AllIcons
 import com.intellij.icons.AllIcons.General
-import com.intellij.ide.BrowserUtil
 import com.intellij.ide.HelpTooltip
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -14,11 +13,8 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.ui.*
 import com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE
 import com.intellij.ui.EnumComboBoxModel
-import com.intellij.ui.JBColor
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.*
-import com.intellij.ui.components.ActionLink
-// removed: com.intellij.ui.dsl.builder.panel
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
@@ -36,6 +32,7 @@ import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceTempl
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.util.ApplicationUtil
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,7 +41,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import okhttp3.internal.toImmutableList
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -294,8 +290,11 @@ class CustomServiceForm(
         .panel
 
     private fun createMarketingPanel(): JPanel {
-        val marketingText = CodeGPTBundle.get("settingsConfigurable.service.custom.openai.marketing.text").trim()
-        val learnMoreText = CodeGPTBundle.get("settingsConfigurable.service.custom.openai.marketing.learnMore").trim()
+        val marketingText =
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.marketing.text").trim()
+        val learnMoreText =
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.marketing.learnMore")
+                .trim()
 
         val html = """
             <html>

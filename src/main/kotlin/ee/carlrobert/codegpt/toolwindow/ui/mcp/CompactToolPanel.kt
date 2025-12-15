@@ -69,12 +69,62 @@ class CompactToolPanel(
             val args =
                 mapper.readValue(toolCall.function.arguments, Map::class.java) as Map<String, Any>
 
-            val preview = if (args.isEmpty()) {
-                ""
-            } else {
-                args.entries.take(2).joinToString(", ") { (k, v) ->
-                    "$k: ${formatPreviewValue(v)}"
-                } + if (args.size > 2) ", ..." else ""
+            val name = toolCall.function.name.lowercase()
+            val preview = when {
+                args.isEmpty() -> ""
+                name.contains("bash") -> {
+                    val cmd = (args["command"] as? String)?.trim()
+                    if (!cmd.isNullOrEmpty()) "command: \"${cmd.take(80)}${if (cmd.length > 80) "..." else ""}\"" else
+                        args.entries.take(2).joinToString(", ") { (k, v) -> "$k: ${formatPreviewValue(v)}" }
+                }
+                name.startsWith("read") -> {
+                    val path = (args["file_path"] as? String) ?: (args["path"] as? String)
+                    val off = (args["offset"] as? Number)?.toInt()
+                    val lim = (args["limit"] as? Number)?.toInt()
+                    buildString {
+                        path?.let { append("file: ${it}") }
+                        if (off != null || lim != null) {
+                            if (isNotEmpty()) append(", ")
+                            append("range: ")
+                            append(off?.toString() ?: "1")
+                            append("..")
+                            append(lim?.toString() ?: "")
+                        }
+                    }.ifEmpty {
+                        args.entries.take(2).joinToString(", ") { (k, v) -> "$k: ${formatPreviewValue(v)}" }
+                    }
+                }
+                name.contains("grep") || name.contains("search") -> {
+                    val pat = (args["pattern"] as? String)
+                    val path = (args["path"] as? String)
+                    buildString {
+                        pat?.let { append("pattern: \"${it.take(40)}${if (it.length > 40) "..." else ""}\"") }
+                        if (!path.isNullOrEmpty()) {
+                            if (isNotEmpty()) append(", ")
+                            append("in: $path")
+                        }
+                    }.ifEmpty {
+                        args.entries.take(2).joinToString(", ") { (k, v) -> "$k: ${formatPreviewValue(v)}" }
+                    }
+                }
+                name.startsWith("write") || name.contains("edit") -> {
+                    val path = (args["file_path"] as? String) ?: (args["path"] as? String)
+                    val content = (args["content"] as? String)
+                    buildString {
+                        path?.let { append("file: $it") }
+                        if (!content.isNullOrEmpty()) {
+                            if (isNotEmpty()) append(", ")
+                            append("content: ${content.length} chars")
+                        }
+                    }.ifEmpty {
+                        args.entries.take(2).joinToString(", ") { (k, v) -> "$k: ${formatPreviewValue(v)}" }
+                    }
+                }
+                else -> {
+                    args.entries.take(2).joinToString(", ") { (k, v) ->
+                        "$k: ${formatPreviewValue(v)}"
+                    } + if (args.size > 2) ", ..." else ""
+                }
             }
 
             preview to args
@@ -138,8 +188,7 @@ class CompactToolPanel(
             isOpaque = false
         }
 
-        infoPanel.add(JBLabel(Icons.MCP))
-        infoPanel.add(Box.createHorizontalStrut(8))
+        infoPanel.add(Box.createHorizontalStrut(0))
 
         val toolNameLabel = JBLabel(toolCall.function.name).apply {
             font = JBUI.Fonts.label().asBold()

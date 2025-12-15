@@ -2,10 +2,12 @@ package ee.carlrobert.codegpt.toolwindow
 
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
+import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowPanel
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowPanel
 import ee.carlrobert.codegpt.toolwindow.history.ChatHistoryToolWindow
 import javax.swing.JComponent
@@ -16,9 +18,13 @@ class ProxyAIToolWindowFactory : ToolWindowFactory, DumbAware {
         project: Project,
         toolWindow: ToolWindow
     ) {
-        var chatToolWindowPanel = ChatToolWindowPanel(project, toolWindow.disposable)
-        var chatHistoryToolWindow = ChatHistoryToolWindow(project)
+        val agentToolWindowPanel = AgentToolWindowPanel(project).also {
+            Disposer.register(toolWindow.disposable, it)
+        }
+        val chatToolWindowPanel = ChatToolWindowPanel(project, toolWindow.disposable)
+        val chatHistoryToolWindow = ChatHistoryToolWindow(project)
 
+        addContent(toolWindow, agentToolWindowPanel, "Agent")
         addContent(toolWindow, chatToolWindowPanel, "Chat")
         addContent(toolWindow, chatHistoryToolWindow.getContent(), "Chat History")
 
@@ -26,6 +32,10 @@ class ProxyAIToolWindowFactory : ToolWindowFactory, DumbAware {
             override fun selectionChanged(event: ContentManagerEvent) {
                 if ("Chat History" == event.content.tabName && event.content.isSelected) {
                     chatHistoryToolWindow.refresh()
+                }
+
+                if (event.content.tabName == "Agent" && !event.content.isSelected) {
+                    agentToolWindowPanel.getTabbedPane().onTabHidden()
                 }
             }
         })

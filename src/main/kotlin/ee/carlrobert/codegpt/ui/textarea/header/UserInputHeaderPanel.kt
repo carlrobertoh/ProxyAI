@@ -1,6 +1,9 @@
 package ee.carlrobert.codegpt.ui.textarea.header
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.Editor
@@ -19,12 +22,10 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
-import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.IconActionButton
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.ActionUpdateThread
+import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.components.BadgeChip
 import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
@@ -39,7 +40,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.awt.*
 import java.awt.datatransfer.StringSelection
-import java.awt.Toolkit
 import java.awt.event.ActionListener
 import javax.swing.JButton
 import javax.swing.JPanel
@@ -52,7 +52,8 @@ class UserInputHeaderPanel(
     private val promptTextField: PromptTextField,
     private val withRemovableSelectedEditorTag: Boolean,
     private val onApply: (() -> Unit)? = null,
-    private val getMarkdownContent: (() -> String)? = null
+    private val getMarkdownContent: (() -> String)? = null,
+    private val featureType: FeatureType? = null
 ) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener, McpTagUpdateListener {
 
     companion object {
@@ -323,6 +324,10 @@ class UserInputHeaderPanel(
     }
 
     private fun addInitialTags() {
+        if (featureType == FeatureType.AGENT) {
+            return
+        }
+
         val autoTaggingEnabled =
             ConfigurationSettings.getState().chatCompletionSettings.editorContextTagEnabled
         if (autoTaggingEnabled) {

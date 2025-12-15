@@ -139,7 +139,7 @@ class HistoryTagIntegrationTest : IntegrationTest() {
         )
 
         val message = MessageBuilder(project, "New question referencing history")
-            .withInlays(listOf(historyTag))
+            .withTags(listOf(historyTag))
             .build()
 
         assertThat(message.prompt).isEqualTo("New question referencing history")

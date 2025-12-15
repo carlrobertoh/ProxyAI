@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.toolwindow.ui
 
 import com.intellij.ui.components.ActionLink
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.prompts.ChatActionsState
@@ -20,7 +21,7 @@ class ChatToolWindowLandingPanel(onAction: (LandingPanelAction, Point) -> Unit) 
     }
 
     private fun createContent(onAction: (LandingPanelAction, Point) -> Unit): JPanel {
-        return JPanel(BorderLayout()).apply {
+        return BorderLayoutPanel().apply {
             add(createTextPane(getWelcomeMessage(), false), BorderLayout.NORTH)
             add(createActionsListPanel(onAction), BorderLayout.CENTER)
             add(createTextPane(getCautionMessage(), false), BorderLayout.SOUTH)

@@ -77,9 +77,6 @@ class McpApprovalPanel(
                 border = JBUI.Borders.emptyTop(4)
             }
 
-            toolInfoPanel.add(JBLabel(Icons.MCP))
-            toolInfoPanel.add(Box.createHorizontalStrut(8))
-
             toolInfoPanel.add(JBLabel(toolCall.function.name).apply {
                 font = JBUI.Fonts.label().asBold()
                 toolTipText = createParametersTooltip()
@@ -146,7 +143,7 @@ class McpApprovalPanel(
                 foreground = JBUI.CurrentTheme.Label.disabledForeground()
             })
 
-            linksPanel.add(ActionLink("Yes, always for this session") {
+            linksPanel.add(ActionLink("Always accept for this session") {
                 handleApproval(true)
             })
 
@@ -188,8 +185,7 @@ class McpApprovalPanel(
             JBUI.CurrentTheme.NotificationError.backgroundColor()
         }
 
-        add(JBLabel(Icons.MCP))
-        add(Box.createHorizontalStrut(8))
+        // Removed MCP icon
         add(JBLabel(statusText).apply {
             foreground = if (success) {
                 JBUI.CurrentTheme.NotificationInfo.foregroundColor()

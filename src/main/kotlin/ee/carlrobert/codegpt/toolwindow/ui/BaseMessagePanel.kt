@@ -34,6 +34,13 @@ abstract class BaseMessagePanel : BorderLayoutPanel() {
         iconsWrapper.add(iconActionButton)
     }
 
+    protected fun addHeaderRightComponent(component: JComponent) {
+        if (iconsWrapper.components.isNotEmpty()) {
+            iconsWrapper.add(Box.createHorizontalStrut(8))
+        }
+        iconsWrapper.add(component)
+    }
+
     fun enableAllActions(enabled: Boolean) {
         iconsWrapper.components.forEach { it.isEnabled = enabled }
     }

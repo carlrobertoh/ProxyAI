@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.toolwindow.ui
 
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBFont
+import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
@@ -12,7 +13,7 @@ import javax.swing.SwingConstants
 
 open class ResponseMessagePanel : BaseMessagePanel() {
 
-    private val originalContent = JPanel(BorderLayout()).apply {
+    private val originalContent = BorderLayoutPanel().apply {
         isOpaque = false
     }
 
@@ -34,7 +35,7 @@ open class ResponseMessagePanel : BaseMessagePanel() {
     }
 
     private fun createContentWrapper(): JPanel {
-        return JPanel(BorderLayout()).apply {
+        return BorderLayoutPanel().apply {
             isOpaque = false
             add(originalContent, BorderLayout.CENTER)
         }
