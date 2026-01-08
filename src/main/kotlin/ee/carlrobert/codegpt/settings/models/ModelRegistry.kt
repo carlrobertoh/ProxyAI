@@ -164,7 +164,7 @@ class ModelRegistry {
     private val pricingPlanBasedDefaults = mapOf(
         PricingPlan.ANONYMOUS to mapOf(
             FeatureType.AGENT to ModelSelection(
-                ServiceType.OPENAI,
+                ServiceType.PROXYAI,
                 PROXYAI_AUTO,
                 "Auto"
             ),
@@ -206,7 +206,7 @@ class ModelRegistry {
         ),
         PricingPlan.FREE to mapOf(
             FeatureType.AGENT to ModelSelection(
-                ServiceType.OPENAI,
+                ServiceType.PROXYAI,
                 PROXYAI_AUTO,
                 "Auto"
             ),
@@ -240,7 +240,7 @@ class ModelRegistry {
         ),
         PricingPlan.INDIVIDUAL to mapOf(
             FeatureType.AGENT to ModelSelection(
-                ServiceType.OPENAI,
+                ServiceType.PROXYAI,
                 PROXYAI_AUTO,
                 "Auto"
             ),
@@ -280,7 +280,7 @@ class ModelRegistry {
 
     private val fallbackDefaults = mapOf(
         FeatureType.AGENT to ModelSelection(
-            ServiceType.OPENAI,
+            ServiceType.PROXYAI,
             PROXYAI_AUTO,
             "Auto"
         ),

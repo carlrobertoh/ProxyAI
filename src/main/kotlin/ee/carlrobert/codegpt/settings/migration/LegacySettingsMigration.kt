@@ -40,8 +40,9 @@ object LegacySettingsMigration {
     private fun createMigratedState(selectedService: ServiceType): ModelSettingsState {
         return ModelSettingsState().apply {
             val chatModel = getLegacyChatModelForService(selectedService)
+            val agentModel = getLegacyAgentModelForService(selectedService, chatModel)
 
-            setModelSelection(FeatureType.AGENT, "auto", selectedService)
+            setModelSelection(FeatureType.AGENT, agentModel, selectedService)
             setModelSelection(FeatureType.CHAT, chatModel, selectedService)
             setModelSelection(FeatureType.AUTO_APPLY, chatModel, selectedService)
             setModelSelection(FeatureType.COMMIT_MESSAGE, chatModel, selectedService)
@@ -114,6 +115,22 @@ object LegacySettingsMigration {
             logger.warn("Failed to get legacy chat model for $serviceType", e)
             throw e
         }
+    }
+
+    private fun getLegacyAgentModelForService(
+        serviceType: ServiceType,
+        fallbackModel: String
+    ): String {
+        val registry = ModelRegistry.getInstance()
+        if (!registry.isFeatureSupportedByProvider(FeatureType.AGENT, serviceType)) {
+            return fallbackModel
+        }
+
+        if (serviceType == ServiceType.PROXYAI) {
+            return ModelRegistry.PROXYAI_AUTO
+        }
+
+        return registry.getAgentModels(serviceType).firstOrNull()?.model?.id ?: fallbackModel
     }
 
     private fun getLegacyCodeModelForService(serviceType: ServiceType): String? {
