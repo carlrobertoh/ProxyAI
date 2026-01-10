@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
@@ -18,29 +19,26 @@ import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.nio.file.Files
 import java.nio.file.Path
-import javax.swing.JButton
-import javax.swing.JDialog
-import javax.swing.JPanel
-import javax.swing.JScrollPane
-import javax.swing.JTextArea
+import javax.swing.*
 import kotlin.math.absoluteValue
 
 object ToolCallDescriptorFactory {
 
     fun create(
+        project: Project,
         toolName: String,
         args: Any,
         result: Any? = null,
-        projectId: String? = null,
         overrideKind: ToolKind? = null
     ): ToolCallDescriptor {
         val kind = overrideKind ?: detectToolKind(toolName, args)
+        val projectId = project.locationHash
 
         return when (kind) {
             ToolKind.SEARCH -> createSearchDescriptor(args, result, projectId)
             ToolKind.READ -> createReadDescriptor(args, result, projectId)
-            ToolKind.WRITE -> createWriteDescriptor(args, result, projectId)
-            ToolKind.EDIT -> createEditDescriptor(args, result, projectId)
+            ToolKind.WRITE -> createWriteDescriptor(project, args, result, projectId)
+            ToolKind.EDIT -> createEditDescriptor(project, args, result, projectId)
             ToolKind.BASH -> createBashDescriptor(args, result, projectId)
             ToolKind.WEB -> createWebDescriptor(args, result, projectId)
             ToolKind.TASK -> createTaskDescriptor(args, result, projectId)
@@ -182,6 +180,7 @@ object ToolCallDescriptorFactory {
     }
 
     private fun createWriteDescriptor(
+        project: Project,
         args: Any,
         result: Any?,
         projectId: String?
@@ -197,8 +196,8 @@ object ToolCallDescriptorFactory {
                 is WriteTool.Result.Success -> {
                     badges.add(Badge("${result.bytesWritten} bytes", JBColor.GREEN))
                     actions.add(
-                        ToolAction("View Changes", AllIcons.Actions.Diff) { component ->
-                            DiffViewAction.showDiff(writeArgs.filePath, component)
+                        ToolAction("View Changes", AllIcons.Actions.Diff) {
+                            DiffViewAction.showDiff(writeArgs.filePath, project)
                         }
                     )
                 }
@@ -231,6 +230,7 @@ object ToolCallDescriptorFactory {
     }
 
     private fun createEditDescriptor(
+        project: Project,
         args: Any,
         result: Any?,
         projectId: String?
@@ -282,7 +282,7 @@ object ToolCallDescriptorFactory {
                                     null
                                 )
                             } catch (_: Exception) {
-                                DiffViewAction.showDiff(editArgs.filePath, component)
+                                DiffViewAction.showDiff(editArgs.filePath, project)
                             }
                         }
                     )

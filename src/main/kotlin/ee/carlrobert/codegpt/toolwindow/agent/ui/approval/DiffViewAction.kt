@@ -5,18 +5,13 @@ import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.project.ProjectLocator
 import com.intellij.openapi.vfs.VirtualFileManager
+import ee.carlrobert.codegpt.util.ApplicationUtil
 import java.awt.Component
 
 object DiffViewAction {
-    
-    fun showDiff(filePath: String, component: Component) {
-        val project = ProjectManager.getInstance().openProjects.firstOrNull()
-        if (project != null) {
-            showDiff(filePath, project)
-        }
-    }
-    
+
     fun showDiff(filePath: String, project: Project) {
         val virtualFile = VirtualFileManager.getInstance().findFileByUrl("file://$filePath")
         if (virtualFile != null) {

@@ -624,7 +624,7 @@ class AgentEventHandler(
         if (existing != null) return existing
 
         val vm = AgentRunViewModel()
-        val view = AgentRunDslPanel(vm)
+        val view = AgentRunDslPanel(project, vm)
         currentResponseBody?.addToolStatusPanel(view.component)
         val viewHolder = RunViewHolder(vm, view)
         subagentViewHolders[taskId] = viewHolder

@@ -1,17 +1,21 @@
 package ee.carlrobert.codegpt.toolwindow.agent.ui
 
+import com.intellij.openapi.project.Project
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallDescriptorFactory
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallView
-import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallViewAdapter
 import java.awt.BorderLayout
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 
-class AgentRunDslPanel(private val vm: AgentRunViewModel) {
+class AgentRunDslPanel(
+    private val project: Project,
+    private val vm: AgentRunViewModel
+) {
 
     private val rowsPanel = JPanel().apply {
         isOpaque = false
@@ -89,7 +93,14 @@ class AgentRunDslPanel(private val vm: AgentRunViewModel) {
 
         rowsPanel.removeAll()
         finalList.forEach { value ->
-            val view = ToolCallViewAdapter.build(value)
+            val descriptor = ToolCallDescriptorFactory.create(
+                project = project,
+                toolName = value.toolName,
+                args = value.args ?: "",
+                result = value.result,
+                overrideKind = value.kind
+            )
+            val view = ToolCallView(descriptor)
             viewByEntryId[value.id] = view
             val leftIndent = if (value.parentId != null) 12 else 0
             rowsPanel.add(BorderLayoutPanel().apply {
