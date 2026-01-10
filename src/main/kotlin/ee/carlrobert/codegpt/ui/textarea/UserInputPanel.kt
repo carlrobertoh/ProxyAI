@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.ui.textarea
 
 import com.intellij.icons.AllIcons
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnAction
@@ -17,7 +18,6 @@ import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.notification.NotificationType
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
@@ -37,13 +37,13 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
+import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.components.BadgeChip
 import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
-import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import git4idea.GitCommit
@@ -66,8 +66,8 @@ class UserInputPanel @JvmOverloads constructor(
     private val onStop: () -> Unit,
     private val onAcceptAll: (() -> Unit)? = null,
     private val onRejectAll: (() -> Unit)? = null,
-    private val onApply: (() -> Unit)? = null,
-    private val getMarkdownContent: (() -> String)? = null,
+    onApply: (() -> Unit)? = null,
+    getMarkdownContent: (() -> String)? = null,
     withRemovableSelectedEditorTag: Boolean = true,
     private val agentTokenCounterPanel: JComponent? = null,
     private val sessionIdProvider: (() -> String?)? = null,
@@ -101,8 +101,14 @@ class UserInputPanel @JvmOverloads constructor(
         private const val CORNER_RADIUS = 16
     }
 
-    private val quickQuestionCheckbox = JBCheckBox(CodeGPTBundle.get("userInput.quickQuestion"), true).apply {
+    private val quickQuestionCheckbox =
+        JBCheckBox(CodeGPTBundle.get("userInput.quickQuestion"), true).apply {
+            isOpaque = false
+        }
+    private val editModeCheckbox = JBCheckBox("Edit mode", false).apply {
         isOpaque = false
+        border = JBUI.Borders.emptyLeft(6)
+        addActionListener { setChatMode(if (isSelected) ChatMode.EDIT else ChatMode.ASK) }
     }
     private var chatMode: ChatMode = ChatMode.ASK
     private val disposableCoroutineScope = DisposableCoroutineScope()
@@ -134,9 +140,10 @@ class UserInputPanel @JvmOverloads constructor(
     private var footerPanelRef: JPanel? = null
 
     private val applyChip =
-        onApply?.let { BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, it) }?.apply {
-            isVisible = false
-        }
+        onApply?.let { BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, it) }
+            ?.apply {
+                isVisible = false
+            }
     private val acceptChip =
         InlineEditChips.acceptAll { onAcceptAll?.invoke() }.apply { isVisible = false }
     private val rejectChip =
@@ -216,7 +223,6 @@ class UserInputPanel @JvmOverloads constructor(
     }
     private val imageActionSupported = AtomicBooleanProperty(isImageActionSupported())
 
-    private lateinit var modelComboBoxComponent: JComponent
     private var separatorRef: JPanel? = null
     private var isPromptEnhancing: Boolean = false
 
@@ -227,8 +233,8 @@ class UserInputPanel @JvmOverloads constructor(
     fun getChatMode(): ChatMode = chatMode
     fun setChatMode(mode: ChatMode) {
         chatMode = mode
+        editModeCheckbox.isSelected = mode == ChatMode.EDIT
     }
-
 
     init {
         setupDisposables(parentDisposable)
@@ -392,7 +398,7 @@ class UserInputPanel @JvmOverloads constructor(
 
     override fun isFocusable(): Boolean = true
 
-    fun getPreferredFocusedComponent(): JComponent? = promptTextField
+    fun getPreferredFocusedComponent(): JComponent = promptTextField
 
     override fun paintComponent(g: Graphics) {
         val g2 = g.create() as Graphics2D
@@ -526,17 +532,11 @@ class UserInputPanel @JvmOverloads constructor(
         promptEnhancerButton?.isEnabled = !isPromptEnhancing && text.isNotBlank()
     }
 
-    private fun createToolbarSeparator(): JPanel {
-        return JPanel().apply {
-            isOpaque = true
-            background = JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()
-            preferredSize = Dimension(1, 16)
-            minimumSize = Dimension(1, 16)
-            maximumSize = Dimension(1, 16)
-        }
-    }
+    private fun createToolbarSeparator(): JPanel = createSeparator()
 
-    private fun createActionSeparator(height: Int = 16): JPanel {
+    private fun createActionSeparator(height: Int = 16): JPanel = createSeparator(height)
+
+    private fun createSeparator(height: Int = 16): JPanel {
         val scaledHeight = JBUI.scale(height)
         return JPanel().apply {
             isOpaque = true
@@ -561,7 +561,6 @@ class UserInputPanel @JvmOverloads constructor(
         ).createCustomComponent(ActionPlaces.UNKNOWN).apply {
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         }
-        modelComboBoxComponent = modelComboBox
 
         val pnl = panel {
             twoColumnsRow(
@@ -575,6 +574,10 @@ class UserInputPanel @JvmOverloads constructor(
                             cell(thinkingPanel).gap(RightGap.SMALL)
                             cell(acceptChip).gap(RightGap.SMALL)
                             cell(rejectChip).gap(RightGap.SMALL)
+                            if (featureType == FeatureType.CHAT) {
+                                cell(createActionSeparator()).gap(RightGap.SMALL)
+                                cell(editModeCheckbox)
+                            }
                             if (featureType == FeatureType.INLINE_EDIT) {
                                 cell(quickQuestionCheckbox)
                             }
@@ -620,7 +623,6 @@ class UserInputPanel @JvmOverloads constructor(
         revalidate()
         repaint()
     }
-
 
     private fun isImageActionSupported(): Boolean {
         val currentModel = ModelSelectionService.getInstance().getModelForFeature(featureType)
