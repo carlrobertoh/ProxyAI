@@ -196,14 +196,11 @@ public class ModelComboBoxAction extends ComboBoxAction {
     if (availableProviders.contains(OPENAI)) {
       var openaiGroup = DefaultActionGroup.createPopupGroup(() -> "OpenAI");
       openaiGroup.getTemplatePresentation().setIcon(Icons.OpenAI);
-      ModelRegistry.getInstance().getAgentModels(OPENAI).forEach(item ->
-          openaiGroup.add(createModelAction(
-              OPENAI,
-              item.getModel().getId(),
-              Icons.OpenAI,
-              presentation,
-              () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-                  .setModel(featureType, item.getModel().getId(), OPENAI))));
+      if (featureType == FeatureType.AGENT) {
+        addOpenAIGroupForAgent(openaiGroup, presentation);
+      } else {
+        addOpenAIGroupForChat(openaiGroup, presentation);
+      }
       actionGroup.add(openaiGroup);
     }
 
@@ -493,6 +490,35 @@ public class ModelComboBoxAction extends ComboBoxAction {
         comboBoxPresentation,
         () -> ApplicationManager.getApplication().getService(ModelSettings.class)
             .setModel(featureType, model.getCode(), OPENAI));
+  }
+
+  private void addOpenAIGroupForAgent(DefaultActionGroup openaiGroup, Presentation presentation) {
+    ModelRegistry.getInstance().getAgentModels(OPENAI).forEach(item ->
+        openaiGroup.add(createModelAction(
+            OPENAI,
+            item.getModel().getId(),
+            Icons.OpenAI,
+            presentation,
+            () -> ApplicationManager.getApplication().getService(ModelSettings.class)
+                .setModel(featureType, item.getModel().getId(), OPENAI))));
+  }
+
+  private void addOpenAIGroupForChat(DefaultActionGroup openaiGroup, Presentation presentation) {
+    List.of(
+            OpenAIChatCompletionModel.GPT_5,
+            OpenAIChatCompletionModel.GPT_5_MINI,
+            OpenAIChatCompletionModel.O_4_MINI,
+            OpenAIChatCompletionModel.O_3,
+            OpenAIChatCompletionModel.O_3_MINI,
+            OpenAIChatCompletionModel.O_1_PREVIEW,
+            OpenAIChatCompletionModel.O_1_MINI,
+            OpenAIChatCompletionModel.GPT_4_1,
+            OpenAIChatCompletionModel.GPT_4_1_MINI,
+            OpenAIChatCompletionModel.GPT_4_1_NANO,
+            OpenAIChatCompletionModel.GPT_4_O,
+            OpenAIChatCompletionModel.GPT_4_O_MINI,
+            OpenAIChatCompletionModel.GPT_4_0125_128k)
+        .forEach(model -> openaiGroup.add(createOpenAIModelAction(model, presentation)));
   }
 
   private AnAction createCustomOpenAIModelAction(
