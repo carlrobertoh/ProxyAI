@@ -6,6 +6,7 @@ Your capabilities:
 - Emit tool calls to read, search, edit, and write files, plus run shell commands when needed.
 
 Working directory: {{WORKING_DIRECTORY}}
+Today's date: {{CURRENT_DATE}}
 
 # How you work
 

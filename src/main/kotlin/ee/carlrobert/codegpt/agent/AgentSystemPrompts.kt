@@ -4,9 +4,12 @@ import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.util.file.FileUtil
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 internal object AgentSystemPrompts {
     private const val WORKING_DIRECTORY_TOKEN = "{{WORKING_DIRECTORY}}"
+    private const val CURRENT_DATE_TOKEN = "{{CURRENT_DATE}}"
 
     private const val OPENAI_KEY = "openai"
     private const val GEMINI_KEY = "gemini"
@@ -55,7 +58,10 @@ internal object AgentSystemPrompts {
 
     private fun renderPrompt(key: String, projectPath: String?): String {
         val workingDirectory = projectPath ?: "unknown"
-        return getPrompt(key).replace(WORKING_DIRECTORY_TOKEN, workingDirectory)
+        val currentDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        return getPrompt(key)
+            .replace(WORKING_DIRECTORY_TOKEN, workingDirectory)
+            .replace(CURRENT_DATE_TOKEN, currentDate)
     }
 
     private fun getPrompt(key: String): String {
