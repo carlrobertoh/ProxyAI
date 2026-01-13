@@ -31,10 +31,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 public class ProxyAIClientSettings(
     baseUrl: String = DEFAULT_BASE_URL,
     chatCompletionsPath: String = DEFAULT_CHAT_COMPLETIONS_PATH,
-    timeoutConfig: ConnectionTimeoutConfig = ConnectionTimeoutConfig(
-        requestTimeoutMillis = 120_000,
-        socketTimeoutMillis = 120_000
-    )
+    timeoutConfig: ConnectionTimeoutConfig = ConnectionTimeoutConfig()
 ) : OpenAIBaseSettings(baseUrl, chatCompletionsPath, timeoutConfig) {
     public companion object {
         public const val DEFAULT_BASE_URL: String = "https://codegpt-api.carlrobert.ee"

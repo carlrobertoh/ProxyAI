@@ -43,6 +43,10 @@ class AgentEventHandler(
 
     private val mainToolCards = ConcurrentHashMap<String, ToolCallCard>()
 
+    private val toolOutputPublisher = ApplicationManager.getApplication()
+        .messageBus
+        .syncPublisher(AgentToolOutputNotifier.AGENT_TOOL_OUTPUT_TOPIC)
+
     @Volatile
     private var lastReportedPromptTokens: Long = 0
 
@@ -90,12 +94,62 @@ class AgentEventHandler(
         approvalQueue.clear()
         currentQuestion = null
         questionQueue.clear()
-        approvalContainer.removeAll()
-        approvalContainer.isVisible = false
+        clearApprovalContainer()
         todoListPanel.clearTodos()
         runViewHolder = null
         subagentViewHolders.clear()
         lastReportedPromptTokens = 0
+    }
+
+    private fun clearApprovalContainer() {
+        approvalContainer.removeAll()
+        approvalContainer.isVisible = false
+        approvalContainer.revalidate()
+        approvalContainer.repaint()
+    }
+
+    private fun monitorBackgroundProcessOutput(
+        bgId: String,
+        toolId: String,
+        onComplete: (() -> Unit)? = null
+    ) {
+        serviceScope.launch {
+            try {
+                var outPos = 0
+                var errPos = 0
+                while (true) {
+                    val po = BackgroundProcessManager.getOutput(bgId) ?: break
+                    val stdout = po.stdout.toString()
+                    val stderr = po.stderr.toString()
+                    if (outPos < stdout.length) {
+                        stdout.substring(outPos).split('\n').forEach { line ->
+                            if (line.isNotEmpty()) toolOutputPublisher.toolOutput(
+                                toolId,
+                                line,
+                                false
+                            )
+                        }
+                        outPos = stdout.length
+                    }
+                    if (errPos < stderr.length) {
+                        stderr.substring(errPos).split('\n').forEach { line ->
+                            if (line.isNotEmpty()) toolOutputPublisher.toolOutput(
+                                toolId,
+                                line,
+                                true
+                            )
+                        }
+                        errPos = stderr.length
+                    }
+                    if (po.isComplete) break
+                    delay(300)
+                }
+            } catch (ex: Exception) {
+                logger.warn("Failed to monitor background process output", ex)
+            } finally {
+                onComplete?.invoke()
+            }
+        }
     }
 
     fun setCurrentResponseBody(responseBody: ChatMessageResponseBody) {
@@ -135,8 +189,13 @@ class AgentEventHandler(
 
     private fun handleProxyAIException(ex: KoogHttpClientException) {
         when (ex.statusCode) {
-            403 -> {
+            401 -> {
                 currentResponseBody?.displayMissingCredential()
+                handleDone()
+            }
+
+            403 -> {
+                currentResponseBody?.displayInvalidCredential()
                 handleDone()
             }
 
@@ -276,38 +335,9 @@ class AgentEventHandler(
                 if (bgId == null) {
                     mainToolCards.remove(keyFor(id))
                 } else {
-                    val publisher =
-                        ApplicationManager.getApplication()
-                            .messageBus
-                            .syncPublisher(AgentToolOutputNotifier.AGENT_TOOL_OUTPUT_TOPIC)
-                    serviceScope.launch {
-                        try {
-                            var outPos = 0
-                            var errPos = 0
-                            while (true) {
-                                val po = BackgroundProcessManager.getOutput(bgId) ?: break
-                                val stdout = po.stdout.toString()
-                                val stderr = po.stderr.toString()
-                                if (outPos < stdout.length) {
-                                    stdout.substring(outPos).split('\n').forEach { line ->
-                                        if (line.isNotEmpty()) publisher.toolOutput(id, line, false)
-                                    }
-                                    outPos = stdout.length
-                                }
-                                if (errPos < stderr.length) {
-                                    stderr.substring(errPos).split('\n').forEach { line ->
-                                        if (line.isNotEmpty()) publisher.toolOutput(id, line, true)
-                                    }
-                                    errPos = stderr.length
-                                }
-                                if (po.isComplete) break
-                                delay(300)
-                            }
-                        } catch (_: Exception) {
-                        } finally {
-                            runInEdt {
-                                mainToolCards.remove(keyFor(id))
-                            }
+                    monitorBackgroundProcessOutput(bgId, id) {
+                        runInEdt {
+                            mainToolCards.remove(keyFor(id))
                         }
                     }
                 }
@@ -405,44 +435,7 @@ class AgentEventHandler(
 
                 val bgId = (result as? BashTool.Result)?.bashId
                 if (bgId != null) {
-                    val publisher =
-                        ApplicationManager.getApplication()
-                            .messageBus
-                            .syncPublisher(AgentToolOutputNotifier.AGENT_TOOL_OUTPUT_TOPIC)
-                    serviceScope.launch {
-                        try {
-                            var outPos = 0
-                            var errPos = 0
-                            while (true) {
-                                val po = BackgroundProcessManager.getOutput(bgId) ?: break
-                                val stdout = po.stdout.toString()
-                                val stderr = po.stderr.toString()
-                                if (outPos < stdout.length) {
-                                    stdout.substring(outPos).split('\n').forEach { line ->
-                                        if (line.isNotEmpty()) publisher.toolOutput(
-                                            childId,
-                                            line,
-                                            false
-                                        )
-                                    }
-                                    outPos = stdout.length
-                                }
-                                if (errPos < stderr.length) {
-                                    stderr.substring(errPos).split('\n').forEach { line ->
-                                        if (line.isNotEmpty()) publisher.toolOutput(
-                                            childId,
-                                            line,
-                                            true
-                                        )
-                                    }
-                                    errPos = stderr.length
-                                }
-                                if (po.isComplete) break
-                                delay(300)
-                            }
-                        } catch (_: Exception) {
-                        }
-                    }
+                    monitorBackgroundProcessOutput(bgId, childId)
                 }
             }
             scrollablePanel.update()
@@ -486,10 +479,7 @@ class AgentEventHandler(
     private fun maybeShowNextApproval() {
         if (currentApproval != null) return
         val next = approvalQueue.pollFirst() ?: run {
-            approvalContainer.removeAll()
-            approvalContainer.isVisible = false
-            approvalContainer.revalidate()
-            approvalContainer.repaint()
+            clearApprovalContainer()
             maybeShowNextQuestion()
             return
         }
@@ -536,10 +526,7 @@ class AgentEventHandler(
 
                 next.deferred.complete(true)
                 currentApproval = null
-                approvalContainer.removeAll()
-                approvalContainer.isVisible = false
-                approvalContainer.revalidate()
-                approvalContainer.repaint()
+                clearApprovalContainer()
                 runCatching {
                     project.service<AgentToolWindowContentManager>()
                         .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.RUNNING)
@@ -549,10 +536,7 @@ class AgentEventHandler(
             onReject = {
                 next.deferred.complete(false)
                 currentApproval = null
-                approvalContainer.removeAll()
-                approvalContainer.isVisible = false
-                approvalContainer.revalidate()
-                approvalContainer.repaint()
+                clearApprovalContainer()
 
                 try {
                     project.service<AgentService>().cancelCurrentRun(sessionId)
@@ -585,10 +569,7 @@ class AgentEventHandler(
             onSubmit = { answers ->
                 next.deferred.complete(answers)
                 currentQuestion = null
-                approvalContainer.removeAll()
-                approvalContainer.isVisible = false
-                approvalContainer.revalidate()
-                approvalContainer.repaint()
+                clearApprovalContainer()
                 runCatching {
                     project.service<AgentToolWindowContentManager>()
                         .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.RUNNING)
@@ -599,10 +580,7 @@ class AgentEventHandler(
             onCancel = {
                 next.deferred.complete(emptyMap())
                 currentQuestion = null
-                approvalContainer.removeAll()
-                approvalContainer.isVisible = false
-                approvalContainer.revalidate()
-                approvalContainer.repaint()
+                clearApprovalContainer()
                 runCatching {
                     project.service<AgentToolWindowContentManager>()
                         .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.RUNNING)

@@ -168,6 +168,10 @@ object ProxyAIAgent {
                     }
                 }
 
+                onNodeExecutionFailed { ctx ->
+                    logger.error(ctx.throwable) { "Node execution failed: $ctx" }
+                }
+
                 onToolCallStarting { ctx ->
                     val id = ctx.toolCallId ?: UUID.randomUUID().toString()
                     if (ctx.toolCallId == null) {
@@ -195,6 +199,10 @@ object ProxyAIAgent {
 
                 onAgentCompleted { context ->
                     events.onAgentCompleted(context)
+                }
+
+                onAgentExecutionFailed {
+                    logger.error(it.throwable) { "Agent execution failed: $it" }
                 }
             }
         }

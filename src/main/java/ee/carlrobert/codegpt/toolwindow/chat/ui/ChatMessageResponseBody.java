@@ -166,6 +166,16 @@ public class ChatMessageResponseBody extends JPanel {
     });
   }
 
+  public void displayInvalidCredential() {
+    String message = "Invalid API key. Open <a href=\"#\">Settings</a> to update your API key.";
+    displayErrorMessage(message, e -> {
+      if (e.getEventType() == ACTIVATED) {
+        ShowSettingsUtil.getInstance()
+            .showSettingsDialog(project, GeneralSettingsConfigurable.class);
+      }
+    });
+  }
+
   public void displayQuotaExceeded() {
     String message = "You exceeded your current quota, please check your plan and billing details, "
         + "or <a href=\"#CHANGE_PROVIDER\">change</a> to a different LLM provider.";

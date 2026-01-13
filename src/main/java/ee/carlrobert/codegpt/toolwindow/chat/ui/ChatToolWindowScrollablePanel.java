@@ -47,7 +47,7 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
                 It looks like you haven't configured your API key yet. Visit <a href="#OPEN_SETTINGS">ProxyAI settings</a> to do so.
               </p>
               <p style="margin-top: 4px; margin-bottom: 4px;">
-                Don't have an account? <a href="https://tryproxy.io/signin">Sign up</a> to get the most out of ProxyAI.
+                Don't have an account? <a href="https://tryproxy.io/signin">Sign up</a> to get started.
               </p>
               </html>""",
           false,
