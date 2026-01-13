@@ -8,7 +8,9 @@ import ai.koog.prompt.executor.clients.LLMClientException
 import ai.koog.prompt.executor.clients.openai.base.AbstractOpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.base.OpenAIBaseSettings
 import ai.koog.prompt.executor.clients.openai.base.OpenAICompatibleToolDescriptorSchemaGenerator
-import ai.koog.prompt.executor.clients.openai.base.models.*
+import ai.koog.prompt.executor.clients.openai.base.models.OpenAIMessage
+import ai.koog.prompt.executor.clients.openai.base.models.OpenAITool
+import ai.koog.prompt.executor.clients.openai.base.models.OpenAIToolChoice
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.LLMChoice
@@ -105,7 +107,7 @@ public class ProxyAILLMClient(
             logger.error { errorMsg }
             throw LLMClientException(clientName, errorMsg)
         }
-        
+
         // Check for errors in choices
         response.choices.forEach { choice ->
             choice.error?.let { error ->
@@ -114,7 +116,7 @@ public class ProxyAILLMClient(
                 throw LLMClientException(clientName, errorMsg)
             }
         }
-        
+
         return response.choices.map {
             it.message.toResponses(it.finishReason, createProxyMetaInfo(response.usage))
         }

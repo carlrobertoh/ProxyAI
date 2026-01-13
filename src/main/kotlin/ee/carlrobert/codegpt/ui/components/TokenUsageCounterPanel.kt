@@ -101,7 +101,7 @@ class TokenUsageCounterPanel(
             append("<html><body>")
             append("<b>Usage Details</b><br>")
             append("Input size: ${numberFormat.format(usedPrompt)} tokens<br>")
-            append("Max output size: ${numberFormat.format(model.maxOutputTokens)} tokens<br>")
+            append("Max output size: ${numberFormat.format(budget.reservedOutput)} tokens<br>")
             append("Max context size: ${numberFormat.format(budget.contextLength)} tokens<br>")
             append("</body></html>")
         }

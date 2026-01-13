@@ -15,13 +15,17 @@ import ai.koog.agents.snapshot.feature.Persistence
 import ai.koog.agents.snapshot.feature.persistence
 import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
+import ee.carlrobert.codegpt.agent.strategy.CODE_AGENT_COMPRESSION
+import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
+import ee.carlrobert.codegpt.agent.strategy.buildHistoryTooBigPredicate
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
@@ -83,6 +87,7 @@ object ProxyAIAgent {
         val executor = AgentFactory.createExecutor(provider)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
         val toolRegistry = createToolRegistry(project, events, sessionId)
+        val agentModel = service<ModelSelectionService>().getAgentModel()
         val agent = AIAgent(
             promptExecutor = executor,
             strategy = SingleRunStrategyProvider().build(
@@ -91,6 +96,10 @@ object ProxyAIAgent {
                 projectInstructions,
                 previousCheckpoint,
                 pendingMessageQueue,
+                HistoryCompressionConfig(
+                    isLimitExceeded = buildHistoryTooBigPredicate(computeAvailableInput(agentModel)),
+                    compressionStrategy = CODE_AGENT_COMPRESSION
+                ),
                 events,
                 sessionId,
                 provider,
@@ -106,7 +115,7 @@ object ProxyAIAgent {
                         )
                     )
                 },
-                model = service<ModelSelectionService>().getAgentModel(),
+                model = agentModel,
                 maxAgentIterations = 100
             ),
             toolRegistry = toolRegistry,
@@ -293,5 +302,11 @@ object ProxyAIAgent {
                 )
             )
         }
+    }
+
+    private fun computeAvailableInput(model: LLModel): Long {
+        val contextLength = model.contextLength
+        val outputLength = model.maxOutputTokens ?: 0
+        return (contextLength - outputLength).coerceAtLeast(1L)
     }
 }

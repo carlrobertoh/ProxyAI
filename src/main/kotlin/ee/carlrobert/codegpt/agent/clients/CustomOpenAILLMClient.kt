@@ -16,7 +16,6 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrameFlowBuilder
-import com.intellij.openapi.util.text.StringUtil
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -182,13 +181,8 @@ public class CustomOpenAILLMClient(
                         Message.Tool.Call(
                             id = toolCall.id,
                             tool = toolCall.function.name,
-                            /*
-                             If the tool has no arguments, OpenRouter puts an empty string in the arguments instead of an empty object
-                             But we always expect arguments to be a JSON object. Fixing this.
-                             */
-                            content = StringUtil.escapeStringCharacters(toolCall.function.arguments
-                                .takeIf { it.isNotEmpty() }
-                                ?: "{}"),
+                            content = toolCall.function.arguments.takeIf { it.isNotEmpty() }
+                                ?: "{}",
                             metaInfo = metaInfo
                         )
                     )

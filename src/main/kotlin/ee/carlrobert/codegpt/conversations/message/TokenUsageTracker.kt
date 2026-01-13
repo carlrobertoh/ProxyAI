@@ -8,6 +8,10 @@ class TokenUsageTracker {
     private val toolTokens = AtomicLong(0)
     private val subAgentTokens = AtomicLong(0)
 
+    fun setPromptTokens(tokens: Long) {
+        promptTokens.set(tokens.coerceAtLeast(0))
+    }
+
     fun addPromptTokens(tokens: Long) {
         promptTokens.addAndGet(tokens)
     }

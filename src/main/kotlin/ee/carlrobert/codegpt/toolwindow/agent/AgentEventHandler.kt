@@ -9,6 +9,7 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
+import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.agent.*
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.conversations.message.TokenUsage
@@ -450,15 +451,18 @@ class AgentEventHandler(
     }
 
     override fun onTokenUsageAvailable(tokenUsage: Long) {
-        val delta = (tokenUsage - lastReportedPromptTokens).coerceAtLeast(0)
-        if (delta > 0) {
-            project.service<AgentService>()
-                .getTokenTrackerForSession(sessionId)
-                .addPromptTokens(delta)
+        val tracker = project.service<AgentService>().getTokenTrackerForSession(sessionId)
+        if (tokenUsage < lastReportedPromptTokens) {
+            tracker.setPromptTokens(tokenUsage)
+        } else {
+            val delta = (tokenUsage - lastReportedPromptTokens).coerceAtLeast(0)
+            if (delta > 0) {
+                tracker.addPromptTokens(delta)
+            }
         }
         lastReportedPromptTokens = tokenUsage
 
-        val event = TokenUsageEvent(sessionId, tokenUsage)
+        val event = TokenUsageEvent(sessionId, tracker.getPromptTokens())
         project.messageBus.syncPublisher(TokenUsageListener.TOKEN_USAGE_TOPIC)
             .onTokenUsageChanged(event)
     }
@@ -474,6 +478,14 @@ class AgentEventHandler(
     override fun onCreditsAvailable(event: AgentCreditsEvent) {
         project.messageBus.syncPublisher(AgentCreditsListener.AGENT_CREDITS_TOPIC)
             .onCreditsChanged(event)
+    }
+
+    override fun onHistoryCompressionStateChanged(isCompressing: Boolean) {
+        val key =
+            if (isCompressing) "toolwindow.chat.compressingHistory" else "toolwindow.chat.loading"
+        runInEdt {
+            onShowLoading(CodeGPTBundle.get(key))
+        }
     }
 
     private fun maybeShowNextApproval() {

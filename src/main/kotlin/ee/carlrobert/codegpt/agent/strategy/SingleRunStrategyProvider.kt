@@ -7,9 +7,7 @@ import ai.koog.agents.core.dsl.builder.AIAgentEdgeBuilderIntermediate
 import ai.koog.agents.core.dsl.builder.EdgeTransformationDslMarker
 import ai.koog.agents.core.dsl.builder.forwardTo
 import ai.koog.agents.core.dsl.builder.strategy
-import ai.koog.agents.core.dsl.extension.nodeExecuteMultipleTools
-import ai.koog.agents.core.dsl.extension.onIsInstance
-import ai.koog.agents.core.dsl.extension.onMultipleToolCalls
+import ai.koog.agents.core.dsl.extension.*
 import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.environment.result
 import ai.koog.agents.features.tokenizer.feature.tokenizer
@@ -17,7 +15,6 @@ import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.message.Message
-import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponses
 import ai.koog.prompt.tokenizer.PromptTokenizer
@@ -32,8 +29,6 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import java.util.*
 import ee.carlrobert.codegpt.conversations.message.Message as ChatMessage
 
@@ -44,12 +39,18 @@ internal interface AgentRunStrategyProvider {
         projectInstructions: String?,
         previousCheckpoint: AgentCheckpointData?,
         pendingMessageQueue: ArrayDeque<MessageWithContext>,
+        historyCompressionConfig: HistoryCompressionConfig,
         events: AgentEvents,
         sessionId: String,
         provider: ServiceType,
         stream: Boolean
     ): AIAgentGraphStrategy<MessageWithContext, String>
 }
+
+data class HistoryCompressionConfig(
+    val isLimitExceeded: (Prompt, PromptTokenizer) -> Boolean,
+    val compressionStrategy: HistoryCompressionStrategy
+)
 
 internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
     override fun build(
@@ -58,6 +59,7 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
         projectInstructions: String?,
         previousCheckpoint: AgentCheckpointData?,
         pendingMessageQueue: ArrayDeque<MessageWithContext>,
+        historyCompressionConfig: HistoryCompressionConfig,
         events: AgentEvents,
         sessionId: String,
         provider: ServiceType,
@@ -148,14 +150,51 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
                 )
             }
         }
+        val nodeShowCompressionLoading by node<List<ReceivedToolResult>, List<ReceivedToolResult>> {
+            events.onHistoryCompressionStateChanged(true)
+            it
+        }
+        val nodeCompressHistory by nodeLLMCompressHistory<List<ReceivedToolResult>>(strategy = historyCompressionConfig.compressionStrategy)
+        val nodeResetCompressionLoading by node<List<ReceivedToolResult>, List<ReceivedToolResult>> {
+            events.onHistoryCompressionStateChanged(false)
+            it
+        }
+        val nodeSendCompressedHistory by node<List<ReceivedToolResult>, List<Message.Response>> {
+            llm.writeSession {
+                requestAndPublish(
+                    executor,
+                    config,
+                    tokenizer(),
+                    events,
+                    sessionId,
+                    provider,
+                    stream
+                )
+            }
+        }
 
         edge(nodeStart forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onMultipleToolCalls { true })
         edge(nodeCallLLM forwardTo nodeFinish onSingleAssistantResponse { true })
-        edge(nodeExecuteTool forwardTo nodeSendToolResult)
+        edge(nodeExecuteTool forwardTo nodeSendToolResult onCondition {
+            llm.readSession {
+                !historyCompressionConfig.isLimitExceeded(prompt, tokenizer())
+            }
+        })
+        edge(nodeExecuteTool forwardTo nodeShowCompressionLoading onCondition {
+            llm.readSession {
+                historyCompressionConfig.isLimitExceeded(prompt, tokenizer())
+            }
+        })
+        edge(nodeShowCompressionLoading forwardTo nodeCompressHistory)
+        edge(nodeCompressHistory forwardTo nodeResetCompressionLoading)
+        edge(nodeResetCompressionLoading forwardTo nodeSendCompressedHistory)
         edge(nodeSendToolResult forwardTo nodeFinish onEmptyOutput { true })
         edge(nodeSendToolResult forwardTo nodeFinish onSingleAssistantResponse { true })
         edge(nodeSendToolResult forwardTo nodeExecuteTool onMultipleToolCalls { true })
+
+        edge(nodeSendCompressedHistory forwardTo nodeFinish onSingleAssistantResponse { true })
+        edge(nodeSendCompressedHistory forwardTo nodeExecuteTool onMultipleToolCalls { true })
     }
 }
 

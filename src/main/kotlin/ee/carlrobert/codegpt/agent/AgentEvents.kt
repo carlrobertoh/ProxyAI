@@ -27,6 +27,7 @@ interface AgentEvents {
     fun onTokenUsageUpdated(tokenUsage: TokenUsage) {}
     fun onCreditsAvailable(event: AgentCreditsEvent) {}
     fun onClientException(provider: ServiceType, ex: LLMClientException) {}
+    fun onHistoryCompressionStateChanged(isCompressing: Boolean) {}
 
     suspend fun approveToolCall(request: ToolApprovalRequest): Boolean = false
 
