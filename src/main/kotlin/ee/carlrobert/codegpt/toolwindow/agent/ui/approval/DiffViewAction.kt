@@ -4,11 +4,8 @@ import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.ProjectManager
-import com.intellij.openapi.project.ProjectLocator
 import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.util.ApplicationUtil
-import java.awt.Component
 
 object DiffViewAction {
 
@@ -32,7 +29,7 @@ object DiffViewAction {
     }
 
     fun showDiff(before: String, after: String, title: String, project: Project?) {
-        val proj = project ?: ProjectManager.getInstance().openProjects.firstOrNull() ?: return
+        val proj = project ?: ApplicationUtil.findCurrentProject() ?: return
         val contentFactory = DiffContentFactory.getInstance()
         val left = contentFactory.create(before)
         val right = contentFactory.create(after)

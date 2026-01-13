@@ -279,7 +279,7 @@ object ToolCallDescriptorFactory {
                                     before,
                                     after,
                                     "Changes in ${extractBaseName(editArgs.filePath)}",
-                                    null
+                                    project
                                 )
                             } catch (_: Exception) {
                                 DiffViewAction.showDiff(editArgs.filePath, project)
