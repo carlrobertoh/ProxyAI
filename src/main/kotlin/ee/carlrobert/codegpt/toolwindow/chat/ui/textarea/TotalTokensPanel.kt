@@ -64,7 +64,7 @@ class TotalTokensPanel(
             }
         }
 
-        border = JBUI.Borders.empty(4)
+        border = JBUI.Borders.empty()
         isOpaque = false
         add(JBLabel(AllIcons.General.ContextHelp).apply {
             addMouseListener(object : MouseAdapter() {

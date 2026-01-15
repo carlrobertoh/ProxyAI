@@ -10,7 +10,9 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.components.JBLabel;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.CodeGPTKeys;
@@ -39,7 +41,6 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody;
-import ee.carlrobert.codegpt.toolwindow.chat.editor.header.LoadingPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensDetails;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel;
@@ -62,6 +63,8 @@ import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import git4idea.GitCommit;
 import java.awt.BorderLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -95,7 +98,7 @@ public class ChatToolWindowTabPanel implements Disposable {
   private final TagManager tagManager;
   private final JPanel mcpApprovalContainer;
   private @Nullable ToolwindowChatCompletionRequestHandler requestHandler;
-  private LoadingPanel inputLoadingPanel;
+  private JBLabel loadingLabel;
   private final JPanel queuedMessageContainer;
 
   public ChatToolWindowTabPanel(@NotNull Project project, @NotNull Conversation conversation) {
@@ -138,6 +141,9 @@ public class ChatToolWindowTabPanel implements Disposable {
     queuedMessageContainer.setLayout(new BoxLayout(queuedMessageContainer, BoxLayout.Y_AXIS));
     queuedMessageContainer.setBorder(JBUI.Borders.empty());
     queuedMessageContainer.setOpaque(false);
+
+    loadingLabel = new JBLabel("", new AnimatedIcon.Default(), JBLabel.LEFT);
+    loadingLabel.setVisible(false);
 
     rootPanel = createRootPanel();
 
@@ -224,8 +230,9 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   private void updateUserPromptPanel() {
     var userPromptPanel = createUserPromptPanel();
+
     rootPanel.remove(rootPanel.getComponent(rootPanel.getComponentCount() - 1));
-    rootPanel.add(userPromptPanel, BorderLayout.SOUTH);
+    rootPanel.add(createSouthPanel(userPromptPanel), BorderLayout.SOUTH);
     rootPanel.revalidate();
     rootPanel.repaint();
   }
@@ -603,11 +610,6 @@ public class ChatToolWindowTabPanel implements Disposable {
     topContainer.setLayout(new BoxLayout(topContainer, BoxLayout.Y_AXIS));
     topContainer.setOpaque(false);
 
-    inputLoadingPanel = new LoadingPanel(CodeGPTBundle.get("toolwindow.chat.loading"), null, null);
-    inputLoadingPanel.setAlignmentX(JComponent.LEFT_ALIGNMENT);
-    inputLoadingPanel.setVisible(false);
-    topContainer.add(inputLoadingPanel);
-
     if (queuedMessageContainer.getComponentCount() > 0) {
       queuedMessageContainer.setAlignmentX(JComponent.LEFT_ALIGNMENT);
       topContainer.add(queuedMessageContainer);
@@ -618,30 +620,59 @@ public class ChatToolWindowTabPanel implements Disposable {
       topContainer.add(mcpApprovalContainer);
     }
 
-    var tokenPanelWrapper = JBUI.Panels.simplePanel(totalTokensPanel)
-        .withBorder(JBUI.Borders.empty(4, 0, 4, 0));
-    tokenPanelWrapper.setAlignmentX(JComponent.LEFT_ALIGNMENT);
-    topContainer.add(tokenPanelWrapper);
-
     panel.add(topContainer, BorderLayout.NORTH);
     panel.add(userInputPanel, BorderLayout.CENTER);
     return panel;
   }
 
+  private JComponent createStatusPanel() {
+    var statusPanel = new JPanel(new GridBagLayout());
+    statusPanel.setBorder(JBUI.Borders.empty(8));
+    statusPanel.setOpaque(false);
+
+    var gbc = new GridBagConstraints();
+    gbc.gridx = 0;
+    gbc.gridy = 0;
+    gbc.anchor = GridBagConstraints.WEST;
+    gbc.weightx = 0;
+    gbc.fill = GridBagConstraints.NONE;
+    statusPanel.add(loadingLabel, gbc);
+
+    gbc.gridx = 1;
+    gbc.weightx = 1;
+    gbc.fill = GridBagConstraints.HORIZONTAL;
+    statusPanel.add(Box.createHorizontalGlue(), gbc);
+
+    gbc.gridx = 2;
+    gbc.weightx = 0;
+    gbc.anchor = GridBagConstraints.EAST;
+    gbc.fill = GridBagConstraints.NONE;
+    statusPanel.add(totalTokensPanel, gbc);
+
+    return statusPanel;
+  }
+
+  private JComponent createSouthPanel(JComponent userPromptPanel) {
+    var southPanel = new JPanel(new BorderLayout());
+    southPanel.add(createStatusPanel(), BorderLayout.NORTH);
+    southPanel.add(userPromptPanel, BorderLayout.CENTER);
+    return southPanel;
+  }
+
   private void showInputLoading(String text) {
-    if (inputLoadingPanel != null) {
-      inputLoadingPanel.setText(text);
-      inputLoadingPanel.setVisible(true);
-      inputLoadingPanel.revalidate();
-      inputLoadingPanel.repaint();
+    if (loadingLabel != null) {
+      loadingLabel.setText(text);
+      loadingLabel.setVisible(true);
+      rootPanel.revalidate();
+      rootPanel.repaint();
     }
   }
 
   private void hideInputLoading() {
-    if (inputLoadingPanel != null) {
-      inputLoadingPanel.setVisible(false);
-      inputLoadingPanel.revalidate();
-      inputLoadingPanel.repaint();
+    if (loadingLabel != null) {
+      loadingLabel.setVisible(false);
+      rootPanel.revalidate();
+      rootPanel.repaint();
     }
   }
 
@@ -703,7 +734,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     var rootPanel = new JPanel(new BorderLayout());
     rootPanel.add(createScrollPaneWithSmartScroller(toolWindowScrollablePanel),
         BorderLayout.CENTER);
-    rootPanel.add(createUserPromptPanel(), BorderLayout.SOUTH);
+    rootPanel.add(createSouthPanel(createUserPromptPanel()), BorderLayout.SOUTH);
     return rootPanel;
   }
 }

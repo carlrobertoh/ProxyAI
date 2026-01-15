@@ -47,7 +47,7 @@ public class ProxyAIChoice(
 public class ProxyAIStreamChoice(
     public val finishReason: String? = null,
     public val nativeFinishReason: String? = null,
-    public val delta: ProxyAIStreamDelta,
+    public val delta: ProxyAIStreamDelta?,
     public val error: ProxyAIErrorResponse? = null
 )
 

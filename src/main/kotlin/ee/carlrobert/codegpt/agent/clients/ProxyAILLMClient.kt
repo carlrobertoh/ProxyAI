@@ -130,8 +130,8 @@ public class ProxyAILLMClient(
 
     override suspend fun StreamFrameFlowBuilder.processStreamingChunk(chunk: ProxyAIChatCompletionStreamResponse) {
         chunk.choices.firstOrNull()?.let { choice ->
-            choice.delta.content?.let { emitAppend(it) }
-            choice.delta.toolCalls?.forEachIndexed { index, toolCall ->
+            choice.delta?.content?.let { emitAppend(it) }
+            choice.delta?.toolCalls?.forEachIndexed { index, toolCall ->
                 val id = toolCall.id
                 val name = toolCall.function.name
                 val arguments = toolCall.function.arguments
