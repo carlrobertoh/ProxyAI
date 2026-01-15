@@ -16,6 +16,7 @@ import ee.carlrobert.codegpt.agent.AgentService
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.MessageWithContext
 import ee.carlrobert.codegpt.agent.ToolRunContext
+import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.conversations.message.QueuedMessage
@@ -23,6 +24,7 @@ import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentToolWindowLandingPanel
+import ee.carlrobert.codegpt.toolwindow.agent.ui.RollbackPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.TodoListPanel
 import ee.carlrobert.codegpt.toolwindow.chat.MessageBuilder
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction
@@ -105,9 +107,11 @@ class AgentToolWindowTabPanel(
         agentTokenCounterPanel = TokenUsageCounterPanel(project, sessionId),
         sessionIdProvider = { sessionId }
     )
+    private lateinit var rollbackPanel: RollbackPanel
     private val todoListPanel = TodoListPanel()
     private val projectMessageBusConnection = project.messageBus.connect()
     private val appMessageBusConnection = ApplicationManager.getApplication().messageBus.connect()
+    private val rollbackService = RollbackService.getInstance(project)
 
     private val agentEventHandler = AgentEventHandler(
         project = project,
@@ -127,6 +131,7 @@ class AgentToolWindowTabPanel(
             loadingLabel.isVisible = false
             revalidate()
             repaint()
+            rollbackPanel.refreshOperations()
         },
         onQueuedMessagesResolved = { message ->
             runInEdt {
@@ -139,6 +144,9 @@ class AgentToolWindowTabPanel(
 
     init {
         setupMessageBusSubscriptions()
+        rollbackPanel = RollbackPanel(project, sessionId) {
+            rollbackPanel.refreshOperations()
+        }
         setupUI()
 
         if (conversation.messages.isEmpty()) {
@@ -181,6 +189,9 @@ class AgentToolWindowTabPanel(
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
         }
+
+        rollbackPanel.alignmentX = LEFT_ALIGNMENT
+        topContainer.add(rollbackPanel)
 
         todoListPanel.alignmentX = LEFT_ALIGNMENT
         topContainer.add(todoListPanel)
@@ -233,6 +244,9 @@ class AgentToolWindowTabPanel(
                 .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.RUNNING)
         }
 
+        rollbackService.startSession(sessionId)
+        rollbackPanel.refreshOperations()
+
         val message = MessageWithContext(text, userInputPanel.getSelectedTags())
         val messagePanel = scrollablePanel.addMessage(message.id)
         val userPanel = UserMessagePanel(
@@ -274,6 +288,9 @@ class AgentToolWindowTabPanel(
         val agentService = project.service<AgentService>()
         agentService.cancelCurrentRun(sessionId)
         agentService.clearPendingMessages(sessionId)
+
+        rollbackService.finishSession(sessionId)
+        rollbackPanel.refreshOperations()
 
         approvalContainer.removeAll()
         clearQueuedMessages()

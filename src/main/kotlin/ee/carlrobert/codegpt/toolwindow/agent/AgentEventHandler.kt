@@ -11,6 +11,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.agent.*
+import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.conversations.message.TokenUsage
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -209,6 +210,7 @@ class AgentEventHandler(
 
     private fun handleDone() {
         runInEdt {
+            project.service<RollbackService>().finishSession(sessionId)
             currentResponseBody?.finishThinking()
             onHideLoading()
             userInputPanel.setStopEnabled(false)
@@ -416,16 +418,6 @@ class AgentEventHandler(
         toolName: String,
         result: Any?
     ) {
-        when (result) {
-            is TaskTool.InternalResult -> {
-                result.tokenUsage?.let { usage -> onTokenUsageUpdated(usage) }
-            }
-
-            is TokenUsage -> {
-                onTokenUsageUpdated(result)
-            }
-        }
-
         runInEdt {
             if (childId != null) {
                 val holder = subagentViewHolders.values.find { viewHolder ->
