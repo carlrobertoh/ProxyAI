@@ -195,7 +195,6 @@ object AgentFactory {
         extraBehavior: String? = null,
         toolOverrides: Set<SubagentTool>? = null
     ): AIAgent<String, String> {
-
         val selectedTools = toolOverrides ?: SubagentTool.entries.toSet()
         return AIAgent.Companion(
             promptExecutor = createExecutor(provider),
@@ -214,7 +213,7 @@ object AgentFactory {
 
                         # Tool Usage Policy
                         - You may call multiple tools in a single turn. If calls are independent, run them in parallel. If calls depend on earlier results, run sequentially.
-                        - Prefer specialized tools over bash: use Read for file content, Grep for search, Edit/Write for code changes. Use Bash only for true shell operations.
+                        - Prefer specialized tools over bash: use Read for file content, IntelliJSearch for search, Edit/Write for code changes. Use Bash only for true shell operations.
                         - Never use Bash to "echo" thoughts or communicate. All communication happens in your response text.
                         - Never guess parameters. If a required argument is unknown, first gather it via an appropriate tool.
                         - Respect approval gates: Edit/Write operations require confirmation hooks and may be denied.
@@ -223,7 +222,7 @@ object AgentFactory {
 
                         # Tool Routing Rules
                         - If the user asks about how to use a library, best practices, API semantics, configuration, or conventions: prefer ResolveLibraryId followed by GetLibraryDocs to gather authoritative guidance before proposing changes.
-                        - Use IntelliJSearch/Grep to locate symbols and examples before editing files.
+                        - Use IntelliJSearch to locate symbols and examples before editing files.
 
                         # Collaboration as Subagent
                         - Assume a parent agent orchestrates overall strategy. Focus on execution quality and clear, minimal output.
@@ -231,7 +230,7 @@ object AgentFactory {
 
                         # Good Practices
                         - Be precise and cite evidence (paths/lines) for findings and changes.
-                        - Batch independent reads/greps/web queries in parallel for speed.
+                        - Batch independent reads/searches/web queries in parallel for speed.
                         - Validate at boundaries (user input, external APIs); trust internal code guarantees.
                         """.trimIndent()
                     )
@@ -272,18 +271,18 @@ object AgentFactory {
                         ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}
 
                         # Tool Usage Policy (Read-only)
-                        - Use Read to examine files; Grep to search patterns; WebSearch for external context; ResolveLibraryId/GetLibraryDocs for dependencies; TodoWrite to record findings.
-                        - You may call multiple tools in parallel when independent (e.g., read multiple files, run several greps at once).
+                        - Use Read to examine files; IntelliJSearch to search patterns; WebSearch for external context; ResolveLibraryId/GetLibraryDocs for dependencies; TodoWrite to record findings.
+                        - You may call multiple tools in parallel when independent (e.g., read multiple files, run several searches at once).
                         - Do not use Edit or Write. Avoid destructive Bash. Use Bash only for safe, read-only operations if strictly necessary.
                         - Never guess parameters; first gather precise paths/patterns.
 
                         # Tool Routing Rules
                         - For library usage and best practices: ResolveLibraryId then GetLibraryDocs to retrieve relevant docs prior to summarizing advice.
-                        - Use IntelliJSearch/Grep for code navigation and symbol discovery.
+                        - Use IntelliJSearch for code navigation and symbol discovery.
 
                         # Exploration Workflow
                         - Initial scan: read key config/entry files in parallel; map structure.
-                        - Deep dive: run targeted greps and reads in parallel for related components.
+                        - Deep dive: run targeted searches and reads in parallel for related components.
                         - Summarize: synthesize findings with concrete references; use TodoWrite to capture a brief outline of insights.
 
                         # Good Practices

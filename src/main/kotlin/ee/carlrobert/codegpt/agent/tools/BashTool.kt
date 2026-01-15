@@ -4,21 +4,24 @@ import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.application.runWriteAction
+import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.tokens.truncateToolResult
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.selects.select
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.IOException
 import java.nio.file.Paths
 import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 
 fun interface BashCommandConfirmationHandler {
@@ -281,6 +284,7 @@ class BashTool(
         return withContext(Dispatchers.IO) {
             val stdoutBuilder = StringBuilder()
             val stderrBuilder = StringBuilder()
+            val activityChannel = Channel<Unit>(Channel.CONFLATED)
 
             val shellCommand = buildShellCommand(args.command)
             val process = ProcessBuilder(shellCommand)
@@ -289,12 +293,13 @@ class BashTool(
                     redirectErrorStream(false)
                 }
                 .start()
+            closeStdin(process)
 
             try {
                 val job = currentCoroutineContext()[Job]
                 job?.invokeOnCompletion { cause ->
                     if (cause is CancellationException && process.isAlive) {
-                        runCatching { process.destroyForcibly() }
+                        terminateProcess(process)
                     }
                 }
                 val stdoutJob = launch {
@@ -303,6 +308,7 @@ class BashTool(
                             lines.forEach { line ->
                                 stdoutBuilder.appendLine(line)
                                 publisher.toolOutput(toolId, line, false)
+                                activityChannel.trySend(Unit)
                             }
                         }
                     } catch (_: IOException) {
@@ -316,6 +322,7 @@ class BashTool(
                             lines.forEach { line ->
                                 stderrBuilder.appendLine(line)
                                 publisher.toolOutput(toolId, line, true)
+                                activityChannel.trySend(Unit)
                             }
                         }
                     } catch (_: IOException) {
@@ -323,16 +330,15 @@ class BashTool(
                     }
                 }
 
-                val timeoutMs = args.timeout.coerceIn(1, 600_000)
-                val isCompleted = withTimeoutOrNull(timeoutMs.toLong()) {
-                    withContext(Dispatchers.IO) {
-                        process.waitFor()
-                    }
-                } != null
-
-                if (!isCompleted) {
-                    process.destroyForcibly()
-                }
+                val timedOut = AtomicBoolean(false)
+                val exitDeferred = async(Dispatchers.IO) { process.waitFor() }
+                waitForExitOrIdleTimeout(
+                    process = process,
+                    timeoutMs = args.timeout,
+                    activityChannel = activityChannel,
+                    timedOut = timedOut,
+                    exitDeferred = exitDeferred
+                )
 
                 stdoutJob.join()
                 stderrJob.join()
@@ -340,18 +346,24 @@ class BashTool(
                 val combinedOutput = buildCombinedOutput(
                     stdoutBuilder.toString().trimEnd(),
                     stderrBuilder.toString().trimEnd(),
-                    if (!isCompleted) "Command timed out after ${timeoutMs}ms" else null
+                    if (timedOut.get()) "Command timed out after ${args.timeout}ms of inactivity" else null
                 )
+
+                runInEdt(ModalityState.defaultModalityState()) {
+                    runWriteAction {
+                        VirtualFileManager.getInstance().syncRefresh()
+                    }
+                }
 
                 Result(
                     args.command,
-                    if (isCompleted) process.exitValue() else null,
+                    if (!timedOut.get()) process.exitValue() else null,
                     combinedOutput,
                     null
                 )
             } finally {
                 if (process.isAlive) {
-                    process.destroyForcibly()
+                    terminateProcess(process)
                 }
             }
         }
@@ -367,6 +379,63 @@ class BashTool(
             if (stderr.isNotEmpty()) appendLine(stderr)
             message?.let { appendLine(it) }
         }.trimEnd()
+    }
+
+    private suspend fun waitForExitOrIdleTimeout(
+        process: Process,
+        timeoutMs: Int,
+        activityChannel: ReceiveChannel<Unit>,
+        timedOut: AtomicBoolean,
+        exitDeferred: Deferred<Int>
+    ) {
+        var done = false
+        while (!done) {
+            val event = withTimeoutOrNull(timeoutMs.toLong()) {
+                select {
+                    exitDeferred.onAwait { WaitEvent.EXIT }
+                    activityChannel.onReceive { WaitEvent.ACTIVITY }
+                }
+            }
+            when (event) {
+                WaitEvent.EXIT -> done = true
+                WaitEvent.ACTIVITY -> { /* reset idle timer */
+                }
+
+                null -> {
+                    timedOut.set(true)
+                    terminateProcess(process)
+                    done = true
+                }
+            }
+        }
+    }
+
+    private enum class WaitEvent {
+        EXIT,
+        ACTIVITY
+    }
+
+    private fun destroyProcessTree(process: Process) {
+        val handle = process.toHandle()
+        handle.descendants().forEach { child ->
+            runCatching { child.destroyForcibly() }
+        }
+        runCatching { handle.destroyForcibly() }
+    }
+
+    private fun closeProcessStreams(process: Process) {
+        runCatching { process.inputStream.close() }
+        runCatching { process.errorStream.close() }
+        runCatching { process.outputStream.close() }
+    }
+
+    private fun closeStdin(process: Process) {
+        runCatching { process.outputStream.close() }
+    }
+
+    private fun terminateProcess(process: Process) {
+        destroyProcessTree(process)
+        closeProcessStreams(process)
     }
 
     override fun encodeResultToString(result: Result): String = with(result) {
@@ -431,7 +500,20 @@ class BashTool(
 
     private fun shouldBlockByIgnore(command: String): Boolean {
         val svc = settingsService ?: return false
-        val readers = setOf("cat", "grep", "rg", "sed", "awk", "head", "tail", "less", "more", "wc", "stat", "file")
+        val readers = setOf(
+            "cat",
+            "grep",
+            "rg",
+            "sed",
+            "awk",
+            "head",
+            "tail",
+            "less",
+            "more",
+            "wc",
+            "stat",
+            "file"
+        )
         val tokens = tokenize(command)
         val paths = mutableListOf<String>()
         var lastWasReader = false
@@ -474,7 +556,9 @@ class BashTool(
                 if (c == '\'' || c == '"') {
                     quote = c
                 } else if (c.isWhitespace()) {
-                    if (sb.isNotEmpty()) { out.add(sb.toString()); sb.setLength(0) }
+                    if (sb.isNotEmpty()) {
+                        out.add(sb.toString()); sb.setLength(0)
+                    }
                 } else {
                     sb.append(c)
                 }
@@ -488,7 +572,9 @@ class BashTool(
     }
 
     private fun looksLikePath(token: String): Boolean =
-        token.startsWith("/") || token.startsWith("./") || token.startsWith("../") || token.contains('/')
+        token.startsWith("/") || token.startsWith("./") || token.startsWith("../") || token.contains(
+            '/'
+        )
 
     private fun toAbsolute(token: String): String {
         return try {

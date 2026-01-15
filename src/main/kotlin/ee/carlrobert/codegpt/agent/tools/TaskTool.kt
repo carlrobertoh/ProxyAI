@@ -10,7 +10,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.*
-import ee.carlrobert.codegpt.conversations.message.TokenUsage
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.ProxyAISubagent
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
@@ -77,16 +76,6 @@ class TaskTool(
         val totalTokens: Long = 0
     )
 
-    internal data class InternalResult(
-        val agentType: String,
-        val description: String,
-        val prompt: String,
-        val output: String,
-        val executionTime: Long,
-        val totalTokens: Long = 0,
-        val tokenUsage: TokenUsage? = null
-    )
-
     override suspend fun execute(args: Args): Result {
         val startTime = System.currentTimeMillis()
         val parentId = ToolRunContext.getToolId(sessionId)
@@ -126,9 +115,9 @@ class TaskTool(
                     approveToolCall = approvalHandler,
                     onAgentToolCallStarting = toolCallBridge::onToolCallStarting,
                     onAgentToolCallCompleted = toolCallBridge::onToolCallCompleted,
+                    onCreditsAvailable = events::onCreditsAvailable,
                     extraBehavior = extraBehavior,
                     toolOverrides = toolOverrides,
-                    onCreditsAvailable = events::onCreditsAvailable
                 )
             }
 
@@ -183,7 +172,6 @@ private fun buildTaskDescription(project: Project): String {
                 Built-in agent types:
                 - general-purpose: General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks.
                 - explore: Fast agent specialized for exploring codebases.
-                - plan: Software architect agent for designing implementation plans.
 
                 Custom subagents:
                 - You may also pass the exact name of a configured subagent (as shown in ProxyAI Settings > Subagents) in the subagent_type field.
@@ -194,19 +182,19 @@ private fun buildTaskDescription(project: Project): String {
                 """.trimIndent()
         )
 
-        val customs = runCatching {
+        val subagents = runCatching {
             project.service<ProxyAISettingsService>().getSubagents()
                 .filterNot { SubagentDefaults.isBuiltInId(it.id) }
         }.getOrNull()?.takeIf { it.isNotEmpty() }
-        if (customs != null) {
+        if (subagents != null) {
             appendLine()
             appendLine("Configured subagents available:")
-            customs.forEach { sa ->
-                val title = sa.title.trim()
-                if (title.isEmpty()) return@forEach
-                val desc = sa.objective.trim()
+            subagents
+                .filter { it.title.trim().isNotBlank() }
+                .forEach { sa ->
                 append("- ")
-                append(title)
+                append(sa.title)
+                val desc = sa.objective.trim()
                 if (desc.isNotBlank()) {
                     append(": ")
                     append(desc.take(140))
@@ -225,7 +213,7 @@ private data class ConfiguredSubagent(
 
 private fun isBuiltInAgentType(value: String): Boolean {
     return when (value.lowercase().trim()) {
-        "general-purpose", "explore", "plan" -> true
+        "general-purpose", "explore" -> true
         else -> false
     }
 }

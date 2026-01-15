@@ -189,7 +189,6 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
         edge(nodeShowCompressionLoading forwardTo nodeCompressHistory)
         edge(nodeCompressHistory forwardTo nodeResetCompressionLoading)
         edge(nodeResetCompressionLoading forwardTo nodeSendCompressedHistory)
-        edge(nodeSendToolResult forwardTo nodeFinish onEmptyOutput { true })
         edge(nodeSendToolResult forwardTo nodeFinish onSingleAssistantResponse { true })
         edge(nodeSendToolResult forwardTo nodeExecuteTool onMultipleToolCalls { true })
 
@@ -323,20 +322,6 @@ private infix fun <IncomingOutput, OutgoingInput> AIAgentEdgeBuilderIntermediate
                 .filterIsInstance<Message.Response>()
         }
         .onCondition { it.size == 1 && it[0] is Message.Assistant }
-        .onCondition { messages -> block(messages[0]) }
-        .transformed { it[0].content }
-}
-
-@EdgeTransformationDslMarker
-private infix fun <IncomingOutput, OutgoingInput> AIAgentEdgeBuilderIntermediate<IncomingOutput, List<Message.Response>, OutgoingInput>.onEmptyOutput(
-    block: suspend (Message.Response) -> Boolean
-): AIAgentEdgeBuilderIntermediate<IncomingOutput, String, OutgoingInput> {
-    return onIsInstance(List::class)
-        .transformed { response ->
-            response.filter { item -> item is Message.Response && item !is Message.Reasoning }
-                .filterIsInstance<Message.Response>()
-        }
-        .onCondition { it.isEmpty() }
         .onCondition { messages -> block(messages[0]) }
         .transformed { it[0].content }
 }
