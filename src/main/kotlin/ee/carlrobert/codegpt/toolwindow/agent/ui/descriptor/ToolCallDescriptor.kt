@@ -41,5 +41,6 @@ data class ToolCallDescriptor(
     val args: Any,
     val result: Any? = null,
     val projectId: String? = null,
-    val prefixColor: JBColor? = null
+    val prefixColor: JBColor? = null,
+    val summary: String? = null
 )

@@ -41,12 +41,30 @@ private fun longestCommonSubsequenceLength(a: List<String>, b: List<String>): In
     val n = a.size
     val m = b.size
     if (n == 0 || m == 0) return 0
-    val dp = Array(n + 1) { IntArray(m + 1) }
-    for (i in 1..n) {
-        val ai = a[i - 1]
-        for (j in 1..m) {
-            dp[i][j] = if (ai == b[j - 1]) dp[i - 1][j - 1] + 1 else maxOf(dp[i - 1][j], dp[i][j - 1])
+
+    val smaller = if (n < m) a else b
+    val larger = if (n < m) b else a
+
+    val smallSize = smaller.size
+    val largeSize = larger.size
+
+    var prev = IntArray(smallSize + 1)
+    var curr = IntArray(smallSize + 1)
+
+    for (i in 1..largeSize) {
+        val largerLine = larger[i - 1]
+        val temp = prev
+        prev = curr
+        curr = temp
+
+        for (j in 1..smallSize) {
+            curr[j] = if (largerLine == smaller[j - 1]) {
+                prev[j - 1] + 1
+            } else {
+                maxOf(prev[j], curr[j - 1])
+            }
         }
     }
-    return dp[n][m]
+
+    return curr[smallSize]
 }

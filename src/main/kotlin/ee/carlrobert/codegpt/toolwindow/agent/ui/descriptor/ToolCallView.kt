@@ -120,6 +120,12 @@ private class ToolCallHeaderPanel(
 
         this.fileLink = link
         leftRow.add(link)
+
+        descriptor.summary?.let { summary ->
+            leftRow.add(JBLabel(" · $summary").withFont(JBFont.small()).apply {
+                foreground = JBUI.CurrentTheme.Label.disabledForeground()
+            })
+        }
     }
 
     private fun addRegularContent() {
@@ -129,7 +135,12 @@ private class ToolCallHeaderPanel(
         }
         leftRow.add(content)
 
-        // Show IntelliJSearch parameter chips for compact rows for parity with main cards
+        descriptor.summary?.let { summary ->
+            leftRow.add(JBLabel(" · $summary").withFont(JBFont.small()).apply {
+                foreground = JBUI.CurrentTheme.Label.disabledForeground()
+            })
+        }
+
         addSearchParametersIfAny()
     }
 

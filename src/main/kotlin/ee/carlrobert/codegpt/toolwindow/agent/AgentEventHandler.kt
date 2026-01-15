@@ -158,7 +158,7 @@ class AgentEventHandler(
         currentResponseBody = responseBody
     }
 
-    override fun onAgentCompleted(ctx: AgentCompletedContext) {
+    override fun onAgentCompleted(agentId: String) {
         runCatching {
             project.service<AgentToolWindowContentManager>().getTabbedPane()
                 .onAgentCompleted(sessionId)
@@ -171,7 +171,7 @@ class AgentEventHandler(
                 .orElse(null)
         }.getOrNull()
         val resolvedAgentId = project.service<AgentService>().getAgentForSession(sessionId)?.id
-            ?: ctx.agentId
+            ?: agentId
         project.service<AgentSessionState>().updateSession(
             sessionId,
             lastAgentId = resolvedAgentId,

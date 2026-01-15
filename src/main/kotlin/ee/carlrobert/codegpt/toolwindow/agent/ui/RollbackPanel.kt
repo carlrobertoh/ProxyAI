@@ -21,8 +21,8 @@ import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
 import ee.carlrobert.codegpt.ui.IconActionButton
 import kotlinx.coroutines.*
+import java.awt.Dimension
 import java.awt.FlowLayout
-import java.awt.GridLayout
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -38,13 +38,12 @@ class RollbackPanel(
     private val sessionId: String,
     private val onRollbackComplete: () -> Unit
 ) : BorderLayoutPanel() {
-
     private val rollbackService = RollbackService.getInstance(project)
     private val titleLabel = JBLabel()
     private val timeLabel = JBLabel()
-    private val summaryPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 2))
     private val changesPanel = JPanel()
-    private val footerPanel = JPanel(GridLayout(1, 2, 8, 0))
+    private val scrollPane = JScrollPane(changesPanel)
+    private val rollbackAllLink = createRollbackAllLink()
     private val diffStatsCache = ConcurrentHashMap<String, Triple<Int, Int, Int>>()
     private val diffDataCache = ConcurrentHashMap<String, RollbackDiffData>()
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -54,10 +53,8 @@ class RollbackPanel(
     }
 
     private fun setupUI() {
-        val headerPanel = JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+        val headerPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply {
             isOpaque = false
-            add(JBLabel(AllIcons.Actions.Diff))
-            add(JBLabel(AllIcons.General.Add))
             add(titleLabel.apply {
                 font = font.deriveFont(java.awt.Font.BOLD)
             })
@@ -66,14 +63,10 @@ class RollbackPanel(
             })
         }
 
-        summaryPanel.apply {
-            isOpaque = false
-        }
-
         val topPanel = BorderLayoutPanel().apply {
             addToLeft(headerPanel)
-            addToRight(summaryPanel)
-            border = JBUI.Borders.empty(8)
+            addToRight(rollbackAllLink)
+            border = JBUI.Borders.empty(6, 0)
         }
 
         changesPanel.apply {
@@ -81,18 +74,17 @@ class RollbackPanel(
             isOpaque = false
         }
 
-        footerPanel.apply {
-            isOpaque = true
-            border = JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0)
-            add(createRollbackAllButton())
-            add(createKeepButton())
+        scrollPane.apply {
+            horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+            border = null
+            preferredSize = Dimension(0, 240)
         }
 
         addToTop(topPanel)
         addToCenter(
             BorderLayoutPanel().apply {
-                addToCenter(changesPanel)
-                addToBottom(footerPanel)
+                addToCenter(scrollPane)
             }
         )
         border = JBUI.Borders.compound(
@@ -110,21 +102,19 @@ class RollbackPanel(
             .sortedBy { it.path }
         isVisible = changes.isNotEmpty()
         if (changes.isEmpty()) {
-            titleLabel.text = "Agent changes"
+            titleLabel.text = "Changes"
             timeLabel.text = ""
             changesPanel.removeAll()
-            summaryPanel.removeAll()
-            footerPanel.isVisible = false
+            rollbackAllLink.isVisible = false
             revalidate()
             repaint()
             return
         }
 
         val timeText = snapshot?.completedAt?.let { formatTime(it) } ?: ""
-        titleLabel.text = "Agent changes (${changes.size})"
+        titleLabel.text = "Changes (${changes.size})"
         timeLabel.text = if (timeText.isNotBlank()) "• $timeText" else ""
 
-        updateSummary(changes)
         preloadDiffStats(changes)
 
         changesPanel.removeAll()
@@ -132,7 +122,8 @@ class RollbackPanel(
             if (index > 0) changesPanel.add(Box.createVerticalStrut(4))
             changesPanel.add(createChangeRow(change))
         }
-        footerPanel.isVisible = true
+        updateScrollPaneSizing()
+        rollbackAllLink.isVisible = true
 
         revalidate()
         repaint()
@@ -220,6 +211,7 @@ class RollbackPanel(
         return JBLabel(display).apply {
             foreground = JBUI.CurrentTheme.Label.disabledForeground()
             font = JBUI.Fonts.smallFont()
+            toolTipText = display
         }
     }
 
@@ -287,48 +279,29 @@ class RollbackPanel(
         return "Last run at ${formatter.format(instant)}"
     }
 
-    private fun updateSummary(changes: List<FileChange>) {
-        val added = changes.count { it.kind == ChangeKind.ADDED }
-        val deleted = changes.count { it.kind == ChangeKind.DELETED }
-        val modified =
-            changes.count { it.kind == ChangeKind.MODIFIED || it.kind == ChangeKind.MOVED }
-        summaryPanel.removeAll()
-        if (added > 0) summaryPanel.add(colorChip("+$added", ChangeColors.inserted))
-        if (deleted > 0) summaryPanel.add(colorChip("-$deleted", ChangeColors.deleted))
-        if (modified > 0) summaryPanel.add(colorChip("~$modified", ChangeColors.modified))
-        summaryPanel.revalidate()
-        summaryPanel.repaint()
-    }
-
-    private fun colorChip(text: String, color: JBColor): JBLabel =
-        JBLabel(text).apply {
-            foreground = color
-            font = JBUI.Fonts.smallFont()
-        }
-
-    private fun createRollbackAllButton(): JComponent {
-        return JButton("Rollback all").apply {
-            isFocusable = false
-            isContentAreaFilled = true
-            isOpaque = true
-            putClientProperty("JButton.buttonType", "roundRect")
-            margin = JBUI.insets(6, 12)
-            addActionListener { handleRollback() }
-        }
-    }
-
-    private fun createKeepButton(): JComponent {
-        return JButton("Keep changes").apply {
-            isFocusable = false
-            isContentAreaFilled = true
-            isOpaque = true
-            putClientProperty("JButton.buttonType", "roundRect")
-            margin = JBUI.insets(6, 12)
-            addActionListener {
-                rollbackService.clearSnapshot(sessionId)
-                refreshOperations()
+    private fun updateScrollPaneSizing() {
+        val maxVisibleItems = 5
+        val componentList = changesPanel.components.toList()
+        var visibleRows = 0
+        var height = 0
+        componentList.forEach { component ->
+            if (visibleRows >= maxVisibleItems) return@forEach
+            height += component.preferredSize.height
+            if (component is BorderLayoutPanel) {
+                visibleRows += 1
             }
         }
+        if (height == 0) {
+            scrollPane.preferredSize = Dimension(0, 0)
+            return
+        }
+        scrollPane.preferredSize = Dimension(0, height)
+        scrollPane.maximumSize = Dimension(Int.MAX_VALUE, height)
+        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+    }
+
+    private fun createRollbackAllLink(): JComponent {
+        return ActionLink("Rollback all changes") { handleRollback() }
     }
 
     private fun rollbackFile(path: String) {

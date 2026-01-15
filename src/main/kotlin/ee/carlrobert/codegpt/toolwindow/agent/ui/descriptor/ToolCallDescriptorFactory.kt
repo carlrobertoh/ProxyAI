@@ -29,7 +29,8 @@ object ToolCallDescriptorFactory {
         toolName: String,
         args: Any,
         result: Any? = null,
-        overrideKind: ToolKind? = null
+        overrideKind: ToolKind? = null,
+        summary: String? = null
     ): ToolCallDescriptor {
         val kind = overrideKind ?: detectToolKind(toolName, args)
         val projectId = project.locationHash
@@ -41,7 +42,7 @@ object ToolCallDescriptorFactory {
             ToolKind.EDIT -> createEditDescriptor(project, args, result, projectId)
             ToolKind.BASH -> createBashDescriptor(args, result, projectId)
             ToolKind.WEB -> createWebDescriptor(args, result, projectId)
-            ToolKind.TASK -> createTaskDescriptor(args, result, projectId)
+            ToolKind.TASK -> createTaskDescriptor(args, result, projectId, summary)
             ToolKind.LIBRARY_RESOLVE -> createLibraryResolveDescriptor(args, result, projectId)
             ToolKind.LIBRARY_DOCS -> createLibraryDocsDescriptor(args, result, projectId)
             ToolKind.ASK_QUESTION -> createAskDescriptor(args, result, projectId)
@@ -374,28 +375,12 @@ object ToolCallDescriptorFactory {
         val pattern = searchArgs?.pattern ?: ""
         val scopeOrPath = searchArgs?.path?.substringAfterLast('/') ?: (searchArgs?.scope ?: "")
         val titleMain = buildSearchDisplay(truncatePattern(pattern), scopeOrPath)
-
         val badges = mutableListOf<Badge>()
         val actions = mutableListOf<ToolAction>()
 
         when (result) {
             is IntelliJSearchTool.Result -> {
                 badges.add(Badge("${result.totalMatches} matches", JBColor.BLUE))
-                if (result.output.isNotBlank()) {
-                    actions.add(
-                        ToolAction("View Results", AllIcons.Actions.Find) { _ ->
-                            showTextDialog(result.output, "Search Results")
-                        }
-                    )
-                }
-            }
-
-            is String -> {
-                actions.add(
-                    ToolAction("View Results", AllIcons.Actions.Find) { _ ->
-                        showTextDialog(result, "Search Results")
-                    }
-                )
             }
         }
 
@@ -442,7 +427,8 @@ object ToolCallDescriptorFactory {
     private fun createTaskDescriptor(
         args: Any,
         result: Any?,
-        projectId: String?
+        projectId: String?,
+        summary: String? = null
     ): ToolCallDescriptor {
         val description = when (args) {
             is TaskTool.Args -> args.description
@@ -463,6 +449,12 @@ object ToolCallDescriptorFactory {
             prefixColor = null
         }
 
+        val taskSummary = when {
+            summary != null -> summary
+            result is TaskTool.Result -> formatTaskSummary(result)
+            else -> null
+        }
+
         return ToolCallDescriptor(
             kind = ToolKind.TASK,
             icon = AllIcons.Actions.RunAnything,
@@ -474,8 +466,28 @@ object ToolCallDescriptorFactory {
             args = args,
             result = result,
             projectId = projectId,
-            prefixColor = prefixColor
+            prefixColor = prefixColor,
+            summary = taskSummary
         )
+    }
+
+    private fun formatTaskSummary(result: TaskTool.Result): String? {
+        val parts = mutableListOf<String>()
+        if (result.executionTime > 0) {
+            parts.add(formatDuration(result.executionTime))
+        }
+        if (result.totalTokens > 0) {
+            parts.add("${result.totalTokens} tokens")
+        }
+        return if (parts.isNotEmpty()) parts.joinToString(" · ") else null
+    }
+
+    private fun formatDuration(ms: Long): String {
+        return when {
+            ms < 1000 -> "${ms}ms"
+            ms < 60000 -> "${ms / 1000}s"
+            else -> "${ms / 60000}m ${((ms % 60000) / 1000)}s"
+        }
     }
 
     private fun getSubagentColor(subagentType: String): JBColor {

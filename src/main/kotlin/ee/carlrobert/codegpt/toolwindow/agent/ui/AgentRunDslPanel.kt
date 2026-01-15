@@ -93,12 +93,17 @@ class AgentRunDslPanel(
 
         rowsPanel.removeAll()
         finalList.forEach { value ->
+            val summary = when (value) {
+                is RunEntry.TaskEntry -> formatTaskSummary(value.summary)
+                else -> null
+            }
             val descriptor = ToolCallDescriptorFactory.create(
                 project = project,
                 toolName = value.toolName,
                 args = value.args ?: "",
                 result = value.result,
-                overrideKind = value.kind
+                overrideKind = value.kind,
+                summary = summary
             )
             val view = ToolCallView(descriptor)
             viewByEntryId[value.id] = view
@@ -131,5 +136,17 @@ class AgentRunDslPanel(
 
     fun complete(entryId: String, success: Boolean, result: Any?) {
         viewByEntryId[entryId]?.complete(success, result)
+    }
+
+    private fun formatTaskSummary(summary: TaskSummary?): String? {
+        if (summary == null) return null
+        val parts = mutableListOf<String>()
+        if (summary.toolCalls > 0) {
+            parts.add("${summary.toolCalls} calls")
+        }
+        if (summary.tokens > 0) {
+            parts.add("${summary.tokens} tokens")
+        }
+        return if (parts.isNotEmpty()) parts.joinToString(" · ") else null
     }
 }
