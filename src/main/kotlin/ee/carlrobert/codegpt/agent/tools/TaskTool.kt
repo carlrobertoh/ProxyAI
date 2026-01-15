@@ -19,6 +19,7 @@ import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A tool for launching specialized agents to handle complex, multistep tasks autonomously.
@@ -80,10 +81,17 @@ class TaskTool(
         val startTime = System.currentTimeMillis()
         val parentId = ToolRunContext.getToolId(sessionId)
             ?: throw IllegalStateException("No parent tool call found for session $sessionId")
+        val totalTokenCounter = AtomicLong(0L)
+        val trackingEvents = object : AgentEvents by events {
+            override fun onTokenUsageAvailable(tokenUsage: Long) {
+                totalTokenCounter.addAndGet(tokenUsage)
+                events.onTokenUsageAvailable(tokenUsage)
+            }
+        }
 
         try {
-            val toolCallBridge = SubagentToolCallBridge(events, parentId, sessionId)
-            val approvalHandler = approvalHandler(events)
+            val toolCallBridge = SubagentToolCallBridge(trackingEvents, parentId, sessionId)
+            val approvalHandler = approvalHandler(trackingEvents)
             val configuredSubagent = if (isBuiltInAgentType(args.subagentType)) {
                 null
             } else {
@@ -100,7 +108,7 @@ class TaskTool(
                     approveToolCall = approvalHandler,
                     onAgentToolCallStarting = toolCallBridge::onToolCallStarting,
                     onAgentToolCallCompleted = toolCallBridge::onToolCallCompleted,
-                    onCreditsAvailable = events::onCreditsAvailable
+                    onCreditsAvailable = trackingEvents::onCreditsAvailable
                 )
             } else {
                 val agentType = AgentType.fromString(args.subagentType)
@@ -115,7 +123,7 @@ class TaskTool(
                     approveToolCall = approvalHandler,
                     onAgentToolCallStarting = toolCallBridge::onToolCallStarting,
                     onAgentToolCallCompleted = toolCallBridge::onToolCallCompleted,
-                    onCreditsAvailable = events::onCreditsAvailable,
+                    onCreditsAvailable = trackingEvents::onCreditsAvailable,
                     extraBehavior = extraBehavior,
                     toolOverrides = toolOverrides,
                 )
@@ -124,7 +132,7 @@ class TaskTool(
             toolCallBridge.setToolRegistry((agent as? GraphAIAgent<*, *>)?.toolRegistry)
 
             val output = agent.run(args.prompt)
-            return args.createResult(output, startTime)
+            return args.createResult(output, startTime, totalTokenCounter.get())
         } catch (e: Exception) {
             return Result(
                 agentType = args.subagentType,
@@ -136,14 +144,16 @@ class TaskTool(
         }
     }
 
-    private fun Args.createResult(output: String, startTime: Long): Result {
+    private fun Args.createResult(output: String, startTime: Long, totalTokens: Long): Result {
+        val resolvedTotalTokens =
+            if (totalTokens > 0) totalTokens else EncodingManager.getInstance().countTokens(output).toLong()
         return Result(
             agentType = this.subagentType,
             description = this.description,
             prompt = this.prompt,
             output = output,
             executionTime = System.currentTimeMillis() - startTime,
-            totalTokens = EncodingManager.getInstance().countTokens(output).toLong()
+            totalTokens = resolvedTotalTokens
         )
     }
 

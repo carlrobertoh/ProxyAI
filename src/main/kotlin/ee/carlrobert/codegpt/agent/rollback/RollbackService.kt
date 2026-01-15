@@ -2,29 +2,24 @@ package ee.carlrobert.codegpt.agent.rollback
 
 import com.intellij.history.Label
 import com.intellij.history.LocalHistory
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runWriteAction
-import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.*
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.*
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Paths
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Tracks file changes during agent runs and provides rollback to a checkpoint.
@@ -141,20 +136,22 @@ class RollbackService(private val project: Project) {
     fun isDisplayable(path: String): Boolean = isTrackable(path)
 
     suspend fun rollbackFile(sessionId: String, path: String): RollbackResult =
-        withContext(Dispatchers.Main) {
+        withContext(Dispatchers.IO) {
             val snapshot = snapshots[sessionId]
                 ?: return@withContext RollbackResult.Failure("No rollback snapshot available")
             val change = snapshot.changes[path]
                 ?: return@withContext RollbackResult.Failure("No change tracked for $path")
 
             val errors = mutableListOf<String>()
-            isApplyingRollback = true
-            try {
-                runWriteSafe("ProxyAI Rollback") {
-                    applyChangeWithLabel(snapshot.labelRef, path, change, errors)
+            runInEdt {
+                runWriteAction {
+                    try {
+                        isApplyingRollback = true
+                        applyChangeWithLabel(snapshot.labelRef, path, change, errors)
+                    } finally {
+                        isApplyingRollback = false
+                    }
                 }
-            } finally {
-                isApplyingRollback = false
             }
 
             if (errors.isNotEmpty()) {
@@ -176,15 +173,17 @@ class RollbackService(private val project: Project) {
             ?: return@withContext RollbackResult.Failure("No rollback snapshot available")
 
         val errors = mutableListOf<String>()
-        isApplyingRollback = true
-        try {
-            runWriteSafe("ProxyAI Rollback") {
-                snapshot.changes.forEach { (path, change) ->
-                    applyChangeWithLabel(snapshot.labelRef, path, change, errors)
+        runInEdt {
+            runWriteAction {
+                try {
+                    isApplyingRollback = true
+                    snapshot.changes.forEach { (path, change) ->
+                        applyChangeWithLabel(snapshot.labelRef, path, change, errors)
+                    }
+                } finally {
+                    isApplyingRollback = false
                 }
             }
-        } finally {
-            isApplyingRollback = false
         }
 
         if (errors.isNotEmpty()) {
@@ -221,9 +220,8 @@ class RollbackService(private val project: Project) {
     private fun isTrackable(file: VirtualFile): Boolean {
         if (file.isDirectory || !file.isValid) return false
         if (FileTypeManager.getInstance().isFileIgnored(file)) return false
-        if (runReadAction { !ProjectFileIndex.getInstance(project).isInContent(file) }) return false
         if (settingsService.isPathIgnored(file.path)) return false
-        return true
+        return !file.path.contains(".proxyai/checkpoints/")
     }
 
     private fun isTrackable(path: String): Boolean {
@@ -248,7 +246,7 @@ class RollbackService(private val project: Project) {
             return false
         }
         if (settingsService.isPathIgnored(normalized)) return false
-        return true
+        return !normalized.contains(".proxyai/checkpoints/")
     }
 
     private fun readContentSafe(file: VirtualFile): ByteArray? =
@@ -273,7 +271,7 @@ class RollbackService(private val project: Project) {
         val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(path) ?: return
         if (!vf.exists()) return
         runCatching {
-            runInEdt {
+            runInEdt(ModalityState.defaultModalityState()) {
                 runWriteAction {
                     vf.delete(this)
                 }
@@ -315,7 +313,7 @@ class RollbackService(private val project: Project) {
         }
 
         runCatching {
-            runInEdt {
+            runInEdt(ModalityState.defaultModalityState()) {
                 runWriteAction {
                     file.setBinaryContent(content)
                 }
@@ -344,7 +342,9 @@ class RollbackService(private val project: Project) {
 
             ChangeKind.MODIFIED -> {
                 if (file != null) {
-                    val reverted = runCatching { label.revert(project, file) }.isSuccess
+                    val reverted = runCatching {
+                        label.revert(project, file)
+                    }.isSuccess
                     if (!reverted) {
                         val before = resolveLabelContent(label, path, change.originalContent)
                         restoreFile(path, before, errors)
@@ -378,24 +378,6 @@ class RollbackService(private val project: Project) {
     ): ByteArray? {
         return runCatching { label.getByteContent(path) }
             .getOrNull()?.bytes ?: fallback
-    }
-
-    private suspend fun runWriteSafe(actionName: String, block: () -> Unit) {
-        suspendCancellableCoroutine { cont ->
-            runInEdt {
-                try {
-                    WriteCommandAction.runWriteCommandAction(
-                        project,
-                        actionName,
-                        null,
-                        { block() }
-                    )
-                    if (cont.isActive) cont.resume(Unit)
-                } catch (e: Throwable) {
-                    if (cont.isActive) cont.resumeWithException(e)
-                }
-            }
-        }
     }
 
     companion object {

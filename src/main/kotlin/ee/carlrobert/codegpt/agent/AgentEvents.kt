@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.agent
 
-import ai.koog.agents.core.feature.handler.agent.AgentCompletedContext
 import ai.koog.prompt.executor.clients.LLMClientException
 import ee.carlrobert.codegpt.agent.tools.AskUserQuestionTool
 import ee.carlrobert.codegpt.conversations.message.TokenUsage
@@ -10,7 +9,7 @@ import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
 
 interface AgentEvents {
     fun onTextReceived(text: String) {}
-    fun onAgentCompleted(ctx: AgentCompletedContext) {}
+    fun onAgentCompleted(agentId: String) {}
     fun onToolStarting(id: String, toolName: String, args: Any?) {}
     fun onToolCompleted(id: String?, toolName: String, result: Any?) {}
     fun onSubAgentToolStarting(parentId: String, toolName: String, args: Any?): String? = null

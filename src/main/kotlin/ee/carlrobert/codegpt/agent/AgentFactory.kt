@@ -13,10 +13,15 @@ import ai.koog.agents.ext.tool.ExitTool
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
 import ai.koog.agents.features.eventHandler.feature.handleEvents
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
 import ai.koog.prompt.executor.clients.LLMClient
+import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
+import ai.koog.prompt.executor.clients.google.GoogleClientSettings
 import ai.koog.prompt.executor.clients.google.GoogleLLMClient
+import ai.koog.prompt.executor.clients.mistralai.MistralAIClientSettings
 import ai.koog.prompt.executor.clients.mistralai.MistralAILLMClient
+import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.retry.RetryConfig
 import ai.koog.prompt.executor.clients.retry.RetryingLLMClient
@@ -27,6 +32,7 @@ import ai.koog.prompt.message.Message
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
+import ee.carlrobert.codegpt.agent.clients.ProxyAIClientSettings
 import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
 import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.agent.tools.*
@@ -135,29 +141,52 @@ object AgentFactory {
     }
 
     fun createExecutor(provider: ServiceType): PromptExecutor {
+        val timeoutConfig = ConnectionTimeoutConfig(
+            connectTimeoutMillis = 300_000,
+            socketTimeoutMillis = 300_000,
+        )
         return when (provider) {
             ServiceType.OPENAI -> {
                 val apiKey = getCredential(CredentialKey.OpenaiApiKey) ?: ""
-                createRetryingExecutor(OpenAILLMClient(apiKey))
+                createRetryingExecutor(
+                    OpenAILLMClient(
+                        apiKey, OpenAIClientSettings(timeoutConfig = timeoutConfig)
+                    )
+                )
             }
 
             ServiceType.ANTHROPIC -> {
                 val apiKey = getCredential(CredentialKey.AnthropicApiKey) ?: ""
-                createRetryingExecutor(AnthropicLLMClient(apiKey))
+                createRetryingExecutor(
+                    AnthropicLLMClient(
+                        apiKey,
+                        AnthropicClientSettings(timeoutConfig = timeoutConfig)
+                    )
+                )
             }
 
             ServiceType.GOOGLE -> {
                 val apiKey = getCredential(CredentialKey.GoogleApiKey) ?: ""
-                createRetryingExecutor(GoogleLLMClient(apiKey))
+                createRetryingExecutor(
+                    GoogleLLMClient(
+                        apiKey,
+                        GoogleClientSettings(timeoutConfig = timeoutConfig)
+                    )
+                )
             }
 
             ServiceType.OLLAMA -> {
-                createRetryingExecutor(OllamaClient())
+                createRetryingExecutor(OllamaClient(timeoutConfig = timeoutConfig))
             }
 
             ServiceType.MISTRAL -> {
                 val apiKey = getCredential(CredentialKey.MistralApiKey) ?: ""
-                createRetryingExecutor(MistralAILLMClient(apiKey))
+                createRetryingExecutor(
+                    MistralAILLMClient(
+                        apiKey,
+                        MistralAIClientSettings(timeoutConfig = timeoutConfig)
+                    )
+                )
             }
 
             ServiceType.CUSTOM_OPENAI -> {
@@ -169,13 +198,22 @@ object AgentFactory {
                     ?: throw IllegalArgumentException("No API key found for custom service: $serviceId")
 
                 createRetryingExecutor(
-                    CustomOpenAILLMClient.fromSettingsState(apiKey, state.chatCompletionSettings)
+                    CustomOpenAILLMClient.fromSettingsState(
+                        apiKey,
+                        state.chatCompletionSettings,
+                        timeoutConfig
+                    )
                 )
             }
 
             ServiceType.PROXYAI -> {
                 val apiKey = getCredential(CredentialKey.CodeGptApiKey) ?: ""
-                createRetryingExecutor(ProxyAILLMClient(apiKey))
+                createRetryingExecutor(
+                    ProxyAILLMClient(
+                        apiKey,
+                        ProxyAIClientSettings(timeoutConfig = timeoutConfig)
+                    )
+                )
             }
 
             else -> throw UnsupportedOperationException("Provider not supported: $provider")
@@ -183,7 +221,7 @@ object AgentFactory {
     }
 
     private fun createRetryingExecutor(client: LLMClient): PromptExecutor {
-        return SingleLLMPromptExecutor(RetryingLLMClient(client))
+        return SingleLLMPromptExecutor(RetryingLLMClient(client, RetryConfig.PRODUCTION))
     }
 
     private fun createGeneralPurposeAgent(

@@ -207,11 +207,12 @@ object ProxyAIAgent {
                 }
 
                 onAgentCompleted { context ->
-                    events.onAgentCompleted(context)
+                    events.onAgentCompleted(context.agentId)
                 }
 
                 onAgentExecutionFailed {
                     logger.error(it.throwable) { "Agent execution failed: $it" }
+                    events.onAgentCompleted(it.agentId)
                 }
             }
         }

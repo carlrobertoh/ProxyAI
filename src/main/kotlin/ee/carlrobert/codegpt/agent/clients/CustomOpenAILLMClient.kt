@@ -72,13 +72,15 @@ public class CustomOpenAILLMClient(
 
         fun fromSettingsState(
             apiKey: String,
-            state: CustomServiceChatCompletionSettingsState
+            state: CustomServiceChatCompletionSettingsState,
+            timeoutConfig: ConnectionTimeoutConfig
         ): CustomOpenAILLMClient {
             val stateUrl = state.url ?: throw RuntimeException("Url not set")
             val uri = URI.create(stateUrl)
             val settings = CustomOpenAIClientSettings(
                 baseUrl = stateUrl.substring(0, stateUrl.lastIndexOf(uri.host) + (uri.host.length)),
                 chatCompletionsPath = uri.path,
+                timeoutConfig = timeoutConfig
             )
             return CustomOpenAILLMClient(apiKey, settings, state)
         }
