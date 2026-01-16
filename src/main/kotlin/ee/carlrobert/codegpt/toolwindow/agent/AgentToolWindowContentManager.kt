@@ -23,22 +23,7 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
                 }
             })
 
-        val storedSessions = sessionState.getSessionIds()
-        if (storedSessions.isEmpty()) {
-            createNewAgentTab()
-        } else {
-            storedSessions.forEach { sessionId ->
-                createNewAgentTab(sessionId = sessionId, select = false)
-            }
-            sessionState.getLastActiveSessionId()?.let { lastActive ->
-                tabbedPane.tryFindTabTitle(lastActive).ifPresent { title ->
-                    val tabIndex = tabbedPane.indexOfTab(title)
-                    if (tabIndex >= 0) {
-                        tabbedPane.selectedIndex = tabIndex
-                    }
-                }
-            }
-        }
+        createNewAgentTab()
 
         return tabbedPane
     }

@@ -85,10 +85,7 @@ class SelectionTagProcessor(
         }
 
         promptBuilder.append(
-            """
-                # User has highlighted code:
-                ${CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)}
-            """.trimIndent()
+            CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)
         )
     }
 }
@@ -104,10 +101,7 @@ class EditorSelectionTagProcessor(
         }
 
         promptBuilder.append(
-            """
-                # User has highlighted code:
-                ${CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)}
-            """.trimIndent()
+            CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)
         )
     }
 }
