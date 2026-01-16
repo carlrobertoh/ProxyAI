@@ -476,7 +476,7 @@ object ToolCallDescriptorFactory {
 
         return ToolCallDescriptor(
             kind = ToolKind.TASK,
-            icon = AllIcons.Actions.RunAnything,
+            icon = AllIcons.Actions.Execute,
             titlePrefix = titlePrefix,
             titleMain = description,
             tooltip = "Task: $description",
