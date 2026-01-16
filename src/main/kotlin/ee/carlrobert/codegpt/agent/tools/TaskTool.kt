@@ -108,7 +108,8 @@ class TaskTool(
                     approveToolCall = approvalHandler,
                     onAgentToolCallStarting = toolCallBridge::onToolCallStarting,
                     onAgentToolCallCompleted = toolCallBridge::onToolCallCompleted,
-                    onCreditsAvailable = trackingEvents::onCreditsAvailable
+                    onCreditsAvailable = trackingEvents::onCreditsAvailable,
+                    tokenCounter = totalTokenCounter
                 )
             } else {
                 val agentType = AgentType.fromString(args.subagentType)
@@ -124,6 +125,7 @@ class TaskTool(
                     onAgentToolCallStarting = toolCallBridge::onToolCallStarting,
                     onAgentToolCallCompleted = toolCallBridge::onToolCallCompleted,
                     onCreditsAvailable = trackingEvents::onCreditsAvailable,
+                    tokenCounter = totalTokenCounter,
                     extraBehavior = extraBehavior,
                     toolOverrides = toolOverrides,
                 )
@@ -163,13 +165,21 @@ class TaskTool(
             appendLine("Description: ${result.description}")
             appendLine("DurationMs: ${result.executionTime}")
             if (result.totalTokens > 0) {
-                appendLine("TotalTokens: ${result.totalTokens}")
+                appendLine("TotalTokens: ${formatTokens(result.totalTokens)}")
             }
             appendLine()
             appendLine("Output:")
             appendLine(result.output)
         }.trimEnd()
         return summary.truncateToolResult()
+    }
+
+    private fun formatTokens(tokens: Long): String {
+        return if (tokens >= 1000) {
+            "${tokens / 1000}K"
+        } else {
+            tokens.toString()
+        }
     }
 }
 

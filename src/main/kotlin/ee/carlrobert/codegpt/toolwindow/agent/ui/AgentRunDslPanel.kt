@@ -145,8 +145,16 @@ class AgentRunDslPanel(
             parts.add("${summary.toolCalls} calls")
         }
         if (summary.tokens > 0) {
-            parts.add("${summary.tokens} tokens")
+            parts.add("${formatTokens(summary.tokens)} tokens")
         }
         return if (parts.isNotEmpty()) parts.joinToString(" · ") else null
+    }
+
+    private fun formatTokens(tokens: Long): String {
+        return if (tokens >= 1000) {
+            "${tokens / 1000}K"
+        } else {
+            tokens.toString()
+        }
     }
 }

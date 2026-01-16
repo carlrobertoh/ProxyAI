@@ -156,7 +156,12 @@ object ToolCallDescriptorFactory {
         val fileName = extractBaseName(readArgs?.filePath ?: "")
 
         val lineBadge = when (result) {
-            is ReadTool.Result.Success -> Badge("[${result.lineCount} lines]")
+            is ReadTool.Result.Success -> {
+                Badge(
+                    "[${result.lineCount} lines]",
+                    action = { showTextDialog(result.content, "File Content: $fileName") })
+            }
+
             else -> null
         }
 
@@ -296,6 +301,13 @@ object ToolCallDescriptorFactory {
             }
         }
 
+        val editLocations = when (result) {
+            is EditTool.Result.Success -> result.editLocations
+            else -> emptyList()
+        }
+
+        val firstLocation = editLocations.firstOrNull()
+
         return ToolCallDescriptor(
             kind = ToolKind.EDIT,
             icon = AllIcons.Actions.Edit,
@@ -306,7 +318,9 @@ object ToolCallDescriptorFactory {
             fileLink = FileLink(
                 path = editArgs?.filePath ?: "",
                 displayName = fileName,
-                enabled = result != null
+                enabled = result != null,
+                line = firstLocation?.line,
+                column = firstLocation?.column
             ),
             actions = actions,
             supportsStreaming = false,
@@ -380,7 +394,12 @@ object ToolCallDescriptorFactory {
 
         when (result) {
             is IntelliJSearchTool.Result -> {
-                badges.add(Badge("${result.totalMatches} matches", JBColor.BLUE))
+                badges.add(
+                    Badge(
+                        "${result.totalMatches} matches",
+                        JBColor.BLUE,
+                        action = { showTextDialog(result.output, "Search Results") })
+                )
             }
         }
 
@@ -473,20 +492,17 @@ object ToolCallDescriptorFactory {
 
     private fun formatTaskSummary(result: TaskTool.Result): String? {
         val parts = mutableListOf<String>()
-        if (result.executionTime > 0) {
-            parts.add(formatDuration(result.executionTime))
-        }
         if (result.totalTokens > 0) {
-            parts.add("${result.totalTokens} tokens")
+            parts.add("${formatTokens(result.totalTokens)} tokens")
         }
         return if (parts.isNotEmpty()) parts.joinToString(" · ") else null
     }
 
-    private fun formatDuration(ms: Long): String {
-        return when {
-            ms < 1000 -> "${ms}ms"
-            ms < 60000 -> "${ms / 1000}s"
-            else -> "${ms / 60000}m ${((ms % 60000) / 1000)}s"
+    private fun formatTokens(tokens: Long): String {
+        return if (tokens >= 1000) {
+            "${tokens / 1000}K"
+        } else {
+            tokens.toString()
         }
     }
 

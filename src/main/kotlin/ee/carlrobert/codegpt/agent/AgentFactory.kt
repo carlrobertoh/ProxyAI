@@ -6,12 +6,17 @@ import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.dsl.builder.forwardTo
 import ai.koog.agents.core.dsl.builder.strategy
 import ai.koog.agents.core.dsl.extension.*
+import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
+import ai.koog.agents.core.environment.ReceivedToolResult
+import ai.koog.agents.core.environment.result
 import ai.koog.agents.core.feature.handler.tool.ToolCallCompletedContext
 import ai.koog.agents.core.feature.handler.tool.ToolCallStartingContext
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.ext.tool.ExitTool
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
 import ai.koog.agents.features.eventHandler.feature.handleEvents
+import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
+import ai.koog.agents.features.tokenizer.feature.tokenizer
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
 import ai.koog.prompt.executor.clients.LLMClient
@@ -29,8 +34,10 @@ import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.executor.ollama.client.OllamaClient
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
 import ee.carlrobert.codegpt.agent.clients.ProxyAIClientSettings
 import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
@@ -46,6 +53,7 @@ import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import java.time.LocalDate
 import kotlin.time.Duration.Companion.seconds
+import java.util.concurrent.atomic.AtomicLong
 
 object AgentFactory {
 
@@ -59,7 +67,8 @@ object AgentFactory {
         onAgentToolCallCompleted: ((eventContext: ToolCallCompletedContext) -> Unit)? = null,
         extraBehavior: String? = null,
         toolOverrides: Set<SubagentTool>? = null,
-        onCreditsAvailable: ((AgentCreditsEvent) -> Unit)? = null
+        onCreditsAvailable: ((AgentCreditsEvent) -> Unit)? = null,
+        tokenCounter: AtomicLong? = null
     ): AIAgent<String, String> {
         val installHandler = buildUsageAwareInstallHandler(
             provider,
@@ -68,6 +77,7 @@ object AgentFactory {
             onAgentToolCallCompleted,
             onCreditsAvailable
         )
+        val executor = createExecutor(provider)
         return when (agentType) {
             AgentType.GENERAL_PURPOSE -> createGeneralPurposeAgent(
                 provider,
@@ -76,7 +86,9 @@ object AgentFactory {
                 approveToolCall,
                 installHandler,
                 extraBehavior,
-                toolOverrides
+                toolOverrides,
+                executor,
+                tokenCounter
             )
 
             AgentType.EXPLORE -> createExploreAgent(
@@ -86,7 +98,9 @@ object AgentFactory {
                 approveToolCall,
                 installHandler,
                 extraBehavior,
-                toolOverrides
+                toolOverrides,
+                executor,
+                tokenCounter
             )
         }
     }
@@ -102,6 +116,7 @@ object AgentFactory {
         onAgentToolCallStarting: ((eventContext: ToolCallStartingContext) -> Unit)? = null,
         onAgentToolCallCompleted: ((eventContext: ToolCallCompletedContext) -> Unit)? = null,
         onCreditsAvailable: ((AgentCreditsEvent) -> Unit)? = null,
+        tokenCounter: AtomicLong? = null,
     ): AIAgent<String, String> {
         val installHandler = buildUsageAwareInstallHandler(
             provider,
@@ -110,6 +125,7 @@ object AgentFactory {
             onAgentToolCallCompleted,
             onCreditsAvailable
         )
+        val executor = createExecutor(provider)
 
         val selected = SubagentTool.parse(toolNames)
         val registry = createToolRegistry(
@@ -121,8 +137,8 @@ object AgentFactory {
         )
 
         return AIAgent.Companion(
-            promptExecutor = createExecutor(provider),
-            strategy = singleRunWithParallelAbility(),
+            promptExecutor = executor,
+            strategy = singleRunWithParallelAbility(executor, tokenCounter),
             agentConfig = AIAgentConfig(
                 prompt = prompt("manual-agent") {
                     system(
@@ -137,7 +153,16 @@ object AgentFactory {
                 maxAgentIterations = 100
             ),
             toolRegistry = registry,
-            installFeatures = installHandler
+            installFeatures = {
+                installHandler()
+                install(MessageTokenizer) {
+                    tokenizer = object : Tokenizer {
+                        override fun countTokens(text: String): Int =
+                            EncodingManager.getInstance().countTokens(text)
+                    }
+                    enableCaching = false
+                }
+            }
         )
     }
 
@@ -239,12 +264,14 @@ object AgentFactory {
         approveToolCall: (suspend (name: String, details: String) -> Boolean)? = null,
         installFeatures: GraphAIAgent.FeatureContext.() -> Unit = {},
         extraBehavior: String? = null,
-        toolOverrides: Set<SubagentTool>? = null
+        toolOverrides: Set<SubagentTool>? = null,
+        executor: PromptExecutor,
+        tokenCounter: AtomicLong?
     ): AIAgent<String, String> {
         val selectedTools = toolOverrides ?: SubagentTool.entries.toSet()
         return AIAgent.Companion(
-            promptExecutor = createExecutor(provider),
-            strategy = singleRunWithParallelAbility(),
+            promptExecutor = executor,
+            strategy = singleRunWithParallelAbility(executor, tokenCounter),
             agentConfig = AIAgentConfig(
                 prompt = prompt("general-agent") {
                     system(
@@ -291,7 +318,16 @@ object AgentFactory {
                 selectedTools,
                 approvalBashHandler(approveToolCall)
             ),
-            installFeatures = installFeatures
+            installFeatures = {
+                installFeatures()
+                install(MessageTokenizer) {
+                    tokenizer = object : Tokenizer {
+                        override fun countTokens(text: String): Int =
+                            EncodingManager.getInstance().countTokens(text)
+                    }
+                    enableCaching = false
+                }
+            }
         )
     }
 
@@ -302,12 +338,14 @@ object AgentFactory {
         approveToolCall: (suspend (name: String, details: String) -> Boolean)? = null,
         installFeatures: GraphAIAgent.FeatureContext.() -> Unit = {},
         extraBehavior: String? = null,
-        toolOverrides: Set<SubagentTool>? = null
+        toolOverrides: Set<SubagentTool>? = null,
+        executor: PromptExecutor,
+        tokenCounter: AtomicLong?
     ): AIAgent<String, String> {
         val selectedTools = toolOverrides ?: (SubagentTool.readOnly + SubagentTool.BASH).toSet()
         return AIAgent.Companion(
-            promptExecutor = createExecutor(provider),
-            strategy = singleRunWithParallelAbility(),
+            promptExecutor = executor,
+            strategy = singleRunWithParallelAbility(executor, tokenCounter),
             agentConfig = AIAgentConfig(
                 prompt = prompt("explore-agent") {
                     system(
@@ -348,7 +386,16 @@ object AgentFactory {
                 selected = selectedTools,
                 bashConfirmationHandler = { ShellCommandConfirmation.Approved }
             ),
-            installFeatures = installFeatures
+            installFeatures = {
+                installFeatures()
+                install(MessageTokenizer) {
+                    tokenizer = object : Tokenizer {
+                        override fun countTokens(text: String): Int =
+                            EncodingManager.getInstance().countTokens(text)
+                    }
+                    enableCaching = false
+                }
+            }
         )
     }
 
@@ -386,10 +433,31 @@ object AgentFactory {
         )
     }
 
-    private fun singleRunWithParallelAbility() = strategy("subagent_single_run_sequential") {
-        val nodeCallLLM by nodeLLMRequestMultiple()
+    private fun singleRunWithParallelAbility(
+        executor: PromptExecutor,
+        tokenCounter: AtomicLong?
+    ) = strategy("subagent_single_run_sequential") {
+        val nodeCallLLM by node<String, List<Message.Response>> { input ->
+            llm.writeSession {
+                appendPrompt { user(input) }
+                tokenCounter?.addAndGet(tokenizer().tokenCountFor(prompt).toLong())
+                val responses =
+                    requestResponses(executor, config, { appendPrompt { message(it) } }, tokenCounter)
+                responses
+            }
+        }
         val nodeExecuteTool by nodeExecuteMultipleTools(parallelTools = true)
-        val nodeSendToolResult by nodeLLMSendMultipleToolResults()
+        val nodeSendToolResult by node<List<ReceivedToolResult>, List<Message.Response>> { results ->
+            llm.writeSession {
+                appendPrompt {
+                    results.forEach { tool { result(it) } }
+                }
+                tokenCounter?.addAndGet(tokenizer().tokenCountFor(prompt).toLong())
+                val responses =
+                    requestResponses(executor, config, { appendPrompt { message(it) } }, tokenCounter)
+                responses
+            }
+        }
 
         edge(nodeStart forwardTo nodeCallLLM)
         edge(nodeCallLLM forwardTo nodeExecuteTool onMultipleToolCalls { true })
@@ -408,6 +476,39 @@ object AgentFactory {
                     onMultipleAssistantMessages { true }
                     transformed { it.joinToString("\n") { message -> message.content } }
         )
+    }
+
+    private suspend fun AIAgentLLMWriteSession.requestResponses(
+        executor: PromptExecutor,
+        config: AIAgentConfig,
+        appendResponse: (Message.Response) -> Unit,
+        tokenCounter: AtomicLong?
+    ): List<Message.Response> {
+        val preparedPrompt = config.missingToolsConversionStrategy.convertPrompt(prompt, tools)
+        val responses = executor.execute(preparedPrompt, model, tools)
+        val appendableResponses = appendableResponses(responses)
+        appendableResponses.forEach(appendResponse)
+        tokenCounter?.addAndGet(countResponseTokens(appendableResponses))
+        return appendableResponses
+    }
+
+    private fun appendableResponses(responses: List<Message.Response>): List<Message.Response> {
+        return responses
+            .sortedBy { if (it is Message.Assistant) 0 else 1 }
+            .filter { it !is Message.Reasoning }
+    }
+
+    private fun countResponseTokens(responses: List<Message.Response>): Long {
+        val encoder = EncodingManager.getInstance()
+        return responses.sumOf { response ->
+            when (response) {
+                is Message.Assistant -> encoder.countTokens(response.content).toLong()
+                is Message.Tool.Call -> encoder.countTokens(response.content).toLong()
+                is Message.Tool.Result -> encoder.countTokens(response.content).toLong()
+                is Message.Reasoning -> encoder.countTokens(response.content).toLong()
+                else -> 0L
+            }
+        }
     }
 
     private fun getEnvironmentInfo(project: Project): String {
