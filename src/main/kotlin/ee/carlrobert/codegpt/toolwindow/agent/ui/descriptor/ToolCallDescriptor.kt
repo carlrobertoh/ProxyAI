@@ -12,14 +12,17 @@ enum class ToolKind {
 data class Badge(
     val text: String,
     val color: JBColor = JBColor.GRAY,
-    val tooltip: String? = null
+    val tooltip: String? = null,
+    val action: (() -> Unit)? = null
 )
 
 data class FileLink(
     val path: String,
     val displayName: String,
     val enabled: Boolean = true,
-    val action: ((Project) -> Unit)? = null
+    val action: ((Project) -> Unit)? = null,
+    val line: Int? = null,
+    val column: Int? = null
 )
 
 data class ToolAction(

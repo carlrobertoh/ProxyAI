@@ -1,6 +1,8 @@
 package ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor
 
 import com.intellij.ide.actions.OpenFileAction
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -110,10 +112,26 @@ private class ToolCallHeaderPanel(
             val project = getProject()
             if (project != null) {
                 val vf = LocalFileSystem.getInstance().findFileByPath(fileLink.path)
-                if (vf != null) OpenFileAction.openFile(vf, project)
+                if (vf != null) {
+                    if (fileLink.line != null) {
+                        val descriptor = OpenFileDescriptor(
+                            project,
+                            vf,
+                            fileLink.line - 1,
+                            fileLink.column ?: 0
+                        )
+                        FileEditorManager.getInstance(project).openTextEditor(descriptor, true)
+                    } else {
+                        OpenFileAction.openFile(vf, project)
+                    }
+                }
             }
         }.apply {
-            toolTipText = fileLink.path
+            toolTipText = if (fileLink.line != null) {
+                "${fileLink.path}:${fileLink.line}"
+            } else {
+                fileLink.path
+            }
             setExternalLinkIcon()
             isEnabled = fileLink.enabled
         }
@@ -146,15 +164,9 @@ private class ToolCallHeaderPanel(
 
     private fun addSecondaryBadges() {
         descriptor.secondaryBadges.forEach { badge ->
-            val isMatchesBadge = badge.text.contains("matches", ignoreCase = true)
-            if (isMatchesBadge && descriptor.result != null) {
+            if (badge.action != null) {
                 val link = ActionLink(badge.text) {
-                    val content = when (val res = descriptor.result) {
-                        is IntelliJSearchTool.Result -> res.output
-                        is String -> res
-                        else -> null
-                    }
-                    content?.let { showSearchResultsDialog(it) }
+                    badge.action?.invoke()
                 }.apply {
                     font = JBUI.Fonts.smallFont()
                 }

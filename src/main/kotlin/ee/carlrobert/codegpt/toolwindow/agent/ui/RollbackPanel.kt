@@ -260,19 +260,32 @@ class RollbackPanel(
     }
 
     private fun displayPath(path: String, change: FileChange): String {
+        val originalPath = change.originalPath?.let { toRelativePath(it) }
+        val truncatedPath = truncatePath(toRelativePath(path))
+        val truncatedOriginal = originalPath?.let { truncatePath(it) }
+
+        return if (change.kind == ChangeKind.MOVED && originalPath != null) {
+            "$truncatedPath (renamed from $truncatedOriginal)"
+        } else {
+            truncatedPath
+        }
+    }
+
+    private fun toRelativePath(path: String): String {
         val base = project.basePath?.replace("\\", "/")
         val normalized = path.replace("\\", "/")
-        val relative = if (base != null && normalized.startsWith(base)) {
+        return if (base != null && normalized.startsWith(base)) {
             normalized.removePrefix(base).trimStart('/')
-        } else normalized
-        val original = change.originalPath?.replace("\\", "/")
-        return if (change.kind == ChangeKind.MOVED && original != null) {
-            val originalDisplay = if (base != null && original.startsWith(base)) {
-                original.removePrefix(base).trimStart('/')
-            } else original
-            "$relative (renamed from $originalDisplay)"
         } else {
-            relative
+            normalized
+        }
+    }
+
+    private fun truncatePath(path: String, maxLength: Int = 80): String {
+        return if (path.length > maxLength) {
+            "..." + path.takeLast(maxLength)
+        } else {
+            path
         }
     }
 
