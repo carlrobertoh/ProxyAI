@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ProxyAI Agent for end-to-end tasks
+- Model Context Protocol (MCP) for Chat
+
+### Improved
+
+- Autocomplete and Next Edit suggestions reliability and trigger behavior
+- Code completion request handling and gRPC connection stability
+
 ## [3.6.8-241.1] - 2025-11-17
 
 ### Added
