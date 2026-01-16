@@ -19,6 +19,8 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import java.nio.file.Paths
 import com.intellij.openapi.util.TextRange
@@ -128,7 +130,7 @@ class IntelliJSearchTool(
             val searchScope = createSearchScope(args, project)
             val effectiveLimit = (args.limit ?: 10).coerceAtLeast(1)
             val matches =
-                runReadAction { searchEverywhere(args.pattern, searchScope, effectiveLimit) }
+                withContext(Dispatchers.Default) { runReadAction { searchEverywhere(args.pattern, searchScope, effectiveLimit) } }
             val output = formatOutput(matches, args)
 
             return Result(

@@ -10,6 +10,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.tokens.truncateToolResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.nio.charset.StandardCharsets
@@ -83,7 +85,7 @@ class ReadTool(private val project: Project) : Tool<ReadTool.Args, ReadTool.Resu
 
     override suspend fun execute(args: Args): Result {
         return try {
-            return runReadAction {
+            return withContext(Dispatchers.Default) { runReadAction {
                 val svc = project.getService(ProxyAISettingsService::class.java)
                 if (svc.isPathIgnored(args.filePath)) {
                     return@runReadAction Result.Error(
@@ -180,7 +182,7 @@ class ReadTool(private val project: Project) : Tool<ReadTool.Args, ReadTool.Resu
                         )
                     }
                 }
-            }
+            }}
         } catch (e: Exception) {
             Result.Error(
                 filePath = args.filePath,

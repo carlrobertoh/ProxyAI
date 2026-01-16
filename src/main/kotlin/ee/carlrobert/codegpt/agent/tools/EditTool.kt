@@ -12,6 +12,8 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.File
@@ -175,7 +177,7 @@ class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Resu
             }
 
             val document =
-                runReadAction { FileDocumentManager.getInstance().getDocument(virtualFile) }
+                withContext(Dispatchers.Default) { runReadAction { FileDocumentManager.getInstance().getDocument(virtualFile) } }
                     ?: return Result.Error(
                         filePath = args.filePath,
                         error = "Cannot get document for file: ${args.filePath}"
