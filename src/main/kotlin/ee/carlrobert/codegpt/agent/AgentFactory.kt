@@ -45,6 +45,7 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import java.time.LocalDate
+import kotlin.time.Duration.Companion.seconds
 
 object AgentFactory {
 
@@ -142,8 +143,8 @@ object AgentFactory {
 
     fun createExecutor(provider: ServiceType): PromptExecutor {
         val timeoutConfig = ConnectionTimeoutConfig(
-            connectTimeoutMillis = 300_000,
-            socketTimeoutMillis = 300_000,
+            connectTimeoutMillis = 30_000,
+            socketTimeoutMillis = 60_000,
         )
         return when (provider) {
             ServiceType.OPENAI -> {
@@ -221,7 +222,14 @@ object AgentFactory {
     }
 
     private fun createRetryingExecutor(client: LLMClient): PromptExecutor {
-        return SingleLLMPromptExecutor(RetryingLLMClient(client, RetryConfig.PRODUCTION))
+        val retryConfig = RetryConfig(
+            maxAttempts = 5,
+            initialDelay = 1.seconds,
+            maxDelay = 30.seconds,
+            backoffMultiplier = 2.0,
+            jitterFactor = 0.1
+        )
+        return SingleLLMPromptExecutor(RetryingLLMClient(client, retryConfig))
     }
 
     private fun createGeneralPurposeAgent(
