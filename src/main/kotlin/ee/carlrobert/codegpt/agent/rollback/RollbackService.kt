@@ -9,6 +9,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.io.FileUtil
+import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vfs.*
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.*
@@ -43,6 +44,7 @@ class RollbackService(private val project: Project) {
             override fun before(events: List<VFileEvent>) {
                 if (isApplyingRollback || activeRuns.isEmpty()) return
                 events.forEach { event ->
+                    if (!isInProject(event)) return@forEach
                     when (event) {
                         is VFileContentChangeEvent -> recordModified(event.file)
                         is VFileDeleteEvent -> recordDeleted(event.file)
@@ -71,12 +73,29 @@ class RollbackService(private val project: Project) {
             override fun after(events: List<VFileEvent>) {
                 if (isApplyingRollback || activeRuns.isEmpty()) return
                 events.forEach { event ->
+                    if (!isInProject(event)) return@forEach
                     if (event is VFileCreateEvent) {
                         recordCreated(event.path, event.isDirectory)
                     }
                 }
             }
         })
+    }
+
+    private fun isInProject(event: VFileEvent): Boolean {
+        val basePath = project.basePath ?: return false
+        val normalizedBase = FileUtil.toSystemIndependentName(basePath)
+        
+        val filePath = when (event) {
+            is VFileContentChangeEvent, is VFileDeleteEvent -> event.file?.path
+            is VFileMoveEvent -> event.file.path
+            is VFilePropertyChangeEvent -> event.file.path
+            is VFileCreateEvent -> event.path
+            else -> return false
+        } ?: return false
+
+        val normalizedPath = FileUtil.toSystemIndependentName(filePath)
+        return FileUtil.isAncestor(normalizedBase, normalizedPath, false) || normalizedPath == normalizedBase
     }
 
     fun startSession(sessionId: String) {
@@ -220,6 +239,7 @@ class RollbackService(private val project: Project) {
     private fun isTrackable(file: VirtualFile): Boolean {
         if (file.isDirectory || !file.isValid) return false
         if (FileTypeManager.getInstance().isFileIgnored(file)) return false
+        if (ChangeListManager.getInstance(project).isIgnoredFile(file)) return false
         if (settingsService.isPathIgnored(file.path)) return false
         return !file.path.contains(".proxyai/checkpoints/")
     }

@@ -44,6 +44,7 @@ class RollbackPanel(
     private val changesPanel = JPanel()
     private val scrollPane = JScrollPane(changesPanel)
     private val rollbackAllLink = createRollbackAllLink()
+    private val keepAllLink = createKeepAllLink()
     private val diffStatsCache = ConcurrentHashMap<String, Triple<Int, Int, Int>>()
     private val diffDataCache = ConcurrentHashMap<String, RollbackDiffData>()
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -65,7 +66,13 @@ class RollbackPanel(
 
         val topPanel = BorderLayoutPanel().apply {
             addToLeft(headerPanel)
-            addToRight(rollbackAllLink)
+            val actionLinksPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 0, 0)).apply {
+                isOpaque = false
+                add(keepAllLink)
+                add(Box.createHorizontalStrut(16))
+                add(rollbackAllLink)
+            }
+            addToRight(actionLinksPanel)
             border = JBUI.Borders.empty(6, 0)
         }
 
@@ -96,22 +103,36 @@ class RollbackPanel(
     }
 
     fun refreshOperations() {
-        val snapshot = rollbackService.getSnapshot(sessionId)
-        val changes = snapshot?.changes.orEmpty()
-            .filter { rollbackService.isDisplayable(it.path) }
-            .sortedBy { it.path }
+        refreshOperationsAsync()
+    }
+
+    private fun refreshOperationsAsync() {
+        backgroundScope.launch {
+            val snapshot = rollbackService.getSnapshot(sessionId)
+            val changes = snapshot?.changes.orEmpty()
+                .filter { rollbackService.isDisplayable(it.path) }
+                .sortedBy { it.path }
+
+            withContext(Dispatchers.EDT) {
+                refreshOperationsUI(changes, snapshot?.completedAt)
+            }
+        }
+    }
+
+    private fun refreshOperationsUI(changes: List<FileChange>, completedAt: Instant?) {
         isVisible = changes.isNotEmpty()
         if (changes.isEmpty()) {
             titleLabel.text = "Changes"
             timeLabel.text = ""
             changesPanel.removeAll()
             rollbackAllLink.isVisible = false
+            keepAllLink.isVisible = false
             revalidate()
             repaint()
             return
         }
 
-        val timeText = snapshot?.completedAt?.let { formatTime(it) } ?: ""
+        val timeText = completedAt?.let { formatTime(it) } ?: ""
         titleLabel.text = "Changes (${changes.size})"
         timeLabel.text = if (timeText.isNotBlank()) "• $timeText" else ""
 
@@ -124,6 +145,7 @@ class RollbackPanel(
         }
         updateScrollPaneSizing()
         rollbackAllLink.isVisible = true
+        keepAllLink.isVisible = true
 
         revalidate()
         repaint()
@@ -301,7 +323,17 @@ class RollbackPanel(
     }
 
     private fun createRollbackAllLink(): JComponent {
-        return ActionLink("Rollback all changes") { handleRollback() }
+        return ActionLink("Rollback all") { handleRollback() }
+    }
+
+    private fun createKeepAllLink(): JComponent {
+        return ActionLink("Keep all") { handleKeepAll() }
+    }
+
+    private fun handleKeepAll() {
+        rollbackService.clearSnapshot(sessionId)
+        refreshOperations()
+        onRollbackComplete()
     }
 
     private fun rollbackFile(path: String) {
