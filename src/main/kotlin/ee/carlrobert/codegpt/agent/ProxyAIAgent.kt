@@ -32,7 +32,6 @@ import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.toolwindow.agent.AgentSessionState
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.BashPayload
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
@@ -159,11 +158,7 @@ object ProxyAIAgent {
                         checkpointId = ctx.context.runId,
                         version = 0L
                     )
-                    project.service<AgentSessionState>().updateSession(
-                        sessionId = sessionId,
-                        lastAgentId = ctx.context.agentId,
-                        checkpointId = checkpoint?.checkpointId
-                    )
+                    checkpoint?.checkpointId ?: return@onNodeExecutionCompleted
 
                     if (stream) return@onNodeExecutionCompleted
 

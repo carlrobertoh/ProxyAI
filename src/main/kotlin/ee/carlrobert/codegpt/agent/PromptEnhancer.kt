@@ -1,19 +1,16 @@
 package ee.carlrobert.codegpt.agent
 
-import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
 import ai.koog.prompt.dsl.prompt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
-import ee.carlrobert.codegpt.toolwindow.agent.AgentSessionState
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import ee.carlrobert.codegpt.util.GitUtil
 import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import ee.carlrobert.codegpt.util.file.FileUtil
 import kotlinx.coroutines.runBlocking
-import kotlin.io.path.Path
 import ai.koog.prompt.message.Message as KoogMessage
 import ai.koog.prompt.message.Message as PromptMessage
 import ee.carlrobert.codegpt.conversations.message.Message as ChatMessage
@@ -157,14 +154,8 @@ class PromptEnhancer(private val project: Project) {
 
     private suspend fun buildHistoryContext(sessionId: String?): String {
         if (sessionId.isNullOrBlank()) return ""
-        val sessionState = project.service<AgentSessionState>()
-        val agentId = sessionState.getLastAgentId(sessionId) ?: return ""
-        val storage = JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
-        val checkpoint = storage.getCheckpoints(agentId)
-            .filter { it.nodePath != "tombstone" }
-            .maxByOrNull { it.createdAt }
-            ?: return ""
-        return formatHistory(checkpoint.messageHistory)
+        val checkpoint = project.service<AgentService>().getCheckpoint(sessionId)
+        return formatHistory(checkpoint?.messageHistory ?: emptyList())
     }
 
     private fun formatHistory(messages: List<PromptMessage>): String {

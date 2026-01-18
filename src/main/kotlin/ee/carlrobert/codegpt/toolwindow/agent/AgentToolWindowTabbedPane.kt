@@ -13,6 +13,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.agent.AgentService
+import ee.carlrobert.codegpt.conversations.Conversation
 import java.awt.*
 import java.awt.event.ActionEvent
 import java.awt.event.ActionListener
@@ -146,7 +147,6 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         val title = getTitle(toolWindowPanel, nextIndex)
         val sessionId = toolWindowPanel.getSessionId()
         toolWindowPanel.getAgentSession().displayName = title
-        project.service<AgentSessionState>().updateSession(sessionId, displayName = title)
 
         super.insertTab(title, null, toolWindowPanel, null, nextIndex)
         activeTabMapping[title] = toolWindowPanel
@@ -219,7 +219,6 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         activeTabMapping[uniqueName] = panel
 
         panel.getAgentSession().displayName = uniqueName
-        project.service<AgentSessionState>().updateSession(sessionId, displayName = uniqueName)
 
         applyIconForSession(sessionId)
     }
@@ -252,7 +251,6 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
                 selectedState.unseen = false
                 applyIconForSession(selectedSessionId)
             }
-            project.service<AgentSessionState>().setLastActiveSessionId(selectedSessionId)
         }
 
         for (i in 0 until tabCount) {
@@ -312,15 +310,19 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     fun resetCurrentlyActiveTabPanel() {
         tryFindActiveTabPanel().ifPresent { tabPanel ->
             val oldSessionId = tabPanel.getSessionId()
+            val oldDisplayName = tabPanel.getAgentSession().displayName
             Disposer.dispose(tabPanel)
             activeTabMapping.remove(getTitleAt(selectedIndex))
             removeTabAt(selectedIndex)
             sessionStates.remove(oldSessionId)
 
-            val newTabPanel = AgentToolWindowTabPanel(project)
-            project.service<AgentSessionState>()
-                .replaceSession(oldSessionId, newTabPanel.getSessionId())
-            addNewTab(newTabPanel)
+            project.service<AgentToolWindowContentManager>().removeSession(oldSessionId)
+            val newSession = AgentSession(
+                UUID.randomUUID().toString(),
+                Conversation(),
+                displayName = oldDisplayName
+            )
+            project.service<AgentToolWindowContentManager>().createNewAgentTab(newSession)
             repaint()
             revalidate()
         }
@@ -375,7 +377,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
             if (tabIndex >= 0) {
                 activeTabMapping[title]?.let { panel ->
                     sessionStates.remove(panel.getSessionId())
-                    project.service<AgentSessionState>().removeSession(panel.getSessionId())
+                    project.service<AgentToolWindowContentManager>().removeSession(panel.getSessionId())
                     Disposer.dispose(panel)
                 }
                 removeTabAt(tabIndex)
@@ -399,7 +401,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
                     val title = getTitleAt(selectedPopupTabIndex)
                     activeTabMapping[title]?.let { panel ->
                         sessionStates.remove(panel.getSessionId())
-                        project.service<AgentSessionState>().removeSession(panel.getSessionId())
+                        project.service<AgentToolWindowContentManager>().removeSession(panel.getSessionId())
                         Disposer.dispose(panel)
                     }
                     removeTabAt(selectedPopupTabIndex)
@@ -416,7 +418,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
                 activeTabMapping.values
                     .map { it.getSessionId() }
                     .filter { it != keepSessionId }
-                    .forEach { project.service<AgentSessionState>().removeSession(it) }
+                    .forEach { project.service<AgentToolWindowContentManager>().removeSession(it) }
 
                 clearAll()
                 tabPanel?.let { addNewTab(it) }

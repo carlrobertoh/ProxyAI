@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.toolwindow.agent
 
-import ai.koog.agents.core.feature.handler.agent.AgentCompletedContext
 import ai.koog.http.client.KoogHttpClientException
 import ai.koog.prompt.executor.clients.LLMClientException
 import com.intellij.openapi.Disposable
@@ -163,20 +162,6 @@ class AgentEventHandler(
             project.service<AgentToolWindowContentManager>().getTabbedPane()
                 .onAgentCompleted(sessionId)
         }
-
-        val tabTitle = runCatching {
-            project.service<AgentToolWindowContentManager>()
-                .getTabbedPane()
-                .tryFindTabTitle(sessionId)
-                .orElse(null)
-        }.getOrNull()
-        val resolvedAgentId = project.service<AgentService>().getAgentForSession(sessionId)?.id
-            ?: agentId
-        project.service<AgentSessionState>().updateSession(
-            sessionId,
-            lastAgentId = resolvedAgentId,
-            displayName = tabTitle
-        )
         handleDone()
     }
 

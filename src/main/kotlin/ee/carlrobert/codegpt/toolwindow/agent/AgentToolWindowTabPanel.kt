@@ -42,7 +42,6 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import kotlinx.coroutines.launch
-import java.util.*
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
@@ -50,15 +49,14 @@ import javax.swing.JPanel
 
 class AgentToolWindowTabPanel(
     private val project: Project,
-    private val sessionId: String = UUID.randomUUID().toString()
+    private val agentSession: AgentSession
 ) : BorderLayoutPanel(), Disposable {
 
     private val scrollablePanel = ChatToolWindowScrollablePanel()
     private val tagManager = TagManager()
     private val dispatchers = CoroutineDispatchers()
-
-    private val conversation = Conversation()
-    private val agentSession = AgentSession(sessionId, conversation)
+    private val sessionId = agentSession.sessionId
+    private val conversation = agentSession.conversation
     private val psiRepository = PsiStructureRepository(
         this,
         project,
@@ -221,7 +219,8 @@ class AgentToolWindowTabPanel(
 
     private fun handleSubmit(text: String) {
         if (text.isBlank()) return
-        agentSession.serviceType = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AGENT)
+        agentSession.serviceType =
+            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AGENT)
 
         val agentService = project.service<AgentService>()
 

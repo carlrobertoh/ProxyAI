@@ -5,6 +5,9 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import ee.carlrobert.codegpt.agent.AgentService
+import ee.carlrobert.codegpt.conversations.Conversation
+import java.util.UUID
 
 @Service(Service.Level.PROJECT)
 class AgentToolWindowContentManager(private val project: Project) : Disposable {
@@ -12,7 +15,6 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
     private val activeSessions = mutableMapOf<String, AgentSession>()
     private val tabPanels = mutableMapOf<String, AgentToolWindowTabPanel>()
     private val autoApprovedSessions = mutableSetOf<String>()
-    private val sessionState = project.service<AgentSessionState>()
     private val tabbedPane = AgentToolWindowTabbedPane(project)
 
     fun initializeTabbedPane(): AgentToolWindowTabbedPane {
@@ -28,22 +30,12 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
         return tabbedPane
     }
 
-    fun createNewAgentTab(
-        sessionId: String? = null,
-        select: Boolean = true
-    ): AgentToolWindowTabPanel {
-        val tabPanel = if (sessionId != null) {
-            AgentToolWindowTabPanel(project, sessionId)
-        } else {
-            AgentToolWindowTabPanel(project)
-        }
-        val resolvedSessionId = tabPanel.getSessionId()
-        val session = AgentSession(resolvedSessionId, tabPanel.getConversation())
-        val sessionEntry = sessionState.ensureSession(resolvedSessionId)
-        if (sessionEntry.displayName.isNotBlank()) {
-            tabPanel.getAgentSession().displayName = sessionEntry.displayName
-            session.displayName = sessionEntry.displayName
-        }
+    fun createNewAgentTab(select: Boolean = true): AgentToolWindowTabPanel {
+        return createNewAgentTab(AgentSession(UUID.randomUUID().toString(), Conversation()), select)
+    }
+
+    fun createNewAgentTab(session: AgentSession, select: Boolean = true): AgentToolWindowTabPanel {
+        val tabPanel = AgentToolWindowTabPanel(project, session)
         activeSessions[session.sessionId] = session
         tabPanels[session.sessionId] = tabPanel
         tabbedPane.addNewTab(tabPanel, select)
@@ -81,6 +73,15 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
     fun isSessionAutoApproved(sessionId: String): Boolean {
         return autoApprovedSessions.contains(sessionId)
     }
+
+    fun removeSession(sessionId: String) {
+        activeSessions.remove(sessionId)
+        tabPanels.remove(sessionId)
+        autoApprovedSessions.remove(sessionId)
+        project.service<AgentService>().removeSession(sessionId)
+    }
+
+    fun getSession(sessionId: String): AgentSession? = activeSessions[sessionId]
 
     companion object {
         fun getInstance(project: Project): AgentToolWindowContentManager {
