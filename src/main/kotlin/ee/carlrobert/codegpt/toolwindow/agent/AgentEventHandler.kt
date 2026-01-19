@@ -182,7 +182,7 @@ class AgentEventHandler(
             }
 
             403 -> {
-                currentResponseBody?.displayInvalidCredential()
+                currentResponseBody?.displayForbidden()
                 handleDone()
             }
 

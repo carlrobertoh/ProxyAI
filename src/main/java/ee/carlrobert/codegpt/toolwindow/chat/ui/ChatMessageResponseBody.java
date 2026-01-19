@@ -166,8 +166,8 @@ public class ChatMessageResponseBody extends JPanel {
     });
   }
 
-  public void displayInvalidCredential() {
-    String message = "Invalid API key. Open <a href=\"#\">Settings</a> to update your API key.";
+  public void displayForbidden() {
+    String message = "Access forbidden. Invalid credentials or model access not granted.";
     displayErrorMessage(message, e -> {
       if (e.getEventType() == ACTIVATED) {
         ShowSettingsUtil.getInstance()
