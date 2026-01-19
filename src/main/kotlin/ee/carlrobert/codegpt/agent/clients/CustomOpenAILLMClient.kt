@@ -32,10 +32,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 public class CustomOpenAIClientSettings(
     baseUrl: String,
     chatCompletionsPath: String,
-    timeoutConfig: ConnectionTimeoutConfig = ConnectionTimeoutConfig(
-        requestTimeoutMillis = 120_000,
-        socketTimeoutMillis = 120_000
-    )
+    timeoutConfig: ConnectionTimeoutConfig
 ) : OpenAIBaseSettings(baseUrl, chatCompletionsPath, timeoutConfig)
 
 /**

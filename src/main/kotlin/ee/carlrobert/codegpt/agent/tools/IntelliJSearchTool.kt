@@ -127,10 +127,14 @@ class IntelliJSearchTool(
 
     override suspend fun execute(args: Args): Result {
         try {
-            val searchScope = createSearchScope(args, project)
-            val effectiveLimit = (args.limit ?: 10).coerceAtLeast(1)
-            val matches =
-                withContext(Dispatchers.Default) { runReadAction { searchEverywhere(args.pattern, searchScope, effectiveLimit) } }
+            val (searchScope, matches) = withContext(Dispatchers.Default) {
+                runReadAction {
+                    val scope = createSearchScope(args, project)
+                    val effectiveLimit = (args.limit ?: 10).coerceAtLeast(1)
+                    val results = searchEverywhere(args.pattern, scope, effectiveLimit)
+                    scope to results
+                }
+            }
             val output = formatOutput(matches, args)
 
             return Result(
