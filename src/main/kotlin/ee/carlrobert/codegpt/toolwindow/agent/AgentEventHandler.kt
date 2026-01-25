@@ -457,6 +457,17 @@ class AgentEventHandler(
             .onCreditsChanged(event)
     }
 
+    override fun onRetry(attempt: Int, maxAttempts: Int, reason: String?) {
+        val suffix = "($attempt/$maxAttempts)"
+        val base = when {
+            reason?.contains("timeout", ignoreCase = true) == true -> "Request timed out, retrying"
+            else -> "Retrying"
+        }
+        runInEdt {
+            onShowLoading("$base $suffix")
+        }
+    }
+
     override fun onHistoryCompressionStateChanged(isCompressing: Boolean) {
         val key =
             if (isCompressing) "toolwindow.chat.compressingHistory" else "toolwindow.chat.loading"

@@ -3,10 +3,12 @@ package ee.carlrobert.codegpt.agent
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.GraphAIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
+import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
 import ai.koog.agents.core.dsl.builder.forwardTo
 import ai.koog.agents.core.dsl.builder.strategy
-import ai.koog.agents.core.dsl.extension.*
-import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
+import ai.koog.agents.core.dsl.extension.nodeExecuteMultipleTools
+import ai.koog.agents.core.dsl.extension.onMultipleAssistantMessages
+import ai.koog.agents.core.dsl.extension.onMultipleToolCalls
 import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.environment.result
 import ai.koog.agents.core.feature.handler.tool.ToolCallCompletedContext
@@ -18,19 +20,11 @@ import ai.koog.agents.features.eventHandler.feature.handleEvents
 import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
 import ai.koog.agents.features.tokenizer.feature.tokenizer
 import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
 import ai.koog.prompt.executor.clients.LLMClient
-import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
-import ai.koog.prompt.executor.clients.google.GoogleClientSettings
 import ai.koog.prompt.executor.clients.google.GoogleLLMClient
-import ai.koog.prompt.executor.clients.mistralai.MistralAIClientSettings
 import ai.koog.prompt.executor.clients.mistralai.MistralAILLMClient
-import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
-import ai.koog.prompt.executor.clients.retry.RetryConfig
-import ai.koog.prompt.executor.clients.retry.RetryingLLMClient
-import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.executor.ollama.client.OllamaClient
 import ai.koog.prompt.message.Message
@@ -39,8 +33,9 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
-import ee.carlrobert.codegpt.agent.clients.ProxyAIClientSettings
+import ee.carlrobert.codegpt.agent.clients.InceptionAILLMClient
 import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
+import ee.carlrobert.codegpt.agent.clients.RetryingPromptExecutor
 import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
@@ -52,8 +47,8 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import java.time.LocalDate
-import kotlin.time.Duration.Companion.seconds
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration.Companion.seconds
 
 object AgentFactory {
 
@@ -68,7 +63,8 @@ object AgentFactory {
         extraBehavior: String? = null,
         toolOverrides: Set<SubagentTool>? = null,
         onCreditsAvailable: ((AgentCreditsEvent) -> Unit)? = null,
-        tokenCounter: AtomicLong? = null
+        tokenCounter: AtomicLong? = null,
+        events: AgentEvents? = null
     ): AIAgent<String, String> {
         val installHandler = buildUsageAwareInstallHandler(
             provider,
@@ -77,7 +73,7 @@ object AgentFactory {
             onAgentToolCallCompleted,
             onCreditsAvailable
         )
-        val executor = createExecutor(provider)
+        val executor = createExecutor(provider, events)
         return when (agentType) {
             AgentType.GENERAL_PURPOSE -> createGeneralPurposeAgent(
                 provider,
@@ -166,53 +162,30 @@ object AgentFactory {
         )
     }
 
-    fun createExecutor(provider: ServiceType): PromptExecutor {
-        val timeoutConfig = ConnectionTimeoutConfig(
-            connectTimeoutMillis = 30_000,
-            socketTimeoutMillis = 60_000,
-        )
+    fun createExecutor(provider: ServiceType, events: AgentEvents? = null): PromptExecutor {
         return when (provider) {
             ServiceType.OPENAI -> {
                 val apiKey = getCredential(CredentialKey.OpenaiApiKey) ?: ""
-                createRetryingExecutor(
-                    OpenAILLMClient(
-                        apiKey, OpenAIClientSettings(timeoutConfig = timeoutConfig)
-                    )
-                )
+                createRetryingExecutor(OpenAILLMClient(apiKey), events)
             }
 
             ServiceType.ANTHROPIC -> {
                 val apiKey = getCredential(CredentialKey.AnthropicApiKey) ?: ""
-                createRetryingExecutor(
-                    AnthropicLLMClient(
-                        apiKey,
-                        AnthropicClientSettings(timeoutConfig = timeoutConfig)
-                    )
-                )
+                createRetryingExecutor(AnthropicLLMClient(apiKey), events)
             }
 
             ServiceType.GOOGLE -> {
                 val apiKey = getCredential(CredentialKey.GoogleApiKey) ?: ""
-                createRetryingExecutor(
-                    GoogleLLMClient(
-                        apiKey,
-                        GoogleClientSettings(timeoutConfig = timeoutConfig)
-                    )
-                )
+                createRetryingExecutor(GoogleLLMClient(apiKey), events)
             }
 
             ServiceType.OLLAMA -> {
-                createRetryingExecutor(OllamaClient(timeoutConfig = timeoutConfig))
+                createRetryingExecutor(OllamaClient(), events)
             }
 
             ServiceType.MISTRAL -> {
                 val apiKey = getCredential(CredentialKey.MistralApiKey) ?: ""
-                createRetryingExecutor(
-                    MistralAILLMClient(
-                        apiKey,
-                        MistralAIClientSettings(timeoutConfig = timeoutConfig)
-                    )
-                )
+                createRetryingExecutor(MistralAILLMClient(apiKey), events)
             }
 
             ServiceType.CUSTOM_OPENAI -> {
@@ -227,34 +200,34 @@ object AgentFactory {
                     CustomOpenAILLMClient.fromSettingsState(
                         apiKey,
                         state.chatCompletionSettings,
-                        timeoutConfig
-                    )
+                    ),
+                    events
                 )
             }
 
             ServiceType.PROXYAI -> {
                 val apiKey = getCredential(CredentialKey.CodeGptApiKey) ?: ""
-                createRetryingExecutor(
-                    ProxyAILLMClient(
-                        apiKey,
-                        ProxyAIClientSettings(timeoutConfig = timeoutConfig)
-                    )
-                )
+                createRetryingExecutor(ProxyAILLMClient(apiKey), events)
+            }
+
+            ServiceType.INCEPTION -> {
+                val apiKey = getCredential(CredentialKey.InceptionApiKey) ?: ""
+                createRetryingExecutor(InceptionAILLMClient(apiKey), events)
             }
 
             else -> throw UnsupportedOperationException("Provider not supported: $provider")
         }
     }
 
-    private fun createRetryingExecutor(client: LLMClient): PromptExecutor {
-        val retryConfig = RetryConfig(
+    private fun createRetryingExecutor(client: LLMClient, events: AgentEvents?): PromptExecutor {
+        val policy = RetryingPromptExecutor.RetryPolicy(
             maxAttempts = 5,
             initialDelay = 1.seconds,
             maxDelay = 30.seconds,
             backoffMultiplier = 2.0,
             jitterFactor = 0.1
         )
-        return SingleLLMPromptExecutor(RetryingLLMClient(client, retryConfig))
+        return RetryingPromptExecutor.fromClient(client, policy, events)
     }
 
     private fun createGeneralPurposeAgent(
@@ -442,7 +415,12 @@ object AgentFactory {
                 appendPrompt { user(input) }
                 tokenCounter?.addAndGet(tokenizer().tokenCountFor(prompt).toLong())
                 val responses =
-                    requestResponses(executor, config, { appendPrompt { message(it) } }, tokenCounter)
+                    requestResponses(
+                        executor,
+                        config,
+                        { appendPrompt { message(it) } },
+                        tokenCounter
+                    )
                 responses
             }
         }
@@ -454,7 +432,12 @@ object AgentFactory {
                 }
                 tokenCounter?.addAndGet(tokenizer().tokenCountFor(prompt).toLong())
                 val responses =
-                    requestResponses(executor, config, { appendPrompt { message(it) } }, tokenCounter)
+                    requestResponses(
+                        executor,
+                        config,
+                        { appendPrompt { message(it) } },
+                        tokenCounter
+                    )
                 responses
             }
         }

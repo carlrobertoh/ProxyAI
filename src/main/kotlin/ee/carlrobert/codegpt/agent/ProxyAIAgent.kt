@@ -79,11 +79,9 @@ object ProxyAIAgent {
     ): AIAgent<MessageWithContext, String> {
         val modelSelection =
             service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.AGENT)
-        val stream =
-            provider == ServiceType.ANTHROPIC || provider == ServiceType.OPENAI || provider == ServiceType.PROXYAI
+        val stream = provider != ServiceType.CUSTOM_OPENAI
         val projectInstructions = searchForInstructions(project.basePath)
-
-        val executor = AgentFactory.createExecutor(provider)
+        val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
         val toolRegistry = createToolRegistry(project, events, sessionId)
         val agentModel = service<ModelSelectionService>().getAgentModel()

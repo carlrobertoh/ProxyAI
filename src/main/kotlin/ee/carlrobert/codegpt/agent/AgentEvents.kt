@@ -21,6 +21,7 @@ interface AgentEvents {
     ) {
     }
 
+    fun onRetry(attempt: Int, maxAttempts: Int, reason: String? = null) {}
     fun onQueuedMessagesResolved()
     fun onTokenUsageAvailable(tokenUsage: Long) {}
     fun onTokenUsageUpdated(tokenUsage: TokenUsage) {}
