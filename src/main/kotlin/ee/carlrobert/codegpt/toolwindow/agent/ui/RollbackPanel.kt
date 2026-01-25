@@ -20,9 +20,13 @@ import ee.carlrobert.codegpt.agent.rollback.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
 import ee.carlrobert.codegpt.ui.IconActionButton
+import ee.carlrobert.codegpt.ui.components.LeftEllipsisLabel
 import kotlinx.coroutines.*
+import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -79,21 +83,26 @@ class RollbackPanel(
         changesPanel.apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
+            alignmentX = LEFT_ALIGNMENT
+            addComponentListener(object : ComponentAdapter() {
+                override fun componentResized(e: ComponentEvent?) {
+                    revalidate()
+                    repaint()
+                }
+            })
         }
 
         scrollPane.apply {
             horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
             border = null
-            preferredSize = Dimension(0, 240)
+            viewportBorder = null
+            viewport.isOpaque = false
+            isOpaque = false
         }
 
         addToTop(topPanel)
-        addToCenter(
-            BorderLayoutPanel().apply {
-                addToCenter(scrollPane)
-            }
-        )
+        addToCenter(scrollPane)
         border = JBUI.Borders.compound(
             JBUI.Borders.customLine(JBColor.border(), 0, 0, 1, 0),
             JBUI.Borders.empty(0, 0, 8, 0)
@@ -171,22 +180,11 @@ class RollbackPanel(
     }
 
     private fun createChangeRow(change: FileChange): JComponent {
-        val row = BorderLayoutPanel().apply {
-            isOpaque = true
-            background = JBUI.CurrentTheme.List.background(false, false)
-            border = JBUI.Borders.compound(
-                JBUI.Borders.customLine(JBColor.border(), 1),
-                JBUI.Borders.empty(4, 8)
-            )
-        }
-
-        val left = JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+        val leftFixed = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
             isOpaque = false
+            add(changeLabel(change))
+            add(fileNameComponent(change))
         }
-        left.add(changeLabel(change))
-        left.add(fileNameComponent(change))
-        left.add(filePathLabel(change))
-        addDiffStats(change, left)
 
         val actions = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
             isOpaque = false
@@ -194,8 +192,45 @@ class RollbackPanel(
         openDiffAction(change).let { actions.add(it) }
         actions.add(rollbackAction(change))
 
-        row.addToLeft(left)
-        row.addToRight(actions)
+        val description = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            add(filePathLabel(change), BorderLayout.CENTER)
+        }
+
+        val stats = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+            isOpaque = false
+        }
+        addDiffStats(change, stats)
+
+        val rightFixed = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
+            isOpaque = false
+            add(stats)
+            add(actions)
+        }
+
+        val row = JPanel(BorderLayout(8, 0)).apply {
+            isOpaque = true
+            background = JBUI.CurrentTheme.List.background(false, false)
+            border = JBUI.Borders.compound(
+                JBUI.Borders.customLine(JBColor.border(), 1),
+                JBUI.Borders.empty(4, 8)
+            )
+
+            add(leftFixed, BorderLayout.WEST)
+            add(description, BorderLayout.CENTER)
+            add(rightFixed, BorderLayout.EAST)
+
+            alignmentX = LEFT_ALIGNMENT
+        }
+
+        description.minimumSize = Dimension(0, description.minimumSize.height)
+        description.maximumSize = Dimension(Int.MAX_VALUE, description.maximumSize.height)
+        description.preferredSize = Dimension(0, description.preferredSize.height)
+
+        row.minimumSize = Dimension(0, row.minimumSize.height)
+        row.maximumSize = Dimension(Int.MAX_VALUE, row.preferredSize.height)
+        row.preferredSize = Dimension(0, row.preferredSize.height)
+
         return row
     }
 
@@ -230,10 +265,9 @@ class RollbackPanel(
 
     private fun filePathLabel(change: FileChange): JBLabel {
         val display = displayPath(change.path, change)
-        return JBLabel(display).apply {
+        return LeftEllipsisLabel(display).apply {
             foreground = JBUI.CurrentTheme.Label.disabledForeground()
             font = JBUI.Fonts.smallFont()
-            toolTipText = display
         }
     }
 
@@ -322,7 +356,7 @@ class RollbackPanel(
         componentList.forEach { component ->
             if (visibleRows >= maxVisibleItems) return@forEach
             height += component.preferredSize.height
-            if (component is BorderLayoutPanel) {
+            if (component is JComponent && component !is Box.Filler) {
                 visibleRows += 1
             }
         }

@@ -205,8 +205,7 @@ private suspend fun AIAgentLLMWriteSession.requestResponses(
 ): List<Message.Response> {
     val responses = if (stream) {
         val streamFrames = mutableListOf<StreamFrame>()
-        val frames = requestLLMStreaming()
-        frames.collect { streamFrames.add(it) }
+        requestLLMStreaming().collect { streamFrames.add(it) }
         streamFrames.toMessageResponses()
     } else {
         val preparedPrompt = config.missingToolsConversionStrategy.convertPrompt(prompt, tools)

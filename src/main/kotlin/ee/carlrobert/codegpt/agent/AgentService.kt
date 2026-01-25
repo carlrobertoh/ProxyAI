@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.path.Path
 
 @Service(Service.Level.PROJECT)

@@ -24,6 +24,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.Serializable
 import java.nio.file.Paths
 import com.intellij.openapi.util.TextRange
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 
 /**
  * Enhanced search tool using IntelliJ's native SearchService and FindModel.
@@ -127,12 +129,13 @@ class IntelliJSearchTool(
 
     override suspend fun execute(args: Args): Result {
         try {
-            val (searchScope, matches) = withContext(Dispatchers.Default) {
-                runReadAction {
-                    val scope = createSearchScope(args, project)
-                    val effectiveLimit = (args.limit ?: 10).coerceAtLeast(1)
-                    val results = searchEverywhere(args.pattern, scope, effectiveLimit)
-                    scope to results
+            val maxResults = (args.limit ?: 10).coerceIn(1, 50)
+            val matches = withTimeout(5000) {
+                withContext(Dispatchers.Default) {
+                    runReadAction {
+                        val scope = createSearchScope(args, project)
+                        searchEverywhere(args.pattern, scope, maxResults)
+                    }
                 }
             }
             val output = formatOutput(matches, args)
@@ -143,6 +146,14 @@ class IntelliJSearchTool(
                 totalMatches = matches.size,
                 matches = matches,
                 output = output
+            )
+        } catch (_: TimeoutCancellationException) {
+            return Result(
+                pattern = args.pattern,
+                scope = args.scope ?: "project",
+                totalMatches = 0,
+                matches = emptyList(),
+                output = "Search timed out. Try a more specific pattern or lower scope."
             )
         } catch (e: Exception) {
             return Result(

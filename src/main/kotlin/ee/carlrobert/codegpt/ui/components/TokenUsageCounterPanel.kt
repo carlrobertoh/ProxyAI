@@ -59,7 +59,7 @@ class TokenUsageCounterPanel(
                             currentSessionId = event.sessionId
                             val model = getAgentModelForSession(event.sessionId) ?: return
                             updateDisplay(event, model)
-                            updateTooltipText(model)
+                            updateTooltipText(event, model)
                         }
                     }
                 })
@@ -69,8 +69,7 @@ class TokenUsageCounterPanel(
     private fun updateDisplay(event: TokenUsageEvent, model: LLModel) {
         scope.launch {
             withEdt {
-                val usedPromptTokens = getPromptTokensForSession(event.sessionId) ?: 0
-                updateColorAndText(usedPromptTokens, model)
+                updateColorAndText(event.totalTokens, model)
                 revalidate()
                 repaint()
             }
@@ -94,13 +93,12 @@ class TokenUsageCounterPanel(
         text = "${percentageLeft.toInt()}% context left"
     }
 
-    fun updateTooltipText(model: LLModel) {
-        val usedPrompt = getPromptTokensForSession(currentSessionId) ?: 0
+    fun updateTooltipText(event: TokenUsageEvent, model: LLModel) {
         val budget = computeBudget(model)
         toolTipText = buildString {
             append("<html><body>")
             append("<b>Usage Details</b><br>")
-            append("Input size: ${numberFormat.format(usedPrompt)} tokens<br>")
+            append("Input size: ${numberFormat.format(event.totalTokens)} tokens<br>")
             append("Max output size: ${numberFormat.format(budget.reservedOutput)} tokens<br>")
             append("Max context size: ${numberFormat.format(budget.contextLength)} tokens<br>")
             append("</body></html>")
@@ -138,13 +136,4 @@ class TokenUsageCounterPanel(
         val inputBudget = (contextLength - reserved).coerceAtLeast(1L)
         return Budget(contextLength, reserved, inputBudget)
     }
-
-    private fun getPromptTokensForSession(sessionId: String?): Long? {
-        if (sessionId == null) return null
-        return project
-            ?.service<AgentService>()
-            ?.getTokenTrackerForSession(sessionId)
-            ?.getPromptTokens()
-    }
-
 }
