@@ -170,6 +170,27 @@ class AgentEventHandler(
         if (cause is KoogHttpClientException) {
             if (provider == ServiceType.PROXYAI) {
                 handleProxyAIException(cause)
+            } else {
+                handleException(cause)
+            }
+        }
+    }
+
+    private fun handleException(ex: KoogHttpClientException) {
+        when (ex.statusCode) {
+            401 -> {
+                currentResponseBody?.displayMissingCredential()
+                handleDone()
+            }
+
+            403 -> {
+                currentResponseBody?.displayForbidden()
+                handleDone()
+            }
+
+            else -> {
+                currentResponseBody?.displayError(ex.message)
+                handleDone()
             }
         }
     }
@@ -188,6 +209,11 @@ class AgentEventHandler(
 
             429 -> {
                 currentResponseBody?.displayCreditsExhausted()
+                handleDone()
+            }
+
+            else -> {
+                currentResponseBody?.displayError("Something went wrong. Please try again.")
                 handleDone()
             }
         }

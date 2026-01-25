@@ -45,6 +45,7 @@ import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
+import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicLong
@@ -180,7 +181,12 @@ object AgentFactory {
             }
 
             ServiceType.OLLAMA -> {
-                createRetryingExecutor(OllamaClient(), events)
+                createRetryingExecutor(
+                    OllamaClient(
+                        baseUrl = service<OllamaSettings>().state.host ?: "http://localhost:11434"
+                    ),
+                    events
+                )
             }
 
             ServiceType.MISTRAL -> {
