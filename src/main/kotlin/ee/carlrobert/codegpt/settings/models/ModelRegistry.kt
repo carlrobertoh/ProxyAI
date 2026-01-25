@@ -22,8 +22,10 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
+import ee.carlrobert.codegpt.agent.clients.InceptionAILLMClient
 import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
+import ee.carlrobert.codegpt.settings.models.ModelRegistry.Companion.MERCURY
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -154,8 +156,13 @@ class ModelRegistry {
         ServiceType.INCEPTION to ModelCapability(
             ServiceType.INCEPTION,
             setOf(
+                FeatureType.AGENT,
+                FeatureType.CHAT,
                 FeatureType.CODE_COMPLETION,
                 FeatureType.AUTO_APPLY,
+                FeatureType.COMMIT_MESSAGE,
+                FeatureType.INLINE_EDIT,
+                FeatureType.LOOKUP,
                 FeatureType.NEXT_EDIT
             )
         )
@@ -405,7 +412,7 @@ class ModelRegistry {
             ServiceType.PROXYAI to listOf(
                 getProxyAIModelWrapper(PROXYAI_AUTO, "Auto"),
                 getProxyAIModelWrapper(GPT5_2.id, "GPT-5.2"),
-                getProxyAIModelWrapper(GPT5_1Codex.id, "GPT-5.1 Codex"),
+                getProxyAIModelWrapper(GPT5_2_Codex.id, "GPT-5.2 Codex"),
                 getProxyAIModelWrapper(GPT5Mini.id, "GPT-5 Mini"),
                 getProxyAIModelWrapper(Opus_4_5.id, "Claude Opus 4.5"),
                 getProxyAIModelWrapper(Sonnet_4_5.id, "Claude Sonnet 4.5"),
@@ -413,6 +420,7 @@ class ModelRegistry {
             ),
             ServiceType.OPENAI to listOf(
                 LLMModelWrapper(GPT5_2, name = "GPT-5.2"),
+                LLMModelWrapper(GPT5_2_Codex, name = "GPT-5.2 Codex"),
                 LLMModelWrapper(GPT5_1, name = "GPT-5.1"),
                 LLMModelWrapper(GPT5_1Codex, name = "GPT-5.1 Codex"),
                 LLMModelWrapper(GPT5Mini, name = "GPT-5 Mini"),
@@ -451,11 +459,16 @@ class ModelRegistry {
             },
             ServiceType.GOOGLE to listOf(
                 LLMModelWrapper(Gemini3_Pro_Preview, name = "Gemini 3 Pro Preview"),
+                LLMModelWrapper(Gemini3_Flash_Preview, name = "Gemini 3 Flash Preview"),
                 LLMModelWrapper(Gemini2_5Pro, name = "Gemini 2.5 Pro"),
                 LLMModelWrapper(Gemini2_5Flash, name = "Gemini 2.5 Flash")
             ),
             ServiceType.MISTRAL to listOf(
-                LLMModelWrapper(DevstralMedium, name = "Devstral Medium")
+                LLMModelWrapper(Devstral2, name = "Devstral 2"),
+                LLMModelWrapper(DevstralMedium, name = "Devstral Medium"),
+            ),
+            ServiceType.INCEPTION to listOf(
+                LLMModelWrapper(model = Mercury, name = "Mercury"),
             ),
             ServiceType.OLLAMA to getOllamaModels().map { model ->
                 LLMModelWrapper(
@@ -493,12 +506,14 @@ class ModelRegistry {
             addAll(getGoogleAgentModels())
             addAll(getMistralAgentModels())
             addAll(getOllamaModels())
+            addAll(getInceptionAgentModels())
         }
     }
 
     fun getOpenAIAgentModels(): List<ModelSelection> {
         return listOf(
             ModelSelection(ServiceType.OPENAI, GPT5_2.id, "GPT-5.2", Icons.OpenAI),
+            ModelSelection(ServiceType.OPENAI, GPT5_2_Codex.id, "GPT-5.2 Codex", Icons.OpenAI),
             ModelSelection(ServiceType.OPENAI, GPT5_1.id, "GPT-5.1", Icons.OpenAI),
             ModelSelection(ServiceType.OPENAI, GPT5_1Codex.id, "GPT-5.1 Codex", Icons.OpenAI),
             ModelSelection(ServiceType.OPENAI, GPT5Mini.id, "GPT-5 Mini", Icons.OpenAI),
@@ -509,7 +524,7 @@ class ModelRegistry {
         return listOf(
             ModelSelection(ServiceType.PROXYAI, PROXYAI_AUTO, "Auto", Icons.DefaultSmall),
             ModelSelection(ServiceType.PROXYAI, GPT5_2.id, "GPT-5.2", Icons.OpenAI),
-            ModelSelection(ServiceType.PROXYAI, GPT5_1Codex.id, "GPT-5.1 Codex", Icons.OpenAI),
+            ModelSelection(ServiceType.PROXYAI, GPT5_2_Codex.id, "GPT-5.2 Codex", Icons.OpenAI),
             ModelSelection(ServiceType.PROXYAI, GPT5Mini.id, "GPT-5 Mini", Icons.OpenAI),
             ModelSelection(ServiceType.PROXYAI, Opus_4_5.id, "Claude Opus 4.5", Icons.Anthropic),
             ModelSelection(
@@ -547,6 +562,18 @@ class ModelRegistry {
 
     fun getGoogleAgentModels(): List<ModelSelection> {
         return listOf(
+            ModelSelection(
+                ServiceType.GOOGLE,
+                Gemini3_Pro_Preview.id,
+                "Gemini 3 Pro Preview",
+                Icons.Google
+            ),
+            ModelSelection(
+                ServiceType.GOOGLE,
+                Gemini3_Flash_Preview.id,
+                "Gemini 3 Flash Preview",
+                Icons.Google
+            ),
             ModelSelection(ServiceType.GOOGLE, Gemini2_5Pro.id, "Gemini 2.5 Pro", Icons.Google),
             ModelSelection(
                 ServiceType.GOOGLE,
@@ -559,6 +586,12 @@ class ModelRegistry {
 
     fun getMistralAgentModels(): List<ModelSelection> {
         return listOf(
+            ModelSelection(
+                ServiceType.MISTRAL,
+                Devstral2.id,
+                "Devstral 2",
+                Icons.Mistral
+            ),
             ModelSelection(
                 ServiceType.MISTRAL,
                 DevstralMedium.id,
@@ -638,6 +671,12 @@ class ModelRegistry {
     private fun getInceptionModels(): List<ModelSelection> {
         return listOf(
             ModelSelection(ServiceType.INCEPTION, MERCURY_CODER, "Mercury Coder")
+        )
+    }
+
+    fun getInceptionAgentModels(): List<ModelSelection> {
+        return listOf(
+            ModelSelection(ServiceType.INCEPTION, MERCURY, "Mercury"),
         )
     }
 
@@ -831,6 +870,7 @@ class ModelRegistry {
 
     private fun getMistralModels(): List<ModelSelection> {
         return listOf(
+            ModelSelection(ServiceType.MISTRAL, Devstral2.id, "Devstral 2"),
             ModelSelection(ServiceType.MISTRAL, DEVSTRAL_MEDIUM_2507, "Devstral Medium"),
             ModelSelection(ServiceType.MISTRAL, MISTRAL_LARGE_2411, "Mistral Large"),
             ModelSelection(ServiceType.MISTRAL, CODESTRAL_LATEST, "Codestral"),
@@ -945,6 +985,7 @@ class ModelRegistry {
         // Llama.cpp default models
         const val LLAMA_3_2_3B_INSTRUCT = "llama-3.2-3b-instruct"
 
+        const val MERCURY = "mercury"
         const val MERCURY_CODER = "mercury-coder"
 
         @JvmStatic
@@ -953,3 +994,77 @@ class ModelRegistry {
         }
     }
 }
+
+public val Gemini3_Flash_Preview: LLModel = LLModel(
+    provider = LLMProvider.Google,
+    id = "gemini-3-flash-preview",
+    capabilities = listOf(
+        LLMCapability.Temperature,
+        LLMCapability.Completion,
+        LLMCapability.MultipleChoices,
+        LLMCapability.Vision.Image,
+        LLMCapability.Vision.Video,
+        LLMCapability.Audio,
+        LLMCapability.Tools,
+        LLMCapability.ToolChoice,
+        LLMCapability.Schema.JSON.Basic,
+        LLMCapability.Schema.JSON.Standard,
+    ),
+    contextLength = 1_048_576,
+    maxOutputTokens = 65_536,
+)
+
+
+public val GPT5_2_Codex: LLModel = LLModel(
+    provider = LLMProvider.OpenAI,
+    id = "gpt-5.2-codex",
+    capabilities = listOf(
+        LLMCapability.Completion,
+        LLMCapability.Schema.JSON.Basic,
+        LLMCapability.Schema.JSON.Standard,
+        LLMCapability.Speculation,
+        LLMCapability.Tools,
+        LLMCapability.ToolChoice,
+        LLMCapability.Vision.Image,
+        LLMCapability.Document,
+        LLMCapability.MultipleChoices,
+        LLMCapability.OpenAIEndpoint.Completions,
+        LLMCapability.OpenAIEndpoint.Responses,
+    ),
+    contextLength = 400_000,
+    maxOutputTokens = 128_000,
+)
+
+public val Devstral2: LLModel = LLModel(
+    provider = LLMProvider.MistralAI,
+    id = "devstral-2512",
+    capabilities = listOf(
+        LLMCapability.Temperature,
+        LLMCapability.Completion,
+        LLMCapability.Tools,
+        LLMCapability.ToolChoice,
+        LLMCapability.Schema.JSON.Basic,
+        LLMCapability.Schema.JSON.Standard
+    ),
+    contextLength = 128_000
+)
+
+public val Mercury: LLModel = LLModel(
+    id = MERCURY,
+    provider = InceptionAILLMClient.Inception,
+    capabilities = listOf(
+        LLMCapability.Temperature,
+        LLMCapability.Schema.JSON.Basic,
+        LLMCapability.Schema.JSON.Standard,
+        LLMCapability.Speculation,
+        LLMCapability.Tools,
+        LLMCapability.ToolChoice,
+        LLMCapability.Vision.Image,
+        LLMCapability.Document,
+        LLMCapability.Completion,
+        LLMCapability.MultipleChoices,
+        LLMCapability.OpenAIEndpoint.Completions,
+    ),
+    contextLength = 200_000,
+    maxOutputTokens = 32_768,
+)

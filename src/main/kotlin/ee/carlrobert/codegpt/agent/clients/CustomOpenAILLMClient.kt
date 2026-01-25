@@ -70,7 +70,7 @@ public class CustomOpenAILLMClient(
         fun fromSettingsState(
             apiKey: String,
             state: CustomServiceChatCompletionSettingsState,
-            timeoutConfig: ConnectionTimeoutConfig
+            timeoutConfig: ConnectionTimeoutConfig = ConnectionTimeoutConfig()
         ): CustomOpenAILLMClient {
             val stateUrl = state.url ?: throw RuntimeException("Url not set")
             val uri = URI.create(stateUrl)

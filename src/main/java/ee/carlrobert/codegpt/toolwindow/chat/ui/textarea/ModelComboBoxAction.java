@@ -253,7 +253,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
     if (availableProviders.contains(INCEPTION)) {
       var inceptionGroup = DefaultActionGroup.createPopupGroup(() -> "Inception");
       inceptionGroup.getTemplatePresentation().setIcon(Icons.Inception);
-      inceptionGroup.add(createInceptionModelAction(presentation));
+      inceptionGroup.add(createInceptionModelAction(ModelRegistry.MERCURY, presentation));
       actionGroup.add(inceptionGroup);
     }
 
@@ -587,8 +587,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
             .setModel(featureType, modelCode, MISTRAL));
   }
 
-  private AnAction createInceptionModelAction(Presentation comboBoxPresentation) {
-    var modelCode = ModelRegistry.MERCURY_CODER;
+  private AnAction createInceptionModelAction(String modelCode, Presentation comboBoxPresentation) {
     var modelName = ModelRegistry.getInstance().getModelDisplayName(INCEPTION, modelCode);
     return createModelAction(
         INCEPTION,

@@ -102,7 +102,8 @@ class ModelRegistryTest : IntegrationTest() {
             ServiceType.MISTRAL,
             ServiceType.OLLAMA,
             ServiceType.LLAMA_CPP,
-            ServiceType.CUSTOM_OPENAI
+            ServiceType.CUSTOM_OPENAI,
+            ServiceType.INCEPTION,
         )
     }
 
