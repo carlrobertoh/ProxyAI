@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Inception provider with Mercury model (Agent)
+- GPT-5.2 Codex (ProxyAI, OpenAI), Gemini 3 Flash Preview (Google), and Devstral 2 (Mistral) models
+
+### Changed
+
+- Improved error handling and retry logic for streaming requests
+- Improved tool call validation and agent model selection UI
+
+### Fixed
+
+- Ollama and Custom OpenAI base URL configuration
+- Agent total tokens tooltip display
+- RollbackPanel layout and text truncation
+
 ## [3.7.0-241.1] - 2026-01-19
 
 ### Added
