@@ -1,3 +1,3 @@
-rootProject.name = "CodeGPT"
-include(":codegpt-treesitter")
-include(":codegpt-telemetry")
+rootProject.name = "ProxyAI"
+include(":proxyai-treesitter")
+include(":proxyai-telemetry")

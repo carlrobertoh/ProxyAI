@@ -24,10 +24,6 @@ public final class CodeGPTPlugin {
     return requireNonNull(PluginManagerCore.getPlugin(CODEGPT_ID)).getPluginPath();
   }
 
-  public static @NotNull String getPluginOptionsPath() {
-    return PathManager.getOptionsPath() + separator + "CodeGPT";
-  }
-
   public static @NotNull String getLlamaSourcePath() {
     return getPluginBasePath() + separator + "llama.cpp";
   }

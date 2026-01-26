@@ -1,5 +1,5 @@
 plugins {
-    id("codegpt.java-conventions")
+    id("proxyai.java-conventions")
 }
 
 dependencies {

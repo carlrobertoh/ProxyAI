@@ -33,7 +33,7 @@ fun properties(key: String): Provider<String> {
 fun environment(key: String) = providers.environmentVariable(key)
 
 plugins {
-    id("codegpt.java-conventions")
+    id("proxyai.java-conventions")
     id("org.jetbrains.intellij.platform")
     alias(libs.plugins.changelog)
     alias(libs.plugins.protobuf)
@@ -70,8 +70,8 @@ dependencies {
         testFramework(TestFrameworkType.JUnit5)
     }
 
-    implementation(project(":codegpt-telemetry"))
-    implementation(project(":codegpt-treesitter"))
+    implementation(project(":proxyai-telemetry"))
+    implementation(project(":proxyai-treesitter"))
 
     implementation(platform(libs.okhttp.bom))
     implementation(platform(libs.slf4j.bom))
@@ -198,7 +198,7 @@ tasks {
     prepareSandbox {
         dependsOn("updateSubmodules")
         from(layout.projectDirectory.dir("src/main/cpp/llama.cpp")) {
-            into("CodeGPT/llama.cpp")
+            into("ProxyAI/llama.cpp")
         }
     }
 
