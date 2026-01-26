@@ -40,7 +40,11 @@ object ToolCallDescriptorFactory {
             ToolKind.READ -> createReadDescriptor(args, result, projectId)
             ToolKind.WRITE -> createWriteDescriptor(project, args, result, projectId)
             ToolKind.EDIT -> createEditDescriptor(project, args, result, projectId)
-            ToolKind.BASH -> createBashDescriptor(args, result, projectId)
+
+            ToolKind.BASH,
+            ToolKind.BASH_OUTPUT,
+            ToolKind.KILL_SHELL -> createBashDescriptor(args, result, projectId)
+
             ToolKind.WEB -> createWebDescriptor(args, result, projectId)
             ToolKind.TASK -> createTaskDescriptor(args, result, projectId, summary)
             ToolKind.LIBRARY_RESOLVE -> createLibraryResolveDescriptor(args, result, projectId)
@@ -58,13 +62,12 @@ object ToolCallDescriptorFactory {
             toolName == "Write" || args is WriteTool.Args -> ToolKind.WRITE
             toolName == "Edit" || args is EditTool.Args -> ToolKind.EDIT
             toolName == "Bash" || args is BashTool.Args -> ToolKind.BASH
-            toolName == "BashOutput" || args is BashOutputTool.Args -> ToolKind.BASH
-            toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.BASH
+            toolName == "BashOutput" || args is BashOutputTool.Args -> ToolKind.BASH_OUTPUT
+            toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.KILL_SHELL
             toolName == "WebSearch" || args is WebSearchTool.Args -> ToolKind.WEB
+            toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
             toolName == "ResolveLibraryId" || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
             toolName == "GetLibraryDocs" || args is GetLibraryDocsTool.Args -> ToolKind.LIBRARY_DOCS
-            toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
-            toolName == "TodoWrite" || toolName == "TodoWriteTool" || args is TodoWriteTool.Args -> ToolKind.TASK
             toolName == "AskUserQuestion" || args is AskUserQuestionTool.Args -> ToolKind.ASK_QUESTION
             toolName == "Exit" -> ToolKind.EXIT
             else -> ToolKind.OTHER

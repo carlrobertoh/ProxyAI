@@ -670,6 +670,7 @@ class ModelRegistry {
 
     private fun getInceptionModels(): List<ModelSelection> {
         return listOf(
+            ModelSelection(ServiceType.INCEPTION, MERCURY, "Mercury"),
             ModelSelection(ServiceType.INCEPTION, MERCURY_CODER, "Mercury Coder")
         )
     }

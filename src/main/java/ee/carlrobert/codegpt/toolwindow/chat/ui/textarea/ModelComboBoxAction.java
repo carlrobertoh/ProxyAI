@@ -185,7 +185,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
       ModelRegistry.getInstance().getAgentModels(ANTHROPIC).forEach(item ->
           anthropicGroup.add(createModelAction(
               ANTHROPIC,
-              item.getModel().getId(),
+              item.getName(),
               Icons.Anthropic,
               presentation,
               () -> ApplicationManager.getApplication().getService(ModelSettings.class)
@@ -225,7 +225,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
       ModelRegistry.getInstance().getAgentModels(GOOGLE).forEach(item ->
           googleGroup.add(createModelAction(
               GOOGLE,
-              item.getModel().getId(),
+              item.getName(),
               Icons.Google,
               presentation,
               () -> {
@@ -242,7 +242,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
       ModelRegistry.getInstance().getAgentModels(MISTRAL).forEach(item ->
           mistralGroup.add(createModelAction(
               MISTRAL,
-              item.getModel().getId(),
+              item.getName(),
               Icons.Mistral,
               presentation,
               () -> ApplicationManager.getApplication().getService(ModelSettings.class)
@@ -405,6 +405,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
       Presentation comboBoxPresentation,
       Runnable onModelChanged) {
     return new DumbAwareAction(label, "", icon) {
+
       @Override
       public void update(@NotNull AnActionEvent event) {
         var presentation = event.getPresentation();
@@ -496,7 +497,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
     ModelRegistry.getInstance().getAgentModels(OPENAI).forEach(item ->
         openaiGroup.add(createModelAction(
             OPENAI,
-            item.getModel().getId(),
+            item.getName(),
             Icons.OpenAI,
             presentation,
             () -> ApplicationManager.getApplication().getService(ModelSettings.class)

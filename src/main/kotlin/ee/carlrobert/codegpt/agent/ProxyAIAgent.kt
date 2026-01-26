@@ -175,6 +175,11 @@ object ProxyAIAgent {
                 }
 
                 onToolCallStarting { ctx ->
+                    if (toolRegistry.getToolOrNull(ctx.toolName) == null) {
+                        logger.warn { "Ignoring undefined tool call: ${ctx.toolName}" }
+                        return@onToolCallStarting
+                    }
+
                     val id = ctx.toolCallId ?: UUID.randomUUID().toString()
                     if (ctx.toolCallId == null) {
                         anonymousToolIds.addLast(id)
@@ -186,6 +191,11 @@ object ProxyAIAgent {
                 }
 
                 onToolCallCompleted { ctx ->
+                    if (toolRegistry.getToolOrNull(ctx.toolName) == null) {
+                        logger.warn { "Ignoring undefined tool completion: ${ctx.toolName}" }
+                        return@onToolCallCompleted
+                    }
+
                     val uiId = when {
                         ctx.toolCallId != null -> toolCallToUiId[ctx.toolCallId] ?: ctx.toolCallId
                         anonymousToolIds.isNotEmpty() -> anonymousToolIds.removeFirst()

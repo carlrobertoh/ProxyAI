@@ -317,16 +317,14 @@ class AgentEventHandler(
                     lastEditArgs = args
                 }
 
-                if (toolName != "Task") {
-                    runInEdt {
-                        val key = keyFor(id)
-                        if (!mainToolCards.containsKey(key)) {
-                            val card = ToolCallCard(project, toolName, args)
-                            mainToolCards[key] = card
-                            currentResponseBody?.addToolStatusPanel(card)
-                            scrollablePanel.update()
-                            scrollablePanel.scrollToBottom()
-                        }
+                runInEdt {
+                    val key = keyFor(id)
+                    if (!mainToolCards.containsKey(key)) {
+                        val card = ToolCallCard(project, toolName, args)
+                        mainToolCards[key] = card
+                        currentResponseBody?.addToolStatusPanel(card)
+                        scrollablePanel.update()
+                        scrollablePanel.scrollToBottom()
                     }
                 }
             }
