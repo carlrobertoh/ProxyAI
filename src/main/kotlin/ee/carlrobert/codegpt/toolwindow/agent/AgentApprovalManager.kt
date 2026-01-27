@@ -1,10 +1,10 @@
 package ee.carlrobert.codegpt.toolwindow.agent
 
 import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffManager
 import com.intellij.diff.chains.SimpleDiffRequestChain
 import com.intellij.diff.editor.ChainDiffVirtualFile
 import com.intellij.diff.requests.SimpleDiffRequest
-import com.intellij.diff.DiffManager
 import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.diff.util.DiffUserDataKeysEx
 import com.intellij.icons.AllIcons
@@ -22,6 +22,7 @@ import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.text.StringUtil.convertLineSeparators
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.JBColor
@@ -40,9 +41,9 @@ import java.awt.Insets
 import java.awt.Point
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.nio.file.Paths
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -68,10 +69,11 @@ class AgentApprovalManager(
         val factory = DiffContentFactory.getInstance()
 
         val left = if (vf != null) factory.create(project, vf) else factory.create(project, "")
-        val rightDoc = EditorFactory.getInstance().createDocument(args.content)
-            .apply {
-                setReadOnly(true)
-            }
+        val rightDoc =
+            EditorFactory.getInstance().createDocument(convertLineSeparators(args.content))
+                .apply {
+                    setReadOnly(true)
+                }
         val right = if (vf != null) factory.create(project, rightDoc, vf)
         else factory.create(project, rightDoc, FileTypes.PLAIN_TEXT)
 
@@ -98,9 +100,10 @@ class AgentApprovalManager(
             applyStringReplacement(current, args.oldString, args.newString, args.replaceAll)
 
         val left = if (vf != null) factory.create(project, vf) else factory.create(project, current)
-        val rightDoc = EditorFactory.getInstance().createDocument(proposed).apply {
-            setReadOnly(true)
-        }
+        val rightDoc =
+            EditorFactory.getInstance().createDocument(convertLineSeparators(proposed)).apply {
+                setReadOnly(true)
+            }
         val right = if (vf != null) factory.create(project, rightDoc, vf)
         else factory.create(project, rightDoc, FileTypes.PLAIN_TEXT)
 
