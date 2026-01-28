@@ -8,12 +8,12 @@ import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.io.FileUtil
-import com.intellij.openapi.vcs.changes.ChangeListManager
-import com.intellij.openapi.vfs.*
-import com.intellij.openapi.vfs.newvfs.BulkFileListener
-import com.intellij.openapi.vfs.newvfs.events.*
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.agent.tools.EditTool
+import ee.carlrobert.codegpt.agent.tools.WriteTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,6 +27,9 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Uses IntelliJ's LocalHistory labels for persistence and a lightweight in-memory
  * snapshot of modified files for fast restore.
+ * 
+ * Now uses direct tracking via trackEdit() and trackWrite() methods instead of
+ * VFS event monitoring to avoid capturing build artifacts and temporary files.
  */
 @Service(Service.Level.PROJECT)
 class RollbackService(private val project: Project) {
@@ -38,64 +41,28 @@ class RollbackService(private val project: Project) {
     @Volatile
     private var isApplyingRollback = false
 
+    private val MAX_TRACKABLE_BYTES = 10 * 1024 * 1024 // 10MB
+
     init {
-        val connection = project.messageBus.connect()
-        connection.subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
-            override fun before(events: List<VFileEvent>) {
-                if (isApplyingRollback || activeRuns.isEmpty()) return
-                events.forEach { event ->
-                    if (!isInProject(event)) return@forEach
-                    when (event) {
-                        is VFileContentChangeEvent -> recordModified(event.file)
-                        is VFileDeleteEvent -> recordDeleted(event.file)
-                        is VFileMoveEvent -> {
-                            val oldPath = "${event.oldParent.path}/${event.file.name}"
-                            val newPath = "${event.newParent.path}/${event.file.name}"
-                            recordMoved(event.file, oldPath, newPath)
-                        }
-
-                        is VFilePropertyChangeEvent -> {
-                            if (event.propertyName == VirtualFile.PROP_NAME) {
-                                val oldName = event.oldValue as? String ?: return@forEach
-                                val newName = event.newValue as? String ?: return@forEach
-                                val parentPath = event.file.parent?.path ?: return@forEach
-                                recordMoved(
-                                    event.file,
-                                    "$parentPath/$oldName",
-                                    "$parentPath/$newName"
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            override fun after(events: List<VFileEvent>) {
-                if (isApplyingRollback || activeRuns.isEmpty()) return
-                events.forEach { event ->
-                    if (!isInProject(event)) return@forEach
-                    if (event is VFileCreateEvent) {
-                        recordCreated(event.path, event.isDirectory)
-                    }
-                }
-            }
-        })
+        // No VFS listener - using direct tracking via trackEdit() and trackWrite()
     }
 
-    private fun isInProject(event: VFileEvent): Boolean {
-        val basePath = project.basePath ?: return false
-        val normalizedBase = FileUtil.toSystemIndependentName(basePath)
-        
-        val filePath = when (event) {
-            is VFileContentChangeEvent, is VFileDeleteEvent -> event.file?.path
-            is VFileMoveEvent -> event.file.path
-            is VFilePropertyChangeEvent -> event.file.path
-            is VFileCreateEvent -> event.path
-            else -> return false
-        } ?: return false
+    /**
+     * Track an EditTool operation directly from the agent.
+     * This captures the original file content before the edit is applied.
+     */
+    fun trackEdit(sessionId: String, filePath: String, args: EditTool.Args, originalContent: String) {
+        val tracker = activeRuns[sessionId] ?: return
+        tracker.recordExplicitEdit(filePath, args, originalContent)
+    }
 
-        val normalizedPath = FileUtil.toSystemIndependentName(filePath)
-        return FileUtil.isAncestor(normalizedBase, normalizedPath, false) || normalizedPath == normalizedBase
+    /**
+     * Track a WriteTool operation directly from the agent.
+     * This determines if the file was new or existing before the write.
+     */
+    fun trackWrite(sessionId: String, filePath: String, args: WriteTool.Args) {
+        val tracker = activeRuns[sessionId] ?: return
+        tracker.recordExplicitWrite(filePath, args)
     }
 
     fun startSession(sessionId: String) {
@@ -213,64 +180,25 @@ class RollbackService(private val project: Project) {
         }
     }
 
-    private fun recordModified(file: VirtualFile) {
-        if (!isTrackable(file)) return
-        activeRuns.values.forEach { it.recordModified(file) }
-    }
-
-    private fun recordDeleted(file: VirtualFile) {
-        if (!isTrackable(file)) return
-        activeRuns.values.forEach { it.recordDeleted(file) }
-    }
-
-    private fun recordCreated(path: String, isDirectory: Boolean) {
-        if (isDirectory || !isTrackable(path)) return
-        activeRuns.values.forEach { it.recordCreated(path) }
-    }
-
-    private fun recordMoved(file: VirtualFile, oldPath: String, newPath: String) {
-        if (!isTrackable(file)) return
-        val oldNormalized = oldPath.replace("\\", "/")
-        val newNormalized = newPath.replace("\\", "/")
-        if (!isTrackable(oldNormalized) && !isTrackable(newNormalized)) return
-        activeRuns.values.forEach { it.recordMoved(file, oldNormalized, newNormalized) }
-    }
-
-    private fun isTrackable(file: VirtualFile): Boolean {
-        if (file.isDirectory || !file.isValid) return false
-        if (FileTypeManager.getInstance().isFileIgnored(file)) return false
-        if (ChangeListManager.getInstance(project).isIgnoredFile(file)) return false
-        if (settingsService.isPathIgnored(file.path)) return false
-        return !file.path.contains(".proxyai/checkpoints/")
-    }
-
     private fun isTrackable(path: String): Boolean {
         val file = LocalFileSystem.getInstance().findFileByPath(path)
-        if (file != null) return isTrackable(file)
-
-        val basePath = project.basePath ?: return false
-        val normalized = FileUtil.toSystemIndependentName(path)
-        val normalizedBase = FileUtil.toSystemIndependentName(basePath)
-        if (!FileUtil.isAncestor(
-                normalizedBase,
-                normalized,
-                false
-            ) && normalized != normalizedBase
-        ) {
-            return false
+        if (file != null) {
+            if (file.isDirectory || !file.isValid) return false
+            if (FileTypeManager.getInstance().isFileIgnored(file)) return false
+            if (settingsService.isPathIgnored(file.path)) return false
+            return file.length <= MAX_TRACKABLE_BYTES
         }
-        val fileName = runCatching { Paths.get(normalized).fileName?.toString() }
+
+        val fileName = runCatching { Paths.get(path).fileName?.toString() }
             .getOrNull()
-            ?: normalized.substringAfterLast('/')
-        if (FileTypeManager.getInstance().isFileIgnored(fileName)) {
-            return false
-        }
-        if (settingsService.isPathIgnored(normalized)) return false
-        return !normalized.contains(".proxyai/checkpoints/")
-    }
+            ?: path.substringAfterLast('/')
+        if (FileTypeManager.getInstance().isFileIgnored(fileName)) return false
+        if (settingsService.isPathIgnored(path)) return false
 
-    private fun readContentSafe(file: VirtualFile): ByteArray? =
-        runCatching { file.contentsToByteArray() }.getOrNull()
+        val ioFile = File(path)
+        if (!ioFile.exists()) return false
+        return ioFile.length() <= MAX_TRACKABLE_BYTES
+    }
 
     private fun decodeContent(content: ByteArray?): String {
         if (content == null) return ""
@@ -323,7 +251,8 @@ class RollbackService(private val project: Project) {
                     errors.add("Missing parent directory for $path")
                     return@runCatching null
                 }
-                val parentVf = VfsUtil.createDirectories(parentPath)
+                val parentVf = VirtualFileManager.getInstance()
+                    .findFileByUrl("file://$parentPath") ?: return@runCatching null
                 parentVf.createChildData(this, ioFile.name)
             }.getOrNull()
 
@@ -396,8 +325,14 @@ class RollbackService(private val project: Project) {
         path: String,
         fallback: ByteArray?
     ): ByteArray? {
-        return runCatching { label.getByteContent(path) }
-            .getOrNull()?.bytes ?: fallback
+        val labelContent = runCatching { label.getByteContent(path) }
+            .getOrNull()?.bytes
+        // If label content is null or empty, use fallback (captured at track time)
+        return if (labelContent == null || labelContent.isEmpty()) {
+            fallback
+        } else {
+            labelContent
+        }
     }
 
     companion object {
@@ -406,73 +341,45 @@ class RollbackService(private val project: Project) {
         }
     }
 
-    private inner class RunTracker(
+    private class RunTracker(
         val sessionId: String,
         val startedAt: Instant,
         val label: String,
         val labelRef: Label,
         val changes: MutableMap<String, TrackedChange> = ConcurrentHashMap()
     ) {
-        fun recordModified(file: VirtualFile) {
-            val path = file.path
-            val existing = changes[path]
+        fun recordExplicitEdit(filePath: String, args: EditTool.Args, originalContent: String) {
+            val existing = changes[filePath]
             if (existing?.kind == ChangeKind.ADDED) return
             if (existing?.kind == ChangeKind.MOVED) return
             if (existing?.kind == ChangeKind.MODIFIED) return
-            changes[path] = TrackedChange(
+            changes[filePath] = TrackedChange(
                 kind = ChangeKind.MODIFIED,
                 originalPath = null,
-                originalContent = readContentSafe(file)
+                originalContent = originalContent.toByteArray(Charsets.UTF_8)
             )
         }
 
-        fun recordDeleted(file: VirtualFile) {
-            val path = file.path
+        fun recordExplicitWrite(filePath: String, args: WriteTool.Args) {
+            val path = filePath.replace("\\", "/")
             val existing = changes[path]
-            if (existing?.kind == ChangeKind.ADDED) {
-                changes.remove(path)
-                return
-            }
-            if (existing?.kind == ChangeKind.DELETED) return
-
-            val original = existing?.originalContent ?: readContentSafe(file)
-            changes[path] = TrackedChange(
-                kind = ChangeKind.DELETED,
-                originalPath = null,
-                originalContent = original
-            )
-        }
-
-        fun recordCreated(path: String) {
-            val existing = changes[path]
+            val file = File(path)
+            
             if (existing?.kind == ChangeKind.DELETED) {
                 changes[path] = existing.copy(kind = ChangeKind.MODIFIED)
                 return
             }
+
             if (existing == null) {
+                val originalContent = if (file.exists()) {
+                    runCatching { file.readText() }.getOrNull()
+                } else null
                 changes[path] = TrackedChange(
-                    kind = ChangeKind.ADDED,
+                    kind = if (file.exists()) ChangeKind.MODIFIED else ChangeKind.ADDED,
                     originalPath = null,
-                    originalContent = null
+                    originalContent = originalContent?.toByteArray()
                 )
             }
-        }
-
-        fun recordMoved(file: VirtualFile, oldPath: String, newPath: String) {
-            if (oldPath == newPath) return
-            val existing = changes.remove(oldPath)
-
-            if (existing?.kind == ChangeKind.ADDED) {
-                changes[newPath] = existing.copy(kind = ChangeKind.ADDED)
-                return
-            }
-
-            val content = existing?.originalContent ?: readContentSafe(file)
-            changes[newPath] = TrackedChange(
-                kind = ChangeKind.MOVED,
-                originalPath = oldPath,
-                originalContent = content
-            )
         }
     }
 

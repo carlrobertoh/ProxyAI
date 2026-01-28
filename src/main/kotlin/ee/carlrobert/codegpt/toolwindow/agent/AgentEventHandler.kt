@@ -311,10 +311,21 @@ class AgentEventHandler(
             }
 
             else -> {
-                if (args is WriteTool.Args) {
-                    lastWriteArgs = args
-                } else if (args is EditTool.Args) {
-                    lastEditArgs = args
+                when (args) {
+                    is EditTool.Args -> {
+                        lastEditArgs = args
+                        val originalContent = runCatching {
+                            java.io.File(args.filePath).readText()
+                        }.getOrNull() ?: ""
+                        project.service<RollbackService>()
+                            .trackEdit(sessionId, args.filePath, args, originalContent)
+                    }
+
+                    is WriteTool.Args -> {
+                        lastWriteArgs = args
+                        project.service<RollbackService>()
+                            .trackWrite(sessionId, args.filePath, args)
+                    }
                 }
 
                 runInEdt {
