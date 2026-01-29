@@ -16,8 +16,19 @@ import ee.carlrobert.codegpt.conversations.message.TokenUsage
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.ui.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.*
+import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.Badge
+import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolKind
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.applyStringReplacement
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.diffBadgeText
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.getFileContentWithFallback
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel
+import ee.carlrobert.codegpt.util.UpdateSnippetUtil
+import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import kotlinx.coroutines.*
 import java.awt.Component
@@ -60,7 +71,7 @@ class AgentEventHandler(
     private var lastWriteArgs: WriteTool.Args? = null
 
     @Volatile
-    private var lastEditArgs: EditTool.Args? = null
+    private var lastEditArgs: EditArgsSnapshot? = null
 
     private val approvalQueue: ArrayDeque<ApprovalRequest> = ArrayDeque()
 
@@ -241,16 +252,33 @@ class AgentEventHandler(
 
         if (isWrite || isEdit) {
             val deferred = CompletableDeferred<Boolean>()
+            val resolvedRequest = if (isEdit && request.payload == null) {
+                val payload = lastEditArgs?.let { args ->
+                    EditPayload(
+                        filePath = args.filePath,
+                        oldString = args.oldString,
+                        newString = args.newString,
+                        replaceAll = args.replaceAll,
+                        proposedContent = null
+                    )
+                }
+                if (payload != null) request.copy(payload = payload) else request
+            } else {
+                request
+            }
             runInEdt {
-                approvalQueue.addLast(ApprovalRequest(request, deferred))
+                approvalQueue.addLast(ApprovalRequest(resolvedRequest, deferred))
                 maybeShowNextApproval()
             }
 
             lastWriteArgs?.let {
                 if (isWrite) agentApprovalManager.openWriteApprovalDiff(it, deferred)
             }
-            lastEditArgs?.let {
-                if (isEdit) agentApprovalManager.openEditApprovalDiff(it, deferred)
+            lastEditArgs?.let { args ->
+                if (isEdit) {
+                    val proposed = (resolvedRequest.payload as? EditPayload)?.proposedContent
+                    agentApprovalManager.openEditApprovalDiff(args, deferred, proposed)
+                }
             }
             return deferred.await()
         }
@@ -277,7 +305,7 @@ class AgentEventHandler(
     override fun onTextReceived(text: String) {
         runInEdt {
             val cleanedText =
-                text.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+                text.replace(Regex("<tool_call>.*?<tool_call>", RegexOption.DOT_MATCHES_ALL), "")
             currentResponseBody?.updateMessage(cleanedText)
             scrollablePanel.update()
             scrollablePanel.scrollToBottom()
@@ -312,19 +340,12 @@ class AgentEventHandler(
 
             else -> {
                 when (args) {
-                    is EditTool.Args -> {
-                        lastEditArgs = args
-                        val originalContent = runCatching {
-                            java.io.File(args.filePath).readText()
-                        }.getOrNull() ?: ""
-                        project.service<RollbackService>()
-                            .trackEdit(sessionId, args.filePath, args, originalContent)
+                    is EditTool.Args, is ProxyAIEditTool.Args, is EditArgsSnapshot -> {
+                        trackEditOperation(args)
                     }
 
                     is WriteTool.Args -> {
-                        lastWriteArgs = args
-                        project.service<RollbackService>()
-                            .trackWrite(sessionId, args.filePath, args)
+                        trackWriteOperation(args)
                     }
                 }
 
@@ -415,9 +436,10 @@ class AgentEventHandler(
                     RunEntry.WriteEntry(cid, parentId, args, null)
                 }
 
-                is EditTool.Args -> {
-                    lastEditArgs = args
-                    RunEntry.EditEntry(cid, parentId, args, null)
+                is EditTool.Args, is ProxyAIEditTool.Args, is EditArgsSnapshot -> {
+                    val snapshot = snapshotFromEditArgs(args) ?: return@runInEdt
+                    lastEditArgs = snapshot
+                    RunEntry.EditEntry(cid, parentId, snapshot, null)
                 }
 
                 is TaskTool.Args -> RunEntry.TaskEntry(cid, parentId, args, null)
@@ -545,6 +567,10 @@ class AgentEventHandler(
             }
         }
 
+        if (next.model.type == ToolApprovalType.EDIT) {
+            updateEditToolCardPreview(next.model)
+        }
+
         runCatching {
             project.service<AgentToolWindowContentManager>()
                 .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.APPROVAL)
@@ -586,6 +612,56 @@ class AgentEventHandler(
         approvalContainer.isVisible = true
         approvalContainer.revalidate()
         approvalContainer.repaint()
+    }
+
+    private fun updateEditToolCardPreview(request: ToolApprovalRequest) {
+        val payload = request.payload ?: return
+        val (path, before, after) = when (payload) {
+            is ProxyAIEditPayload -> Triple(
+                payload.filePath,
+                payload.originalContent,
+                payload.updatedContent
+            )
+            is EditPayload -> {
+                val rawSnippet = payload.newString.ifBlank { payload.oldString }
+                if (UpdateSnippetUtil.containsMarkers(rawSnippet)) return
+                val currentContent = getFileContentWithFallback(payload.filePath)
+                val proposed = payload.proposedContent ?: applyStringReplacement(
+                    currentContent,
+                    payload.oldString,
+                    payload.newString,
+                    payload.replaceAll
+                )
+                Triple(payload.filePath, currentContent, proposed)
+            }
+            else -> return
+        }
+
+        val (inserted, deleted, changed) = lineDiffStats(before, after)
+        val texts = diffBadgeText(inserted, deleted, changed)
+        val diffBadges = listOf(
+            Badge(texts.inserted, ChangeColors.inserted),
+            Badge(texts.deleted, ChangeColors.deleted),
+            Badge(texts.changed, ChangeColors.modified)
+        )
+
+        val card = mainToolCards.values.firstOrNull { candidate ->
+            val descriptor = candidate.getDescriptor()
+            descriptor.kind == ToolKind.EDIT && descriptor.fileLink?.path == path
+        } ?: return
+
+        card.updateDescriptor { descriptor ->
+            val nonDiffBadges = descriptor.secondaryBadges.filterNot { isDiffBadge(it) }
+            descriptor.copy(
+                secondaryBadges = nonDiffBadges + diffBadges,
+                summary = null
+            )
+        }
+    }
+
+    private fun isDiffBadge(badge: Badge): Boolean {
+        val text = badge.text
+        return text.startsWith("[+") || text.startsWith("[-") || text.startsWith("[~")
     }
 
     private fun maybeShowNextQuestion() {
@@ -690,5 +766,27 @@ class AgentEventHandler(
         mainToolCards.clear()
         approvalQueue.clear()
         subagentViewHolders.clear()
+    }
+
+    private fun trackEditOperation(args: Any?) {
+        val snapshot = snapshotFromEditArgs(args) ?: return
+        lastEditArgs = snapshot
+        val normalizedPath = snapshot.filePath.replace("\\", "/")
+        val originalContent = runCatching {
+            val vf = LocalFileSystem.getInstance().findFileByPath(normalizedPath)
+            val documentText = vf?.let { file ->
+                runReadAction { FileDocumentManager.getInstance().getDocument(file)?.text }
+            }
+            documentText ?: java.io.File(normalizedPath).readText()
+        }.getOrNull() ?: ""
+        project.service<RollbackService>()
+            .trackEdit(sessionId, normalizedPath, snapshot, originalContent)
+    }
+
+    private fun trackWriteOperation(args: WriteTool.Args) {
+        lastWriteArgs = args
+        val normalizedPath = args.filePath.replace("\\", "/")
+        project.service<RollbackService>()
+            .trackWrite(sessionId, normalizedPath, args)
     }
 }

@@ -130,7 +130,8 @@ object AgentFactory {
             sessionId,
             approveToolCall,
             selected,
-            approvalBashHandler(approveToolCall)
+            approvalBashHandler(approveToolCall),
+            provider
         )
 
         return AIAgent.Companion(
@@ -295,7 +296,8 @@ object AgentFactory {
                 sessionId,
                 approveToolCall,
                 selectedTools,
-                approvalBashHandler(approveToolCall)
+                approvalBashHandler(approveToolCall),
+                provider
             ),
             installFeatures = {
                 installFeatures()
@@ -363,7 +365,8 @@ object AgentFactory {
                 sessionId,
                 approveToolCall = approveToolCall,
                 selected = selectedTools,
-                bashConfirmationHandler = { ShellCommandConfirmation.Approved }
+                bashConfirmationHandler = { ShellCommandConfirmation.Approved },
+                provider = provider
             ),
             installFeatures = {
                 installFeatures()
@@ -520,21 +523,30 @@ object AgentFactory {
         sessionId: String,
         approveToolCall: (suspend (name: String, details: String) -> Boolean)?,
         selected: Set<SubagentTool>,
-        bashConfirmationHandler: BashCommandConfirmationHandler
+        bashConfirmationHandler: BashCommandConfirmationHandler,
+        provider: ServiceType
     ): ToolRegistry {
         return ToolRegistry.Companion {
             if (SubagentTool.READ in selected) tool(ReadTool(project))
             if (SubagentTool.EDIT in selected) {
-                tool(
-                    ConfirmingEditTool(EditTool(project)) { name, details ->
-                        approveToolCall?.invoke(name, details) ?: true
-                    }
-                )
+                if (provider == ServiceType.PROXYAI) {
+                    tool(
+                        ConfirmingProxyAIEditTool(ProxyAIEditTool(project), project) { request ->
+                            approveToolCall?.invoke("Edit", request.details) ?: false
+                        }
+                    )
+                } else {
+                    tool(
+                        ConfirmingEditTool(EditTool(project)) { name, details ->
+                            approveToolCall?.invoke(name, details) ?: false
+                        }
+                    )
+                }
             }
             if (SubagentTool.WRITE in selected) {
                 tool(
                     ConfirmingWriteTool(WriteTool(project)) { name, details ->
-                        approveToolCall?.invoke(name, details) ?: true
+                        approveToolCall?.invoke(name, details) ?: false
                     }
                 )
             }

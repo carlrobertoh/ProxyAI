@@ -30,10 +30,11 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.agent.tools.EditTool
+import ee.carlrobert.codegpt.agent.tools.EditArgsSnapshot
 import ee.carlrobert.codegpt.agent.tools.WriteTool
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.applyStringReplacement
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.getFileContentWithFallback
+import ee.carlrobert.codegpt.util.UpdateSnippetUtil
 import kotlinx.coroutines.CompletableDeferred
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -85,34 +86,47 @@ class AgentApprovalManager(
         attachApprovalActionsAndShowDiff(request, decision)
     }
 
-    fun openEditApprovalDiff(args: EditTool.Args, decision: CompletableDeferred<Boolean>) {
+    fun openEditApprovalDiff(
+        args: EditArgsSnapshot,
+        decision: CompletableDeferred<Boolean>,
+        proposedContent: String? = null
+    ) {
         val path = try {
             Paths.get(args.filePath).normalize().toString()
         } catch (_: Exception) {
             args.filePath
         }
 
-        val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(path)
-        val factory = DiffContentFactory.getInstance()
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(path)
+            val factory = DiffContentFactory.getInstance()
 
-        val current = getFileContentWithFallback(path)
-        val proposed =
-            applyStringReplacement(current, args.oldString, args.newString, args.replaceAll)
-
-        val left = if (vf != null) factory.create(project, vf) else factory.create(project, current)
-        val rightDoc =
-            EditorFactory.getInstance().createDocument(convertLineSeparators(proposed)).apply {
-                setReadOnly(true)
+            val current = getFileContentWithFallback(path)
+            val proposed = proposedContent ?: run {
+                val rawSnippet = if (args.newString.isNotBlank()) args.newString else args.oldString
+                if (UpdateSnippetUtil.containsMarkers(rawSnippet)) {
+                    current
+                } else {
+                    applyStringReplacement(current, args.oldString, args.newString, args.replaceAll)
+                }
             }
-        val right = if (vf != null) factory.create(project, rightDoc, vf)
-        else factory.create(project, rightDoc, FileTypes.PLAIN_TEXT)
 
-        val request = SimpleDiffRequest(
-            "Edit File",
-            listOf(left, right),
-            listOf("Current", "Proposed")
-        )
-        attachApprovalActionsAndShowDiff(request, decision)
+            val left = if (vf != null) factory.create(project, vf) else factory.create(project, current)
+            val rightDoc =
+                EditorFactory.getInstance().createDocument(convertLineSeparators(proposed)).apply {
+                    setReadOnly(true)
+                }
+            val right = if (vf != null) factory.create(project, rightDoc, vf)
+            else factory.create(project, rightDoc, FileTypes.PLAIN_TEXT)
+
+            val request = SimpleDiffRequest(
+                "Edit File",
+                listOf(left, right),
+                listOf("Current", "Proposed")
+            )
+
+            runInEdt { attachApprovalActionsAndShowDiff(request, decision) }
+        }
     }
 
     private fun attachApprovalActionsAndShowDiff(
@@ -287,6 +301,7 @@ class AgentApprovalManager(
             val fileEditor = manager.getSelectedEditor(diffFile)
                 ?: manager.getEditors(diffFile).firstOrNull()
             val target = fileEditor?.component ?: return@runInEdt
+            if (!target.isShowing) return@runInEdt
 
             val popup = JBPopupFactory.getInstance()
                 .createComponentPopupBuilder(panel, null)
@@ -314,6 +329,7 @@ class AgentApprovalManager(
 
                 private fun relocate() {
                     if (popup.isDisposed) return
+                    if (!target.isShowing) return
                     val loc = target.locationOnScreen
                     val nx = loc.x + target.width - size.width - margin
                     val ny = loc.y + target.height - size.height - margin

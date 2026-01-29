@@ -17,14 +17,18 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.applyStringReplacement
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.diffBadgeText
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.getFileContentWithFallback
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
+import ee.carlrobert.codegpt.util.UpdateSnippetUtil
 import java.awt.BorderLayout
+import java.awt.FlowLayout
 import java.nio.file.Paths
 import javax.swing.BorderFactory
 import javax.swing.JComponent
+import javax.swing.JPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.EditorFactory as ChatEditorFactory
 
 class EditApprovalPanel(
@@ -48,9 +52,12 @@ class EditApprovalPanel(
             )
         )
 
-        val payload = request.payload as? EditPayload
-        val filePath = payload?.filePath ?: ""
-        val diffComponent = createInlineDiffComponent(payload)
+        val filePath = when (val payload = request.payload) {
+            is EditPayload -> payload.filePath
+            is ProxyAIEditPayload -> payload.filePath
+            else -> ""
+        }
+        val diffComponent = createInlineDiffComponent()
 
         add(
             panel {
@@ -75,15 +82,7 @@ class EditApprovalPanel(
                         cell(link).gap(RightGap.SMALL)
                         diffCounts?.let { (ins, del, changed) ->
                             if (ins + del + changed > 0) {
-                                cell(colorLabel("+${ins}", ChangeColors.inserted).apply {
-                                    font = JBUI.Fonts.smallFont()
-                                })
-                                cell(colorLabel("-${del}", ChangeColors.deleted).apply {
-                                    font = JBUI.Fonts.smallFont()
-                                })
-                                cell(colorLabel("~${changed}", ChangeColors.modified).apply {
-                                    font = JBUI.Fonts.smallFont()
-                                })
+                                cell(compactDiffPanel(ins, del, changed))
                             }
                         }
                     }
@@ -113,27 +112,61 @@ class EditApprovalPanel(
         )
     }
 
-    private fun createInlineDiffComponent(payload: EditPayload?): JComponent? {
-        if (payload == null) return null
-        val path = try {
-            Paths.get(payload.filePath).normalize().toString()
-        } catch (_: Exception) {
-            payload.filePath
+    private fun createInlineDiffComponent(): JComponent? {
+        val payload = request.payload ?: return null
+        
+        val (path, current, proposed) = when (payload) {
+            is EditPayload -> {
+                val normalizedPath = try {
+                    Paths.get(payload.filePath).normalize().toString()
+                } catch (_: Exception) {
+                    payload.filePath
+                }
+                val currentContent = getFileContentWithFallback(normalizedPath)
+                val proposedContent = if (!payload.proposedContent.isNullOrBlank()) {
+                    payload.proposedContent
+                } else {
+                    val rawSnippet = if (payload.newString.isNotBlank()) payload.newString else payload.oldString
+                    if (UpdateSnippetUtil.containsMarkers(rawSnippet)) {
+                        return JBLabel("Preview not available").apply {
+                            foreground = JBUI.CurrentTheme.Label.disabledForeground()
+                            border = JBUI.Borders.empty(8)
+                        }.let { label -> BorderLayoutPanel().apply { addToCenter(label) } }
+                    }
+                    applyStringReplacement(
+                        currentContent,
+                        payload.oldString,
+                        payload.newString,
+                        payload.replaceAll
+                    )
+                }
+                Triple(normalizedPath, currentContent, proposedContent)
+            }
+            is ProxyAIEditPayload -> {
+                val normalizedPath = try {
+                    Paths.get(payload.filePath).normalize().toString()
+                } catch (_: Exception) {
+                    payload.filePath
+                }
+                Triple(normalizedPath, payload.originalContent, payload.updatedContent)
+            }
+            else -> return null
         }
-        val vfs = LocalFileSystem.getInstance().refreshAndFindFileByPath(path)
-
-        val current = getFileContentWithFallback(path)
-        val proposed = applyStringReplacement(
-            current,
-            payload.oldString,
-            payload.newString,
-            payload.replaceAll
-        )
 
         val (insRaw, delRaw, changed) = lineDiffStats(current, proposed)
         diffCounts = Triple(insRaw, delRaw, changed)
 
+        val vfs = LocalFileSystem.getInstance().refreshAndFindFileByPath(path)
         val language = vfs?.extension ?: "text"
+        return buildDiffEditor(current, proposed, language, path)
+    }
+
+    private fun buildDiffEditor(
+        current: String,
+        proposed: String,
+        language: String,
+        path: String
+    ): JComponent {
         val segment = ReplaceWaiting(current, proposed, language, path)
         val editor = ChatEditorFactory.createEditor(project, segment)
         ResponseEditorPanel.RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor)?.let { viewer ->
@@ -180,4 +213,20 @@ class EditApprovalPanel(
 
     private fun colorLabel(text: String, color: JBColor): JBLabel =
         JBLabel(text).apply { foreground = color }
+
+    private fun compactDiffPanel(inserted: Int, deleted: Int, changed: Int): JComponent {
+        val texts = diffBadgeText(inserted, deleted, changed)
+        return JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            isOpaque = false
+            add(colorLabel(texts.inserted, ChangeColors.inserted).apply {
+                font = JBUI.Fonts.smallFont()
+            })
+            add(colorLabel(texts.deleted, ChangeColors.deleted).apply {
+                font = JBUI.Fonts.smallFont()
+            })
+            add(colorLabel(texts.changed, ChangeColors.modified).apply {
+                font = JBUI.Fonts.smallFont()
+            })
+        }
+    }
 }

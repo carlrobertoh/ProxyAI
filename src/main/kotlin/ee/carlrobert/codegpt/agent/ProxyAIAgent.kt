@@ -83,7 +83,7 @@ object ProxyAIAgent {
         val projectInstructions = searchForInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
-        val toolRegistry = createToolRegistry(project, events, sessionId)
+        val toolRegistry = createToolRegistry(project, events, sessionId, provider)
         val agentModel = service<ModelSelectionService>().getAgentModel()
         val agent = AIAgent(
             promptExecutor = executor,
@@ -225,26 +225,38 @@ object ProxyAIAgent {
     private fun createToolRegistry(
         project: Project,
         events: AgentEvents,
-        sessionId: String
+        sessionId: String,
+        provider: ServiceType
     ): ToolRegistry {
         return ToolRegistry {
             tool(ReadTool(project))
-            tool(
-                ConfirmingEditTool(EditTool(project)) { name, details ->
-                    try {
-                        events.approveToolCall(
-                            ToolApprovalRequest(
-                                if (name.equals("Edit", true)
-                                ) ToolApprovalType.EDIT else ToolApprovalType.GENERIC,
-                                "Allow $name?",
-                                details
-                            )
+            val approveHandler: suspend (String, String) -> Boolean = { name, details ->
+                try {
+                    events.approveToolCall(
+                        ToolApprovalRequest(
+                            if (name.equals("Edit", true)
+                            ) ToolApprovalType.EDIT else ToolApprovalType.GENERIC,
+                            "Allow $name?",
+                            details
                         )
-                    } catch (_: Exception) {
-                        false
-                    }
+                    )
+                } catch (_: Exception) {
+                    false
                 }
-            )
+            }
+            if (provider == ServiceType.PROXYAI) {
+                tool(
+                    ConfirmingProxyAIEditTool(ProxyAIEditTool(project), project) { request ->
+                        try {
+                            events.approveToolCall(request)
+                        } catch (_: Exception) {
+                            false
+                        }
+                    }
+                )
+            } else {
+                tool(ConfirmingEditTool(EditTool(project), approveHandler))
+            }
             tool(
                 ConfirmingWriteTool(WriteTool(project)) { name, details ->
                     try {
