@@ -9,6 +9,7 @@ import com.intellij.openapi.util.io.FileUtil.createDirectory
 import com.intellij.openapi.vfs.JarFileSystem
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings.getLlamaModelsPath
 import java.io.File
@@ -42,7 +43,6 @@ object FileUtil {
         }
     }
 
-    @JvmStatic
     fun readContent(virtualFile: VirtualFile): String {
         try {
             return VfsUtilCore.loadText(virtualFile)
@@ -113,7 +113,6 @@ object FileUtil {
         }.takeIf { it } ?: throw RuntimeException("Failed to create directory: $directoryPath")
     }
 
-    @JvmStatic
     fun getFileExtension(filename: String?): String {
         val pattern = Pattern.compile("[^.]+$")
         val matcher = filename?.let { pattern.matcher(it) }
@@ -124,7 +123,6 @@ object FileUtil {
         return ""
     }
 
-    @JvmStatic
     fun findLanguageExtensionMapping(language: String? = ""): Map.Entry<String, String> {
         val defaultValue = mapOf("Text" to ".txt").entries.first()
         val mapper = ObjectMapper()
@@ -169,7 +167,6 @@ object FileUtil {
         }
     }
 
-    @JvmStatic
     fun getImageMediaType(fileName: String?): String {
         return when (val fileExtension = getFileExtension(fileName)) {
             "png" -> "image/png"
@@ -178,7 +175,6 @@ object FileUtil {
         }
     }
 
-    @JvmStatic
     fun getResourceContent(filePath: String?): String {
         try {
             Objects.requireNonNull(filePath?.let { FileUtil::class.java.getResourceAsStream(it) })
@@ -216,7 +212,6 @@ object FileUtil {
         return value.toString()
     }
 
-    @JvmStatic
     fun findFirstExtension(
         languageFileExtensionMappings: List<LanguageFileExtensionDetails>,
         language: String? = ""
@@ -252,6 +247,29 @@ object FileUtil {
         } catch (t: Throwable) {
             logger.error(t)
             null
+        }
+    }
+
+    fun findVirtualFile(normalizedPath: String): VirtualFile? {
+        return VirtualFileManager.getInstance().refreshAndFindFileByUrl("file://$normalizedPath")
+            ?: LocalFileSystem.getInstance().findFileByIoFile(File(normalizedPath))
+    }
+
+    fun validateFileForEdit(filePath: String): Result<File> {
+        val normalizedPath = filePath.replace("\\", "/")
+        val file = File(normalizedPath)
+
+        return when {
+            !file.exists() -> Result.failure(
+                IllegalArgumentException("File not found: $filePath (File does not exist on filesystem)")
+            )
+            !file.isFile -> Result.failure(
+                IllegalArgumentException("Path is not a file: $filePath")
+            )
+            !file.canWrite() -> Result.failure(
+                IllegalArgumentException("File is not writable: $filePath")
+            )
+            else -> Result.success(file)
         }
     }
 }

@@ -210,4 +210,18 @@ object EditorUtil {
             }
         }
     }
+
+    @JvmStatic
+    fun writeDocumentContent(project: Project, virtualFile: VirtualFile, content: String): Boolean {
+        val document = runReadAction {
+            FileDocumentManager.getInstance().getDocument(virtualFile)
+        } ?: return false
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            document.setText(content)
+            FileDocumentManager.getInstance().saveDocument(document)
+        }
+
+        return true
+    }
 }

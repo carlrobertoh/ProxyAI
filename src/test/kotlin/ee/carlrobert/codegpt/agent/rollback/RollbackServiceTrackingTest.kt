@@ -1,7 +1,7 @@
 package ee.carlrobert.codegpt.agent.rollback
 
 import com.intellij.openapi.vfs.LocalFileSystem
-import ee.carlrobert.codegpt.agent.tools.EditTool
+import ee.carlrobert.codegpt.agent.tools.EditArgsSnapshot
 import ee.carlrobert.codegpt.agent.tools.WriteTool
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
@@ -28,7 +28,7 @@ class RollbackServiceTrackingTest : IntegrationTest() {
         rollbackService.trackEdit(
             sessionId = sessionId,
             filePath = filePath,
-            args = EditTool.Args(filePath, "before", "after", "test", false),
+            args = EditArgsSnapshot(filePath, "before", "after", false, "test"),
             originalContent = "before"
         )
         val snapshot = rollbackService.finishSession(sessionId)

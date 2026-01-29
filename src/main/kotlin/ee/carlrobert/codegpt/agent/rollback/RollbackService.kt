@@ -3,16 +3,18 @@ package ee.carlrobert.codegpt.agent.rollback
 import com.intellij.history.Label
 import com.intellij.history.LocalHistory
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
-import ee.carlrobert.codegpt.agent.tools.EditTool
+import ee.carlrobert.codegpt.agent.tools.EditArgsSnapshot
 import ee.carlrobert.codegpt.agent.tools.WriteTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,9 +53,15 @@ class RollbackService(private val project: Project) {
      * Track an EditTool operation directly from the agent.
      * This captures the original file content before the edit is applied.
      */
-    fun trackEdit(sessionId: String, filePath: String, args: EditTool.Args, originalContent: String) {
+    fun trackEdit(
+        sessionId: String,
+        filePath: String,
+        args: EditArgsSnapshot,
+        originalContent: String
+    ) {
         val tracker = activeRuns[sessionId] ?: return
-        tracker.recordExplicitEdit(filePath, args, originalContent)
+        val normalizedPath = filePath.replace("\\", "/")
+        tracker.recordExplicitEdit(normalizedPath, args, originalContent)
     }
 
     /**
@@ -62,7 +70,8 @@ class RollbackService(private val project: Project) {
      */
     fun trackWrite(sessionId: String, filePath: String, args: WriteTool.Args) {
         val tracker = activeRuns[sessionId] ?: return
-        tracker.recordExplicitWrite(filePath, args)
+        val normalizedPath = filePath.replace("\\", "/")
+        tracker.recordExplicitWrite(normalizedPath, args)
     }
 
     fun startSession(sessionId: String) {
@@ -94,16 +103,23 @@ class RollbackService(private val project: Project) {
     }
 
     fun getDiffData(sessionId: String, path: String): RollbackDiffData? {
-        if (!isTrackable(path)) return null
         val snapshot = snapshots[sessionId] ?: return null
         val change = snapshot.changes[path] ?: return null
+        if (change.kind != ChangeKind.DELETED && !isTrackable(path)) return null
         val beforeText = when (change.kind) {
             ChangeKind.ADDED -> ""
-            else -> decodeLabelContent(
-                snapshot.labelRef,
-                change.originalPath ?: path,
-                change.originalContent
-            )
+            else -> {
+                val original = change.originalContent
+                if (original != null && original.isNotEmpty()) {
+                    decodeContent(original)
+                } else {
+                    decodeLabelContent(
+                        snapshot.labelRef,
+                        change.originalPath ?: path,
+                        change.originalContent
+                    )
+                }
+            }
         }
         val afterText = when (change.kind) {
             ChangeKind.DELETED -> ""
@@ -212,6 +228,10 @@ class RollbackService(private val project: Project) {
 
     private fun readCurrentText(path: String): String {
         val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(path) ?: return ""
+        val docText = runReadAction {
+            FileDocumentManager.getInstance().getDocument(vf)?.text
+        }
+        if (docText != null) return docText
         return runCatching { VfsUtilCore.loadText(vf) }.getOrDefault("")
     }
 
@@ -348,7 +368,7 @@ class RollbackService(private val project: Project) {
         val labelRef: Label,
         val changes: MutableMap<String, TrackedChange> = ConcurrentHashMap()
     ) {
-        fun recordExplicitEdit(filePath: String, args: EditTool.Args, originalContent: String) {
+        fun recordExplicitEdit(filePath: String, args: EditArgsSnapshot, originalContent: String) {
             val existing = changes[filePath]
             if (existing?.kind == ChangeKind.ADDED) return
             if (existing?.kind == ChangeKind.MOVED) return
