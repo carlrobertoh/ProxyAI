@@ -6,13 +6,18 @@ import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
+import io.ktor.client.*
 
-class InceptionAILLMClient(apiKey: String) : OpenAILLMClient(
+class InceptionAILLMClient(
+    apiKey: String,
+    baseClient: HttpClient = HttpClient()
+) : OpenAILLMClient(
     apiKey = apiKey,
     settings = OpenAIClientSettings(
         baseUrl = "https://api.inceptionlabs.ai",
         chatCompletionsPath = "v1/chat/completions"
-    )
+    ),
+    baseClient = baseClient
 ) {
     data object Inception : LLMProvider("inception", "Inception")
 

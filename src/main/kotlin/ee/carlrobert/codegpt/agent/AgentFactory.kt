@@ -33,6 +33,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
+import ee.carlrobert.codegpt.agent.clients.HttpClientProvider
 import ee.carlrobert.codegpt.agent.clients.InceptionAILLMClient
 import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
 import ee.carlrobert.codegpt.agent.clients.RetryingPromptExecutor
@@ -165,26 +166,28 @@ object AgentFactory {
     }
 
     fun createExecutor(provider: ServiceType, events: AgentEvents? = null): PromptExecutor {
+        val httpClient = HttpClientProvider.createHttpClient()
         return when (provider) {
             ServiceType.OPENAI -> {
                 val apiKey = getCredential(CredentialKey.OpenaiApiKey) ?: ""
-                createRetryingExecutor(OpenAILLMClient(apiKey), events)
+                createRetryingExecutor(OpenAILLMClient(apiKey, baseClient = httpClient), events)
             }
 
             ServiceType.ANTHROPIC -> {
                 val apiKey = getCredential(CredentialKey.AnthropicApiKey) ?: ""
-                createRetryingExecutor(AnthropicLLMClient(apiKey), events)
+                createRetryingExecutor(AnthropicLLMClient(apiKey, baseClient = httpClient), events)
             }
 
             ServiceType.GOOGLE -> {
                 val apiKey = getCredential(CredentialKey.GoogleApiKey) ?: ""
-                createRetryingExecutor(GoogleLLMClient(apiKey), events)
+                createRetryingExecutor(GoogleLLMClient(apiKey, baseClient = httpClient), events)
             }
 
             ServiceType.OLLAMA -> {
                 createRetryingExecutor(
                     OllamaClient(
-                        baseUrl = service<OllamaSettings>().state.host ?: "http://localhost:11434"
+                        baseUrl = service<OllamaSettings>().state.host ?: "http://localhost:11434",
+                        baseClient = httpClient
                     ),
                     events
                 )
@@ -192,7 +195,7 @@ object AgentFactory {
 
             ServiceType.MISTRAL -> {
                 val apiKey = getCredential(CredentialKey.MistralApiKey) ?: ""
-                createRetryingExecutor(MistralAILLMClient(apiKey), events)
+                createRetryingExecutor(MistralAILLMClient(apiKey, baseClient = httpClient), events)
             }
 
             ServiceType.CUSTOM_OPENAI -> {
@@ -207,6 +210,7 @@ object AgentFactory {
                     CustomOpenAILLMClient.fromSettingsState(
                         apiKey,
                         state.chatCompletionSettings,
+                        httpClient
                     ),
                     events
                 )
@@ -214,12 +218,12 @@ object AgentFactory {
 
             ServiceType.PROXYAI -> {
                 val apiKey = getCredential(CredentialKey.CodeGptApiKey) ?: ""
-                createRetryingExecutor(ProxyAILLMClient(apiKey), events)
+                createRetryingExecutor(ProxyAILLMClient(apiKey, baseClient = httpClient), events)
             }
 
             ServiceType.INCEPTION -> {
                 val apiKey = getCredential(CredentialKey.InceptionApiKey) ?: ""
-                createRetryingExecutor(InceptionAILLMClient(apiKey), events)
+                createRetryingExecutor(InceptionAILLMClient(apiKey, baseClient = httpClient), events)
             }
 
             else -> throw UnsupportedOperationException("Provider not supported: $provider")
