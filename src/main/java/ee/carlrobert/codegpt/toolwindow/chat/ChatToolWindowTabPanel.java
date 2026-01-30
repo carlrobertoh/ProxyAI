@@ -73,6 +73,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
@@ -283,14 +284,42 @@ public class ChatToolWindowTabPanel implements Disposable {
     return builder.build();
   }
 
+  /**
+    * Returns true if the directory should be excluded from context (e.g. __pycache__).
+  */
+  private boolean isExcludedDir(VirtualFile vf) {
+    return vf.isDirectory() && "__pycache__".equals(vf.getName());
+  }
+
+  private List<VirtualFile> expandFolder(VirtualFile folder) {
+    List<VirtualFile> result = new ArrayList<>();
+    for (VirtualFile child : folder.getChildren()) {
+      if (isExcludedDir(child)) {
+        continue;
+      }
+      if (child.isDirectory()) {
+        result.addAll(expandFolder(child));
+      } else {
+        result.add(child);
+      }
+    }
+    return result;
+  }
+
   private List<ReferencedFile> getReferencedFiles(List<? extends TagDetails> tags) {
     return tags.stream()
-        .map(this::getVirtualFile)
-        .filter(Objects::nonNull)
-        .distinct()
-        .map(ReferencedFile::from)
-        .toList();
-  }
+      .flatMap(tag -> {
+        VirtualFile vf = getVirtualFile(tag);
+        if (vf == null) return Stream.empty();
+        if (tag instanceof FolderTagDetails) {
+          return expandFolder(vf).stream();
+        }
+        return Stream.of(vf);
+      })
+      .distinct()
+      .map(ReferencedFile::from)
+      .toList();
+    }
 
   private List<UUID> getConversationHistoryIds(List<? extends TagDetails> tags) {
     return tags.stream()
@@ -382,18 +411,37 @@ public class ChatToolWindowTabPanel implements Disposable {
     tagManager.clear();
   }
 
+  private List<VirtualFile> flattenFiles(List<VirtualFile> roots) {
+    return roots.stream()
+      .flatMap(vf -> {
+        if (isExcludedDir(vf)) {
+          return Stream.empty();
+        }
+        if (vf.isDirectory()) {
+          return expandFolder(vf).stream();
+        }
+        return Stream.of(vf);
+      })
+      .distinct()
+      .collect(Collectors.toList());
+    }
+
   public void includeFiles(List<VirtualFile> referencedFiles) {
+    List<VirtualFile> allFiles = flattenFiles(referencedFiles);
+
     userInputPanel.includeFiles(referencedFiles);
     ReadAction.nonBlocking(() -> {
               var encodingManager = EncodingManager.getInstance();
-              return referencedFiles.stream()
-                  .mapToInt(it -> encodingManager.countTokens(ReferencedFile.from(it).fileContent()))
-                  .sum();
-            }
-        )
+              return allFiles.stream()
+                      .mapToInt(it -> encodingManager.countTokens(
+                        ReferencedFile.from(it).fileContent()))
+                      .sum();
+                    }
+            )
         .inSmartMode(project)
         .expireWith(project)
-        .finishOnUiThread(ModalityState.any(), totalTokensPanel::updateReferencedFilesTokens)
+        .finishOnUiThread(ModalityState.any(),
+                        totalTokensPanel::updateReferencedFilesTokens)
         .submit(AppExecutorUtil.getAppExecutorService());
   }
 
