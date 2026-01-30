@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.toolwindow.agent.ui.renderer
 
 import com.intellij.ui.JBColor
 import java.awt.Color
+import java.awt.Graphics2D
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Path
@@ -10,6 +11,23 @@ object ChangeColors {
     val inserted: JBColor = JBColor(Color(0x2E7D32), Color(0x81C784))
     val deleted: JBColor = JBColor(Color(0xC62828), Color(0xEF9A9A))
     val modified: JBColor = JBColor(Color(0x1565C0), Color(0x90CAF9))
+}
+
+data class DiffBadgeText(
+    val inserted: String,
+    val deleted: String,
+    val changed: String,
+    val summary: String
+)
+
+fun diffBadgeText(inserted: Int, deleted: Int, changed: Int, spaced: Boolean = true): DiffBadgeText {
+    val sep = if (spaced) " " else ""
+    return DiffBadgeText(
+        inserted = "[+$inserted]$sep",
+        deleted = "[-$deleted]$sep",
+        changed = "[~$changed]",
+        summary = "[+$inserted]${sep}[-$deleted]${sep}[~$changed]"
+    )
 }
 
 fun getFileContentWithFallback(path: String, charset: Charset = Charsets.UTF_8): String {
@@ -67,4 +85,11 @@ private fun longestCommonSubsequenceLength(a: List<String>, b: List<String>): In
     }
 
     return curr[smallSize]
+}
+
+fun drawCenteredText(g2: Graphics2D, text: String, width: Int, height: Int) {
+    val metrics = g2.fontMetrics
+    val x = (width - metrics.stringWidth(text)) / 2
+    val y = (height - metrics.height) / 2 + metrics.ascent
+    g2.drawString(text, x, y)
 }

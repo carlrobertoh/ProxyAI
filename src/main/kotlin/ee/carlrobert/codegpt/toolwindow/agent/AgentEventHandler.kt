@@ -5,30 +5,24 @@ import ai.koog.prompt.executor.clients.LLMClientException
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.agent.*
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
-import ee.carlrobert.codegpt.conversations.message.TokenUsage
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.ui.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.Badge
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolKind
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.applyStringReplacement
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.diffBadgeText
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.getFileContentWithFallback
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.*
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel
-import ee.carlrobert.codegpt.util.UpdateSnippetUtil
-import com.intellij.openapi.application.runReadAction
-import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import kotlinx.coroutines.*
 import java.awt.Component
@@ -71,7 +65,7 @@ class AgentEventHandler(
     private var lastWriteArgs: WriteTool.Args? = null
 
     @Volatile
-    private var lastEditArgs: EditArgsSnapshot? = null
+    private var lastEditArgs: EditTool.Args? = null
 
     private val approvalQueue: ArrayDeque<ApprovalRequest> = ArrayDeque()
 
@@ -276,7 +270,10 @@ class AgentEventHandler(
             }
             lastEditArgs?.let { args ->
                 if (isEdit) {
-                    val proposed = (resolvedRequest.payload as? EditPayload)?.proposedContent
+                    val proposed = when (val payload = resolvedRequest.payload) {
+                        is EditPayload -> payload.proposedContent
+                        else -> null
+                    }
                     agentApprovalManager.openEditApprovalDiff(args, deferred, proposed)
                 }
             }
@@ -340,7 +337,7 @@ class AgentEventHandler(
 
             else -> {
                 when (args) {
-                    is EditTool.Args, is ProxyAIEditTool.Args, is EditArgsSnapshot -> {
+                    is EditTool.Args -> {
                         trackEditOperation(args)
                     }
 
@@ -436,10 +433,9 @@ class AgentEventHandler(
                     RunEntry.WriteEntry(cid, parentId, args, null)
                 }
 
-                is EditTool.Args, is ProxyAIEditTool.Args, is EditArgsSnapshot -> {
-                    val snapshot = snapshotFromEditArgs(args) ?: return@runInEdt
-                    lastEditArgs = snapshot
-                    RunEntry.EditEntry(cid, parentId, snapshot, null)
+                is EditTool.Args -> {
+                    lastEditArgs = args
+                    RunEntry.EditEntry(cid, parentId, args, null)
                 }
 
                 is TaskTool.Args -> RunEntry.TaskEntry(cid, parentId, args, null)
@@ -485,26 +481,9 @@ class AgentEventHandler(
     }
 
     override fun onTokenUsageAvailable(tokenUsage: Long) {
-        val tracker = project.service<AgentService>().getTokenTrackerForSession(sessionId)
-        if (tokenUsage < lastReportedPromptTokens) {
-            tracker.setPromptTokens(tokenUsage)
-        } else {
-            val delta = (tokenUsage - lastReportedPromptTokens).coerceAtLeast(0)
-            if (delta > 0) {
-                tracker.addPromptTokens(delta)
-            }
-        }
         lastReportedPromptTokens = tokenUsage
 
-        val event = TokenUsageEvent(sessionId, tracker.getPromptTokens())
-        project.messageBus.syncPublisher(TokenUsageListener.TOKEN_USAGE_TOPIC)
-            .onTokenUsageChanged(event)
-    }
-
-    override fun onTokenUsageUpdated(tokenUsage: TokenUsage) {
-        val tracker = project.service<AgentService>().getTokenTrackerForSession(sessionId)
-        tracker.updateTokenUsage(tokenUsage)
-        val event = TokenUsageEvent(sessionId, tracker.getPromptTokens())
+        val event = TokenUsageEvent(sessionId, tokenUsage)
         project.messageBus.syncPublisher(TokenUsageListener.TOKEN_USAGE_TOPIC)
             .onTokenUsageChanged(event)
     }
@@ -617,14 +596,7 @@ class AgentEventHandler(
     private fun updateEditToolCardPreview(request: ToolApprovalRequest) {
         val payload = request.payload ?: return
         val (path, before, after) = when (payload) {
-            is ProxyAIEditPayload -> Triple(
-                payload.filePath,
-                payload.originalContent,
-                payload.updatedContent
-            )
             is EditPayload -> {
-                val rawSnippet = payload.newString.ifBlank { payload.oldString }
-                if (UpdateSnippetUtil.containsMarkers(rawSnippet)) return
                 val currentContent = getFileContentWithFallback(payload.filePath)
                 val proposed = payload.proposedContent ?: applyStringReplacement(
                     currentContent,
@@ -634,6 +606,7 @@ class AgentEventHandler(
                 )
                 Triple(payload.filePath, currentContent, proposed)
             }
+
             else -> return
         }
 
@@ -768,10 +741,9 @@ class AgentEventHandler(
         subagentViewHolders.clear()
     }
 
-    private fun trackEditOperation(args: Any?) {
-        val snapshot = snapshotFromEditArgs(args) ?: return
-        lastEditArgs = snapshot
-        val normalizedPath = snapshot.filePath.replace("\\", "/")
+    private fun trackEditOperation(args: EditTool.Args) {
+        lastEditArgs = args
+        val normalizedPath = args.filePath.replace("\\", "/")
         val originalContent = runCatching {
             val vf = LocalFileSystem.getInstance().findFileByPath(normalizedPath)
             val documentText = vf?.let { file ->
@@ -780,7 +752,7 @@ class AgentEventHandler(
             documentText ?: java.io.File(normalizedPath).readText()
         }.getOrNull() ?: ""
         project.service<RollbackService>()
-            .trackEdit(sessionId, normalizedPath, snapshot, originalContent)
+            .trackEdit(sessionId, normalizedPath, originalContent)
     }
 
     private fun trackWriteOperation(args: WriteTool.Args) {

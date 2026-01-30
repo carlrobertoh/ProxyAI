@@ -30,11 +30,10 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.agent.tools.EditArgsSnapshot
+import ee.carlrobert.codegpt.agent.tools.EditTool
 import ee.carlrobert.codegpt.agent.tools.WriteTool
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.applyStringReplacement
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.getFileContentWithFallback
-import ee.carlrobert.codegpt.util.UpdateSnippetUtil
 import kotlinx.coroutines.CompletableDeferred
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -87,7 +86,7 @@ class AgentApprovalManager(
     }
 
     fun openEditApprovalDiff(
-        args: EditArgsSnapshot,
+        args: EditTool.Args,
         decision: CompletableDeferred<Boolean>,
         proposedContent: String? = null
     ) {
@@ -103,15 +102,11 @@ class AgentApprovalManager(
 
             val current = getFileContentWithFallback(path)
             val proposed = proposedContent ?: run {
-                val rawSnippet = if (args.newString.isNotBlank()) args.newString else args.oldString
-                if (UpdateSnippetUtil.containsMarkers(rawSnippet)) {
-                    current
-                } else {
-                    applyStringReplacement(current, args.oldString, args.newString, args.replaceAll)
-                }
+                applyStringReplacement(current, args.oldString, args.newString, args.replaceAll)
             }
 
-            val left = if (vf != null) factory.create(project, vf) else factory.create(project, current)
+            val left =
+                if (vf != null) factory.create(project, vf) else factory.create(project, current)
             val rightDoc =
                 EditorFactory.getInstance().createDocument(convertLineSeparators(proposed)).apply {
                     setReadOnly(true)

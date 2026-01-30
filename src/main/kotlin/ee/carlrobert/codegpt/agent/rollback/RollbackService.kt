@@ -14,7 +14,6 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
-import ee.carlrobert.codegpt.agent.tools.EditArgsSnapshot
 import ee.carlrobert.codegpt.agent.tools.WriteTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -56,12 +55,11 @@ class RollbackService(private val project: Project) {
     fun trackEdit(
         sessionId: String,
         filePath: String,
-        args: EditArgsSnapshot,
         originalContent: String
     ) {
         val tracker = activeRuns[sessionId] ?: return
         val normalizedPath = filePath.replace("\\", "/")
-        tracker.recordExplicitEdit(normalizedPath, args, originalContent)
+        tracker.recordExplicitEdit(normalizedPath,  originalContent)
     }
 
     /**
@@ -368,7 +366,7 @@ class RollbackService(private val project: Project) {
         val labelRef: Label,
         val changes: MutableMap<String, TrackedChange> = ConcurrentHashMap()
     ) {
-        fun recordExplicitEdit(filePath: String, args: EditArgsSnapshot, originalContent: String) {
+        fun recordExplicitEdit(filePath: String, originalContent: String) {
             val existing = changes[filePath]
             if (existing?.kind == ChangeKind.ADDED) return
             if (existing?.kind == ChangeKind.MOVED) return

@@ -8,7 +8,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import ee.carlrobert.codegpt.conversations.message.TokenUsageTracker
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import kotlinx.coroutines.*
@@ -28,7 +27,6 @@ class AgentService(private val project: Project) {
     private val sessionJobs = ConcurrentHashMap<String, Job>()
     private val pendingMessages = ConcurrentHashMap<String, ArrayDeque<MessageWithContext>>()
     private val sessionAgents = ConcurrentHashMap<String, AIAgent<MessageWithContext, String>>()
-    private val sessionTokenTrackers = ConcurrentHashMap<String, TokenUsageTracker>()
     private val checkpointStorage =
         JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
 
@@ -98,7 +96,6 @@ class AgentService(private val project: Project) {
         cancelCurrentRun(sessionId)
         pendingMessages.remove(sessionId)
         sessionAgents.remove(sessionId)
-        sessionTokenTrackers.remove(sessionId)
     }
 
     fun isSessionRunning(sessionId: String): Boolean {
@@ -115,9 +112,5 @@ class AgentService(private val project: Project) {
 
     fun getAgentForSession(sessionId: String): AIAgent<MessageWithContext, String>? {
         return sessionAgents[sessionId]
-    }
-
-    fun getTokenTrackerForSession(sessionId: String): TokenUsageTracker {
-        return sessionTokenTrackers.getOrPut(sessionId) { TokenUsageTracker() }
     }
 }

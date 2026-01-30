@@ -163,24 +163,32 @@ private class ToolCallHeaderPanel(
     }
 
     private fun addSecondaryBadges() {
+        var prevWasDiff = false
         descriptor.secondaryBadges.forEach { badge ->
+            val isDiff = isDiffBadge(badge.text)
+            val leftGap = if (isDiff && prevWasDiff) 0 else 4
             if (badge.action != null) {
                 val link = ActionLink(badge.text) {
                     badge.action?.invoke()
                 }.apply {
                     font = JBUI.Fonts.smallFont()
                 }
-                leftRow.add(link.apply { border = JBUI.Borders.emptyLeft(4) })
+                leftRow.add(link.apply { border = JBUI.Borders.emptyLeft(leftGap) })
             } else {
                 leftRow.add(JBLabel(badge.text).withFont(JBFont.small()).apply {
                     foreground = badge.color
                     if (badge.tooltip != null) {
                         toolTipText = badge.tooltip
                     }
-                    border = JBUI.Borders.emptyLeft(4)
+                    border = JBUI.Borders.emptyLeft(leftGap)
                 })
             }
+            prevWasDiff = isDiff
         }
+    }
+
+    private fun isDiffBadge(text: String): Boolean {
+        return text.startsWith("[+") || text.startsWith("[-") || text.startsWith("[~")
     }
 
     private fun showSearchResultsDialog(content: String) {

@@ -15,14 +15,9 @@ import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.applyStringReplacement
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.diffBadgeText
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.getFileContentWithFallback
-import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.*
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
-import ee.carlrobert.codegpt.util.UpdateSnippetUtil
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.nio.file.Paths
@@ -54,7 +49,6 @@ class EditApprovalPanel(
 
         val filePath = when (val payload = request.payload) {
             is EditPayload -> payload.filePath
-            is ProxyAIEditPayload -> payload.filePath
             else -> ""
         }
         val diffComponent = createInlineDiffComponent()
@@ -114,7 +108,7 @@ class EditApprovalPanel(
 
     private fun createInlineDiffComponent(): JComponent? {
         val payload = request.payload ?: return null
-        
+
         val (path, current, proposed) = when (payload) {
             is EditPayload -> {
                 val normalizedPath = try {
@@ -126,13 +120,6 @@ class EditApprovalPanel(
                 val proposedContent = if (!payload.proposedContent.isNullOrBlank()) {
                     payload.proposedContent
                 } else {
-                    val rawSnippet = if (payload.newString.isNotBlank()) payload.newString else payload.oldString
-                    if (UpdateSnippetUtil.containsMarkers(rawSnippet)) {
-                        return JBLabel("Preview not available").apply {
-                            foreground = JBUI.CurrentTheme.Label.disabledForeground()
-                            border = JBUI.Borders.empty(8)
-                        }.let { label -> BorderLayoutPanel().apply { addToCenter(label) } }
-                    }
                     applyStringReplacement(
                         currentContent,
                         payload.oldString,
@@ -142,14 +129,7 @@ class EditApprovalPanel(
                 }
                 Triple(normalizedPath, currentContent, proposedContent)
             }
-            is ProxyAIEditPayload -> {
-                val normalizedPath = try {
-                    Paths.get(payload.filePath).normalize().toString()
-                } catch (_: Exception) {
-                    payload.filePath
-                }
-                Triple(normalizedPath, payload.originalContent, payload.updatedContent)
-            }
+
             else -> return null
         }
 

@@ -24,7 +24,6 @@ interface AgentEvents {
     fun onRetry(attempt: Int, maxAttempts: Int, reason: String? = null) {}
     fun onQueuedMessagesResolved()
     fun onTokenUsageAvailable(tokenUsage: Long) {}
-    fun onTokenUsageUpdated(tokenUsage: TokenUsage) {}
     fun onCreditsAvailable(event: AgentCreditsEvent) {}
     fun onClientException(provider: ServiceType, ex: LLMClientException) {}
     fun onHistoryCompressionStateChanged(isCompressing: Boolean) {}

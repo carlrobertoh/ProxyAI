@@ -18,6 +18,8 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.agent.rollback.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.diffBadgeText
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.drawCenteredText
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
 import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.components.LeftEllipsisLabel
@@ -25,6 +27,11 @@ import kotlinx.coroutines.*
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Graphics
+import java.awt.Graphics2D
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
+import java.awt.Insets
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.time.Instant
@@ -180,10 +187,20 @@ class RollbackPanel(
     }
 
     private fun createChangeRow(change: FileChange): JComponent {
-        val leftFixed = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+        val leftFixed = JPanel(GridBagLayout()).apply {
             isOpaque = false
-            add(changeLabel(change))
-            add(fileNameComponent(change))
+        }
+        run {
+            val gbc = GridBagConstraints().apply {
+                gridx = 0
+                gridy = 0
+                anchor = GridBagConstraints.CENTER
+                insets = Insets(0, 0, 0, 6)
+            }
+            leftFixed.add(changeLabel(change), gbc)
+            gbc.gridx = 1
+            gbc.insets = Insets(0, 0, 0, 0)
+            leftFixed.add(fileNameComponent(change), gbc)
         }
 
         val actions = JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
@@ -234,16 +251,39 @@ class RollbackPanel(
         return row
     }
 
-    private fun changeLabel(change: FileChange): JBLabel {
+    private fun changeLabel(change: FileChange): JComponent {
         val (text, color) = when (change.kind) {
             ChangeKind.ADDED -> "+" to ChangeColors.inserted
             ChangeKind.DELETED -> "-" to ChangeColors.deleted
             ChangeKind.MODIFIED -> "~" to ChangeColors.modified
             ChangeKind.MOVED -> "~" to ChangeColors.modified
         }
-        return JBLabel(text).apply {
-            foreground = color
-            font = JBUI.Fonts.smallFont()
+        return object : JComponent() {
+            init {
+                isOpaque = false
+                foreground = color
+                font = JBUI.Fonts.smallFont()
+                val metrics = getFontMetrics(font)
+                val symbolWidth = listOf("+", "-", "~").maxOf { metrics.stringWidth(it) }
+                val size = Dimension(
+                    symbolWidth + JBUI.scale(4),
+                    metrics.height + JBUI.scale(2)
+                )
+                preferredSize = size
+                minimumSize = size
+                maximumSize = size
+            }
+
+            override fun paintComponent(g: Graphics) {
+                val g2 = g.create() as Graphics2D
+                try {
+                    g2.color = foreground
+                    g2.font = font
+                    drawCenteredText(g2, text, width, height)
+                } finally {
+                    g2.dispose()
+                }
+            }
         }
     }
 
@@ -331,10 +371,10 @@ class RollbackPanel(
     private fun addDiffStats(change: FileChange, container: JPanel) {
         val stats = diffStatsCache[change.path] ?: return
         val (ins, del, mod) = stats
-        if (ins + del + mod == 0) return
-        container.add(colorLabel("+$ins", ChangeColors.inserted))
-        container.add(colorLabel("-$del", ChangeColors.deleted))
-        container.add(colorLabel("~$mod", ChangeColors.modified))
+        val texts = diffBadgeText(ins, del, mod)
+        container.add(colorLabel(texts.inserted, ChangeColors.inserted))
+        container.add(colorLabel(texts.deleted, ChangeColors.deleted))
+        container.add(colorLabel(texts.changed, ChangeColors.modified))
     }
 
     private fun colorLabel(text: String, color: JBColor): JBLabel =

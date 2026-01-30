@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.ui.components
 
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.drawCenteredText
 import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -50,9 +51,6 @@ class BadgeChip(
 
         g2.font = font
         g2.color = textColor
-        val fm = g2.fontMetrics
-        val tx = (width - fm.stringWidth(text)) / 2
-        val ty = (height - fm.height) / 2 + fm.ascent
-        g2.drawString(text, tx, ty)
+        drawCenteredText(g2, text, width, height)
     }
 }

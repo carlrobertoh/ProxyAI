@@ -8,6 +8,9 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentUiConfig
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.DiffViewAction
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.DiffBadgeText
+import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.diffBadgeText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -244,63 +247,57 @@ object ToolCallDescriptorFactory {
         result: Any?,
         projectId: String?
     ): ToolCallDescriptor {
-        val editArgs = args as? EditTool.Args
-        val fileName = extractBaseName(editArgs?.filePath ?: "")
-
+        val editArgs = args as? EditTool.Args ?: throw IllegalArgumentException("Invalid args")
+        val displayName = extractBaseName(editArgs.filePath)
         val badges = mutableListOf<Badge>()
         val actions = mutableListOf<ToolAction>()
+        when (result) {
+            is EditTool.Result.Success -> {
+                val oldLines = editArgs.oldString.split('\n').size
+                val newLines = editArgs.newString.split('\n').size
+                val changedPer = minOf(oldLines, newLines)
+                val addedPer = (newLines - oldLines).coerceAtLeast(0)
+                val deletedPer = (oldLines - newLines).coerceAtLeast(0)
+                val changed = changedPer * result.replacementsMade
+                val inserted = addedPer * result.replacementsMade
+                val deleted = deletedPer * result.replacementsMade
 
-        if (result is EditTool.Result && editArgs != null) {
-            when (result) {
-                is EditTool.Result.Success -> {
-                    val oldLines = editArgs.oldString.split('\n').size
-                    val newLines = editArgs.newString.split('\n').size
-                    val changedPer = minOf(oldLines, newLines)
-                    val addedPer = (newLines - oldLines).coerceAtLeast(0)
-                    val deletedPer = (oldLines - newLines).coerceAtLeast(0)
-                    val changed = changedPer * result.replacementsMade
-                    val inserted = addedPer * result.replacementsMade
-                    val deleted = deletedPer * result.replacementsMade
-
-                    if (changed > 0) badges.add(Badge("[~$changed]", JBColor.YELLOW))
-                    if (deleted > 0) badges.add(Badge("[-$deleted]", JBColor.RED))
-                    if (inserted > 0) badges.add(Badge("[+$inserted]", JBColor.GREEN))
-                    actions.add(
-                        ToolAction("View Changes", AllIcons.Actions.Diff) { component ->
-                            try {
-                                val path = Path.of(editArgs.filePath)
-                                val after = Files.readString(path)
-                                val before = buildString {
-                                    append(after)
-                                }.let { cur ->
-                                    if (editArgs.replaceAll) {
-                                        cur.replace(editArgs.newString, editArgs.oldString)
-                                    } else {
-                                        replaceFirstNOccurrences(
-                                            cur,
-                                            editArgs.newString,
-                                            editArgs.oldString,
-                                            result.replacementsMade
-                                        )
-                                    }
+                val texts = diffBadgeText(inserted, deleted, changed)
+                badges.addAll(getDiffBadges(texts))
+                actions.add(
+                    ToolAction("View Changes", AllIcons.Actions.Diff) { _ ->
+                        try {
+                            val path = Path.of(editArgs.filePath)
+                            val after = Files.readString(path)
+                            val before = buildString {
+                                append(after)
+                            }.let { cur ->
+                                if (editArgs.replaceAll) {
+                                    cur.replace(editArgs.newString, editArgs.oldString)
+                                } else {
+                                    replaceFirstNOccurrences(
+                                        cur,
+                                        editArgs.newString,
+                                        editArgs.oldString,
+                                        result.replacementsMade
+                                    )
                                 }
-                                DiffViewAction.showDiff(
-                                    before,
-                                    after,
-                                    "Changes in ${extractBaseName(editArgs.filePath)}",
-                                    project
-                                )
-                            } catch (_: Exception) {
-                                DiffViewAction.showDiff(editArgs.filePath, project)
                             }
+                            DiffViewAction.showDiff(
+                                before,
+                                after,
+                                "Changes in ${extractBaseName(editArgs.filePath)}",
+                                project
+                            )
+                        } catch (_: Exception) {
+                            DiffViewAction.showDiff(editArgs.filePath, project)
                         }
-                    )
-                }
+                    }
+                )
+            }
 
-
-                is EditTool.Result.Error -> {
-                    badges.add(Badge("Error", JBColor.RED))
-                }
+            is EditTool.Result.Error -> {
+                badges.add(Badge("Error", JBColor.RED))
             }
         }
 
@@ -310,18 +307,17 @@ object ToolCallDescriptorFactory {
         }
 
         val firstLocation = editLocations.firstOrNull()
-
         return ToolCallDescriptor(
             kind = ToolKind.EDIT,
             icon = AllIcons.Actions.Edit,
             titlePrefix = "Edit:",
-            titleMain = fileName,
-            tooltip = "Edit file: ${editArgs?.filePath ?: ""}",
+            titleMain = displayName,
+            tooltip = "Edit file: ${editArgs.filePath}",
             secondaryBadges = badges,
             fileLink = FileLink(
-                path = editArgs?.filePath ?: "",
-                displayName = fileName,
-                enabled = result != null,
+                path = editArgs.filePath,
+                displayName = displayName,
+                enabled = editArgs.filePath.isNotBlank(),
                 line = firstLocation?.line,
                 column = firstLocation?.column
             ),
@@ -329,7 +325,15 @@ object ToolCallDescriptorFactory {
             supportsStreaming = false,
             args = args,
             result = result,
-            projectId = projectId
+            projectId = projectId,
+        )
+    }
+
+    private fun getDiffBadges(texts: DiffBadgeText): List<Badge> {
+        return listOf(
+            Badge(texts.inserted, ChangeColors.inserted),
+            Badge(texts.deleted, ChangeColors.deleted),
+            Badge(texts.changed, ChangeColors.modified)
         )
     }
 

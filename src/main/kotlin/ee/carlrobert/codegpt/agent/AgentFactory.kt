@@ -529,19 +529,11 @@ object AgentFactory {
         return ToolRegistry.Companion {
             if (SubagentTool.READ in selected) tool(ReadTool(project))
             if (SubagentTool.EDIT in selected) {
-                if (provider == ServiceType.PROXYAI) {
-                    tool(
-                        ConfirmingProxyAIEditTool(ProxyAIEditTool(project), project) { request ->
-                            approveToolCall?.invoke("Edit", request.details) ?: false
-                        }
-                    )
-                } else {
-                    tool(
-                        ConfirmingEditTool(EditTool(project)) { name, details ->
-                            approveToolCall?.invoke(name, details) ?: false
-                        }
-                    )
-                }
+                tool(
+                    ConfirmingEditTool(EditTool(project)) { name, details ->
+                        approveToolCall?.invoke(name, details) ?: false
+                    }
+                )
             }
             if (SubagentTool.WRITE in selected) {
                 tool(

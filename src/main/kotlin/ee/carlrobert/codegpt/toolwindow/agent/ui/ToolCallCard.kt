@@ -6,6 +6,7 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallDescriptorFactory
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallView
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolKind
+import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallDescriptor
 import java.awt.BorderLayout
 
 class ToolCallCard(
@@ -44,6 +45,13 @@ class ToolCallCard(
         view.refreshDescriptor(updated)
         view.complete(success, result)
     }
+
+    fun updateDescriptor(transform: (ToolCallDescriptor) -> ToolCallDescriptor) {
+        val updated = transform(view.getDescriptor())
+        view.refreshDescriptor(updated)
+    }
+
+    fun getDescriptor(): ToolCallDescriptor = view.getDescriptor()
 
     fun appendStreamingLine(text: String, isError: Boolean) {
         view.appendStreamingLine(text, isError)

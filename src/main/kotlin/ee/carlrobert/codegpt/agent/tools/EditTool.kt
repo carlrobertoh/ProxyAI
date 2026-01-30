@@ -10,8 +10,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
-import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -77,7 +77,7 @@ class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Resu
         @SerialName("old_string")
         val oldString: String,
         @property:LLMDescription(
-            "The new string to replace the old string with."
+            "The new string to replace the old string with. Use empty string to delete."
         )
         @SerialName("new_string")
         val newString: String,
@@ -177,7 +177,11 @@ class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Resu
             }
 
             val document =
-                withContext(Dispatchers.Default) { runReadAction { FileDocumentManager.getInstance().getDocument(virtualFile) } }
+                withContext(Dispatchers.Default) {
+                    runReadAction {
+                        FileDocumentManager.getInstance().getDocument(virtualFile)
+                    }
+                }
                     ?: return Result.Error(
                         filePath = args.filePath,
                         error = "Cannot get document for file: ${args.filePath}"

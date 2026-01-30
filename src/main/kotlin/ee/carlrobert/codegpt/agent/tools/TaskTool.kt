@@ -16,7 +16,6 @@ import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
-import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.concurrent.atomic.AtomicLong
@@ -148,7 +147,9 @@ class TaskTool(
 
     private fun Args.createResult(output: String, startTime: Long, totalTokens: Long): Result {
         val resolvedTotalTokens =
-            if (totalTokens > 0) totalTokens else EncodingManager.getInstance().countTokens(output).toLong()
+            if (totalTokens > 0) totalTokens else EncodingManager.getInstance()
+                .countTokens(output)
+                .toLong()
         return Result(
             agentType = this.subagentType,
             description = this.description,
@@ -212,15 +213,15 @@ private fun buildTaskDescription(project: Project): String {
             subagents
                 .filter { it.title.trim().isNotBlank() }
                 .forEach { sa ->
-                append("- ")
-                append(sa.title)
-                val desc = sa.objective.trim()
-                if (desc.isNotBlank()) {
-                    append(": ")
-                    append(desc.take(140))
+                    append("- ")
+                    append(sa.title)
+                    val desc = sa.objective.trim()
+                    if (desc.isNotBlank()) {
+                        append(": ")
+                        append(desc.take(140))
+                    }
+                    appendLine()
                 }
-                appendLine()
-            }
         }
     }.trimEnd()
 }
@@ -259,17 +260,9 @@ private fun lookupBuiltInConfig(project: Project, agentType: AgentType): ProxyAI
 
 private fun approvalHandler(events: AgentEvents): suspend (String, String) -> Boolean =
     { name, details ->
-        events.approveToolCall(ToolApprovalRequest(approvalTypeFor(name), "Allow $name?", details))
+        val approvalType = ToolSpecs.approvalTypeFor(name)
+        events.approveToolCall(ToolApprovalRequest(approvalType, "Allow $name?", details))
     }
-
-private fun approvalTypeFor(name: String): ToolApprovalType {
-    return when {
-        name.equals("Write", true) -> ToolApprovalType.WRITE
-        name.equals("Edit", true) -> ToolApprovalType.EDIT
-        name.equals("Bash", true) -> ToolApprovalType.BASH
-        else -> ToolApprovalType.GENERIC
-    }
-}
 
 private class SubagentToolCallBridge(
     private val events: AgentEvents,
@@ -283,30 +276,25 @@ private class SubagentToolCallBridge(
         toolRegistry = registry
     }
 
-    fun onToolCallStarting(eventContext: ToolCallStartingContext) {
-        val decodedArgs = ToolCallPayloadDecoder.decodeArgs(
-            toolRegistry,
-            eventContext.toolName,
-            eventContext.toolArgs
-        )
-        val childId = events.onSubAgentToolStarting(parentId, eventContext.toolName, decodedArgs)
+    fun onToolCallStarting(ctx: ToolCallStartingContext) {
+        val tool = toolRegistry?.getToolOrNull(ctx.toolName) ?: return
+        val decodedArgs = runCatching { tool.decodeArgs(ctx.toolArgs) }.getOrElse { ctx.toolArgs }
+        val childId = events.onSubAgentToolStarting(parentId, ctx.toolName, decodedArgs)
         if (childId != null) {
             pendingChildIds.addLast(childId)
             ToolRunContext.set(sessionId, childId)
         }
     }
 
-    fun onToolCallCompleted(eventContext: ToolCallCompletedContext) {
+    fun onToolCallCompleted(ctx: ToolCallCompletedContext) {
+        val tool = toolRegistry?.getToolOrNull(ctx.toolName) ?: return
+        val toolResult = ctx.toolResult ?: return
         val childId = if (pendingChildIds.isEmpty()) null else pendingChildIds.removeFirst()
-        val decodedResult = ToolCallPayloadDecoder.decodeResult(
-            toolRegistry,
-            eventContext.toolName,
-            eventContext.toolResult
-        )
+        val decodedResult = runCatching { tool.decodeResult(toolResult) }.getOrElse { toolResult }
         events.onSubAgentToolCompleted(
             parentId,
             childId,
-            eventContext.toolName,
+            ctx.toolName,
             decodedResult
         )
     }

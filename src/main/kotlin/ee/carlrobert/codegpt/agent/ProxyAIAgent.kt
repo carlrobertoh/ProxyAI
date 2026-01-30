@@ -40,6 +40,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.reflect.typeOf
 
 data class ToolError(val message: String)
 
@@ -48,6 +49,7 @@ object ProxyAIAgent {
     private const val INSTRUCTION_FILE_NAME = "PROXYAI.md"
 
     private val logger = KotlinLogging.logger { }
+    private val messageWithContextSnapshotType = typeOf<MessageWithContextSnapshot>()
 
     private fun searchForInstructions(projectPath: String?): String? {
         if (projectPath == null) return null
@@ -62,6 +64,7 @@ object ProxyAIAgent {
                     return content
                 }
             } catch (_: Exception) {
+                logger.warn { "Couldn't read $INSTRUCTION_FILE_NAME" }
             }
         }
 
@@ -148,11 +151,18 @@ object ProxyAIAgent {
                 }
 
                 onNodeExecutionCompleted { ctx ->
+                    val input = ctx.input
+                    val (lastInput, lastInputType) = if (input is MessageWithContext) {
+                        val snapshot = input.toSnapshot()
+                        snapshot to messageWithContextSnapshotType
+                    } else {
+                        input to ctx.inputType
+                    }
                     val checkpoint = ctx.context.persistence().createCheckpoint(
                         agentContext = ctx.context,
                         nodePath = ctx.context.executionInfo.path(),
-                        lastInput = ctx.input,
-                        lastInputType = ctx.inputType,
+                        lastInput = lastInput,
+                        lastInputType = lastInputType,
                         checkpointId = ctx.context.runId,
                         version = 0L
                     )
@@ -175,7 +185,8 @@ object ProxyAIAgent {
                 }
 
                 onToolCallStarting { ctx ->
-                    if (toolRegistry.getToolOrNull(ctx.toolName) == null) {
+                    val tool = toolRegistry.getToolOrNull(ctx.toolName)
+                    if (tool == null) {
                         logger.warn { "Ignoring undefined tool call: ${ctx.toolName}" }
                         return@onToolCallStarting
                     }
@@ -185,14 +196,21 @@ object ProxyAIAgent {
                         anonymousToolIds.addLast(id)
                     }
                     val decodedArgs =
-                        ToolCallPayloadDecoder.decodeArgs(toolRegistry, ctx.toolName, ctx.toolArgs)
+                        runCatching { tool.decodeArgs(ctx.toolArgs) }.getOrElse { ctx.toolArgs }
                     events.onToolStarting(id, ctx.toolName, decodedArgs)
                     ToolRunContext.set(sessionId, id)
                 }
 
                 onToolCallCompleted { ctx ->
-                    if (toolRegistry.getToolOrNull(ctx.toolName) == null) {
+                    val tool = toolRegistry.getToolOrNull(ctx.toolName)
+                    if (tool == null) {
                         logger.warn { "Ignoring undefined tool completion: ${ctx.toolName}" }
+                        return@onToolCallCompleted
+                    }
+
+                    val toolResult = ctx.toolResult
+                    if (toolResult == null) {
+                        logger.warn { "Ignoring undefined tool result: $toolResult" }
                         return@onToolCallCompleted
                     }
 
@@ -201,11 +219,8 @@ object ProxyAIAgent {
                         anonymousToolIds.isNotEmpty() -> anonymousToolIds.removeFirst()
                         else -> null
                     }
-                    val decodedResult = ToolCallPayloadDecoder.decodeResult(
-                        toolRegistry,
-                        ctx.toolName,
-                        ctx.toolResult
-                    )
+                    val decodedResult =
+                        runCatching { tool.decodeResult(toolResult) }.getOrElse { toolResult }
                     events.onToolCompleted(uiId, ctx.toolName, decodedResult)
                 }
 
@@ -234,8 +249,7 @@ object ProxyAIAgent {
                 try {
                     events.approveToolCall(
                         ToolApprovalRequest(
-                            if (name.equals("Edit", true)
-                            ) ToolApprovalType.EDIT else ToolApprovalType.GENERIC,
+                            ToolSpecs.approvalTypeFor(name),
                             "Allow $name?",
                             details
                         )
@@ -244,19 +258,7 @@ object ProxyAIAgent {
                     false
                 }
             }
-            if (provider == ServiceType.PROXYAI) {
-                tool(
-                    ConfirmingProxyAIEditTool(ProxyAIEditTool(project), project) { request ->
-                        try {
-                            events.approveToolCall(request)
-                        } catch (_: Exception) {
-                            false
-                        }
-                    }
-                )
-            } else {
-                tool(ConfirmingEditTool(EditTool(project), approveHandler))
-            }
+            tool(ConfirmingEditTool(EditTool(project), approveHandler))
             tool(
                 ConfirmingWriteTool(WriteTool(project)) { name, details ->
                     try {
