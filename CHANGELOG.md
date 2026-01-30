@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Advanced settings (HTTP/SOCKS proxy) for Agent mode
+
+### Fixed
+
+- Agen rollback changes and context window tracking
+- Incorrect line separators on Windows
+
 ## [3.7.1-241.1] - 2026-01-26
 
 ### Added
