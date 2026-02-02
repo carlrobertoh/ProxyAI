@@ -1,14 +1,18 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-class KillShellTool : Tool<KillShellTool.Args, KillShellTool.Result>(
+class KillShellTool(
+    workingDirectory: String,
+    hookManager: HookManager,
+) : BaseTool<KillShellTool.Args, KillShellTool.Result>(
+    workingDirectory = workingDirectory,
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "KillShell",
@@ -18,7 +22,10 @@ class KillShellTool : Tool<KillShellTool.Args, KillShellTool.Result>(
 - Returns a success or failure status
 - Use this tool when you need to terminate a long-running shell
 - Shell IDs can be found using the Bash tool with run_in_background=true
-""".trimIndent()
+""".trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     @Serializable
@@ -38,7 +45,7 @@ class KillShellTool : Tool<KillShellTool.Args, KillShellTool.Result>(
         val message: String
     )
 
-    override suspend fun execute(args: Args): Result = withContext(Dispatchers.IO) {
+    override suspend fun doExecute(args: Args): Result = withContext(Dispatchers.IO) {
         val process = BackgroundProcessManager.getProcess(args.bashId)
             ?: return@withContext Result(
                 bashId = args.bashId,
@@ -76,6 +83,17 @@ class KillShellTool : Tool<KillShellTool.Args, KillShellTool.Result>(
                 message = "Error terminating shell: ${e.message}"
             )
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result(
+            bashId = originalArgs.bashId,
+            success = false,
+            message = deniedReason
+        )
     }
 
     override fun encodeResultToString(result: Result): String =

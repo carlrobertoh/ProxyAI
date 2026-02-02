@@ -32,16 +32,13 @@ import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
-import ee.carlrobert.codegpt.agent.clients.HttpClientProvider
-import ee.carlrobert.codegpt.agent.clients.InceptionAILLMClient
-import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
-import ee.carlrobert.codegpt.agent.clients.RetryingPromptExecutor
+import ee.carlrobert.codegpt.agent.clients.*
 import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -66,7 +63,8 @@ object AgentFactory {
         toolOverrides: Set<SubagentTool>? = null,
         onCreditsAvailable: ((AgentCreditsEvent) -> Unit)? = null,
         tokenCounter: AtomicLong? = null,
-        events: AgentEvents? = null
+        events: AgentEvents? = null,
+        hookManager: HookManager
     ): AIAgent<String, String> {
         val installHandler = buildUsageAwareInstallHandler(
             provider,
@@ -78,7 +76,6 @@ object AgentFactory {
         val executor = createExecutor(provider, events)
         return when (agentType) {
             AgentType.GENERAL_PURPOSE -> createGeneralPurposeAgent(
-                provider,
                 project,
                 sessionId,
                 approveToolCall,
@@ -86,11 +83,11 @@ object AgentFactory {
                 extraBehavior,
                 toolOverrides,
                 executor,
-                tokenCounter
+                tokenCounter,
+                hookManager
             )
 
             AgentType.EXPLORE -> createExploreAgent(
-                provider,
                 project,
                 sessionId,
                 approveToolCall,
@@ -98,7 +95,8 @@ object AgentFactory {
                 extraBehavior,
                 toolOverrides,
                 executor,
-                tokenCounter
+                tokenCounter,
+                hookManager
             )
         }
     }
@@ -115,6 +113,7 @@ object AgentFactory {
         onAgentToolCallCompleted: ((eventContext: ToolCallCompletedContext) -> Unit)? = null,
         onCreditsAvailable: ((AgentCreditsEvent) -> Unit)? = null,
         tokenCounter: AtomicLong? = null,
+        hookManager: HookManager,
     ): AIAgent<String, String> {
         val installHandler = buildUsageAwareInstallHandler(
             provider,
@@ -132,7 +131,7 @@ object AgentFactory {
             approveToolCall,
             selected,
             approvalBashHandler(approveToolCall),
-            provider
+            hookManager
         )
 
         return AIAgent.Companion(
@@ -223,7 +222,10 @@ object AgentFactory {
 
             ServiceType.INCEPTION -> {
                 val apiKey = getCredential(CredentialKey.InceptionApiKey) ?: ""
-                createRetryingExecutor(InceptionAILLMClient(apiKey, baseClient = httpClient), events)
+                createRetryingExecutor(
+                    InceptionAILLMClient(apiKey, baseClient = httpClient),
+                    events
+                )
             }
 
             else -> throw UnsupportedOperationException("Provider not supported: $provider")
@@ -242,7 +244,6 @@ object AgentFactory {
     }
 
     private fun createGeneralPurposeAgent(
-        provider: ServiceType,
         project: Project,
         sessionId: String,
         approveToolCall: (suspend (name: String, details: String) -> Boolean)? = null,
@@ -250,7 +251,8 @@ object AgentFactory {
         extraBehavior: String? = null,
         toolOverrides: Set<SubagentTool>? = null,
         executor: PromptExecutor,
-        tokenCounter: AtomicLong?
+        tokenCounter: AtomicLong?,
+        hookManager: HookManager,
     ): AIAgent<String, String> {
         val selectedTools = toolOverrides ?: SubagentTool.entries.toSet()
         return AIAgent.Companion(
@@ -301,7 +303,7 @@ object AgentFactory {
                 approveToolCall,
                 selectedTools,
                 approvalBashHandler(approveToolCall),
-                provider
+                hookManager
             ),
             installFeatures = {
                 installFeatures()
@@ -317,7 +319,6 @@ object AgentFactory {
     }
 
     private fun createExploreAgent(
-        provider: ServiceType,
         project: Project,
         sessionId: String,
         approveToolCall: (suspend (name: String, details: String) -> Boolean)? = null,
@@ -325,7 +326,8 @@ object AgentFactory {
         extraBehavior: String? = null,
         toolOverrides: Set<SubagentTool>? = null,
         executor: PromptExecutor,
-        tokenCounter: AtomicLong?
+        tokenCounter: AtomicLong?,
+        hookManager: HookManager
     ): AIAgent<String, String> {
         val selectedTools = toolOverrides ?: (SubagentTool.readOnly + SubagentTool.BASH).toSet()
         return AIAgent.Companion(
@@ -370,7 +372,7 @@ object AgentFactory {
                 approveToolCall = approveToolCall,
                 selected = selectedTools,
                 bashConfirmationHandler = { ShellCommandConfirmation.Approved },
-                provider = provider
+                hookManager = hookManager
             ),
             installFeatures = {
                 installFeatures()
@@ -497,13 +499,7 @@ object AgentFactory {
     private fun countResponseTokens(responses: List<Message.Response>): Long {
         val encoder = EncodingManager.getInstance()
         return responses.sumOf { response ->
-            when (response) {
-                is Message.Assistant -> encoder.countTokens(response.content).toLong()
-                is Message.Tool.Call -> encoder.countTokens(response.content).toLong()
-                is Message.Tool.Result -> encoder.countTokens(response.content).toLong()
-                is Message.Reasoning -> encoder.countTokens(response.content).toLong()
-                else -> 0L
-            }
+            encoder.countTokens(response.content).toLong()
         }
     }
 
@@ -528,38 +524,76 @@ object AgentFactory {
         approveToolCall: (suspend (name: String, details: String) -> Boolean)?,
         selected: Set<SubagentTool>,
         bashConfirmationHandler: BashCommandConfirmationHandler,
-        provider: ServiceType
+        hookManager: HookManager
     ): ToolRegistry {
         return ToolRegistry.Companion {
-            if (SubagentTool.READ in selected) tool(ReadTool(project))
+            if (SubagentTool.READ in selected) tool(ReadTool(project, hookManager, sessionId))
             if (SubagentTool.EDIT in selected) {
                 tool(
-                    ConfirmingEditTool(EditTool(project)) { name, details ->
+                    ConfirmingEditTool(EditTool(project, hookManager, sessionId)) { name, details ->
                         approveToolCall?.invoke(name, details) ?: false
                     }
                 )
             }
             if (SubagentTool.WRITE in selected) {
                 tool(
-                    ConfirmingWriteTool(WriteTool(project)) { name, details ->
+                    ConfirmingWriteTool(WriteTool(project, hookManager)) { name, details ->
                         approveToolCall?.invoke(name, details) ?: false
                     }
                 )
             }
-            if (SubagentTool.TODO_WRITE in selected) tool(TodoWriteTool(project, sessionId))
-            if (SubagentTool.INTELLIJ_SEARCH in selected) tool(IntelliJSearchTool(project))
-            if (SubagentTool.WEB_SEARCH in selected) tool(WebSearchTool())
-            if (SubagentTool.BASH_OUTPUT in selected) tool(BashOutputTool(sessionId))
-            if (SubagentTool.KILL_SHELL in selected) tool(KillShellTool())
-            if (SubagentTool.RESOLVE_LIBRARY_ID in selected) tool(ResolveLibraryIdTool())
-            if (SubagentTool.GET_LIBRARY_DOCS in selected) tool(GetLibraryDocsTool())
+            if (SubagentTool.TODO_WRITE in selected) tool(
+                TodoWriteTool(
+                    project,
+                    sessionId,
+                    hookManager
+                )
+            )
+            if (SubagentTool.INTELLIJ_SEARCH in selected) tool(
+                IntelliJSearchTool(
+                    project = project,
+                    hookManager = hookManager
+                )
+            )
+            if (SubagentTool.WEB_SEARCH in selected) tool(
+                WebSearchTool(
+                    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    hookManager = hookManager,
+                )
+            )
+            if (SubagentTool.BASH_OUTPUT in selected) tool(
+                BashOutputTool(
+                    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    sessionId = sessionId,
+                    hookManager = hookManager,
+                )
+            )
+            if (SubagentTool.KILL_SHELL in selected) tool(
+                KillShellTool(
+                    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    hookManager = hookManager,
+                )
+            )
+            if (SubagentTool.RESOLVE_LIBRARY_ID in selected) tool(
+                ResolveLibraryIdTool(
+                    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    hookManager = hookManager,
+                )
+            )
+            if (SubagentTool.GET_LIBRARY_DOCS in selected) tool(
+                GetLibraryDocsTool(
+                    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    hookManager = hookManager
+                )
+            )
             if (SubagentTool.BASH in selected) {
                 tool(
                     BashTool(
                         project.basePath ?: "",
                         confirmationHandler = bashConfirmationHandler,
                         sessionId = sessionId,
-                        settingsService = project.service<ProxyAISettingsService>()
+                        settingsService = project.service<ProxyAISettingsService>(),
+                        hookManager = hookManager
                     )
                 )
             }

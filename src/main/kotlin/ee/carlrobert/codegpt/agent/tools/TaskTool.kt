@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.agent.tools
 import ai.koog.agents.core.agent.GraphAIAgent
 import ai.koog.agents.core.feature.handler.tool.ToolCallCompletedContext
 import ai.koog.agents.core.feature.handler.tool.ToolCallStartingContext
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.components.service
@@ -13,6 +12,8 @@ import ee.carlrobert.codegpt.agent.*
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.ProxyAISubagent
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
+import ee.carlrobert.codegpt.settings.hooks.HookEventType
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
@@ -28,11 +29,16 @@ class TaskTool(
     private val sessionId: String,
     private val provider: ServiceType,
     private val events: AgentEvents,
-) : Tool<TaskTool.Args, TaskTool.Result>(
+    private val hookManager: HookManager,
+) : BaseTool<TaskTool.Args, TaskTool.Result>(
+    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "Task",
-    description = buildTaskDescription(project)
+    description = buildTaskDescription(project),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager,
 ) {
 
     @Serializable
@@ -76,11 +82,35 @@ class TaskTool(
         val totalTokens: Long = 0
     )
 
-    override suspend fun execute(args: Args): Result {
+    override suspend fun doExecute(args: Args): Result {
         val startTime = System.currentTimeMillis()
         val parentId = ToolRunContext.getToolId(sessionId)
             ?: throw IllegalStateException("No parent tool call found for session $sessionId")
         val totalTokenCounter = AtomicLong(0L)
+
+        val startPayload = mapOf(
+            "subagent_type" to args.subagentType,
+            "description" to args.description,
+            "prompt" to args.prompt
+        )
+        val toolId = ToolRunContext.getToolId(sessionId)
+        val deniedReason = hookManager.checkHooksForDenial(
+            HookEventType.SUBAGENT_START,
+            startPayload,
+            "Task",
+            toolId,
+            sessionId
+        )
+        if (deniedReason != null) {
+            return Result(
+                agentType = args.subagentType,
+                description = args.description,
+                prompt = args.prompt,
+                output = deniedReason,
+                executionTime = 0L
+            )
+        }
+
         val trackingEvents = object : AgentEvents by events {
             override fun onTokenUsageAvailable(tokenUsage: Long) {
                 totalTokenCounter.addAndGet(tokenUsage)
@@ -108,7 +138,8 @@ class TaskTool(
                     onAgentToolCallStarting = toolCallBridge::onToolCallStarting,
                     onAgentToolCallCompleted = toolCallBridge::onToolCallCompleted,
                     onCreditsAvailable = trackingEvents::onCreditsAvailable,
-                    tokenCounter = totalTokenCounter
+                    tokenCounter = totalTokenCounter,
+                    hookManager = hookManager
                 )
             } else {
                 val agentType = AgentType.fromString(args.subagentType)
@@ -127,14 +158,46 @@ class TaskTool(
                     tokenCounter = totalTokenCounter,
                     extraBehavior = extraBehavior,
                     toolOverrides = toolOverrides,
+                    hookManager = hookManager
                 )
             }
 
             toolCallBridge.setToolRegistry((agent as? GraphAIAgent<*, *>)?.toolRegistry)
 
             val output = agent.run(args.prompt)
-            return args.createResult(output, startTime, totalTokenCounter.get())
+            val result = args.createResult(output, startTime, totalTokenCounter.get())
+
+            val stopPayload = mapOf(
+                "subagent_type" to args.subagentType,
+                "status" to if (result.output.startsWith("Error:")) "error" else "completed",
+                "result" to result.output,
+                "duration" to result.executionTime
+            )
+            val toolId = ToolRunContext.getToolId(sessionId)
+            hookManager.executeHooksForEvent(
+                HookEventType.SUBAGENT_STOP,
+                stopPayload,
+                "Task",
+                toolId,
+                sessionId
+            )
+
+            return result
         } catch (e: Exception) {
+            val stopPayload = mapOf(
+                "subagent_type" to args.subagentType,
+                "status" to "error",
+                "result" to "Error: ${e.message}",
+                "duration" to System.currentTimeMillis() - startTime
+            )
+            val toolId = ToolRunContext.getToolId(sessionId)
+            hookManager.executeHooksForEvent(
+                HookEventType.SUBAGENT_STOP,
+                stopPayload,
+                "Task",
+                toolId,
+                sessionId
+            )
             return Result(
                 agentType = args.subagentType,
                 description = args.description,
@@ -143,6 +206,19 @@ class TaskTool(
                 executionTime = System.currentTimeMillis() - startTime,
             )
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result(
+            agentType = originalArgs.subagentType,
+            description = originalArgs.description,
+            prompt = originalArgs.prompt,
+            output = deniedReason,
+            executionTime = 0L
+        )
     }
 
     private fun Args.createResult(output: String, startTime: Long, totalTokens: Long): Result {

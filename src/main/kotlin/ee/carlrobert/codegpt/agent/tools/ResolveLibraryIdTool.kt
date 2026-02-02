@@ -1,7 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,13 +15,20 @@ import java.nio.charset.StandardCharsets
 /**
  * Tool for resolving library names to Context7-compatible library IDs.
  */
-class ResolveLibraryIdTool : Tool<ResolveLibraryIdTool.Args, ResolveLibraryIdTool.Result>(
+class ResolveLibraryIdTool(
+    workingDirectory: String,
+    hookManager: HookManager,
+) : BaseTool<ResolveLibraryIdTool.Args, ResolveLibraryIdTool.Result>(
+    workingDirectory = workingDirectory,
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "ResolveLibraryId",
     description = """
         Use to resolve a library/package name into a Context7-compatible ID before fetching docs. Prefer this when the user asks about libraries, best practices, APIs, or configuration, unless they already provided a valid '/org/project[/version]' ID.
-    """.trimIndent()
+    """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     @Serializable
@@ -61,7 +68,7 @@ class ResolveLibraryIdTool : Tool<ResolveLibraryIdTool.Args, ResolveLibraryIdToo
         isLenient = true
     }
 
-    override suspend fun execute(args: Args): Result = withContext(Dispatchers.IO) {
+    override suspend fun doExecute(args: Args): Result = withContext(Dispatchers.IO) {
         try {
             val encodedQuery =
                 URLEncoder.encode(args.libraryName, StandardCharsets.UTF_8.toString())
@@ -127,6 +134,13 @@ class ResolveLibraryIdTool : Tool<ResolveLibraryIdTool.Args, ResolveLibraryIdToo
             }
             return@withContext Result.Error(errorMessage)
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result.Error(deniedReason)
     }
 
     override fun encodeResultToString(result: Result): String = when (result) {

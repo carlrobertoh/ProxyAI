@@ -1,7 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,8 +14,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 class WebSearchTool(
-    private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)"
-) : Tool<WebSearchTool.Args, WebSearchTool.Result>(
+    workingDirectory: String,
+    private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)",
+    hookManager: HookManager,
+) : BaseTool<WebSearchTool.Args, WebSearchTool.Result>(
+    workingDirectory = workingDirectory,
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "WebSearch",
@@ -48,9 +51,14 @@ Usage notes:
   - Web search is only available in the US
 
 IMPORTANT - Use the correct year in search queries:
-  - Today's date is ${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}. You MUST use this year when searching for recent information, documentation, or current events.
+  - Today's date is ${
+        LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+    }. You MUST use this year when searching for recent information, documentation, or current events.
   - Example: If today is 2025-07-15 and the user asks for "latest React docs", search for "React documentation 2025", NOT "React documentation 2024"
-""".trimIndent()
+""".trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     @Serializable
@@ -85,38 +93,57 @@ IMPORTANT - Use the correct year in search queries:
         val sources: List<String>
     )
 
-    override suspend fun execute(args: Args): Result = withContext(Dispatchers.IO) {
+    override suspend fun doExecute(args: Args): Result = withContext(Dispatchers.IO) {
         try {
             val searxResults = searchWithSearxNG(args.query)
             if (searxResults.isNotEmpty()) {
                 val filteredResults =
-                    filterResults(searxResults, args.allowedDomains, args.blockedDomains)
+                    filterResults(
+                        searxResults,
+                        args.allowedDomains,
+                        args.blockedDomains
+                    )
                 return@withContext Result(
                     query = args.query,
                     results = filteredResults.take(10),
                     sources = filteredResults.take(10).map { "[${it.title}](${it.url})" }
                 )
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fall back to DuckDuckGo
         }
 
         try {
             val duckduckgoResults = searchWithDuckDuckGo(args.query)
             val filteredResults =
-                filterResults(duckduckgoResults, args.allowedDomains, args.blockedDomains)
+                filterResults(
+                    duckduckgoResults,
+                    args.allowedDomains,
+                    args.blockedDomains
+                )
             return@withContext Result(
                 query = args.query,
                 results = filteredResults.take(10),
                 sources = filteredResults.take(10).map { "[${it.title}](${it.url})" }
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return@withContext Result(
                 query = args.query,
                 results = emptyList(),
                 sources = emptyList()
             )
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result(
+            query = originalArgs.query,
+            results = emptyList(),
+            sources = listOf(deniedReason)
+        )
     }
 
     private suspend fun searchWithSearxNG(query: String): List<SearchResult> =
@@ -142,7 +169,7 @@ IMPORTANT - Use the correct year in search queries:
                         content = result.content
                     )
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 emptyList()
             }
         }
@@ -204,15 +231,15 @@ IMPORTANT - Use the correct year in search queries:
                 return@buildString
             }
 
-            result.results.forEach { searchResult ->
-                appendLine()
-                appendLine("[${searchResult.title}](${searchResult.url})")
-                if (searchResult.content.isNotBlank()) {
-                    appendLine()
-                    appendLine(searchResult.content)
-                }
-                appendLine()
+            appendLine("[${result.results.size} results]")
+            appendLine()
+
+            result.results.forEachIndexed { index, searchResult ->
+                appendLine("[${index + 1}. ${searchResult.title}](${searchResult.url})")
             }
+
+            appendLine()
+            appendLine("*Click on any result to view the full content*")
         }.trimEnd().truncateToolResult()
 
     @Serializable

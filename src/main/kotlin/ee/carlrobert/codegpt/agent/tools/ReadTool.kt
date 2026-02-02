@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.diagnostic.thisLogger
@@ -8,7 +7,10 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
+import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.hooks.HookEventType
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,7 +21,12 @@ import java.nio.charset.StandardCharsets
 /**
  * Reads a file from the local filesystem using IntelliJ's Document and VirtualFile APIs.
  */
-class ReadTool(private val project: Project) : Tool<ReadTool.Args, ReadTool.Result>(
+class ReadTool(
+    private val project: Project,
+    private val hookManager: HookManager,
+    private val sessionId: String? = null
+) : BaseTool<ReadTool.Args, ReadTool.Result>(
+    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "Read",
@@ -39,7 +46,10 @@ class ReadTool(private val project: Project) : Tool<ReadTool.Args, ReadTool.Resu
         - Images are returned visually for analysis
         - PDFs are processed page by page
         - Jupyter notebooks return all cells with outputs
-    """.trimIndent()
+    """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     companion object {
@@ -83,112 +93,149 @@ class ReadTool(private val project: Project) : Tool<ReadTool.Args, ReadTool.Resu
         ) : Result()
     }
 
-    override suspend fun execute(args: Args): Result {
+    override suspend fun doExecute(args: Args): Result {
         return try {
-            return withContext(Dispatchers.Default) { runReadAction {
-                val svc = project.getService(ProxyAISettingsService::class.java)
-                if (svc.isPathIgnored(args.filePath)) {
-                    return@runReadAction Result.Error(
-                        filePath = args.filePath,
-                        error = "Access to this path is blocked by .proxyai ignore rules"
-                    )
-                }
-
-                val virtualFile =
-                    VirtualFileManager.getInstance().findFileByUrl("file://${args.filePath}")
-                        ?: return@runReadAction Result.Error(
+            val result = withContext(Dispatchers.Default) {
+                runReadAction {
+                    val svc = project.getService(ProxyAISettingsService::class.java)
+                    if (svc.isPathIgnored(args.filePath)) {
+                        return@runReadAction Result.Error(
                             filePath = args.filePath,
-                            error = "File not found: ${args.filePath}"
-                        )
-
-                if (virtualFile.isDirectory) {
-                    return@runReadAction Result.Error(
-                        filePath = args.filePath,
-                        error = "Path is a directory, not a file: ${args.filePath}"
-                    )
-                }
-
-                val fileType = FileTypeManager.getInstance().getFileTypeByFile(virtualFile)
-
-                when {
-                    fileType.isBinary -> {
-                        Result.Error(
-                            filePath = args.filePath,
-                            error = "Binary files are not supported by ProxyAI yet."
+                            error = "Access to this path is blocked by .proxyai ignore rules"
                         )
                     }
 
-                    else -> {
-                        val content = try {
-                            val document =
-                                FileDocumentManager.getInstance().getDocument(virtualFile)
-                            document?.text ?: String(
-                                virtualFile.contentsToByteArray(),
-                                StandardCharsets.UTF_8
+                    val virtualFile =
+                        VirtualFileManager.getInstance()
+                            .findFileByUrl("file://${args.filePath}")
+                            ?: return@runReadAction Result.Error(
+                                filePath = args.filePath,
+                                error = "File not found: ${args.filePath}"
                             )
-                        } catch (e: Exception) {
-                            logger.error("Error reading document from $virtualFile", e)
-                            String(virtualFile.contentsToByteArray(), StandardCharsets.UTF_8)
-                        }
 
-                        val lines = content.lines()
-                        val totalLines = lines.size
-
-                        val (startIdx, endIdx, truncated) = when {
-                            args.offset != null && args.limit != null -> {
-                                val start = (args.offset - 1).coerceIn(0, totalLines)
-                                val end = (start + args.limit).coerceIn(start, totalLines)
-                                Triple(start, end, end < totalLines)
-                            }
-
-                            args.offset != null -> {
-                                val start = (args.offset - 1).coerceIn(0, totalLines)
-                                Triple(start, totalLines, false)
-                            }
-
-                            args.limit != null -> {
-                                Triple(
-                                    0,
-                                    args.limit.coerceIn(0, totalLines),
-                                    totalLines > args.limit
-                                )
-                            }
-
-                            else -> {
-                                val limit = 2000
-                                Triple(0, limit.coerceIn(0, totalLines), totalLines > limit)
-                            }
-                        }
-
-                        val startLine = if (startIdx == 0) null else startIdx + 1
-                        val endLine = if (endIdx == totalLines) null else endIdx
-
-                        val selectedLines = lines.subList(startIdx, endIdx)
-                        val numberedContent = buildString {
-                            selectedLines.forEachIndexed { index, line ->
-                                val lineNumber = startIdx + index + 1
-                                appendLine("${lineNumber}\t${line.take(2000)}")
-                            }
-                        }
-
-                        Result.Success(
+                    if (virtualFile.isDirectory) {
+                        return@runReadAction Result.Error(
                             filePath = args.filePath,
-                            content = numberedContent.trimEnd(),
-                            lineCount = selectedLines.size,
-                            truncated = truncated,
-                            fileType = fileType.name,
-                            startLine = startLine,
-                            endLine = endLine
+                            error = "Path is a directory, not a file: ${args.filePath}"
                         )
                     }
+
+                    val fileType = FileTypeManager.getInstance().getFileTypeByFile(virtualFile)
+
+                    when {
+                        fileType.isBinary -> {
+                            Result.Error(
+                                filePath = args.filePath,
+                                error = "Binary files are not supported by ProxyAI yet."
+                            )
+                        }
+
+                        else -> {
+                            val content = try {
+                                val document =
+                                    FileDocumentManager.getInstance().getDocument(virtualFile)
+                                document?.text ?: String(
+                                    virtualFile.contentsToByteArray(),
+                                    StandardCharsets.UTF_8
+                                )
+                            } catch (e: Exception) {
+                                logger.error("Error reading document from $virtualFile", e)
+                                String(virtualFile.contentsToByteArray(), StandardCharsets.UTF_8)
+                            }
+
+                            val lines = content.lines()
+                            val totalLines = lines.size
+
+                            val (startIdx, endIdx, truncated) = when {
+                                args.offset != null && args.limit != null -> {
+                                    val start = (args.offset - 1).coerceIn(0, totalLines)
+                                    val end = (start + args.limit).coerceIn(start, totalLines)
+                                    Triple(start, end, end < totalLines)
+                                }
+
+                                args.offset != null -> {
+                                    val start = (args.offset - 1).coerceIn(0, totalLines)
+                                    Triple(start, totalLines, false)
+                                }
+
+                                args.limit != null -> {
+                                    Triple(
+                                        0,
+                                        args.limit.coerceIn(0, totalLines),
+                                        totalLines > args.limit
+                                    )
+                                }
+
+                                else -> {
+                                    val limit = 2000
+                                    Triple(0, limit.coerceIn(0, totalLines), totalLines > limit)
+                                }
+                            }
+
+                            val startLine = if (startIdx == 0) null else startIdx + 1
+                            val endLine = if (endIdx == totalLines) null else endIdx
+
+                            val selectedLines = lines.subList(startIdx, endIdx)
+                            val numberedContent = buildString {
+                                selectedLines.forEachIndexed { index, line ->
+                                    val lineNumber = startIdx + index + 1
+                                    appendLine("${lineNumber}\t${line.take(2000)}")
+                                }
+                            }
+
+                            Result.Success(
+                                filePath = args.filePath,
+                                content = numberedContent.trimEnd(),
+                                lineCount = selectedLines.size,
+                                truncated = truncated,
+                                fileType = fileType.name,
+                                startLine = startLine,
+                                endLine = endLine
+                            )
+                        }
+                    }
                 }
-            }}
+            }
+
+            if (result is Result.Success) {
+                val toolId = sessionId?.let { id -> ToolRunContext.getToolId(id) }
+                val payload = mapOf(
+                    "file_path" to args.filePath,
+                    "content" to result.content,
+                    "attachments" to emptyList<Any>()
+                )
+                val deniedReason = hookManager.checkHooksForDenial(
+                    HookEventType.BEFORE_READ_FILE,
+                    payload,
+                    "Read",
+                    toolId,
+                    sessionId
+                )
+                if (deniedReason != null) {
+                    return Result.Error(
+                        filePath = args.filePath,
+                        error = deniedReason
+                    )
+                }
+            }
+
+            result
         } catch (e: Exception) {
             Result.Error(
                 filePath = args.filePath,
                 error = "Failed to read file: ${e.message}"
             )
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result.Error(
+            filePath = originalArgs.filePath,
+            error = deniedReason
+        )
     }
 
     override fun encodeResultToString(result: Result): String = when (result) {

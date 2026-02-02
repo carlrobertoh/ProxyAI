@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.ide.util.gotoByName.ChooseByNameModel
 import com.intellij.ide.util.gotoByName.GotoClassModel2
@@ -11,28 +10,31 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.*
 import com.intellij.psi.codeStyle.NameUtil
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
-import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
-import kotlinx.coroutines.withContext
+import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import java.nio.file.Paths
-import com.intellij.openapi.util.TextRange
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withTimeout
 
 /**
  * Enhanced search tool using IntelliJ's native SearchService and FindModel.
  */
 class IntelliJSearchTool(
-    private val project: Project
-) : Tool<IntelliJSearchTool.Args, IntelliJSearchTool.Result>(
+    hookManager: HookManager,
+    private val project: Project,
+) : BaseTool<IntelliJSearchTool.Args, IntelliJSearchTool.Result>(
+    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "IntelliJSearch",
@@ -47,7 +49,10 @@ class IntelliJSearchTool(
         Notes:
         - This is a name-oriented search, not content search
         - For content search, use the Grep tool instead
-    """.trimIndent()
+    """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     companion object {
@@ -127,7 +132,7 @@ class IntelliJSearchTool(
         val context: String?
     )
 
-    override suspend fun execute(args: Args): Result {
+    override suspend fun doExecute(args: Args): Result {
         try {
             val maxResults = (args.limit ?: 10).coerceIn(1, 50)
             val matches = withTimeout(5000) {
@@ -164,6 +169,19 @@ class IntelliJSearchTool(
                 output = "Search failed: ${e.message}"
             )
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result(
+            pattern = originalArgs.pattern,
+            scope = originalArgs.scope ?: "project",
+            totalMatches = 0,
+            matches = emptyList(),
+            output = deniedReason
+        )
     }
 
     private fun createSearchScope(args: Args, project: Project): GlobalSearchScope {

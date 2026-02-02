@@ -1,14 +1,14 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import ee.carlrobert.codegpt.tokens.truncateToolResult
 
 /**
  * Tool for fetching library documentation from Context7.
@@ -17,13 +17,20 @@ import ee.carlrobert.codegpt.tokens.truncateToolResult
  * Context7-compatible ID. It supports both code documentation and
  * informational guides.
  */
-class GetLibraryDocsTool : Tool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Result>(
+class GetLibraryDocsTool(
+    workingDirectory: String,
+    hookManager: HookManager
+) : BaseTool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Result>(
+    workingDirectory = workingDirectory,
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "GetLibraryDocs",
     description = """
         Use when the user asks how to use a library, best practices, APIs, configuration, or conventions. Resolve the library first with ResolveLibraryId unless the user provided a Context7-compatible ID. Use mode='code' for API/code, or mode='info' for guides.
-    """.trimIndent()
+    """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     @Serializable
@@ -62,12 +69,12 @@ class GetLibraryDocsTool : Tool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Resu
         ) : Result()
     }
 
-    override suspend fun execute(args: Args): Result = withContext(Dispatchers.IO) {
+    override suspend fun doExecute(args: Args): Result = withContext(Dispatchers.IO) {
         try {
             if (!args.context7CompatibleLibraryID.startsWith("/")) {
                 return@withContext Result.Error(
                     "Invalid library ID format: '${args.context7CompatibleLibraryID}'. Library ID must start with '/' (e.g., '/vercel/next.js'). " +
-                    "Use 'ResolveLibraryId' tool first to get the correct library ID format."
+                            "Use 'ResolveLibraryId' tool first to get the correct library ID format."
                 )
             }
 
@@ -86,7 +93,8 @@ class GetLibraryDocsTool : Tool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Resu
             val libraryComponents = parseLibraryId(args.context7CompatibleLibraryID)
 
             val baseUrl = "https://context7.com/api/v2/docs/${args.mode.lowercase()}"
-            val urlBuilder = StringBuilder("$baseUrl/${libraryComponents.username}/${libraryComponents.library}")
+            val urlBuilder =
+                StringBuilder("$baseUrl/${libraryComponents.username}/${libraryComponents.library}")
 
             if (libraryComponents.tag != null) {
                 urlBuilder.append("/${libraryComponents.tag}")
@@ -94,7 +102,14 @@ class GetLibraryDocsTool : Tool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Resu
 
             urlBuilder.append("?type=txt")
             if (args.topic != null) {
-                urlBuilder.append("&topic=${URLEncoder.encode(args.topic, StandardCharsets.UTF_8.toString())}")
+                urlBuilder.append(
+                    "&topic=${
+                        URLEncoder.encode(
+                            args.topic,
+                            StandardCharsets.UTF_8.toString()
+                        )
+                    }"
+                )
             }
             if (args.page > 1) {
                 urlBuilder.append("&page=${args.page}")
@@ -117,7 +132,8 @@ class GetLibraryDocsTool : Tool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Resu
             }
 
             if (documentation.contains("No content available") ||
-                documentation.contains("No context data available")) {
+                documentation.contains("No context data available")
+            ) {
                 val suggestion = if (args.mode.lowercase() == "code") {
                     " Try mode='info' for guides and tutorials."
                 } else {
@@ -128,7 +144,7 @@ class GetLibraryDocsTool : Tool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Resu
                 )
             }
 
-            return@withContext Result.Success(
+            Result.Success(
                 libraryId = args.context7CompatibleLibraryID,
                 documentation = documentation,
                 docMode = args.mode,
@@ -138,15 +154,25 @@ class GetLibraryDocsTool : Tool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Resu
             val errorMessage = when {
                 e.message?.contains("404", ignoreCase = true) == true ->
                     "The library '${args.context7CompatibleLibraryID}' was not found. Please check the library ID or use 'ResolveLibraryId' to find the correct ID."
+
                 e.message?.contains("429", ignoreCase = true) == true ->
                     "Rate limited due to too many requests. Please try again later."
+
                 e.message?.contains("401", ignoreCase = true) == true ->
                     "Unauthorized access to Context7 service."
+
                 else ->
                     "Failed to fetch documentation: ${e.message}"
             }
-            return@withContext Result.Error(errorMessage)
+            Result.Error(errorMessage)
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result.Error(error = deniedReason)
     }
 
     override fun encodeResultToString(result: Result): String = when (result) {

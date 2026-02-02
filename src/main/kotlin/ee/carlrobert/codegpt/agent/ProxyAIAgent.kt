@@ -29,6 +29,8 @@ import ee.carlrobert.codegpt.agent.strategy.buildHistoryTooBigPredicate
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.hooks.HookEventType
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -86,7 +88,8 @@ object ProxyAIAgent {
         val projectInstructions = searchForInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
-        val toolRegistry = createToolRegistry(project, events, sessionId, provider)
+        val hookManager = HookManager(project)
+        val toolRegistry = createToolRegistry(project, events, sessionId, provider, hookManager)
         val agentModel = service<ModelSelectionService>().getAgentModel()
         val agent = AIAgent(
             promptExecutor = executor,
@@ -225,11 +228,28 @@ object ProxyAIAgent {
                 }
 
                 onAgentCompleted { context ->
+                    hookManager.executeHooksForEvent(
+                        HookEventType.STOP,
+                        mapOf(
+                            "status" to "completed",
+                            "agent_id" to context.agentId
+                        ),
+                        sessionId = sessionId
+                    )
                     events.onAgentCompleted(context.agentId)
                 }
 
                 onAgentExecutionFailed {
                     logger.error(it.throwable) { "Agent execution failed: $it" }
+                    hookManager.executeHooksForEvent(
+                        HookEventType.STOP,
+                        mapOf(
+                            "status" to "error",
+                            "agent_id" to it.agentId,
+                            "error" to (it.throwable.message ?: "Unknown error")
+                        ),
+                        sessionId = sessionId
+                    )
                     events.onAgentCompleted(it.agentId)
                 }
             }
@@ -241,10 +261,12 @@ object ProxyAIAgent {
         project: Project,
         events: AgentEvents,
         sessionId: String,
-        provider: ServiceType
+        provider: ServiceType,
+        hookManager: HookManager
     ): ToolRegistry {
+        val workingDirectory = project.basePath ?: System.getProperty("user.dir")
         return ToolRegistry {
-            tool(ReadTool(project))
+            tool(ReadTool(project, hookManager, sessionId))
             val approveHandler: suspend (String, String) -> Boolean = { name, details ->
                 try {
                     events.approveToolCall(
@@ -258,9 +280,9 @@ object ProxyAIAgent {
                     false
                 }
             }
-            tool(ConfirmingEditTool(EditTool(project), approveHandler))
+            tool(ConfirmingEditTool(EditTool(project, hookManager, sessionId), approveHandler))
             tool(
-                ConfirmingWriteTool(WriteTool(project)) { name, details ->
+                ConfirmingWriteTool(WriteTool(project, hookManager)) { name, details ->
                     try {
                         val type = if (name.equals("Write", true))
                             ToolApprovalType.WRITE
@@ -278,18 +300,50 @@ object ProxyAIAgent {
                     }
                 }
             )
-            tool(TodoWriteTool(project, sessionId))
-            tool(AskUserQuestionTool(events))
+            tool(TodoWriteTool(project, sessionId, hookManager))
+            tool(
+                AskUserQuestionTool(
+                    workingDirectory = workingDirectory,
+                    hookManager = hookManager,
+                    events = events
+                )
+            )
             tool(ExitTool)
-            tool(IntelliJSearchTool(project))
-            tool(WebSearchTool())
-            tool(BashOutputTool(sessionId))
-            tool(KillShellTool())
-            tool(ResolveLibraryIdTool())
-            tool(GetLibraryDocsTool())
+            tool(IntelliJSearchTool(project = project, hookManager = hookManager))
+            tool(
+                WebSearchTool(
+                    workingDirectory = workingDirectory,
+                    hookManager = hookManager,
+                )
+            )
+            tool(
+                BashOutputTool(
+                    workingDirectory = workingDirectory,
+                    hookManager = hookManager,
+                    sessionId = sessionId
+                )
+            )
+            tool(
+                KillShellTool(
+                    workingDirectory = workingDirectory,
+                    hookManager = hookManager,
+                )
+            )
+            tool(
+                ResolveLibraryIdTool(
+                    workingDirectory = workingDirectory,
+                    hookManager = hookManager,
+                )
+            )
+            tool(
+                GetLibraryDocsTool(
+                    workingDirectory = workingDirectory,
+                    hookManager = hookManager
+                )
+            )
             tool(
                 BashTool(
-                    project.basePath ?: "",
+                    workingDirectory = workingDirectory,
                     confirmationHandler = { args ->
                         try {
                             val approved = events.approveToolCall(
@@ -308,7 +362,8 @@ object ProxyAIAgent {
                         }
                     },
                     sessionId = sessionId,
-                    settingsService = project.service<ProxyAISettingsService>()
+                    settingsService = project.service<ProxyAISettingsService>(),
+                    hookManager = hookManager
                 )
             )
             tool(
@@ -316,7 +371,8 @@ object ProxyAIAgent {
                     project,
                     sessionId,
                     service<ModelSelectionService>().getServiceForFeature(FeatureType.AGENT),
-                    events
+                    events,
+                    hookManager
                 )
             )
         }

@@ -1,13 +1,16 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ee.carlrobert.codegpt.agent.AgentEvents
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import kotlinx.serialization.Serializable
 
 class AskUserQuestionTool(
-    private val events: AgentEvents
-) : Tool<AskUserQuestionTool.Args, AskUserQuestionTool.Result>(
+    workingDirectory: String,
+    hookManager: HookManager,
+    private val events: AgentEvents,
+) : BaseTool<AskUserQuestionTool.Args, AskUserQuestionTool.Result>(
+    workingDirectory = workingDirectory,
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "AskUserQuestion",
@@ -22,7 +25,10 @@ class AskUserQuestionTool(
         - Users will always be able to select "Other" to provide custom text input
         - Use multiSelect: true to allow multiple answers to be selected for a question
         - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label
-        """.trimIndent()
+        """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager,
 ) {
 
     @Serializable
@@ -66,7 +72,7 @@ class AskUserQuestionTool(
         ) : Result()
     }
 
-    override suspend fun execute(args: Args): Result {
+    override suspend fun doExecute(args: Args): Result {
         if (args.questions.isEmpty()) {
             return Result.Error("At least one question is required")
         }
@@ -91,11 +97,21 @@ class AskUserQuestionTool(
         return Result.Success(collected)
     }
 
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result.Error(deniedReason)
+    }
+
     override fun encodeResultToString(result: Result): String = when (result) {
         is Result.Success -> buildString {
             append("User answered:\n")
-            result.answers.forEach { (k, v) -> append("- ").append(k).append(": ").append(v).append('\n') }
+            result.answers.forEach { (k, v) ->
+                append("- ").append(k).append(": ").append(v).append('\n')
+            }
         }.trimEnd()
+
         is Result.Error -> "AskUserQuestion failed: ${result.message}"
     }
 

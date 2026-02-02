@@ -1,17 +1,21 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.SimpleTool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.ToolRunContext
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.toolwindow.agent.AgentTabTitleNotifier
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
 
 class TodoWriteTool(
     project: Project,
-    private val sessionId: String
-) : SimpleTool<TodoWriteTool.Args>(
+    private val sessionId: String,
+    hookManager: HookManager
+) : BaseTool<TodoWriteTool.Args, String>(
+    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
+    resultSerializer = String.serializer(),
     name = "TodoWrite",
     description = """
 Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
@@ -37,7 +41,10 @@ Skip using this tool when:
 4. The task is purely conversational or informational
 
 NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
-    """.trimIndent()
+    """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = String::class,
+    hookManager = hookManager
 ) {
 
     private val agentTabTitlePublisher =
@@ -68,7 +75,7 @@ NOTE that you should not use this tool if there is only one trivial task to do. 
         COMPLETED
     }
 
-    override suspend fun execute(args: Args): String {
+    override suspend fun doExecute(args: Args): String {
         val title = args.title
         if (title.isNotBlank()) {
             val currentContext = ToolRunContext.get(sessionId)
@@ -84,7 +91,7 @@ NOTE that you should not use this tool if there is only one trivial task to do. 
         val inProgressCount = args.todos.count { it.status == TodoStatus.IN_PROGRESS }
         val completedCount = args.todos.count { it.status == TodoStatus.COMPLETED }
 
-        return buildString {
+        val result = buildString {
             appendLine("📋 Todo List Updated")
             appendLine()
             appendLine("Summary:")
@@ -107,5 +114,13 @@ NOTE that you should not use this tool if there is only one trivial task to do. 
                 appendLine("${index + 1}. $statusIcon $taskText")
             }
         }
+        return result
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): String {
+        return deniedReason
     }
 }

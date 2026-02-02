@@ -19,7 +19,33 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
     TASK("Task"),
     ASK_USER_QUESTION("AskUserQuestion"),
     TODO_WRITE("TodoWrite", setOf("TodoWriteTool")),
-    EXIT("Exit")
+    EXIT("Exit");
+
+    companion object {
+        val HOOK_AWARE = setOf(
+            READ,
+            WRITE,
+            EDIT,
+            BASH,
+            TASK,
+            INTELLIJ_SEARCH,
+            WEB_SEARCH,
+            RESOLVE_LIBRARY_ID,
+            GET_LIBRARY_DOCS,
+            ASK_USER_QUESTION,
+            TODO_WRITE,
+            BASH_OUTPUT,
+            KILL_SHELL
+        )
+
+        fun isHookAware(toolId: String): Boolean {
+            return fromId(toolId) in HOOK_AWARE
+        }
+
+        fun fromId(toolId: String): ToolName? {
+            return entries.find { it.id == toolId }
+        }
+    }
 }
 
 data class ToolSpec<TArgs, TResult>(

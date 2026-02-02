@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
 import com.intellij.openapi.application.ApplicationManager
@@ -11,6 +10,8 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.hooks.HookEventType
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -32,8 +33,10 @@ class BashTool(
     private val workingDirectory: String,
     private val confirmationHandler: BashCommandConfirmationHandler,
     private val sessionId: String = "global",
-    private val settingsService: ProxyAISettingsService? = null
-) : Tool<BashTool.Args, BashTool.Result>(
+    private val settingsService: ProxyAISettingsService? = null,
+    private val hookManager: HookManager
+) : BaseTool<BashTool.Args, BashTool.Result>(
+    workingDirectory = workingDirectory,
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "Bash",
@@ -167,7 +170,10 @@ class BashTool(
     
     # Other common operations
     - View comments on a Github PR: gh api repos/foo/bar/pulls/123/comments
-""".trimIndent()
+""".trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     @Serializable
@@ -227,7 +233,9 @@ class BashTool(
         }
     }
 
-    override suspend fun execute(args: Args): Result {
+
+    override suspend fun doExecute(args: Args): Result {
+        val toolId = ToolRunContext.getToolId(sessionId)
         if (shouldBlockByIgnore(args.command)) {
             return Result(
                 args.command,
@@ -236,9 +244,30 @@ class BashTool(
                 null
             )
         }
+
+        val prePayload = mapOf(
+            "command" to args.command,
+            "cwd" to workingDirectory,
+            "timeout" to args.timeout
+        )
+        val deniedReason = hookManager.checkHooksForDenial(
+            HookEventType.BEFORE_BASH_EXECUTION,
+            prePayload,
+            "Bash",
+            toolId,
+            sessionId
+        )
+        if (deniedReason != null) {
+            return Result(
+                args.command,
+                null,
+                deniedReason,
+                null
+            )
+        }
+
         val isAskPattern = shouldAskForConfirmation(args.command)
-        val toolId = ToolRunContext.getToolId(sessionId)
-            ?: throw IllegalArgumentException("Tool ID is missing")
+        val resolvedToolId = toolId ?: throw IllegalArgumentException("Tool ID is missing")
 
         val confirmation = when {
             isWhiteListed(args) && !isAskPattern -> ShellCommandConfirmation.Approved
@@ -256,12 +285,44 @@ class BashTool(
                             bashId
                         )
                     } else {
-                        runForegroundWithStreaming(toolId, args)
+                        val result = runForegroundWithStreaming(resolvedToolId, args)
+
+                        val postPayload = mapOf(
+                            "command" to args.command,
+                            "output" to result.output,
+                            "exit_code" to (result.exitCode ?: "null")
+                        )
+                        hookManager.executeHooksForEvent(
+                            HookEventType.AFTER_BASH_EXECUTION,
+                            postPayload,
+                            "Bash",
+                            toolId,
+                            sessionId
+                        )
+
+                        result
                     }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Result(args.command, null, "Failed to execute command: ${e.message}", null)
+                    val errorPayload = mapOf(
+                        "command" to args.command,
+                        "error" to (e.message ?: "Unknown error"),
+                        "exit_code" to "null"
+                    )
+                    hookManager.executeHooksForEvent(
+                        HookEventType.AFTER_BASH_EXECUTION,
+                        errorPayload,
+                        "Bash",
+                        toolId,
+                        sessionId
+                    )
+                    Result(
+                        args.command,
+                        null,
+                        "Failed to execute command: ${e.message}",
+                        null
+                    )
                 }
             }
 
@@ -274,6 +335,18 @@ class BashTool(
                 )
             }
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result(
+            command = originalArgs.command,
+            exitCode = null,
+            output = deniedReason,
+            bashId = null
+        )
     }
 
     private suspend fun runForegroundWithStreaming(toolId: String, args: Args): Result {

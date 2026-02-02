@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
@@ -10,8 +9,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
-import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.File
@@ -23,7 +23,11 @@ import java.nio.charset.StandardCharsets
  * Uses IntelliJ's Document API for proper IDE integration with undo/redo support.
  * Handles both project files and external files with appropriate project context.
  */
-class WriteTool(private val project: Project) : Tool<WriteTool.Args, WriteTool.Result>(
+class WriteTool(
+    private val project: Project,
+    hookManager: HookManager,
+) : BaseTool<WriteTool.Args, WriteTool.Result>(
+    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "Write",
@@ -44,7 +48,10 @@ class WriteTool(private val project: Project) : Tool<WriteTool.Args, WriteTool.R
         - Uses UTF-8 encoding by default
         - Binary content should be handled differently
         - Content field is required and cannot be empty
-    """.trimIndent()
+    """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     @Serializable
@@ -77,7 +84,7 @@ class WriteTool(private val project: Project) : Tool<WriteTool.Args, WriteTool.R
         ) : Result()
     }
 
-    override suspend fun execute(args: Args): Result {
+    override suspend fun doExecute(args: Args): Result {
         val svc = project.getService(ProxyAISettingsService::class.java)
         if (svc.isPathIgnored(args.filePath)) {
             return Result.Error(
@@ -91,7 +98,7 @@ class WriteTool(private val project: Project) : Tool<WriteTool.Args, WriteTool.R
                 error = "Content field is required and cannot be empty"
             )
         }
-        
+
         return try {
             val file = File(args.filePath)
 
@@ -160,6 +167,16 @@ class WriteTool(private val project: Project) : Tool<WriteTool.Args, WriteTool.R
                 error = "Failed to write file: ${e.message}"
             )
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result.Error(
+            filePath = originalArgs.filePath,
+            error = deniedReason
+        )
     }
 
     override fun encodeResultToString(result: Result): String = when (result) {

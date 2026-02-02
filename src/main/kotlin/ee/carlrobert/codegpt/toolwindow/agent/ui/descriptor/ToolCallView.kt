@@ -50,9 +50,7 @@ class ToolCallView(
     }
 
     fun appendStreamingLine(text: String, isError: Boolean) {
-        if (descriptor.supportsStreaming) {
-            streamingPanel.appendLine(text, isError)
-        }
+        streamingPanel.appendLine(text, isError)
     }
 
     fun getDescriptor(): ToolCallDescriptor = descriptor

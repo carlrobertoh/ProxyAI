@@ -143,7 +143,7 @@ class RollbackService(private val project: Project) {
                 ?: return@withContext RollbackResult.Failure("No change tracked for $path")
 
             val errors = mutableListOf<String>()
-            runInEdt {
+            runInEdt(ModalityState.defaultModalityState()) {
                 runWriteAction {
                     try {
                         isApplyingRollback = true
@@ -173,7 +173,7 @@ class RollbackService(private val project: Project) {
             ?: return@withContext RollbackResult.Failure("No rollback snapshot available")
 
         val errors = mutableListOf<String>()
-        runInEdt {
+        runInEdt(ModalityState.defaultModalityState()) {
             runWriteAction {
                 try {
                     isApplyingRollback = true

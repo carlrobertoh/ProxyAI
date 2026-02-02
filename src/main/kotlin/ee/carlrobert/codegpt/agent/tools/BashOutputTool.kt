@@ -1,18 +1,23 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.application.ApplicationManager
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.ToolRunContext
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-class BashOutputTool(private val sessionId: String = "global") :
-    Tool<BashOutputTool.Args, BashOutputTool.Result>(
+class BashOutputTool(
+    workingDirectory: String,
+    hookManager: HookManager,
+    private val sessionId: String = "global",
+) :
+    BaseTool<BashOutputTool.Args, BashOutputTool.Result>(
+        workingDirectory = workingDirectory,
         argsSerializer = Args.serializer(),
         resultSerializer = Result.serializer(),
         name = "BashOutput",
@@ -24,7 +29,10 @@ class BashOutputTool(private val sessionId: String = "global") :
 - Supports optional regex filtering to show only lines matching a pattern
 - Use this tool when you need to monitor or check the output of a long-running shell
 - Shell IDs can be found using the Bash tool with run_in_background=true
-""".trimIndent()
+""".trimIndent(),
+        argsClass = Args::class,
+        resultClass = Result::class,
+        hookManager = hookManager,
     ) {
 
     @Serializable
@@ -51,7 +59,8 @@ class BashOutputTool(private val sessionId: String = "global") :
         val exitCode: Int?
     )
 
-    override suspend fun execute(args: Args): Result = withContext(Dispatchers.IO) {
+    override suspend fun doExecute(args: Args): Result = withContext(Dispatchers.IO) {
+        val toolId = ToolRunContext.getToolId(sessionId)
         val processOutput = BackgroundProcessManager.getOutput(args.bashId)
             ?: return@withContext Result(
                 bashId = args.bashId,
@@ -66,7 +75,6 @@ class BashOutputTool(private val sessionId: String = "global") :
         val filteredStdout = getFilteredOutput(stdout, args.filter)
         val filteredStderr = getFilteredOutput(stderr, args.filter)
 
-        val toolId = ToolRunContext.getToolId(sessionId)
         if (toolId != null) {
             val publisher = ApplicationManager.getApplication()
                 .messageBus
@@ -95,6 +103,19 @@ class BashOutputTool(private val sessionId: String = "global") :
             stderr = filteredStderr.trimEnd(),
             status = status,
             exitCode = processOutput.exitCode
+        )
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result(
+            bashId = originalArgs.bashId,
+            stdout = "",
+            stderr = deniedReason,
+            status = "denied",
+            exitCode = null
         )
     }
 

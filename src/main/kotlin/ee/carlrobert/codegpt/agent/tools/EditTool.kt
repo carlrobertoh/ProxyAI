@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.agent.tools
 
-import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.command.WriteCommandAction
@@ -10,7 +9,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
+import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.hooks.HookEventType
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,7 +20,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.File
 
-class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Result>(
+class EditTool(
+    private val project: Project,
+    private val hookManager: HookManager,
+    private val sessionId: String? = null
+) : BaseTool<EditTool.Args, EditTool.Result>(
+    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "Edit",
@@ -42,7 +49,10 @@ class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Resu
         - Binary files are not supported
         - old_string and new_string must be different
         - Tool will fail if no replacements are made
-    """.trimIndent()
+    """.trimIndent(),
+    argsClass = Args::class,
+    resultClass = Result::class,
+    hookManager = hookManager
 ) {
 
     private fun getLineAndColumn(document: Document, offset: Int): Pair<Int, Int> {
@@ -119,7 +129,7 @@ class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Resu
         ) : Result()
     }
 
-    override suspend fun execute(args: Args): Result {
+    override suspend fun doExecute(args: Args): Result {
         return try {
             val svc = project.getService(ProxyAISettingsService::class.java)
             if (svc.isPathIgnored(args.filePath)) {
@@ -260,7 +270,7 @@ class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Resu
                 )
             }
 
-            Result.Success(
+            val result = Result.Success(
                 filePath = args.filePath,
                 replacementsMade = replacementsMade,
                 message = "Successfully made $replacementsMade replacement${if (replacementsMade != 1) "s" else ""}",
@@ -268,12 +278,49 @@ class EditTool(private val project: Project) : Tool<EditTool.Args, EditTool.Resu
                 newStringPreview = args.newString.trim().take(200),
                 editLocations = editLocations
             )
+
+            val toolId = sessionId?.let { id -> ToolRunContext.getToolId(id) }
+            val payload = mapOf(
+                "file_path" to args.filePath,
+                "replacements_made" to replacementsMade,
+                "edit_locations" to editLocations.map { loc ->
+                    mapOf(
+                        "line" to loc.line,
+                        "column" to loc.column
+                    )
+                }
+            )
+            val deniedReason = hookManager.checkHooksForDenial(
+                HookEventType.AFTER_FILE_EDIT,
+                payload,
+                "Edit",
+                toolId,
+                sessionId
+            )
+            if (deniedReason != null) {
+                return Result.Error(
+                    filePath = args.filePath,
+                    error = deniedReason
+                )
+            }
+
+            result
         } catch (e: Exception) {
             Result.Error(
                 filePath = args.filePath,
                 error = "Failed to edit file: ${e.message}"
             )
         }
+    }
+
+    override fun createDeniedResult(
+        originalArgs: Args,
+        deniedReason: String
+    ): Result {
+        return Result.Error(
+            filePath = originalArgs.filePath,
+            error = deniedReason
+        )
     }
 
     override fun encodeResultToString(result: Result): String = when (result) {

@@ -5,6 +5,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
+import ee.carlrobert.codegpt.settings.hooks.HookConfiguration
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -20,7 +21,10 @@ import kotlin.io.path.notExists
 @Service(Service.Level.PROJECT)
 class ProxyAISettingsService(private val project: Project) {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
+    }
     private val logger = thisLogger()
     private val settingsFile: Path by lazy {
         Paths.get(project.basePath ?: "", ".proxyai", "settings.json")
@@ -34,9 +38,21 @@ class ProxyAISettingsService(private val project: Project) {
         return SubagentDefaults.ensureBuiltIns(settings.subagents)
     }
 
+    fun getSettings(): ProxyAISettings {
+        return snapshot().settings
+    }
+
+    fun getHooks(): HookConfiguration {
+        return snapshot().settings.hooks ?: HookConfiguration()
+    }
+
     fun saveSubagents(subagents: List<ProxyAISubagent>) {
         val normalized = SubagentDefaults.ensureBuiltIns(subagents)
         updateSettings { it.copy(subagents = normalized) }
+    }
+
+    fun saveHooks(configuration: HookConfiguration?) {
+        updateSettings { it.copy(hooks = configuration) }
     }
 
     fun getBashPermissions(): List<String> {
@@ -223,7 +239,8 @@ private class IgnoreMatcher(
 data class ProxyAISettings(
     val ignore: List<String>,
     val permissions: Permissions,
-    val subagents: List<ProxyAISubagent> = emptyList()
+    val subagents: List<ProxyAISubagent> = emptyList(),
+    val hooks: HookConfiguration? = null
 ) {
     companion object {
         fun default(): ProxyAISettings {
@@ -261,7 +278,8 @@ data class ProxyAISettings(
                         "Bash(more:*)",
                     )
                 ),
-                subagents = SubagentDefaults.defaults()
+                subagents = SubagentDefaults.defaults(),
+                hooks = HookConfiguration()
             )
         }
     }
