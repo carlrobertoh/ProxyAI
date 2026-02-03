@@ -26,7 +26,7 @@ abstract class BaseTool<Args : Any, Result : Any>(
     resultSerializer: kotlinx.serialization.KSerializer<Result>,
     name: String,
     description: String,
-    private val workingDirectory: String,
+    protected val workingDirectory: String,
     private val hookManager: HookManager,
     private val sessionId: String? = null,
     private val argsClass: KClass<Args>,

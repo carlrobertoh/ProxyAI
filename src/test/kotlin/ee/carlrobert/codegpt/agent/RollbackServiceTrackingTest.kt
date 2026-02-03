@@ -1,7 +1,8 @@
-package ee.carlrobert.codegpt.agent.rollback
+package ee.carlrobert.codegpt.agent
 
 import com.intellij.openapi.vfs.LocalFileSystem
-import ee.carlrobert.codegpt.agent.tools.EditTool
+import ee.carlrobert.codegpt.agent.rollback.ChangeKind
+import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.WriteTool
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest

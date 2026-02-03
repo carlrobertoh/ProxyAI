@@ -27,7 +27,6 @@ import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
 import ee.carlrobert.codegpt.agent.strategy.buildHistoryTooBigPredicate
 import ee.carlrobert.codegpt.agent.tools.*
-import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
@@ -343,7 +342,7 @@ object ProxyAIAgent {
             )
             tool(
                 BashTool(
-                    workingDirectory = workingDirectory,
+                    project = project,
                     confirmationHandler = { args ->
                         try {
                             val approved = events.approveToolCall(
@@ -362,7 +361,6 @@ object ProxyAIAgent {
                         }
                     },
                     sessionId = sessionId,
-                    settingsService = project.service<ProxyAISettingsService>(),
                     hookManager = hookManager
                 )
             )

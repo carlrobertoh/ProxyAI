@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
@@ -9,6 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.ToolPermissionPolicy
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
@@ -94,11 +96,27 @@ class ReadTool(
     }
 
     override suspend fun doExecute(args: Args): Result {
+        val settingsService = project.service<ProxyAISettingsService>()
+        val decision = settingsService.evaluateToolPermission(this, args.filePath)
+        if (decision == ToolPermissionPolicy.Decision.DENY) {
+            return Result.Error(
+                filePath = args.filePath,
+                error = "Access denied by permissions.deny for Read"
+            )
+        }
+        if (settingsService.hasAllowRulesForTool("Read")
+            && decision != ToolPermissionPolicy.Decision.ALLOW
+        ) {
+            return Result.Error(
+                filePath = args.filePath,
+                error = "Access denied by permissions.allow for Read"
+            )
+        }
+
         return try {
             val result = withContext(Dispatchers.Default) {
                 runReadAction {
-                    val svc = project.getService(ProxyAISettingsService::class.java)
-                    if (svc.isPathIgnored(args.filePath)) {
+                    if (settingsService.isPathIgnored(args.filePath)) {
                         return@runReadAction Result.Error(
                             filePath = args.filePath,
                             error = "Access to this path is blocked by .proxyai ignore rules"

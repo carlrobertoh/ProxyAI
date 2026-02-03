@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.settings
 
+import ai.koog.agents.core.tools.Tool
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.thisLogger
@@ -29,7 +30,9 @@ class ProxyAISettingsService(private val project: Project) {
     private val settingsFile: Path by lazy {
         Paths.get(project.basePath ?: "", ".proxyai", "settings.json")
     }
-    private val store: ProxyAISettingsStore by lazy { ProxyAISettingsStore(settingsFile, json, logger) }
+    private val store: ProxyAISettingsStore by lazy {
+        ProxyAISettingsStore(settingsFile, json, logger)
+    }
     private val cache = AtomicReference<CachedSettings?>(null)
     private val isWindows = System.getProperty("os.name")?.lowercase()?.contains("windows") == true
 
@@ -55,12 +58,34 @@ class ProxyAISettingsService(private val project: Project) {
         updateSettings { it.copy(hooks = configuration) }
     }
 
-    fun getBashPermissions(): List<String> {
-        return snapshot().settings.permissions.allow
+    fun evaluateToolPermission(tool: Tool<*, *>, target: String): ToolPermissionPolicy.Decision {
+        val settings = snapshot().settings
+        val targets = permissionTargets(target)
+        return ToolPermissionPolicy.evaluate(
+            permissions = ToolPermissionPolicy.PermissionLists(
+                allow = settings.permissions.allow,
+                ask = settings.permissions.ask,
+                deny = settings.permissions.deny
+            ),
+            toolName = tool.name,
+            targets = targets
+        )
     }
 
-    fun getIgnorePatterns(): List<String> {
-        return snapshot().settings.ignore
+    fun isToolInvocationDenied(tool: Tool<*, *>, target: String): Boolean {
+        return evaluateToolPermission(tool, target) == ToolPermissionPolicy.Decision.DENY
+    }
+
+    fun isToolInvocationWhitelisted(tool: Tool<*, *>, target: String): Boolean {
+        return evaluateToolPermission(tool, target) == ToolPermissionPolicy.Decision.ALLOW
+    }
+
+    fun hasAllowRulesForTool(toolName: String): Boolean {
+        val allows = snapshot().settings.permissions.allow
+        return allows.any { rule ->
+            val trimmed = rule.trim()
+            trimmed == toolName || trimmed.startsWith("$toolName(")
+        }
     }
 
     fun isPathIgnored(path: String): Boolean {
@@ -69,6 +94,31 @@ class ProxyAISettingsService(private val project: Project) {
 
     fun isPathIgnored(path: String, basePath: String): Boolean {
         return snapshot().ignoreMatcher.matches(path, basePath)
+    }
+
+    private fun permissionTargets(target: String): List<String> {
+        val normalized = try {
+            Paths.get(target).normalize().toString().replace('\\', '/')
+        } catch (_: Exception) {
+            target.replace('\\', '/')
+        }
+        val fileName = normalized.substringAfterLast('/')
+        val base = (project.basePath ?: "").replace('\\', '/').trimEnd('/')
+        if (base.isBlank()) return listOf(normalized, target)
+
+        val rel = if (normalized.startsWith(base)) {
+            normalized.removePrefix(base).removePrefix("/")
+        } else null
+
+        return buildList {
+            add(target)
+            add(normalized)
+            if (fileName.isNotBlank()) add(fileName)
+            if (!rel.isNullOrBlank()) {
+                add(rel)
+                add("./$rel")
+            }
+        }.distinct()
     }
 
     private fun snapshot(): CachedSettings {
@@ -160,9 +210,9 @@ private class IgnoreMatcher(
         return compiled.any { (raw, rx) ->
             val normalized = if (isWindows) raw.lowercase() else raw
             simpleMatch(relToTest, normalized) ||
-                simpleMatch(pathToTest, normalized) ||
-                rx.matches(relToTest) ||
-                rx.matches(pathToTest)
+                    simpleMatch(pathToTest, normalized) ||
+                    rx.matches(relToTest) ||
+                    rx.matches(pathToTest)
         }
     }
 
@@ -174,6 +224,7 @@ private class IgnoreMatcher(
             }
             return IgnoreMatcher(compiled, isWindows)
         }
+
         private fun globToRegex(glob: String, ignoreCase: Boolean = false): Regex? {
             return try {
                 var g = glob.trim()
@@ -194,6 +245,7 @@ private class IgnoreMatcher(
                                 sb.append("[^/]*")
                             }
                         }
+
                         '?' -> sb.append(".")
                         '.', '(', ')', '+', '|', '^', '$', '@', '%' -> sb.append('\\').append(c)
                         '[' -> sb.append("[")
@@ -207,7 +259,10 @@ private class IgnoreMatcher(
                 }
                 if (dirSuffix) sb.append("(/.*)?")
                 sb.append('$')
-                if (ignoreCase) Regex(sb.toString(), RegexOption.IGNORE_CASE) else Regex(sb.toString())
+                if (ignoreCase) Regex(
+                    sb.toString(),
+                    RegexOption.IGNORE_CASE
+                ) else Regex(sb.toString())
             } catch (_: Exception) {
                 null
             }
@@ -255,27 +310,27 @@ data class ProxyAISettings(
                 ),
                 permissions = Permissions(
                     allow = listOf(
-                        "Bash(rg:*)",
-                        "Bash(grep:*)",
-                        "Bash(find:*)",
-                        "Bash(ls:*)",
-                        "Bash(sed:*)",
-                        "Bash(rm:*)",
-                        "Bash(cat:*)",
-                        "Bash(head:*)",
-                        "Bash(tail:*)",
-                        "Bash(diff:*)",
-                        "Bash(du:*)",
-                        "Bash(file:*)",
-                        "Bash(sort:*)",
-                        "Bash(stat:*)",
-                        "Bash(tree:*)",
-                        "Bash(uniq:*)",
-                        "Bash(wc:*)",
-                        "Bash(whereis:*)",
-                        "Bash(which:*)",
-                        "Bash(less:*)",
-                        "Bash(more:*)",
+                        "Bash(rg *)",
+                        "Bash(grep *)",
+                        "Bash(find *)",
+                        "Bash(ls *)",
+                        "Bash(sed *)",
+                        "Bash(rm *)",
+                        "Bash(cat *)",
+                        "Bash(head *)",
+                        "Bash(tail *)",
+                        "Bash(diff *)",
+                        "Bash(du *)",
+                        "Bash(file *)",
+                        "Bash(sort *)",
+                        "Bash(stat *)",
+                        "Bash(tree *)",
+                        "Bash(uniq *)",
+                        "Bash(wc *)",
+                        "Bash(whereis *)",
+                        "Bash(which *)",
+                        "Bash(less *)",
+                        "Bash(more *)",
                     )
                 ),
                 subagents = SubagentDefaults.defaults(),
@@ -286,7 +341,9 @@ data class ProxyAISettings(
 
     @Serializable
     data class Permissions(
-        val allow: List<String>
+        val allow: List<String> = emptyList(),
+        val ask: List<String> = emptyList(),
+        val deny: List<String> = emptyList()
     )
 }
 

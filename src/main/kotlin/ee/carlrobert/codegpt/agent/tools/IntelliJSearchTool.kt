@@ -6,6 +6,7 @@ import com.intellij.ide.util.gotoByName.GotoClassModel2
 import com.intellij.ide.util.gotoByName.GotoFileModel
 import com.intellij.ide.util.gotoByName.GotoSymbolModel2
 import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
@@ -270,7 +271,7 @@ class IntelliJSearchTool(
                     val context = if (psiFile != null) getContextText(psiFile, offset) else null
 
                     val displayFile = vf?.path ?: (psiFile?.name ?: psi.toString())
-                    val svc = project.getService(ProxyAISettingsService::class.java)
+                    val svc = project.service<ProxyAISettingsService>()
                     if (vf?.path != null && svc.isPathIgnored(vf.path)) continue
 
                     results.add(

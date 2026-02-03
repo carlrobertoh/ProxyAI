@@ -37,7 +37,6 @@ import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
-import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
@@ -589,10 +588,9 @@ object AgentFactory {
             if (SubagentTool.BASH in selected) {
                 tool(
                     BashTool(
-                        project.basePath ?: "",
+                        project,
                         confirmationHandler = bashConfirmationHandler,
                         sessionId = sessionId,
-                        settingsService = project.service<ProxyAISettingsService>(),
                         hookManager = hookManager
                     )
                 )

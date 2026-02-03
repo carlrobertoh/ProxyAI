@@ -1,13 +1,12 @@
-package ee.carlrobert.codegpt.settings.hooks
+package ee.carlrobert.codegpt.agent
 
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.intellij.openapi.components.service
-import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.agent.tools.BashTool
 import ee.carlrobert.codegpt.agent.tools.EditTool
 import ee.carlrobert.codegpt.agent.tools.ReadTool
+import ee.carlrobert.codegpt.settings.hooks.HookManager
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
@@ -15,7 +14,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 
-class HooksIntegrationTest : IntegrationTest() {
+class HooksTest : IntegrationTest() {
 
     fun testBeforeToolUseHookDeniesToolExecution() {
         val logFile =
@@ -28,10 +27,9 @@ class HooksIntegrationTest : IntegrationTest() {
             """{"beforeToolUse":[{"command":".proxyai/hooks/${hookScript.name}"}]}"""
         writeSettings(settings)
         val tool = BashTool(
-            project.basePath ?: "",
+            project,
             { ShellCommandConfirmation.Approved },
             "test-pretool-deny",
-            project.service(),
             HookManager(project)
         )
         ToolRunContext.set("test-pretool-deny", "tool-pretool-deny")
@@ -64,10 +62,9 @@ class HooksIntegrationTest : IntegrationTest() {
             """{"beforeToolUse":[{"command":".proxyai/hooks/${hookScript.name}"}]}"""
         writeSettings(settings)
         val tool = BashTool(
-            project.basePath ?: "",
+            project,
             { ShellCommandConfirmation.Approved },
             "test",
-            project.service(),
             HookManager(project)
         )
         ToolRunContext.set("test", "tool-1")
@@ -94,21 +91,21 @@ class HooksIntegrationTest : IntegrationTest() {
             ).apply { parentFile.mkdirs() }
         val hookScript = writeHookScript(
             "posttool_update.sh",
-            $$"""#!/usr/bin/env sh
-payload="$(cat)"
-echo "$payload" >> "$PWD/.proxyai/hooks/posttool_update.log"
-echo '{"updated_output":{"command":"echo ORIGINAL","exitCode":0,"output":"REWRITTEN_BY_AFTER_HOOK","bashId":null}}'
-exit 0
-"""
+            $$"""
+                       #!/usr/bin/env sh
+                       payload="$(cat)"
+                       echo "$payload" >> "$PWD/.proxyai/hooks/posttool_update.log"
+                       echo '{"updated_output":{"command":"echo ORIGINAL","exitCode":0,"output":"REWRITTEN_BY_AFTER_HOOK","bashId":null}}'
+                       exit 0
+                       """.trimIndent()
         )
         val settings =
             """{"afterToolUse":[{"command":".proxyai/hooks/${hookScript.name}"}]}"""
         writeSettings(settings)
         val tool = BashTool(
-            project.basePath ?: "",
+            project,
             { ShellCommandConfirmation.Approved },
             "test",
-            project.service(),
             HookManager(project)
         )
         ToolRunContext.set("test", "tool-1")
@@ -138,10 +135,9 @@ exit 0
             """{"beforeShellExecution":[{"command":".proxyai/hooks/${hookScript.name}"}]}"""
         writeSettings(settings)
         val tool = BashTool(
-            project.basePath ?: "",
+            project,
             { ShellCommandConfirmation.Approved },
             "test",
-            project.service(),
             HookManager(project)
         )
         ToolRunContext.set("test", "tool-1")
@@ -154,6 +150,48 @@ exit 0
             .readValue(logFile.readText(), Map::class.java)
         assertThat(map["hook_event_name"]).isEqualTo("beforeShellExecution")
         assertThat(map["command"]).isEqualTo("echo test")
+    }
+
+    fun testBeforeShellExecutionDeniesGradlewViaBash() {
+        val logFile =
+            File(project.basePath, ".proxyai/hooks/bash_gradlew.log").apply { parentFile.mkdirs() }
+        val hookScript = writeHookScript(
+            "block_bash_gradlew.sh",
+            $$"""
+                       #!/usr/bin/env sh
+                       json="$(cat)"
+                       echo "$json" >> "$PWD/.proxyai/hooks/bash_gradlew.log"
+                       echo '{"reason":"Blocked bash gradlew"}'
+                       exit 2
+                       """.trimIndent()
+        )
+        val settings =
+            """{"beforeShellExecution":[{"command":".proxyai/hooks/${hookScript.name}","matcher":"gradlew"}]}"""
+        writeSettings(settings)
+
+        val tool = BashTool(
+            project,
+            { ShellCommandConfirmation.Approved },
+            "test-bash-gradlew",
+            HookManager(project)
+        )
+        ToolRunContext.set("test-bash-gradlew", "tool-bash-gradlew")
+
+        val blocked = runBlocking {
+            tool.execute(BashTool.Args(command = "bash ./gradlew test", description = "test"))
+        }
+        assertThat(blocked.exitCode).isNull()
+        assertThat(blocked.output).isEqualTo("Blocked bash gradlew")
+
+        val map = ObjectMapper().registerKotlinModule()
+            .readValue(logFile.readText(), Map::class.java)
+        assertThat(map["hook_event_name"]).isEqualTo("beforeShellExecution")
+        assertThat(map["command"]).isEqualTo("bash ./gradlew test")
+
+        val allowed = runBlocking {
+            tool.execute(BashTool.Args(command = "echo should_run", description = "test"))
+        }
+        assertThat(allowed.output).doesNotContain("Blocked bash gradlew")
     }
 
     fun testAfterFileEditHookWritesLog() {

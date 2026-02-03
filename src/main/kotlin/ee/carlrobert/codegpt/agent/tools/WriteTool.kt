@@ -4,6 +4,7 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runWriteAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
@@ -85,7 +86,7 @@ class WriteTool(
     }
 
     override suspend fun doExecute(args: Args): Result {
-        val svc = project.getService(ProxyAISettingsService::class.java)
+        val svc = project.service<ProxyAISettingsService>()
         if (svc.isPathIgnored(args.filePath)) {
             return Result.Error(
                 filePath = args.filePath,

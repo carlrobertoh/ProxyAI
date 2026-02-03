@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.agent.tools
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
@@ -131,7 +132,7 @@ class EditTool(
 
     override suspend fun doExecute(args: Args): Result {
         return try {
-            val svc = project.getService(ProxyAISettingsService::class.java)
+            val svc = project.service<ProxyAISettingsService>()
             if (svc.isPathIgnored(args.filePath)) {
                 return Result.Error(
                     filePath = args.filePath,

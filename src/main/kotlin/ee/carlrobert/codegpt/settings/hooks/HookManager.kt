@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.settings.hooks
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import org.slf4j.LoggerFactory
@@ -20,8 +21,7 @@ class HookManager(
         toolId: String? = null,
         sessionId: String? = null
     ): List<HookExecutionResult> {
-        val settingsService = project.getService(ProxyAISettingsService::class.java)
-        val settings = settingsService.getSettings()
+        val settings = project.service<ProxyAISettingsService>().getSettings()
         val configuration = settings.hooks ?: return emptyList()
         val hooks = configuration.hooksFor(event)
         val matchingHooks = hooks.filter { hook ->

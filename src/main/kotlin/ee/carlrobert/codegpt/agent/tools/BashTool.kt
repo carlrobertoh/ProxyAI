@@ -6,6 +6,8 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runWriteAction
+import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.ToolRunContext
@@ -30,13 +32,12 @@ fun interface BashCommandConfirmationHandler {
 }
 
 class BashTool(
-    private val workingDirectory: String,
+    private val project: Project,
     private val confirmationHandler: BashCommandConfirmationHandler,
     private val sessionId: String = "global",
-    private val settingsService: ProxyAISettingsService? = null,
     private val hookManager: HookManager
 ) : BaseTool<BashTool.Args, BashTool.Result>(
-    workingDirectory = workingDirectory,
+    workingDirectory = project.basePath ?: "",
     argsSerializer = Args.serializer(),
     resultSerializer = Result.serializer(),
     name = "Bash",
@@ -46,7 +47,7 @@ class BashTool(
     IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
     
     <env>
-    Working directory: $$workingDirectory
+    Working directory: $${project.basePath ?: ""}
     </env>
     
     Before executing the command, please follow these steps:
@@ -215,27 +216,22 @@ class BashTool(
     )
 
     private fun isWhiteListed(args: Args): Boolean {
-        val permissions = settingsService?.getBashPermissions() ?: emptyList()
-        return permissions.any { pattern ->
-            when {
-                pattern.startsWith("Bash(") && pattern.endsWith(":*)") -> {
-                    val commandPattern = pattern.removePrefix("Bash(").removeSuffix(":*)")
-                    args.command.startsWith(commandPattern)
-                }
-
-                pattern.startsWith("Bash(") && pattern.endsWith(")") -> {
-                    val commandPattern = pattern.removePrefix("Bash(").removeSuffix(")")
-                    args.command == commandPattern
-                }
-
-                else -> false
-            }
-        }
+        return project.service<ProxyAISettingsService>()
+            .isToolInvocationWhitelisted(this, args.command)
     }
-
 
     override suspend fun doExecute(args: Args): Result {
         val toolId = ToolRunContext.getToolId(sessionId)
+        if (project.service<ProxyAISettingsService>()
+                .isToolInvocationDenied(this, args.command)
+        ) {
+            return Result(
+                args.command,
+                null,
+                "Access denied by permissions.deny for Bash",
+                null
+            )
+        }
         if (shouldBlockByIgnore(args.command)) {
             return Result(
                 args.command,
@@ -571,7 +567,6 @@ class BashTool(
     }
 
     private fun shouldBlockByIgnore(command: String): Boolean {
-        val svc = settingsService ?: return false
         val readers = setOf(
             "cat",
             "grep",
@@ -614,7 +609,10 @@ class BashTool(
             if (!tokenIsReader && looksLikePath(t)) paths.add(t)
             lastWasReader = tokenIsReader
         }
-        return paths.any { candidate -> svc.isPathIgnored(toAbsolute(candidate)) }
+        val settingsService = project.service<ProxyAISettingsService>()
+        return paths.any { candidate ->
+            settingsService.isPathIgnored(toAbsolute(candidate))
+        }
     }
 
     private fun tokenize(s: String): List<String> {

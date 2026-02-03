@@ -7,6 +7,7 @@ import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
@@ -37,7 +38,6 @@ class RollbackService(private val project: Project) {
 
     private val activeRuns = ConcurrentHashMap<String, RunTracker>()
     private val snapshots = ConcurrentHashMap<String, SnapshotState>()
-    private val settingsService = project.getService(ProxyAISettingsService::class.java)
 
     @Volatile
     private var isApplyingRollback = false
@@ -199,7 +199,7 @@ class RollbackService(private val project: Project) {
         if (file != null) {
             if (file.isDirectory || !file.isValid) return false
             if (FileTypeManager.getInstance().isFileIgnored(file)) return false
-            if (settingsService.isPathIgnored(file.path)) return false
+            if (project.service<ProxyAISettingsService>().isPathIgnored(file.path)) return false
             return file.length <= MAX_TRACKABLE_BYTES
         }
 
@@ -207,7 +207,7 @@ class RollbackService(private val project: Project) {
             .getOrNull()
             ?: path.substringAfterLast('/')
         if (FileTypeManager.getInstance().isFileIgnored(fileName)) return false
-        if (settingsService.isPathIgnored(path)) return false
+        if (project.service<ProxyAISettingsService>().isPathIgnored(path)) return false
 
         val ioFile = File(path)
         if (!ioFile.exists()) return false
