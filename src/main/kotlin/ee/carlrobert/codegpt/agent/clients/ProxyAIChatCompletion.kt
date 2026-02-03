@@ -66,6 +66,7 @@ public class ProxyAIStreamDelta(
 @Serializable
 public class ProxyAIToolCall(
     public val id: String? = "",
+    public val index: Int? = 0,
     public val function: ProxyAIFunction
 ) {
     /** The type of the tool. Currently, only `function` is supported. */

@@ -17,9 +17,12 @@ import ai.koog.prompt.message.LLMChoice
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
+import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.StreamFrameFlowBuilder
+import ai.koog.prompt.streaming.buildStreamFrameFlow
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
@@ -128,17 +131,31 @@ public class ProxyAILLMClient(
     override fun decodeResponse(data: String): ProxyAIChatCompletionResponse =
         json.decodeFromString(data)
 
-    override suspend fun StreamFrameFlowBuilder.processStreamingChunk(chunk: ProxyAIChatCompletionStreamResponse) {
-        chunk.choices.firstOrNull()?.let { choice ->
-            choice.delta?.content?.let { emitAppend(it) }
-            choice.delta?.toolCalls?.forEachIndexed { index, toolCall ->
-                val id = toolCall.id
-                val name = toolCall.function.name
-                val arguments = toolCall.function.arguments
-                upsertToolCall(index, id, name, arguments)
+    override fun processStreamingResponse(
+        response: Flow<ProxyAIChatCompletionStreamResponse>
+    ): Flow<StreamFrame> = buildStreamFrameFlow {
+        var finishReason: String? = null
+        var metaInfo: ResponseMetaInfo? = null
+
+        response.collect { chunk ->
+            chunk.choices.firstOrNull()?.let { choice ->
+                choice.delta?.content?.let { emitAppend(it) }
+
+                choice.delta?.toolCalls?.forEach { openAIToolCall ->
+                    val index = openAIToolCall.index ?: 0
+                    val id = openAIToolCall.id
+                    val functionName = openAIToolCall.function.name
+                    val functionArgs = openAIToolCall.function.arguments
+                    upsertToolCall(index, id, functionName, functionArgs)
+                }
+
+                choice.finishReason?.let { finishReason = it }
             }
-            choice.finishReason?.let { emitEnd(it, createProxyMetaInfo(chunk.usage)) }
+
+            chunk.usage?.let { metaInfo = createProxyMetaInfo(it) }
         }
+
+        emitEnd(finishReason, metaInfo)
     }
 
     override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult {

@@ -9,16 +9,20 @@ import ai.koog.prompt.executor.clients.openai.base.AbstractOpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.base.OpenAIBaseSettings
 import ai.koog.prompt.executor.clients.openai.base.OpenAICompatibleToolDescriptorSchemaGenerator
 import ai.koog.prompt.executor.clients.openai.base.models.*
+import ai.koog.prompt.executor.clients.openai.models.OpenAIChatCompletionStreamResponse
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.LLMChoice
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
+import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.StreamFrameFlowBuilder
+import ai.koog.prompt.streaming.buildStreamFrameFlow
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
 import java.net.URI
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -141,17 +145,31 @@ public class CustomOpenAILLMClient(
     override fun decodeResponse(data: String): CustomOpenAIChatCompletionResponse =
         json.decodeFromString(data)
 
-    override suspend fun StreamFrameFlowBuilder.processStreamingChunk(chunk: CustomOpenAIChatCompletionStreamResponse) {
-        chunk.choices.firstOrNull()?.let { choice ->
-            choice.delta.content?.let { emitAppend(it) }
-            choice.delta.toolCalls?.forEachIndexed { index, openAIToolCall ->
-                val id = openAIToolCall.id
-                val name = openAIToolCall.function.name
-                val arguments = openAIToolCall.function.arguments
-                upsertToolCall(index, id, name, arguments)
+    override fun processStreamingResponse(
+        response: Flow<CustomOpenAIChatCompletionStreamResponse>
+    ): Flow<StreamFrame> = buildStreamFrameFlow {
+        var finishReason: String? = null
+        var metaInfo: ResponseMetaInfo? = null
+
+        response.collect { chunk ->
+            chunk.choices.firstOrNull()?.let { choice ->
+                choice.delta.content?.let { emitAppend(it) }
+
+                choice.delta.toolCalls?.forEach { openAIToolCall ->
+                    val index = openAIToolCall.index ?: 0
+                    val id = openAIToolCall.id
+                    val functionName = openAIToolCall.function.name
+                    val functionArgs = openAIToolCall.function.arguments
+                    upsertToolCall(index, id, functionName, functionArgs)
+                }
+
+                choice.finishReason?.let { finishReason = it }
             }
-            choice.finishReason?.let { emitEnd(it, createMetaInfo(chunk.usage)) }
+
+            chunk.usage?.let { metaInfo = createMetaInfo(it) }
         }
+
+        emitEnd(finishReason, metaInfo)
     }
 
     override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult {

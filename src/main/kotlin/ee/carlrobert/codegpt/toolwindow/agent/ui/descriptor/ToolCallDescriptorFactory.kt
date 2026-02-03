@@ -11,6 +11,7 @@ import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.DiffViewAction
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.DiffBadgeText
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.diffBadgeText
+import ee.carlrobert.codegpt.ui.UIUtil
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -53,7 +54,7 @@ object ToolCallDescriptorFactory {
             ToolKind.LIBRARY_RESOLVE -> createLibraryResolveDescriptor(args, result, projectId)
             ToolKind.LIBRARY_DOCS -> createLibraryDocsDescriptor(args, result, projectId)
             ToolKind.ASK_QUESTION -> createAskDescriptor(args, result, projectId)
-            ToolKind.EXIT -> createExitDescriptor(toolName, args, result, projectId)
+            ToolKind.EXIT -> createExitDescriptor(args, result, projectId)
             ToolKind.OTHER -> createOtherDescriptor(toolName, args, result, projectId)
         }
     }
@@ -88,7 +89,6 @@ object ToolCallDescriptorFactory {
             titlePrefix = "Clarify Requirements",
             titleMain = "",
             tooltip = "Ask the user clarifying questions",
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId
@@ -96,7 +96,6 @@ object ToolCallDescriptorFactory {
     }
 
     private fun createExitDescriptor(
-        toolName: String,
         args: Any,
         result: Any?,
         projectId: String?
@@ -107,33 +106,39 @@ object ToolCallDescriptorFactory {
             titlePrefix = "Exit",
             titleMain = "",
             tooltip = "Agent task completed",
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId
         )
     }
 
-    private fun showTextDialog(content: String, title: String) {
-        val dialog = JDialog().apply {
-            this.title = title
-            isModal = true
-        }
-        val textArea = JTextArea(content).apply {
-            isEditable = false
-            lineWrap = true
-            wrapStyleWord = true
-            font = JBUI.Fonts.smallFont()
-        }
-        val scrollPane = JScrollPane(textArea).apply {
+    private fun createScrollPaneWithBorder(textArea: JTextArea): JScrollPane {
+        return JScrollPane(textArea).apply {
             preferredSize = JBUI.size(700, 400)
             border = JBUI.Borders.customLine(
                 JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()
             )
         }
-        val footer = JPanel(FlowLayout(FlowLayout.RIGHT)).apply {
+    }
+
+    private fun createFooterButtonPanel(vararg buttons: JButton): JPanel {
+        return JPanel(FlowLayout(FlowLayout.RIGHT)).apply {
             isOpaque = false
-            add(JButton("Copy").apply {
+            for (button in buttons) {
+                add(button)
+            }
+        }
+    }
+
+    private fun createDialogFooterPanel(dialog: JDialog): JPanel {
+        return createFooterButtonPanel(
+            JButton("Close").apply { addActionListener { dialog.dispose() } }
+        )
+    }
+
+    private fun createDialogFooterPanelWithCopy(dialog: JDialog, content: String): JPanel {
+        return createFooterButtonPanel(
+            JButton("Copy").apply {
                 addActionListener {
                     val selection = StringSelection(content)
                     Toolkit.getDefaultToolkit().systemClipboard.setContents(
@@ -141,16 +146,30 @@ object ToolCallDescriptorFactory {
                         null
                     )
                 }
-            })
-            add(JButton("Close").apply { addActionListener { dialog.dispose() } })
-        }
+            },
+            JButton("Close").apply { addActionListener { dialog.dispose() } }
+        )
+    }
+
+    private fun showDialog(dialog: JDialog, scrollPane: JScrollPane, footerPanel: JPanel) {
         dialog.contentPane = BorderLayoutPanel().apply {
             add(scrollPane, BorderLayout.CENTER)
-            add(footer, BorderLayout.SOUTH)
+            add(footerPanel, BorderLayout.SOUTH)
         }
         dialog.pack()
         dialog.setLocationRelativeTo(null)
         dialog.isVisible = true
+    }
+
+    private fun showTextDialog(content: String, title: String) {
+        val dialog = JDialog().apply {
+            this.title = title
+            isModal = true
+        }
+        val textArea = UIUtil.createReadOnlyTextArea(content)
+        val scrollPane = createScrollPaneWithBorder(textArea)
+        val footer = createDialogFooterPanelWithCopy(dialog, content)
+        showDialog(dialog, scrollPane, footer)
     }
 
     private fun createReadDescriptor(
@@ -183,8 +202,6 @@ object ToolCallDescriptorFactory {
                 enabled = true
             ),
             secondaryBadges = listOfNotNull(lineBadge),
-            actions = emptyList(),
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId
@@ -206,7 +223,7 @@ object ToolCallDescriptorFactory {
         if (result is WriteTool.Result && writeArgs != null) {
             when (result) {
                 is WriteTool.Result.Success -> {
-                    badges.add(Badge("${result.bytesWritten} bytes", JBColor.GREEN))
+                    badges.add(Badge("[${writeArgs.content.lines().size} lines]", JBColor.GREEN))
                     actions.add(
                         ToolAction("View Changes", AllIcons.Actions.Diff) {
                             DiffViewAction.showDiff(writeArgs.filePath, project)
@@ -234,7 +251,6 @@ object ToolCallDescriptorFactory {
                 enabled = result != null
             ),
             actions = actions,
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId
@@ -322,7 +338,6 @@ object ToolCallDescriptorFactory {
                 column = firstLocation?.column
             ),
             actions = actions,
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId,
@@ -387,6 +402,18 @@ object ToolCallDescriptorFactory {
         )
     }
 
+    private fun buildSearchBadges(result: Any?): List<Badge> {
+        return if (result is IntelliJSearchTool.Result) {
+            listOf(Badge(
+                "[${result.totalMatches} matches]",
+                JBColor.BLUE,
+                action = { showTextDialog(result.output, "Search Results") }
+            ))
+        } else {
+            emptyList()
+        }
+    }
+
     private fun createSearchDescriptor(
         args: Any,
         result: Any?,
@@ -396,29 +423,19 @@ object ToolCallDescriptorFactory {
         val pattern = searchArgs?.pattern ?: ""
         val scopeOrPath = searchArgs?.path?.substringAfterLast('/') ?: (searchArgs?.scope ?: "")
         val titleMain = buildSearchDisplay(truncatePattern(pattern), scopeOrPath)
-        val badges = mutableListOf<Badge>()
-        val actions = mutableListOf<ToolAction>()
-
-        when (result) {
-            is IntelliJSearchTool.Result -> {
-                badges.add(
-                    Badge(
-                        "${result.totalMatches} matches",
-                        JBColor.BLUE,
-                        action = { showTextDialog(result.output, "Search Results") })
-                )
-            }
-        }
 
         return ToolCallDescriptor(
             kind = ToolKind.SEARCH,
             icon = AllIcons.Actions.Search,
             titlePrefix = "Search:",
             titleMain = titleMain,
-            tooltip = buildTooltipString("Search", pattern, scopeOrPath.ifBlank { null }),
-            secondaryBadges = badges,
-            actions = actions,
-            supportsStreaming = false,
+            tooltip = if (scopeOrPath.isBlank()) {
+                "Search: \"$pattern\""
+            } else {
+                "Search: \"$pattern\" in $scopeOrPath"
+            },
+            secondaryBadges = buildSearchBadges(result),
+            actions = emptyList(),
             args = args,
             result = result,
             projectId = projectId
@@ -443,7 +460,7 @@ object ToolCallDescriptorFactory {
             titlePrefix = "Web:",
             titleMain = truncatedQuery,
             tooltip = "Web search: $query",
-            supportsStreaming = false,
+            secondaryBadges = buildWebBadges(args, result),
             args = args,
             result = result,
             projectId = projectId
@@ -487,8 +504,6 @@ object ToolCallDescriptorFactory {
             titlePrefix = titlePrefix,
             titleMain = description,
             tooltip = "Task: $description",
-            secondaryBadges = emptyList(),
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId,
@@ -609,7 +624,13 @@ object ToolCallDescriptorFactory {
         val badges = mutableListOf<Badge>()
 
         if (result is ResolveLibraryIdTool.Result.Success) {
-            badges.add(Badge("${result.libraries.size} found", JBColor.BLUE))
+            badges.add(
+                Badge(
+                    "[${result.libraries.size} found]",
+                    JBColor.BLUE,
+                    action = { showLibrariesDialog(result) }
+                )
+            )
         }
 
         return ToolCallDescriptor(
@@ -619,7 +640,6 @@ object ToolCallDescriptorFactory {
             titleMain = libraryName,
             tooltip = "Resolve library: $libraryName",
             secondaryBadges = badges,
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId
@@ -642,7 +662,7 @@ object ToolCallDescriptorFactory {
             titlePrefix = "Docs:",
             titleMain = libraryId,
             tooltip = "Get library docs: $libraryId",
-            supportsStreaming = false,
+            secondaryBadges = buildDocsBadges(result),
             args = args,
             result = result,
             projectId = projectId
@@ -661,7 +681,6 @@ object ToolCallDescriptorFactory {
             titlePrefix = "Tool:",
             titleMain = toolName,
             tooltip = "Tool: $toolName",
-            supportsStreaming = false,
             args = args,
             result = result,
             projectId = projectId
@@ -704,11 +723,114 @@ object ToolCallDescriptorFactory {
         }
     }
 
-    private fun buildTooltipString(operation: String, pattern: String, scope: String?): String {
-        return if (scope.isNullOrBlank()) {
-            "$operation: \"$pattern\""
+    private fun buildDocsBadges(result: Any?): List<Badge> {
+        return if (result is GetLibraryDocsTool.Result.Success) {
+            listOf(Badge(
+                "[View Results]",
+                JBColor.BLUE,
+                action = {
+                    showTextDialog(
+                        result.documentation,
+                        "Documentation: ${result.libraryId}"
+                    )
+                }
+            ))
         } else {
-            "$operation: \"$pattern\" in $scope"
+            emptyList()
         }
+    }
+
+    private fun buildWebBadges(args: Any, result: Any?): List<Badge> {
+        if (result !is WebSearchTool.Result) return emptyList()
+
+        val argsObj = args as? WebSearchTool.Args
+        val badges = mutableListOf(Badge(
+            "[${result.results.size} results]",
+            JBColor.BLUE,
+            action = { showWebResultsDialog(result) }
+        ))
+
+        if (argsObj != null && !argsObj.allowedDomains.isNullOrEmpty()) {
+            badges.add(Badge("[${argsObj.allowedDomains.size} domains]", JBColor.GRAY))
+        }
+
+        return badges
+    }
+
+    private fun showWebResultsDialog(result: WebSearchTool.Result) {
+        val dialog = JDialog().apply {
+            title = "Web Search Results"
+            isModal = true
+        }
+
+        val content = buildString {
+            if (result.results.isEmpty()) {
+                appendLine("No search results found.")
+            } else {
+                result.results.forEachIndexed { index, searchResult ->
+                    appendLine("${index + 1}. ${searchResult.title}")
+                    appendLine("   URL: ${searchResult.url}")
+                    appendLine("   ${searchResult.content}")
+                    appendLine()
+                }
+            }
+        }
+
+        val textArea = UIUtil.createReadOnlyTextArea(content)
+        val scrollPane = createScrollPaneWithBorder(textArea)
+        val footerPanel = createDialogFooterPanel(dialog)
+        showDialog(dialog, scrollPane, footerPanel)
+    }
+
+    private fun showLibrariesDialog(result: ResolveLibraryIdTool.Result.Success) {
+        val content = buildString {
+            if (result.libraries.isEmpty()) {
+                appendLine("No libraries found for '${result.libraryName}'.")
+                appendLine()
+                appendLine("Please try with different search terms or check the library name spelling.")
+            } else {
+                appendLine("Available Libraries:")
+                appendLine()
+                result.libraries.forEachIndexed { index, library ->
+                    appendLine("${index + 1}. ${library.name}")
+                    appendLine("   Library ID: ${library.id}")
+                    if (library.description.isNotBlank()) {
+                        appendLine("   Description: ${library.description}")
+                    }
+                    appendLine("   Code Snippets: ${library.codeSnippets}")
+                    appendLine("   Source Reputation: ${library.sourceReputation}")
+                    appendLine("   Benchmark Score: ${library.benchmarkScore}")
+                    if (!library.versions.isNullOrEmpty()) {
+                        appendLine("   Available Versions: ${library.versions.joinToString(", ")}")
+                    }
+                    appendLine()
+                }
+
+                val topLibrary = result.libraries.maxByOrNull {
+                    (it.benchmarkScore * 0.4 + it.codeSnippets * 0.3 + when (it.sourceReputation.lowercase()) {
+                        "high" -> 30
+                        "medium" -> 20
+                        "low" -> 10
+                        else -> 0
+                    } * 0.3).toInt()
+                }
+                if (topLibrary != null) {
+                    appendLine("Recommended Selection:")
+                    appendLine()
+                    appendLine("Library ID: ${topLibrary.id}")
+                    appendLine("Name: ${topLibrary.name}")
+                    appendLine("Reasoning: Highest combined score of benchmark (${topLibrary.benchmarkScore}), code snippets (${topLibrary.codeSnippets}), and source reputation (${topLibrary.sourceReputation})")
+                }
+            }
+        }
+
+        val textArea = UIUtil.createReadOnlyTextArea(content)
+        val scrollPane = createScrollPaneWithBorder(textArea)
+        val dialog = JDialog().apply {
+            title = "Library Search Results"
+            isModal = true
+        }
+        val footerPanel = createDialogFooterPanel(dialog)
+        showDialog(dialog, scrollPane, footerPanel)
     }
 }

@@ -180,26 +180,28 @@ class GetLibraryDocsTool(
         is Result.Error -> ("Failed to retrieve library documentation: ${result.error}").truncateToolResult()
     }
 
-    private fun parseLibraryId(libraryId: String): LibraryComponents {
-        val cleaned = libraryId.removePrefix("/")
-        val parts = cleaned.split("/")
+    companion object {
+        fun parseLibraryId(libraryId: String): LibraryComponents {
+            val cleaned = libraryId.removePrefix("/")
+            val parts = cleaned.split("/")
 
-        if (parts.size < 2) {
-            throw IllegalArgumentException(
-                "Invalid library ID format: $libraryId. Expected format: /username/library or /username/library/tag"
+            if (parts.size < 2) {
+                throw IllegalArgumentException(
+                    "Invalid library ID format: $libraryId. Expected format: /username/library or /username/library/tag"
+                )
+            }
+
+            return LibraryComponents(
+                username = parts[0],
+                library = parts[1],
+                tag = if (parts.size > 2) parts[2] else null
             )
         }
 
-        return LibraryComponents(
-            username = parts[0],
-            library = parts[1],
-            tag = if (parts.size > 2) parts[2] else null
+        data class LibraryComponents(
+            val username: String,
+            val library: String,
+            val tag: String?
         )
     }
-
-    private data class LibraryComponents(
-        val username: String,
-        val library: String,
-        val tag: String?
-    )
 }

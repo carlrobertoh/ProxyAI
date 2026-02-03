@@ -85,6 +85,15 @@ public class UIUtil {
     return textArea;
   }
 
+  public static JBTextArea createReadOnlyTextArea(String text) {
+    var textArea = new JBTextArea(text);
+    textArea.setEditable(false);
+    textArea.setLineWrap(true);
+    textArea.setWrapStyleWord(true);
+    textArea.setFont(JBUI.Fonts.smallFont());
+    return textArea;
+  }
+
   public static JButton createIconButton(Icon icon) {
     var button = new JButton(icon);
     button.setBorder(BorderFactory.createEmptyBorder());

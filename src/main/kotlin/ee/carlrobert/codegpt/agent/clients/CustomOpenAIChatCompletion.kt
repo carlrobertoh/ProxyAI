@@ -98,6 +98,7 @@ public class CustomOpenAIStreamDelta(
 @Serializable
 public class CustomOpenAIToolCall(
     public val id: String? = "",
+    public val index: Int? = 0,
     public val function: CustomOpenAIFunction
 ) {
     /** The type of the tool. Currently, only `function` is supported. */
