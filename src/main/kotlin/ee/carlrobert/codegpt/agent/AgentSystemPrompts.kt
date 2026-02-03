@@ -3,6 +3,8 @@ package ee.carlrobert.codegpt.agent
 import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.skills.SkillDescriptor
+import ee.carlrobert.codegpt.settings.skills.SkillPromptFormatter
 import ee.carlrobert.codegpt.util.file.FileUtil
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -22,14 +24,17 @@ internal object AgentSystemPrompts {
     fun createSystemPrompt(
         provider: ServiceType,
         modelSelection: ModelSelection?,
-        projectPath: String? = null
+        projectPath: String? = null,
+        skills: List<SkillDescriptor> = emptyList()
     ): String {
-        return when (provider) {
+        val base = when (provider) {
             ServiceType.PROXYAI -> createProxyAiSystemPrompt(modelSelection, projectPath)
             ServiceType.OPENAI -> createOpenAiSystemPrompt(projectPath)
             ServiceType.GOOGLE -> createGeminiSystemPrompt(projectPath)
             else -> createAnthropicSystemPrompt(projectPath)
         }
+        val skillsSection = buildSkillsSection(skills)
+        return if (skillsSection.isBlank()) base else "$base\n\n$skillsSection"
     }
 
     private fun createProxyAiSystemPrompt(
@@ -75,5 +80,10 @@ internal object AgentSystemPrompts {
 
     private fun loadPrompt(path: String): String {
         return FileUtil.getResourceContent(path).trimEnd()
+    }
+
+    private fun buildSkillsSection(skills: List<SkillDescriptor>): String {
+        if (skills.isEmpty()) return ""
+        return SkillPromptFormatter.formatForSystemPrompt(skills)
     }
 }

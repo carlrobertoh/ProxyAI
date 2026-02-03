@@ -30,6 +30,7 @@ import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -83,6 +84,7 @@ object ProxyAIAgent {
     ): AIAgent<MessageWithContext, String> {
         val modelSelection =
             service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.AGENT)
+        val skills = project.service<SkillDiscoveryService>().listSkills()
         val stream = provider != ServiceType.CUSTOM_OPENAI
         val projectInstructions = searchForInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
@@ -113,7 +115,8 @@ object ProxyAIAgent {
                         AgentSystemPrompts.createSystemPrompt(
                             provider,
                             modelSelection,
-                            project.basePath
+                            project.basePath,
+                            skills
                         )
                     )
                 },
@@ -339,6 +342,28 @@ object ProxyAIAgent {
                     workingDirectory = workingDirectory,
                     hookManager = hookManager
                 )
+            )
+            tool(
+                ConfirmingLoadSkillTool(
+                    LoadSkillTool(
+                        project = project,
+                        sessionId = sessionId,
+                        hookManager = hookManager
+                    ),
+                    project = project
+                ) { name, details ->
+                    try {
+                        events.approveToolCall(
+                            ToolApprovalRequest(
+                                ToolApprovalType.GENERIC,
+                                name,
+                                details
+                            )
+                        )
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
             )
             tool(
                 BashTool(

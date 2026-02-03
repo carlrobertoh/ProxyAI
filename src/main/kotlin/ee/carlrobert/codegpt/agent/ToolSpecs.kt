@@ -16,6 +16,7 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
     WEB_SEARCH("WebSearch"),
     RESOLVE_LIBRARY_ID("ResolveLibraryId"),
     GET_LIBRARY_DOCS("GetLibraryDocs"),
+    LOAD_SKILL("LoadSkill"),
     TASK("Task"),
     ASK_USER_QUESTION("AskUserQuestion"),
     TODO_WRITE("TodoWrite", setOf("TodoWriteTool")),
@@ -32,6 +33,7 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
             WEB_SEARCH,
             RESOLVE_LIBRARY_ID,
             GET_LIBRARY_DOCS,
+            LOAD_SKILL,
             ASK_USER_QUESTION,
             TODO_WRITE,
             BASH_OUTPUT,
@@ -135,6 +137,14 @@ object ToolSpecs {
                 ToolName.GET_LIBRARY_DOCS,
                 GetLibraryDocsTool.Args.serializer(),
                 GetLibraryDocsTool.Result.serializer()
+            )
+        )
+        register(
+            ToolSpec(
+                ToolName.LOAD_SKILL,
+                LoadSkillTool.Args.serializer(),
+                LoadSkillTool.Result.serializer(),
+                ToolApprovalType.GENERIC
             )
         )
         register(

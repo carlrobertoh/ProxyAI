@@ -7,6 +7,7 @@ enum class SubagentTool(val id: String, val displayName: String, val isWrite: Bo
     WEB_SEARCH("websearch", "WebSearch", false),
     RESOLVE_LIBRARY_ID("resolvelibraryid", "ResolveLibraryId", false),
     GET_LIBRARY_DOCS("getlibrarydocs", "GetLibraryDocs", false),
+    LOAD_SKILL("loadskill", "LoadSkill", false),
     BASH_OUTPUT("bashoutput", "BashOutput", false),
     KILL_SHELL("killshell", "KillShell", false),
     EDIT("edit", "Edit", true),

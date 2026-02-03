@@ -475,8 +475,9 @@ class AgentEventHandler(
     }
 
     override fun onQueuedMessagesResolved() {
-        val pendingMessage =
-            project.service<AgentService>().getPendingMessages(sessionId).firstOrNull() ?: return
+        val pendingMessage = project.service<AgentService>()
+            .getPendingMessages(sessionId)
+            .firstOrNull { it.uiVisible } ?: return
         onQueuedMessagesResolved(pendingMessage)
     }
 

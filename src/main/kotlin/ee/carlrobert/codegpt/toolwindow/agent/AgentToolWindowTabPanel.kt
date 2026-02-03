@@ -134,7 +134,7 @@ class AgentToolWindowTabPanel(
         onQueuedMessagesResolved = { message ->
             runInEdt {
                 clearQueuedMessagesAndCreateNewResponse(
-                    message.text
+                    message.uiText
                 )
             }
         }

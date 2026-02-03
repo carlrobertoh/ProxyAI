@@ -14,6 +14,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.agent.tools.IntelliJSearchTool
 import ee.carlrobert.codegpt.agent.tools.AskUserQuestionTool
+import ee.carlrobert.codegpt.agent.tools.LoadSkillTool
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.awt.Font
@@ -43,6 +44,12 @@ class ToolCallView(
         when (result) {
             is AskUserQuestionTool.Result.Success -> {
                 val compactLines = result.answers.entries.map { (k, v) -> "$k: $v" }
+                streamingPanel.showCompactInfo(compactLines)
+            }
+            is LoadSkillTool.Result.Success -> {
+                val compactLines = listOf(
+                    "Skill '${result.name}' loaded into context"
+                )
                 streamingPanel.showCompactInfo(compactLines)
             }
             else -> streamingPanel.onCompletion()

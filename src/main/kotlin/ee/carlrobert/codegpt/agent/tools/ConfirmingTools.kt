@@ -1,6 +1,9 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.Tool
+import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 
 class ConfirmingWriteTool(
     private val delegate: WriteTool,
@@ -26,6 +29,34 @@ class ConfirmingWriteTool(
                 filePath = args.filePath,
                 error = "User rejected write operation"
             )
+        }
+        return delegate.execute(args)
+    }
+}
+
+class ConfirmingLoadSkillTool(
+    private val delegate: LoadSkillTool,
+    private val project: Project,
+    private val approve: suspend (name: String, details: String) -> Boolean
+) : Tool<LoadSkillTool.Args, LoadSkillTool.Result>(
+    argsSerializer = LoadSkillTool.Args.serializer(),
+    resultSerializer = LoadSkillTool.Result.serializer(),
+    name = delegate.name,
+    description = delegate.descriptor.description
+) {
+
+    override suspend fun execute(args: LoadSkillTool.Args): LoadSkillTool.Result {
+        val requested = args.skillName.trim()
+        val skill = project.service<SkillDiscoveryService>().listSkills().firstOrNull {
+            it.name.equals(requested, ignoreCase = true) ||
+                    it.title.equals(requested, ignoreCase = true)
+        }
+        if (skill != null) {
+            val promptTitle = "Load skill ${skill.name} into context?"
+            val ok = approve(promptTitle, skill.description)
+            if (!ok) {
+                return LoadSkillTool.Result.Error("User rejected loading skill '${skill.name}'")
+            }
         }
         return delegate.execute(args)
     }

@@ -53,6 +53,7 @@ object ToolCallDescriptorFactory {
             ToolKind.TASK -> createTaskDescriptor(args, result, projectId, summary)
             ToolKind.LIBRARY_RESOLVE -> createLibraryResolveDescriptor(args, result, projectId)
             ToolKind.LIBRARY_DOCS -> createLibraryDocsDescriptor(args, result, projectId)
+            ToolKind.SKILL -> createSkillDescriptor(args, result, projectId)
             ToolKind.ASK_QUESTION -> createAskDescriptor(args, result, projectId)
             ToolKind.EXIT -> createExitDescriptor(args, result, projectId)
             ToolKind.OTHER -> createOtherDescriptor(toolName, args, result, projectId)
@@ -72,10 +73,38 @@ object ToolCallDescriptorFactory {
             toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
             toolName == "ResolveLibraryId" || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
             toolName == "GetLibraryDocs" || args is GetLibraryDocsTool.Args -> ToolKind.LIBRARY_DOCS
+            toolName == "LoadSkill" || args is LoadSkillTool.Args -> ToolKind.SKILL
             toolName == "AskUserQuestion" || args is AskUserQuestionTool.Args -> ToolKind.ASK_QUESTION
             toolName == "Exit" -> ToolKind.EXIT
             else -> ToolKind.OTHER
         }
+    }
+
+    private fun createSkillDescriptor(
+        args: Any,
+        result: Any?,
+        projectId: String?
+    ): ToolCallDescriptor {
+        val skillName = (args as? LoadSkillTool.Args)?.skillName.orEmpty()
+        val actions = when (result) {
+            is LoadSkillTool.Result.Success -> listOf(
+                ToolAction("View Content", AllIcons.Actions.Show) {
+                    showTextDialog(result.loadedContent, "Skill Content: ${result.name}")
+                }
+            )
+            else -> emptyList()
+        }
+        return ToolCallDescriptor(
+            kind = ToolKind.SKILL,
+            icon = AllIcons.Nodes.Template,
+            titlePrefix = "Skill:",
+            titleMain = skillName,
+            tooltip = "Load reusable project skill",
+            args = args,
+            result = result,
+            projectId = projectId,
+            actions = actions
+        )
     }
 
     private fun createAskDescriptor(

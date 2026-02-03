@@ -58,11 +58,11 @@ class BashApprovalPanel(
                     link("Run") { approve(false) }.applyToComponent {
                         border = JBUI.Borders.emptyLeft(6)
                     }
-                    text("|").applyToComponent {
+                    text(" | ").applyToComponent {
                         foreground = JBUI.CurrentTheme.Label.disabledForeground()
                     }
                     link("Always run for this session") { approve(true) }
-                    text("|").applyToComponent {
+                    text(" | ").applyToComponent {
                         foreground = JBUI.CurrentTheme.Label.disabledForeground()
                     }
                     link("Reject") { reject() }

@@ -67,11 +67,11 @@ class WriteApprovalPanel(
 
             row {
                 link("Accept") { approve(false) }
-                label("|").applyToComponent {
+                label(" | ").applyToComponent {
                     foreground = JBUI.CurrentTheme.Label.disabledForeground()
                 }
                 link("Always accept for this session") { approve(true) }
-                label("|").applyToComponent {
+                label(" | ").applyToComponent {
                     foreground = JBUI.CurrentTheme.Label.disabledForeground()
                 }
                 link("Reject") { reject() }

@@ -9,6 +9,7 @@ import java.awt.BorderLayout
 import java.awt.FlowLayout
 import javax.swing.BorderFactory
 import javax.swing.Box
+import javax.swing.BoxLayout
 
 class SimpleAgentApprovalPanel(
     title: String,
@@ -32,7 +33,7 @@ class SimpleAgentApprovalPanel(
         )
 
         val content = JBPanel<JBPanel<*>>().apply {
-            layout = BorderLayout()
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = false
             border = JBUI.Borders.empty(8, 12)
         }
@@ -46,7 +47,7 @@ class SimpleAgentApprovalPanel(
         header.add(JBLabel(title).apply {
             font = JBUI.Fonts.label().asBold()
         })
-        content.add(header, BorderLayout.NORTH)
+        content.add(header)
 
         details?.takeIf { it.isNotBlank() }?.let { txt ->
             val detailsPanel = JBPanel<JBPanel<*>>().apply {
@@ -56,20 +57,22 @@ class SimpleAgentApprovalPanel(
             }
             detailsPanel.add(JBLabel(txt).apply {
                 font = JBUI.Fonts.smallFont()
+                foreground = JBUI.CurrentTheme.Label.disabledForeground()
             }, BorderLayout.CENTER)
-            content.add(detailsPanel, BorderLayout.CENTER)
+            content.add(detailsPanel)
         }
 
+        content.add(Box.createVerticalStrut(2))
         val actions = JBPanel<JBPanel<*>>().apply {
             layout = FlowLayout(FlowLayout.LEFT, 0, 0)
             isOpaque = false
         }
         actions.add(ActionLink("Accept") { approve(false) })
-        actions.add(JBLabel("|").apply { foreground = JBUI.CurrentTheme.Label.disabledForeground() })
+        actions.add(JBLabel(" | ").apply { foreground = JBUI.CurrentTheme.Label.disabledForeground() })
         actions.add(ActionLink("Always accept for this session") { approve(true) })
         actions.add(JBLabel(" | ").apply { foreground = JBUI.CurrentTheme.Label.disabledForeground() })
         actions.add(ActionLink("Reject") { reject() })
-        content.add(actions, BorderLayout.SOUTH)
+        content.add(actions)
 
         add(content, BorderLayout.CENTER)
     }

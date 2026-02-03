@@ -38,6 +38,8 @@ import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
+import ee.carlrobert.codegpt.settings.skills.SkillPromptFormatter
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -142,7 +144,7 @@ object AgentFactory {
                         """
                         You are a user-defined subagent named "$title".
 
-                        ${getEnvironmentInfo(project)}${behaviorSection(behavior)}
+                        ${getEnvironmentInfo(project)}${behaviorSection(behavior)}${skillsSection(project)}
                         """.trimIndent()
                     )
                 },
@@ -263,7 +265,7 @@ object AgentFactory {
                         """
                         You are a general-purpose coding subagent operating inside a JetBrains IDE. You are invoked by a main agent to execute concrete steps. Work efficiently, call tools decisively, and keep messages concise and action-oriented.
 
-                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}
+                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}${skillsSection(project)}
 
                         # Tone and Style
                         - Keep responses short, task-focused, and free of fluff.
@@ -338,7 +340,7 @@ object AgentFactory {
                         """
                         You are an Explore subagent for codebase understanding. You are invoked by a main agent to gather context and answer questions by reading and searching the project. You do NOT modify files.
 
-                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}
+                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}${skillsSection(project)}
 
                         # Tool Usage Policy (Read-only)
                         - Use Read to examine files; IntelliJSearch to search patterns; WebSearch for external context; ResolveLibraryId/GetLibraryDocs for dependencies; TodoWrite to record findings.
@@ -585,6 +587,18 @@ object AgentFactory {
                     hookManager = hookManager
                 )
             )
+            if (SubagentTool.LOAD_SKILL in selected) tool(
+                ConfirmingLoadSkillTool(
+                    LoadSkillTool(
+                        project = project,
+                        sessionId = sessionId,
+                        hookManager = hookManager
+                    ),
+                    project = project
+                ) { name, details ->
+                    approveToolCall?.invoke(name, details) ?: false
+                }
+            )
             if (SubagentTool.BASH in selected) {
                 tool(
                     BashTool(
@@ -616,5 +630,14 @@ object AgentFactory {
     private fun behaviorSection(behavior: String?): String {
         val content = behavior?.trim().orEmpty()
         return if (content.isEmpty()) "" else "\n# Subagent Behavior\n$content"
+    }
+
+    private fun skillsSection(project: Project): String {
+        val skills = runCatching {
+            project.service<SkillDiscoveryService>()
+                .listSkills()
+        }.getOrDefault(emptyList())
+        if (skills.isEmpty()) return ""
+        return "\n" + SkillPromptFormatter.formatForSystemPrompt(skills)
     }
 }

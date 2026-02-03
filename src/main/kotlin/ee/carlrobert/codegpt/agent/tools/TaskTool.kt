@@ -337,7 +337,12 @@ private fun lookupBuiltInConfig(project: Project, agentType: AgentType): ProxyAI
 private fun approvalHandler(events: AgentEvents): suspend (String, String) -> Boolean =
     { name, details ->
         val approvalType = ToolSpecs.approvalTypeFor(name)
-        events.approveToolCall(ToolApprovalRequest(approvalType, "Allow $name?", details))
+        val title = if (name.startsWith("Load skill ", ignoreCase = true)) {
+            name
+        } else {
+            "Allow $name?"
+        }
+        events.approveToolCall(ToolApprovalRequest(approvalType, title, details))
     }
 
 private class SubagentToolCallBridge(
