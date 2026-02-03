@@ -2,6 +2,8 @@ package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.Tool
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.agent.ToolRunContext
@@ -171,7 +173,10 @@ abstract class BaseTool<Args : Any, Result : Any>(
         val updatedMap = updatedInput as? Map<*, *> ?: return null
 
         return try {
-            val mapper = ObjectMapper().registerKotlinModule()
+            val mapper = ObjectMapper()
+                .registerKotlinModule()
+                .registerModule(Jdk8Module())
+                .registerModule(JavaTimeModule())
 
             val argsMap: MutableMap<String, Any?> = mapper.convertValue(
                 currentArgs,

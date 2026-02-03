@@ -17,6 +17,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.nio.file.Paths
 
 /**
  * Writes content to files, creating new files or overwriting existing ones.
@@ -86,13 +87,6 @@ class WriteTool(
     }
 
     override suspend fun doExecute(args: Args): Result {
-        val svc = project.service<ProxyAISettingsService>()
-        if (svc.isPathIgnored(args.filePath)) {
-            return Result.Error(
-                filePath = args.filePath,
-                error = ".proxyai ignore rules block writing to this path"
-            )
-        }
         if (args.content.isBlank()) {
             return Result.Error(
                 filePath = args.filePath,
@@ -101,23 +95,38 @@ class WriteTool(
         }
 
         return try {
-            val file = File(args.filePath)
+            val file = resolveWriteTarget(args.filePath)
+            val filePath = file.absolutePath
+            val svc = project.service<ProxyAISettingsService>()
+            if (svc.isPathIgnored(args.filePath) || svc.isPathIgnored(filePath)) {
+                return Result.Error(
+                    filePath = filePath,
+                    error = ".proxyai ignore rules block writing to this path"
+                )
+            }
 
-            file.parentFile?.mkdirs()
+            val parent = file.parentFile
+            if (parent != null && !parent.exists() && !parent.mkdirs() && !parent.exists()) {
+                return Result.Error(
+                    filePath = filePath,
+                    error = "Failed to create parent directories: ${parent.absolutePath}"
+                )
+            }
 
             val isNewFile = !file.exists()
 
             if (file.exists() && !file.canWrite()) {
                 return Result.Error(
-                    filePath = args.filePath,
-                    error = "File is not writable: ${args.filePath}"
+                    filePath = filePath,
+                    error = "File is not writable: $filePath"
                 )
             }
 
+            val fileUrl = file.toURI().toString()
             val virtualFile =
-                VirtualFileManager.getInstance().findFileByUrl("file://${args.filePath}")
+                VirtualFileManager.getInstance().findFileByUrl(fileUrl)
                     ?: if (isNewFile) {
-                        VirtualFileManager.getInstance().findFileByUrl("file://${args.filePath}")
+                        VirtualFileManager.getInstance().refreshAndFindFileByUrl(fileUrl)
                     } else {
                         null
                     }
@@ -156,7 +165,7 @@ class WriteTool(
             val action = if (isNewFile) "created" else "overwritten"
 
             Result.Success(
-                filePath = args.filePath,
+                filePath = filePath,
                 bytesWritten = bytesWritten,
                 isNewFile = isNewFile,
                 message = "File $action successfully. $bytesWritten bytes written."
@@ -168,6 +177,26 @@ class WriteTool(
                 error = "Failed to write file: ${e.message}"
             )
         }
+    }
+
+    private fun resolveWriteTarget(requestedPath: String): File {
+        val normalized = requestedPath.replace("\\", "/")
+        val projectBase = project.basePath ?: return File(normalized)
+        val projectPath = Paths.get(projectBase)
+
+        if (!File(normalized).isAbsolute) {
+            return projectPath.resolve(normalized).normalize().toFile()
+        }
+
+        val relativePath = normalized.removePrefix("/")
+        val asProjectRelative = projectPath.resolve(relativePath).normalize().toFile()
+        val asAbsolute = File(normalized)
+
+        if (!asAbsolute.exists() && asProjectRelative.parentFile?.exists() == true) {
+            return asProjectRelative
+        }
+
+        return asAbsolute
     }
 
     override fun createDeniedResult(

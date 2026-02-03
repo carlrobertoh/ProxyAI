@@ -2,7 +2,11 @@ package ee.carlrobert.codegpt.settings.hooks
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.util.text.StringUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -13,7 +17,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 class HookExecutionService {
-    private val objectMapper = ObjectMapper().registerKotlinModule()
+    private val objectMapper = ObjectMapper()
+        .registerKotlinModule()
+        .registerModule(Jdk8Module())
+        .registerModule(JavaTimeModule())
     private val logger = LoggerFactory.getLogger(HookExecutionService::class.java)
 
     suspend fun executeHook(
@@ -30,17 +37,8 @@ class HookExecutionService {
         }
 
         try {
-            val command = shellCommand(hookConfig.command)
-            val processBuilder = ProcessBuilder(command)
-
-            environment.forEach { (key, value) ->
-                processBuilder.environment()[key] = value
-            }
-
-            val process = processBuilder
-                .directory(File(projectRoot))
-                .redirectErrorStream(true)
-                .start()
+            val process =
+                buildCommandLine(hookConfig.command, environment, projectRoot).createProcess()
 
             process.outputStream.bufferedWriter().use { writer ->
                 try {
@@ -60,36 +58,44 @@ class HookExecutionService {
                 return@withContext HookExecutionResult.Timeout
             }
 
-            val output = BufferedReader(InputStreamReader(process.inputStream))
+            val stdout = BufferedReader(InputStreamReader(process.inputStream))
+                .use { it.readText() }
+            val stderr = BufferedReader(InputStreamReader(process.errorStream))
                 .use { it.readText() }
 
-            logger.debug("Hook '${hookConfig.command}' output: $output")
+            if (stdout.isNotBlank()) {
+                logger.debug("Hook '${hookConfig.command}' stdout: ${truncateForLog(stdout)}")
+            }
+            if (stderr.isNotBlank()) {
+                logger.debug("Hook '${hookConfig.command}' stderr: ${truncateForLog(stderr)}")
+            }
 
             when (val exitCode = process.exitValue()) {
                 0 -> {
-                    val response = try {
-                        val tree = objectMapper.readTree(output)
+                    val tree = parseJsonNodeOrNull(stdout)
+                    if (tree != null) {
                         HookExecutionResult.Success(responseAsMap(tree))
-                    } catch (e: Exception) {
-                        logger.warn("Hook '${hookConfig.command}' did not return valid JSON, treating as empty output", e)
+                    } else {
                         HookExecutionResult.Success(emptyMap())
                     }
-                    response
                 }
+
                 2 -> {
-                    val reason = try {
-                        val tree = objectMapper.readTree(output)
-                        tree.path("reason").asText()
-                    } catch (e: Exception) {
-                        logger.warn("Hook '${hookConfig.command}' did not return valid JSON, reason: $e")
-                        "Hook denied execution"
-                    }
+                    val reason = parseJsonNodeOrNull(stdout)?.path("reason")?.asText()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: stdout.trim().takeIf { it.isNotBlank() }
+                        ?: "Hook denied execution"
                     logger.info("Hook '${hookConfig.command}' denied operation: $reason")
                     HookExecutionResult.Denied(reason)
                 }
+
                 else -> {
-                    logger.error("Hook '${hookConfig.command}' failed with exit code $exitCode: $output")
-                    HookExecutionResult.Failure(output)
+                    val error = listOf(stdout.trim(), stderr.trim())
+                        .filter { it.isNotBlank() }
+                        .joinToString("\n")
+                        .ifBlank { "Hook failed with exit code $exitCode" }
+                    logger.error("Hook '${hookConfig.command}' failed with exit code $exitCode: $error")
+                    HookExecutionResult.Failure(error)
                 }
             }
         } catch (e: TimeoutException) {
@@ -105,7 +111,23 @@ class HookExecutionService {
         return when {
             System.getProperty("os.name").startsWith("Windows") ->
                 listOf("cmd.exe", "/c", command)
+
             else -> listOf("sh", "-c", command)
+        }
+    }
+
+    private fun buildCommandLine(
+        command: String,
+        environment: Map<String, String>,
+        projectRoot: String
+    ): GeneralCommandLine {
+        val shellCommand = shellCommand(command)
+        return GeneralCommandLine().apply {
+            exePath = shellCommand.first()
+            addParameters(shellCommand.drop(1))
+            withWorkDirectory(File(projectRoot))
+            withEnvironment(environment)
+            isRedirectErrorStream = false
         }
     }
 
@@ -114,6 +136,21 @@ class HookExecutionService {
             "PROXYAI_PROJECT_DIR" to projectRoot,
             "PROXYAI_HOOK_EVENT" to event.eventName
         )
+    }
+
+    private fun parseJsonNodeOrNull(raw: String): JsonNode? {
+        if (raw.isBlank()) return null
+        val normalized = raw.dropWhile { ch ->
+            ch.code < 32 && ch != '\n' && ch != '\r' && ch != '\t'
+        }.trimStart()
+        val first = normalized.firstOrNull() ?: return null
+        if (first != '{' && first != '[') return null
+        return runCatching { objectMapper.readTree(normalized) }.getOrNull()
+    }
+
+    private fun truncateForLog(value: String, maxLen: Int = 500): String {
+        val trimmed = value.trim()
+        return StringUtil.shortenTextWithEllipsis(trimmed, maxLen, 0)
     }
 
     private fun responseAsMap(node: JsonNode): Map<String, Any> {
@@ -137,6 +174,7 @@ class HookExecutionService {
                         }
                     }
                 }
+
                 else -> value.toString()
             }
         }
