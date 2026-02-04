@@ -55,7 +55,7 @@ class SimpleAgentApprovalPanel(
                 isOpaque = false
                 border = JBUI.Borders.empty(6, 0, 8, 0)
             }
-            detailsPanel.add(JBLabel(txt).apply {
+            detailsPanel.add(JBLabel(txt).setAllowAutoWrapping(true).apply {
                 font = JBUI.Fonts.smallFont()
                 foreground = JBUI.CurrentTheme.Label.disabledForeground()
             }, BorderLayout.CENTER)

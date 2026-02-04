@@ -36,6 +36,8 @@
                              instance="ee.carlrobert.codegpt.settings.agents.AgentConfigurable" groupWeight="35"/>
         <projectConfigurable id="settings.codegpt.subagents" parentId="settings.codegpt.agents" displayName="Subagents"
                       instance="ee.carlrobert.codegpt.settings.agents.SubagentsConfigurable"/>
+        <projectConfigurable id="settings.codegpt.skills" parentId="settings.codegpt.agents" displayName="Skills"
+                            instance="ee.carlrobert.codegpt.settings.skills.SkillsConfigurable"/>
         <projectConfigurable id="settings.codegpt.hooks" parentId="settings.codegpt.agents" displayName="Hooks"
                             instance="ee.carlrobert.codegpt.settings.hooks.HooksConfigurable"/>
 
