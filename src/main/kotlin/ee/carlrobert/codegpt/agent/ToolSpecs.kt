@@ -14,6 +14,7 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
     KILL_SHELL("KillShell"),
     INTELLIJ_SEARCH("IntelliJSearch"),
     WEB_SEARCH("WebSearch"),
+    MCP("MCP"),
     RESOLVE_LIBRARY_ID("ResolveLibraryId"),
     GET_LIBRARY_DOCS("GetLibraryDocs"),
     LOAD_SKILL("LoadSkill"),
@@ -31,6 +32,7 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
             TASK,
             INTELLIJ_SEARCH,
             WEB_SEARCH,
+            MCP,
             RESOLVE_LIBRARY_ID,
             GET_LIBRARY_DOCS,
             LOAD_SKILL,
@@ -123,6 +125,13 @@ object ToolSpecs {
                 ToolName.WEB_SEARCH,
                 WebSearchTool.Args.serializer(),
                 WebSearchTool.Result.serializer()
+            )
+        )
+        register(
+            ToolSpec(
+                ToolName.MCP,
+                McpTool.Args.serializer(),
+                McpTool.Result.serializer()
             )
         )
         register(

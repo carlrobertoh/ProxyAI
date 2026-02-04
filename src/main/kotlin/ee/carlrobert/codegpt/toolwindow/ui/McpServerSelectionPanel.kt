@@ -111,10 +111,10 @@ class McpServerSelectionPanel(
             return
         }
 
-        val currentConversation = ConversationsState.getCurrentConversation()
-        val attachedServerIds = if (currentConversation != null) {
+        val conversationId = resolveConversationId()
+        val attachedServerIds = if (conversationId != null) {
             try {
-                service<McpSessionManager>().getSessionAttachments(currentConversation.id)
+                service<McpSessionManager>().getSessionAttachments(conversationId)
                     .map { it.serverId }.toSet()
             } catch (_: Exception) {
                 emptySet()
@@ -149,11 +149,11 @@ class McpServerSelectionPanel(
     }
 
     private fun getServerStatus(serverId: String): ConnectionStatus {
-        val currentConversation = ConversationsState.getCurrentConversation()
-        return if (currentConversation != null) {
+        val conversationId = resolveConversationId()
+        return if (conversationId != null) {
             try {
                 val status = service<McpSessionManager>()
-                    .getSessionAttachments(currentConversation.id)
+                    .getSessionAttachments(conversationId)
                     .find { it.serverId == serverId }?.connectionStatus
                 status ?: ConnectionStatus.DISCONNECTED
             } catch (_: Exception) {
@@ -165,20 +165,23 @@ class McpServerSelectionPanel(
     }
 
     private fun attachServer(serverDetails: McpServerDetailsState) {
-        val currentConversation = ConversationsState.getCurrentConversation()
-        if (currentConversation == null) {
+        val conversationId = resolveConversationId()
+        if (conversationId == null) {
             return
         }
 
         service<McpStatusBridge>()
             .attachServerAndUpdateUi(
-                currentConversation.id,
+                conversationId,
                 serverDetails.id.toString(),
                 serverDetails.name ?: "Unknown Server",
                 userInputPanel
             )
             .whenComplete { _, _ -> refreshServerList() }
     }
+
+    private fun resolveConversationId() =
+        userInputPanel.getConversationId() ?: ConversationsState.getCurrentConversation()?.id
 
     private data class McpServerItem(
         val serverDetails: McpServerDetailsState,

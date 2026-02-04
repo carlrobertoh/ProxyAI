@@ -97,6 +97,18 @@ sealed class RunEntry {
             copy(result = result as? TaskTool.Result)
     }
 
+    data class McpEntry(
+        override val id: String,
+        override val parentId: String? = null,
+        override val args: McpTool.Args? = null,
+        override val result: McpTool.Result? = null,
+    ) : RunEntry() {
+        override val kind: ToolKind = ToolKind.MCP
+        override val toolName: String = "MCP"
+        override fun withAnyResult(result: Any?): RunEntry =
+            copy(result = result as? McpTool.Result)
+    }
+
     data class LibraryResolveEntry(
         override val id: String,
         override val parentId: String? = null,

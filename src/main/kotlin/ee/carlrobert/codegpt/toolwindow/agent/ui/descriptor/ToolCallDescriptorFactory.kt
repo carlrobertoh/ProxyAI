@@ -5,6 +5,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentUiConfig
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.DiffViewAction
@@ -36,7 +37,7 @@ object ToolCallDescriptorFactory {
         overrideKind: ToolKind? = null,
         summary: String? = null
     ): ToolCallDescriptor {
-        val kind = overrideKind ?: detectToolKind(toolName, args)
+        val kind = overrideKind ?: detectToolKind(toolName, args, result)
         val projectId = project.locationHash
 
         return when (kind) {
@@ -51,6 +52,7 @@ object ToolCallDescriptorFactory {
 
             ToolKind.WEB -> createWebDescriptor(args, result, projectId)
             ToolKind.TASK -> createTaskDescriptor(args, result, projectId, summary)
+            ToolKind.MCP -> createMcpDescriptor(toolName, args, result, projectId)
             ToolKind.LIBRARY_RESOLVE -> createLibraryResolveDescriptor(args, result, projectId)
             ToolKind.LIBRARY_DOCS -> createLibraryDocsDescriptor(args, result, projectId)
             ToolKind.SKILL -> createSkillDescriptor(args, result, projectId)
@@ -60,7 +62,7 @@ object ToolCallDescriptorFactory {
         }
     }
 
-    private fun detectToolKind(toolName: String, args: Any): ToolKind {
+    private fun detectToolKind(toolName: String, args: Any, result: Any?): ToolKind {
         return when {
             toolName == "IntelliJSearch" || args is IntelliJSearchTool.Args -> ToolKind.SEARCH
             toolName == "Read" || args is ReadTool.Args -> ToolKind.READ
@@ -71,6 +73,7 @@ object ToolCallDescriptorFactory {
             toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.KILL_SHELL
             toolName == "WebSearch" || args is WebSearchTool.Args -> ToolKind.WEB
             toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
+            toolName == "MCP" || args is McpTool.Args || result is McpTool.Result -> ToolKind.MCP
             toolName == "ResolveLibraryId" || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
             toolName == "GetLibraryDocs" || args is GetLibraryDocsTool.Args -> ToolKind.LIBRARY_DOCS
             toolName == "LoadSkill" || args is LoadSkillTool.Args -> ToolKind.SKILL
@@ -78,6 +81,43 @@ object ToolCallDescriptorFactory {
             toolName == "Exit" -> ToolKind.EXIT
             else -> ToolKind.OTHER
         }
+    }
+
+    private fun createMcpDescriptor(
+        toolName: String,
+        args: Any,
+        result: Any?,
+        projectId: String?
+    ): ToolCallDescriptor {
+        val mcpArgs = args as? McpTool.Args
+        val mcpResult = result as? McpTool.Result
+        val resolvedToolName = mcpResult?.toolName ?: mcpArgs?.toolName ?: toolName
+        val server = mcpResult?.serverName ?: mcpResult?.serverId ?: mcpArgs?.serverName ?: mcpArgs?.serverId
+        val titleMain = resolvedToolName
+
+        val actions = if (mcpResult != null) {
+            listOf(
+                ToolAction("View Content", AllIcons.Actions.Show) {
+                    showTextDialog(mcpResult.output, "MCP Tool Output: ${mcpResult.toolName}")
+                }
+            )
+        } else {
+            emptyList()
+        }
+        val serverBadge = server?.takeIf { it.isNotBlank() }?.let { Badge("@ $it") }
+
+        return ToolCallDescriptor(
+            kind = ToolKind.MCP,
+            icon = Icons.MCP,
+            titlePrefix = "MCP:",
+            titleMain = titleMain,
+            tooltip = "MCP tool call: $resolvedToolName",
+            args = args,
+            result = result,
+            projectId = projectId,
+            secondaryBadges = listOfNotNull(serverBadge),
+            actions = actions
+        )
     }
 
     private fun createSkillDescriptor(
@@ -527,6 +567,16 @@ object ToolCallDescriptorFactory {
             else -> null
         }
 
+        val actions = when (result) {
+            is TaskTool.Result -> listOf(
+                ToolAction("View Content", AllIcons.Actions.Show) {
+                    showTextDialog(result.output, "Subagent Output: ${result.description}")
+                }
+            )
+
+            else -> emptyList()
+        }
+
         return ToolCallDescriptor(
             kind = ToolKind.TASK,
             icon = AllIcons.Actions.Execute,
@@ -537,7 +587,8 @@ object ToolCallDescriptorFactory {
             result = result,
             projectId = projectId,
             prefixColor = prefixColor,
-            summary = taskSummary
+            summary = taskSummary,
+            actions = actions
         )
     }
 

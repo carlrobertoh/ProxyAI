@@ -53,6 +53,7 @@ import java.awt.event.MouseEvent
 import java.awt.geom.Area
 import java.awt.geom.Rectangle2D
 import java.awt.geom.RoundRectangle2D
+import java.util.UUID
 import javax.swing.JComponent
 import javax.swing.JPanel
 
@@ -71,6 +72,7 @@ class UserInputPanel @JvmOverloads constructor(
     withRemovableSelectedEditorTag: Boolean = true,
     private val agentTokenCounterPanel: JComponent? = null,
     private val sessionIdProvider: (() -> String?)? = null,
+    private val conversationIdProvider: (() -> UUID?)? = null,
 ) : BorderLayoutPanel() {
 
     constructor(
@@ -94,7 +96,9 @@ class UserInputPanel @JvmOverloads constructor(
         null,
         null,
         null,
-        withRemovableSelectedEditorTag
+        withRemovableSelectedEditorTag,
+        null,
+        null
     )
 
     companion object {
@@ -310,6 +314,8 @@ class UserInputPanel @JvmOverloads constructor(
     fun getSelectedTags(): List<TagDetails> {
         return userInputHeaderPanel.getSelectedTags()
     }
+
+    fun getConversationId(): UUID? = conversationIdProvider?.invoke()
 
     fun setSubmitEnabled(enabled: Boolean) {
         submitButton.isEnabled = enabled

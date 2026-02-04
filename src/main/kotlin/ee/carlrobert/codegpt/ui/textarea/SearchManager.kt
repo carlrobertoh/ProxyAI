@@ -47,6 +47,7 @@ class SearchManager(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
         GitGroupItem(project),
+        MCPGroupItem(tagManager, FeatureType.AGENT),
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
 
@@ -57,7 +58,7 @@ class SearchManager(
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
-        MCPGroupItem(tagManager),
+        MCPGroupItem(tagManager, featureType ?: FeatureType.CHAT),
         DiagnosticsActionItem(tagManager),
         WebActionItem(tagManager),
         ImageActionItem(project, tagManager)

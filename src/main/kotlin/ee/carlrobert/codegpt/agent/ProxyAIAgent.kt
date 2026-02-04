@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.agent
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.context.RollbackStrategy
+import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.ext.tool.ExitTool
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
@@ -27,17 +28,19 @@ import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
 import ee.carlrobert.codegpt.agent.strategy.buildHistoryTooBigPredicate
 import ee.carlrobert.codegpt.agent.tools.*
+import ee.carlrobert.codegpt.mcp.McpSessionManager
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
-import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.BashPayload
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.serialization.json.JsonObject
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
@@ -202,7 +205,12 @@ object ProxyAIAgent {
                     }
                     val decodedArgs =
                         runCatching { tool.decodeArgs(ctx.toolArgs) }.getOrElse { ctx.toolArgs }
-                    events.onToolStarting(id, ctx.toolName, decodedArgs)
+                    val uiArgs = if (tool is McpAgentToolMarker && decodedArgs is JsonObject) {
+                        tool.toDisplayArgs(decodedArgs)
+                    } else {
+                        decodedArgs
+                    }
+                    events.onToolStarting(id, ctx.toolName, uiArgs)
                     ToolRunContext.set(sessionId, id)
                 }
 
@@ -267,41 +275,15 @@ object ProxyAIAgent {
         hookManager: HookManager
     ): ToolRegistry {
         val workingDirectory = project.basePath ?: System.getProperty("user.dir")
+        val contextService = project.service<AgentMcpContextService>()
+        val mcpSessionManager = service<McpSessionManager>()
+        val standardApproval = approvalHandler(events)
+        val writeApproval = writeApprovalHandler(events)
+        val genericApproval = genericApprovalHandler(events)
         return ToolRegistry {
             tool(ReadTool(project, hookManager, sessionId))
-            val approveHandler: suspend (String, String) -> Boolean = { name, details ->
-                try {
-                    events.approveToolCall(
-                        ToolApprovalRequest(
-                            ToolSpecs.approvalTypeFor(name),
-                            "Allow $name?",
-                            details
-                        )
-                    )
-                } catch (_: Exception) {
-                    false
-                }
-            }
-            tool(ConfirmingEditTool(EditTool(project, hookManager, sessionId), approveHandler))
-            tool(
-                ConfirmingWriteTool(WriteTool(project, hookManager)) { name, details ->
-                    try {
-                        val type = if (name.equals("Write", true))
-                            ToolApprovalType.WRITE
-                        else ToolApprovalType.GENERIC
-
-                        events.approveToolCall(
-                            ToolApprovalRequest(
-                                type,
-                                "Allow $name?",
-                                details
-                            )
-                        )
-                    } catch (_: Exception) {
-                        false
-                    }
-                }
-            )
+            tool(ConfirmingEditTool(EditTool(project, hookManager, sessionId), standardApproval))
+            tool(ConfirmingWriteTool(WriteTool(project, hookManager), writeApproval))
             tool(TodoWriteTool(project, sessionId, hookManager))
             tool(
                 AskUserQuestionTool(
@@ -310,6 +292,14 @@ object ProxyAIAgent {
                     events = events
                 )
             )
+            createMcpTools(
+                project = project,
+                sessionId = sessionId,
+                contextService = contextService,
+                sessionManager = mcpSessionManager,
+                hookManager = hookManager,
+                approve = genericApproval
+            ).forEach { mcpTool -> tool(mcpTool) }
             tool(ExitTool)
             tool(IntelliJSearchTool(project = project, hookManager = hookManager))
             tool(
@@ -351,19 +341,7 @@ object ProxyAIAgent {
                         hookManager = hookManager
                     ),
                     project = project
-                ) { name, details ->
-                    try {
-                        events.approveToolCall(
-                            ToolApprovalRequest(
-                                ToolApprovalType.GENERIC,
-                                name,
-                                details
-                            )
-                        )
-                    } catch (_: Exception) {
-                        false
-                    }
-                }
+                ) { name, details -> genericApproval(name, details) }
             )
             tool(
                 BashTool(
@@ -393,12 +371,84 @@ object ProxyAIAgent {
                 TaskTool(
                     project,
                     sessionId,
-                    service<ModelSelectionService>().getServiceForFeature(FeatureType.AGENT),
+                    provider,
                     events,
                     hookManager
                 )
             )
         }
+    }
+
+    private fun approvalHandler(events: AgentEvents): suspend (String, String) -> Boolean =
+        approvalHandler(events, ToolSpecs::approvalTypeFor)
+
+    private fun writeApprovalHandler(events: AgentEvents): suspend (String, String) -> Boolean =
+        approvalHandler(events) { name ->
+            if (name.equals("Write", ignoreCase = true)) {
+                ToolApprovalType.WRITE
+            } else {
+                ToolApprovalType.GENERIC
+            }
+        }
+
+    private fun genericApprovalHandler(events: AgentEvents): suspend (String, String) -> Boolean =
+        approvalHandler(events) { ToolApprovalType.GENERIC }
+
+    private fun approvalHandler(
+        events: AgentEvents,
+        approvalType: (String) -> ToolApprovalType
+    ): suspend (String, String) -> Boolean {
+        return { name, details ->
+            safeApprove(
+                events = events,
+                request = ToolApprovalRequest(
+                    approvalType(name),
+                    "Allow $name?",
+                    details
+                ),
+                fallback = false
+            )
+        }
+    }
+
+    private fun createMcpTools(
+        project: Project,
+        sessionId: String,
+        contextService: AgentMcpContextService,
+        sessionManager: McpSessionManager,
+        hookManager: HookManager,
+        approve: suspend (String, String) -> Boolean
+    ): List<Tool<*, *>> {
+        val context = contextService.get(sessionId) ?: return emptyList()
+        if (!context.hasSelection() || context.conversationId == null) {
+            return emptyList()
+        }
+
+        val dynamicTools = McpDynamicToolRegistry.createTools(context, approve)
+        if (dynamicTools.isNotEmpty()) {
+            return dynamicTools
+        }
+
+        return listOf(
+            ConfirmingMcpTool(
+                McpTool(
+                    project = project,
+                    sessionId = sessionId,
+                    context = context,
+                    sessionManager = sessionManager,
+                    hookManager = hookManager
+                ),
+                approve = approve
+            )
+        )
+    }
+
+    private suspend fun safeApprove(
+        events: AgentEvents,
+        request: ToolApprovalRequest,
+        fallback: Boolean
+    ): Boolean {
+        return runCatching { events.approveToolCall(request) }.getOrDefault(fallback)
     }
 
     private fun computeAvailableInput(model: LLModel): Long {

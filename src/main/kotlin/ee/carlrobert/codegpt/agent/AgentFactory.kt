@@ -38,13 +38,13 @@ import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.hooks.HookManager
-import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
-import ee.carlrobert.codegpt.settings.skills.SkillPromptFormatter
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
+import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
+import ee.carlrobert.codegpt.settings.skills.SkillPromptFormatter
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicLong
@@ -144,7 +144,11 @@ object AgentFactory {
                         """
                         You are a user-defined subagent named "$title".
 
-                        ${getEnvironmentInfo(project)}${behaviorSection(behavior)}${skillsSection(project)}
+                        ${getEnvironmentInfo(project)}${behaviorSection(behavior)}${
+                            skillsSection(
+                                project
+                            )
+                        }
                         """.trimIndent()
                     )
                 },
@@ -265,7 +269,11 @@ object AgentFactory {
                         """
                         You are a general-purpose coding subagent operating inside a JetBrains IDE. You are invoked by a main agent to execute concrete steps. Work efficiently, call tools decisively, and keep messages concise and action-oriented.
 
-                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}${skillsSection(project)}
+                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}${
+                            skillsSection(
+                                project
+                            )
+                        }
 
                         # Tone and Style
                         - Keep responses short, task-focused, and free of fluff.
@@ -340,7 +348,11 @@ object AgentFactory {
                         """
                         You are an Explore subagent for codebase understanding. You are invoked by a main agent to gather context and answer questions by reading and searching the project. You do NOT modify files.
 
-                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}${skillsSection(project)}
+                        ${getEnvironmentInfo(project)}${behaviorSection(extraBehavior)}${
+                            skillsSection(
+                                project
+                            )
+                        }
 
                         # Tool Usage Policy (Read-only)
                         - Use Read to examine files; IntelliJSearch to search patterns; WebSearch for external context; ResolveLibraryId/GetLibraryDocs for dependencies; TodoWrite to record findings.
@@ -527,6 +539,8 @@ object AgentFactory {
         bashConfirmationHandler: BashCommandConfirmationHandler,
         hookManager: HookManager
     ): ToolRegistry {
+        val contextService = project.service<AgentMcpContextService>()
+        val mcpContext = contextService.get(sessionId)
         return ToolRegistry.Companion {
             if (SubagentTool.READ in selected) tool(ReadTool(project, hookManager, sessionId))
             if (SubagentTool.EDIT in selected) {
@@ -599,6 +613,13 @@ object AgentFactory {
                     approveToolCall?.invoke(name, details) ?: false
                 }
             )
+            if (SubagentTool.MCP in selected && mcpContext?.hasSelection() == true && mcpContext.conversationId != null) {
+                contextService.get(sessionId)?.let { context ->
+                    McpDynamicToolRegistry.createTools(context) { name, details ->
+                        approveToolCall?.invoke(name, details) ?: false
+                    }.forEach { tool(it) }
+                }
+            }
             if (SubagentTool.BASH in selected) {
                 tool(
                     BashTool(

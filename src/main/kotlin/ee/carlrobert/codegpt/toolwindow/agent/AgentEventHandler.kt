@@ -439,6 +439,7 @@ class AgentEventHandler(
                 }
 
                 is TaskTool.Args -> RunEntry.TaskEntry(cid, parentId, args, null)
+                is McpTool.Args -> RunEntry.McpEntry(cid, parentId, args, null)
 
                 else -> RunEntry.OtherEntry(cid, parentId, toolName)
             }

@@ -3,14 +3,13 @@ package ee.carlrobert.codegpt.toolwindow.ui.mcp
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
+import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
-import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.llm.client.openai.completion.response.ToolCall
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.awt.Graphics
 import javax.swing.BorderFactory
-import javax.swing.Box
 import javax.swing.JPanel
 
 /**
@@ -108,25 +107,11 @@ class McpApprovalPanel(
                     border = JBUI.Borders.emptyBottom(8)
                 }
 
-                val paramsText = fullParameters.entries.joinToString(", ") { (key, value) ->
-                    "$key: $value"
+                val paramsText = fullParameters.entries.joinToString("\n") { (key, value) ->
+                    formatParameterEntry(key, value)
                 }
 
-                val paramsLabel = JBLabel(paramsText).apply {
-                    font = JBUI.Fonts.smallFont()
-                    foreground = JBUI.CurrentTheme.Label.foreground()
-                    border = BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(
-                            JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground(),
-                            1
-                        ),
-                        JBUI.Borders.empty(4, 8)
-                    )
-                    background = JBUI.CurrentTheme.CustomFrameDecorations.paneBackground()
-                    isOpaque = true
-                }
-
-                paramsPanel.add(paramsLabel, BorderLayout.CENTER)
+                paramsPanel.add(createWrappedParamsArea(paramsText), BorderLayout.CENTER)
                 add(paramsPanel, BorderLayout.NORTH)
             }
 
@@ -220,6 +205,30 @@ class McpApprovalPanel(
     override fun paintComponent(g: Graphics) {
         paintWithAlpha(g) {
             super.paintComponent(g)
+        }
+    }
+
+    private fun formatParameterEntry(key: String, value: String): String {
+        return "$key: ${value.replace("\n", "\n  ")}"
+    }
+
+    private fun createWrappedParamsArea(text: String): JBTextArea {
+        return JBTextArea(text).apply {
+            isEditable = false
+            isFocusable = false
+            lineWrap = true
+            wrapStyleWord = false
+            font = JBUI.Fonts.smallFont()
+            foreground = JBUI.CurrentTheme.Label.foreground()
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(
+                    JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground(),
+                    1
+                ),
+                JBUI.Borders.empty(4, 8)
+            )
+            background = JBUI.CurrentTheme.CustomFrameDecorations.paneBackground()
+            isOpaque = true
         }
     }
 }

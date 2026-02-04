@@ -103,7 +103,8 @@ class AgentToolWindowTabPanel(
         onStop = { handleCancel() },
         withRemovableSelectedEditorTag = true,
         agentTokenCounterPanel = TokenUsageCounterPanel(project, sessionId),
-        sessionIdProvider = { sessionId }
+        sessionIdProvider = { sessionId },
+        conversationIdProvider = { conversation.id }
     )
     private lateinit var rollbackPanel: RollbackPanel
     private val todoListPanel = TodoListPanel()

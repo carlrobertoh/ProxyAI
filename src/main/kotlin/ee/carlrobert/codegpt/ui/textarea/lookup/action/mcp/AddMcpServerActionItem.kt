@@ -45,7 +45,8 @@ class AddMcpServerActionItem : AbstractLookupActionItem() {
                     newServers.add(newServerState)
                 }
 
-                val conversationId = ConversationsState.getCurrentConversation()?.id
+                val conversationId = userInputPanel.getConversationId()
+                    ?: ConversationsState.getCurrentConversation()?.id
                 if (conversationId != null && newServers.isNotEmpty()) {
                     val firstServer = newServers.first()
                     autoAttachServer(firstServer, conversationId, userInputPanel)

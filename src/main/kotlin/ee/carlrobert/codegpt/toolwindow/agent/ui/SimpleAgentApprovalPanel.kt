@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.toolwindow.agent.ui
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
+import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.Icons
 import java.awt.BorderLayout
@@ -55,10 +56,7 @@ class SimpleAgentApprovalPanel(
                 isOpaque = false
                 border = JBUI.Borders.empty(6, 0, 8, 0)
             }
-            detailsPanel.add(JBLabel(txt).setAllowAutoWrapping(true).apply {
-                font = JBUI.Fonts.smallFont()
-                foreground = JBUI.CurrentTheme.Label.disabledForeground()
-            }, BorderLayout.CENTER)
+            detailsPanel.add(createDetailsArea(txt), BorderLayout.CENTER)
             content.add(detailsPanel)
         }
 
@@ -92,5 +90,18 @@ class SimpleAgentApprovalPanel(
         parent?.remove(this)
         parent?.revalidate()
         parent?.repaint()
+    }
+
+    private fun createDetailsArea(text: String): JBTextArea {
+        return JBTextArea(text).apply {
+            isEditable = false
+            isFocusable = false
+            lineWrap = true
+            wrapStyleWord = false
+            isOpaque = false
+            border = JBUI.Borders.empty()
+            font = JBUI.Fonts.smallFont()
+            foreground = JBUI.CurrentTheme.Label.disabledForeground()
+        }
     }
 }

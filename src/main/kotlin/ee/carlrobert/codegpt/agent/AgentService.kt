@@ -10,6 +10,8 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
+import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -54,6 +56,8 @@ class AgentService(private val project: Project) {
     }
 
     fun submitMessage(message: MessageWithContext, events: AgentEvents, sessionId: String) {
+        updateMcpContext(sessionId, message)
+
         if (isSessionRunning(sessionId)) {
             addToQueue(message, sessionId)
             return
@@ -96,6 +100,7 @@ class AgentService(private val project: Project) {
         cancelCurrentRun(sessionId)
         pendingMessages.remove(sessionId)
         sessionAgents.remove(sessionId)
+        project.service<AgentMcpContextService>().clear(sessionId)
     }
 
     fun isSessionRunning(sessionId: String): Boolean {
@@ -112,5 +117,25 @@ class AgentService(private val project: Project) {
 
     fun getAgentForSession(sessionId: String): AIAgent<MessageWithContext, String>? {
         return sessionAgents[sessionId]
+    }
+
+    private fun updateMcpContext(sessionId: String, message: MessageWithContext) {
+        val selectedServerIds = message.tags
+            .filterIsInstance<McpTagDetails>()
+            .filter { it.selected }
+            .map { it.serverId }
+            .toSet()
+
+        val existingConversationId = project.service<AgentMcpContextService>()
+            .get(sessionId)
+            ?.conversationId
+        val conversationId = project.service<AgentToolWindowContentManager>()
+            .getSession(sessionId)
+            ?.conversation
+            ?.id
+            ?: existingConversationId
+
+        project.service<AgentMcpContextService>()
+            .update(sessionId, conversationId, selectedServerIds)
     }
 }

@@ -83,3 +83,33 @@ class ConfirmingEditTool(
         return delegate.execute(args)
     }
 }
+
+class ConfirmingMcpTool(
+    private val delegate: McpTool,
+    private val approve: suspend (name: String, details: String) -> Boolean
+) : Tool<McpTool.Args, McpTool.Result>(
+    argsSerializer = McpTool.Args.serializer(),
+    resultSerializer = McpTool.Result.serializer(),
+    name = delegate.name,
+    description = delegate.descriptor.description
+) {
+
+    override suspend fun execute(args: McpTool.Args): McpTool.Result {
+        val details = buildMcpApprovalDetails(
+            serverId = args.serverId,
+            serverName = args.serverName,
+            toolName = args.toolName,
+            arguments = args.arguments
+        )
+        val ok = approve("MCP", details)
+        if (!ok) {
+            return McpTool.Result.error(
+                toolName = args.toolName,
+                output = "User rejected MCP tool execution",
+                serverId = args.serverId,
+                serverName = args.serverName
+            )
+        }
+        return delegate.execute(args)
+    }
+}

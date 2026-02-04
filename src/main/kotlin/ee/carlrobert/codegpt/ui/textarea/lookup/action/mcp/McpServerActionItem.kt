@@ -17,7 +17,8 @@ class McpServerActionItem(
     override val icon = Icons.MCP
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
-        val conversationId = ConversationsState.getCurrentConversation()?.id
+        val conversationId = userInputPanel.getConversationId()
+            ?: ConversationsState.getCurrentConversation()?.id
         if (conversationId == null) {
             return
         }

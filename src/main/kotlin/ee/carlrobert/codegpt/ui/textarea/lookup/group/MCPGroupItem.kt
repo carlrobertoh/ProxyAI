@@ -17,14 +17,20 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.action.mcp.AddMcpServerActionIte
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.mcp.McpServerActionItem
 import javax.swing.Icon
 
-class MCPGroupItem(private val tagManager: TagManager) : AbstractLookupGroupItem() {
+class MCPGroupItem(
+    private val tagManager: TagManager,
+    private val featureType: FeatureType = FeatureType.CHAT
+) : AbstractLookupGroupItem() {
 
     override val displayName: String = CodeGPTBundle.get("suggestionGroupItem.mcp.displayName")
     override val icon: Icon = Icons.MCP
     override val enabled: Boolean = isEnabled()
 
     fun isEnabled(): Boolean {
-        val serviceType = service<ModelSelectionService>().getServiceForFeature(FeatureType.CHAT)
+        if (featureType == FeatureType.AGENT) {
+            return true
+        }
+        val serviceType = service<ModelSelectionService>().getServiceForFeature(featureType)
         return serviceType == OPENAI || serviceType == CUSTOM_OPENAI
     }
 

@@ -38,7 +38,7 @@ object TagProcessorFactory {
             is PersonaTagDetails -> PersonaTagProcessor(tagDetails)
             is FolderTagDetails -> FolderTagProcessor(tagDetails)
             is WebTagDetails -> WebTagProcessor()
-            is McpTagDetails -> McpTagProcessor(project, tagDetails)
+            is McpTagDetails -> McpTagProcessor()
             is GitCommitTagDetails -> GitCommitTagProcessor(project, tagDetails)
             is CurrentGitChangesTagDetails -> CurrentGitChangesTagProcessor(project)
             is EditorTagDetails -> EditorTagProcessor(tagDetails)
@@ -209,14 +209,8 @@ class CurrentGitChangesTagProcessor(
     }
 }
 
-class McpTagProcessor(
-    private val project: Project,
-    private val tagDetails: McpTagDetails,
-) : TagProcessor {
-
-    override fun process(message: Message, promptBuilder: StringBuilder) {
-        // TODO
-    }
+class McpTagProcessor : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {}
 }
 
 class ImageTagProcessor(
