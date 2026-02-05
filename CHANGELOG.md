@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- [Agent Hooks](https://docs.tryproxy.io/agent/hooks)
+- [Agent Skills](https://docs.tryproxy.io/agent/skills)
+- MCP support for Agent mode
+
+### Fixed
+
+- WriteTool path resolution and error handling
+- Ignore rules and permissions list handling
+
 ## [3.7.2-241.1] - 2026-01-30
 
 ### Added
