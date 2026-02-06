@@ -118,7 +118,7 @@ class ReadTool(
                     if (settingsService.isPathIgnored(args.filePath)) {
                         return@runReadAction Result.Error(
                             filePath = args.filePath,
-                            error = "Access to this path is blocked by .proxyai ignore rules"
+                            error = "File not found: ${args.filePath}"
                         )
                     }
 

@@ -101,7 +101,7 @@ class WriteTool(
             if (svc.isPathIgnored(args.filePath) || svc.isPathIgnored(filePath)) {
                 return Result.Error(
                     filePath = filePath,
-                    error = ".proxyai ignore rules block writing to this path"
+                    error = "File not found: $filePath"
                 )
             }
 

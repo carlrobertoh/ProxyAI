@@ -19,6 +19,7 @@ import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
@@ -30,18 +31,18 @@ object TagProcessorFactory {
 
     fun getProcessor(project: Project, tagDetails: TagDetails): TagProcessor {
         return when (tagDetails) {
-            is FileTagDetails -> FileTagProcessor(tagDetails)
+            is FileTagDetails -> FileTagProcessor(project, tagDetails)
             is SelectionTagDetails -> SelectionTagProcessor(project, tagDetails)
             is EditorSelectionTagDetails -> EditorSelectionTagProcessor(project, tagDetails)
             is HistoryTagDetails -> ConversationTagProcessor(tagDetails)
             is DocumentationTagDetails -> DocumentationTagProcessor(tagDetails)
             is PersonaTagDetails -> PersonaTagProcessor(tagDetails)
-            is FolderTagDetails -> FolderTagProcessor(tagDetails)
+            is FolderTagDetails -> FolderTagProcessor(project, tagDetails)
             is WebTagDetails -> WebTagProcessor()
             is McpTagDetails -> McpTagProcessor()
             is GitCommitTagDetails -> GitCommitTagProcessor(project, tagDetails)
             is CurrentGitChangesTagDetails -> CurrentGitChangesTagProcessor(project)
-            is EditorTagDetails -> EditorTagProcessor(tagDetails)
+            is EditorTagDetails -> EditorTagProcessor(project, tagDetails)
             is ImageTagDetails -> ImageTagProcessor(tagDetails)
             is EmptyTagDetails -> TagProcessor { _, _ -> }
             is CodeAnalyzeTagDetails -> TagProcessor { _, _ -> }
@@ -51,9 +52,15 @@ object TagProcessorFactory {
 }
 
 class FileTagProcessor(
+    project: Project,
     private val tagDetails: FileTagDetails,
 ) : TagProcessor {
+    private val settingsService = project.service<ProxyAISettingsService>()
+
     override fun process(message: Message, promptBuilder: StringBuilder) {
+        if (!settingsService.isVirtualFileVisible(tagDetails.virtualFile)) {
+            return
+        }
         if (message.referencedFilePaths == null) {
             message.referencedFilePaths = mutableListOf()
         }
@@ -62,10 +69,15 @@ class FileTagProcessor(
 }
 
 class EditorTagProcessor(
+    project: Project,
     private val tagDetails: EditorTagDetails,
 ) : TagProcessor {
+    private val settingsService = project.service<ProxyAISettingsService>()
 
     override fun process(message: Message, promptBuilder: StringBuilder) {
+        if (!settingsService.isVirtualFileVisible(tagDetails.virtualFile)) {
+            return
+        }
         if (message.referencedFilePaths == null) {
             message.referencedFilePaths = mutableListOf()
         }
@@ -123,8 +135,11 @@ class PersonaTagProcessor(
 }
 
 class FolderTagProcessor(
+    project: Project,
     private val tagDetails: FolderTagDetails,
 ) : TagProcessor {
+    private val settingsService = project.service<ProxyAISettingsService>()
+
     override fun process(
         message: Message,
         promptBuilder: StringBuilder
@@ -138,6 +153,9 @@ class FolderTagProcessor(
 
     private fun processFolder(folder: VirtualFile, referencedFilePaths: MutableList<String>) {
         folder.children.forEach { child ->
+            if (!settingsService.isVirtualFileVisible(child)) {
+                return@forEach
+            }
             when {
                 child.isDirectory -> processFolder(child, referencedFilePaths)
                 else -> referencedFilePaths.add(child.path)

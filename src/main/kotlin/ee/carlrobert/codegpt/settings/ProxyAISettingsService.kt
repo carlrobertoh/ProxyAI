@@ -5,8 +5,10 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
 import ee.carlrobert.codegpt.settings.hooks.HookConfiguration
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -15,7 +17,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.io.path.inputStream
 import kotlin.io.path.notExists
 
@@ -33,7 +34,6 @@ class ProxyAISettingsService(private val project: Project) {
     private val store: ProxyAISettingsStore by lazy {
         ProxyAISettingsStore(settingsFile, json, logger)
     }
-    private val cache = AtomicReference<CachedSettings?>(null)
     private val isWindows = System.getProperty("os.name")?.lowercase()?.contains("windows") == true
 
     fun getSubagents(): List<ProxyAISubagent> {
@@ -96,6 +96,14 @@ class ProxyAISettingsService(private val project: Project) {
         return snapshot().ignoreMatcher.matches(path, basePath)
     }
 
+    fun isPathVisible(path: String): Boolean {
+        return !isPathIgnored(path)
+    }
+
+    fun isVirtualFileVisible(file: VirtualFile): Boolean {
+        return isPathVisible(file.path)
+    }
+
     private fun permissionTargets(target: String): List<String> {
         val normalized = try {
             Paths.get(target).normalize().toString().replace('\\', '/')
@@ -121,32 +129,21 @@ class ProxyAISettingsService(private val project: Project) {
         }.distinct()
     }
 
-    private fun snapshot(): CachedSettings {
-        val cached = cache.get()
-        val lastModified = store.lastModified()
-        if (cached != null && cached.lastModified == lastModified) {
-            return cached
-        }
+    private fun snapshot(): SettingsSnapshot {
         val settings = store.load() ?: ProxyAISettings.default()
         val ignoreMatcher = IgnoreMatcher.from(settings.ignore, isWindows)
-        val snapshot = CachedSettings(settings, lastModified, ignoreMatcher)
-        cache.set(snapshot)
-        return snapshot
+        return SettingsSnapshot(settings, ignoreMatcher)
     }
 
     private fun updateSettings(transform: (ProxyAISettings) -> ProxyAISettings) {
         val current = snapshot().settings
         val updated = transform(current)
-        if (!store.save(updated)) return
-        val lastModified = store.lastModified()
-        val ignoreMatcher = IgnoreMatcher.from(updated.ignore, isWindows)
-        cache.set(CachedSettings(updated, lastModified, ignoreMatcher))
+        store.save(updated)
     }
 }
 
-private data class CachedSettings(
+private data class SettingsSnapshot(
     val settings: ProxyAISettings,
-    val lastModified: Long,
     val ignoreMatcher: IgnoreMatcher
 )
 
@@ -155,6 +152,7 @@ private class ProxyAISettingsStore(
     private val json: Json,
     private val logger: Logger
 ) {
+    @OptIn(ExperimentalSerializationApi::class)
     fun load(): ProxyAISettings? {
         if (settingsFile.notExists()) return null
         return try {
@@ -167,6 +165,7 @@ private class ProxyAISettingsStore(
         }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     fun save(settings: ProxyAISettings): Boolean {
         return try {
             settingsFile.parent?.let { Files.createDirectories(it) }
@@ -185,14 +184,6 @@ private class ProxyAISettingsStore(
         }
     }
 
-    fun lastModified(): Long {
-        return try {
-            if (settingsFile.notExists()) -1 else Files.getLastModifiedTime(settingsFile).toMillis()
-        } catch (e: Exception) {
-            logger.warn("Failed to read ProxyAI settings modified time from $settingsFile", e)
-            -1
-        }
-    }
 }
 
 private class IgnoreMatcher(
@@ -229,10 +220,18 @@ private class IgnoreMatcher(
             return try {
                 var g = glob.trim()
                 if (g.isEmpty()) return null
+                val deepDirSuffix = g.endsWith("/**")
                 val dirSuffix = g.endsWith("/")
+                if (deepDirSuffix) {
+                    g = g.removeSuffix("/**")
+                }
                 g = g.trimEnd('/')
                 val sb = StringBuilder()
                 sb.append('^')
+                if (!g.startsWith("/")) {
+                    // Match from project root or any nested directory, similar to gitignore-style rules.
+                    sb.append("(?:.*/)?")
+                }
                 var i = 0
                 while (i < g.length) {
                     when (val c = g[i]) {
@@ -257,7 +256,10 @@ private class IgnoreMatcher(
                     }
                     i += 1
                 }
-                if (dirSuffix) sb.append("(/.*)?")
+                when {
+                    deepDirSuffix -> sb.append("(/.*)?")
+                    dirSuffix -> sb.append("(/.*)?")
+                }
                 sb.append('$')
                 if (ignoreCase) Regex(
                     sb.toString(),
@@ -278,10 +280,17 @@ private class IgnoreMatcher(
     }
 
     private fun simpleMatch(path: String, pattern: String): Boolean {
-        val p = path.trimStart('/')
-        val pat = pattern.trim()
+        val p = path.trimStart('/').replace('\\', '/')
+        val pat = pattern.trim().replace('\\', '/')
         if (pat == p) return true
-        if (pat.endsWith("/") && p.startsWith(pat.trimEnd('/'))) return true
+        if (pat.endsWith("/**")) {
+            val dir = pat.removeSuffix("/**").trimEnd('/')
+            if (p == dir || p.startsWith("$dir/") || p.contains("/$dir/")) return true
+        }
+        if (pat.endsWith("/")) {
+            val dir = pat.trimEnd('/')
+            if (p == dir || p.startsWith("$dir/") || p.contains("/$dir/")) return true
+        }
         if (!pat.contains('/') && pat.startsWith('.')) {
             val fileName = p.substringAfterLast('/')
             if (fileName == pat) return true
@@ -292,46 +301,47 @@ private class IgnoreMatcher(
 
 @Serializable
 data class ProxyAISettings(
-    val ignore: List<String>,
-    val permissions: Permissions,
+    val ignore: List<String> = DEFAULT_IGNORE_PATTERNS,
+    val permissions: Permissions = Permissions(allow = DEFAULT_ALLOW_RULES),
     val subagents: List<ProxyAISubagent> = emptyList(),
     val hooks: HookConfiguration? = null
 ) {
     companion object {
+        private val DEFAULT_IGNORE_PATTERNS = listOf(
+            ".idea/",
+            "*.iml",
+            ".git/",
+        )
+
+        private val DEFAULT_ALLOW_RULES = listOf(
+            "Bash(rg *)",
+            "Bash(grep *)",
+            "Bash(find *)",
+            "Bash(ls *)",
+            "Bash(sed *)",
+            "Bash(rm *)",
+            "Bash(cat *)",
+            "Bash(head *)",
+            "Bash(tail *)",
+            "Bash(diff *)",
+            "Bash(du *)",
+            "Bash(file *)",
+            "Bash(sort *)",
+            "Bash(stat *)",
+            "Bash(tree *)",
+            "Bash(uniq *)",
+            "Bash(wc *)",
+            "Bash(whereis *)",
+            "Bash(which *)",
+            "Bash(less *)",
+            "Bash(more *)",
+        )
+
         fun default(): ProxyAISettings {
             return ProxyAISettings(
-                ignore = listOf(
-                    ".idea/",
-                    "*.iml",
-                    "build/",
-                    "dist/",
-                    "node_modules/",
-                    ".git/",
-                ),
+                ignore = DEFAULT_IGNORE_PATTERNS,
                 permissions = Permissions(
-                    allow = listOf(
-                        "Bash(rg *)",
-                        "Bash(grep *)",
-                        "Bash(find *)",
-                        "Bash(ls *)",
-                        "Bash(sed *)",
-                        "Bash(rm *)",
-                        "Bash(cat *)",
-                        "Bash(head *)",
-                        "Bash(tail *)",
-                        "Bash(diff *)",
-                        "Bash(du *)",
-                        "Bash(file *)",
-                        "Bash(sort *)",
-                        "Bash(stat *)",
-                        "Bash(tree *)",
-                        "Bash(uniq *)",
-                        "Bash(wc *)",
-                        "Bash(whereis *)",
-                        "Bash(which *)",
-                        "Bash(less *)",
-                        "Bash(more *)",
-                    )
+                    allow = DEFAULT_ALLOW_RULES
                 ),
                 subagents = SubagentDefaults.defaults(),
                 hooks = HookConfiguration()

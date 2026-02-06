@@ -8,6 +8,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
@@ -20,6 +21,7 @@ class FoldersGroupItem(
     private val project: Project,
     private val tagManager: TagManager
 ) : AbstractLookupGroupItem(), DynamicLookupGroupItem {
+    private val settingsService = project.service<ProxyAISettingsService>()
 
     override val displayName: String = CodeGPTBundle.get("suggestionGroupItem.folders.displayName")
     override val icon = AllIcons.Nodes.Folder
@@ -27,7 +29,11 @@ class FoldersGroupItem(
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
         withContext(Dispatchers.Default) {
             project.service<ProjectFileIndex>().iterateContent {
-                if (it.isDirectory && !it.name.startsWith(".") && !tagManager.containsTag(it)) {
+                if (it.isDirectory &&
+                    settingsService.isVirtualFileVisible(it) &&
+                    !it.name.startsWith(".") &&
+                    !tagManager.containsTag(it)
+                ) {
                     runInEdt {
                         LookupUtil.addLookupItem(lookup, FolderActionItem(project, it))
                     }
@@ -52,7 +58,11 @@ class FoldersGroupItem(
     private suspend fun getProjectFolders(project: Project) = withContext(Dispatchers.IO) {
         val folders = mutableSetOf<VirtualFile>()
         project.service<ProjectFileIndex>().iterateContent { file: VirtualFile ->
-            if (file.isDirectory && !file.name.startsWith(".") && !tagManager.containsTag(file)) {
+            if (file.isDirectory &&
+                settingsService.isVirtualFileVisible(file) &&
+                !file.name.startsWith(".") &&
+                !tagManager.containsTag(file)
+            ) {
                 val folderPath = file.path
                 if (folders.none { it.path.startsWith(folderPath) }) {
                     folders.removeAll { it.path.startsWith(folderPath) }

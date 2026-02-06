@@ -26,8 +26,8 @@ import javax.swing.JPanel
  * Handles MCP tool call execution with user approval workflow.
  * Manages the lifecycle of tool calls from request to result display.
  */
-@Service
-class McpToolCallHandler {
+@Service(Service.Level.PROJECT)
+class McpToolCallHandler(private val project: Project) {
 
     private val sessionManager = service<McpSessionManager>()
     private val pendingApprovals = ConcurrentHashMap<String, CompletableFuture<Boolean>>()
@@ -202,7 +202,7 @@ class McpToolCallHandler {
                 return "Tool execution failed: $errorMessage"
             }
 
-            val resultContent = when {
+            val rawResultContent = when {
                 toolResult.content != null -> {
                     try {
                         when (val content = toolResult.content) {
@@ -227,6 +227,7 @@ class McpToolCallHandler {
                 toolResult.isError -> "Error: Tool execution failed"
                 else -> "Tool executed successfully (no content returned)"
             }
+            val resultContent = rawResultContent
 
             statusPanels[toolCall.id]?.let { panel ->
                 runInEdt {

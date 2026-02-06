@@ -607,6 +607,8 @@ class BashTool(
             lastWasReader = tokenIsReader
         }
         val settingsService = project.service<ProxyAISettingsService>()
+        // TODO(PROXYAI-IGNORE): Replace deny-style bash path checks with visibility filtering.
+        // Bash output and directory listings should hide ignored paths instead of returning policy-denied.
         return paths.any { candidate ->
             settingsService.isPathIgnored(toAbsolute(candidate))
         }

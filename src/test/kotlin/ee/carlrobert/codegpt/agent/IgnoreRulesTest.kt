@@ -25,7 +25,7 @@ class IgnoreRulesTest : IntegrationTest() {
 
         assertThat(result).isInstanceOf(ReadTool.Result.Error::class.java)
         val error = result as ReadTool.Result.Error
-        assertThat(error.error).isEqualTo("Access to this path is blocked by .proxyai ignore rules")
+        assertThat(error.error).isEqualTo("File not found: ${envFile.absolutePath}")
     }
 
     fun testWriteBlockedByIgnoreRule() {
@@ -39,7 +39,7 @@ class IgnoreRulesTest : IntegrationTest() {
 
         assertThat(result).isInstanceOf(WriteTool.Result.Error::class.java)
         val error = result as WriteTool.Result.Error
-        assertThat(error.error).isEqualTo(".proxyai ignore rules block writing to this path")
+        assertThat(error.error).isEqualTo("File not found: ${pemFile.absolutePath}")
     }
 
     fun testBashBlockedByIgnoreRule() {
@@ -83,17 +83,68 @@ class IgnoreRulesTest : IntegrationTest() {
         assertThat(result).isInstanceOf(ReadTool.Result.Success::class.java)
     }
 
+    fun testReadBlockedWithIgnoreOnlySettingsFile() {
+        val file = File(project.basePath, "app/src/main/Test.kt").apply {
+            parentFile.mkdirs()
+            writeText("secret")
+        }
+        writeSettingsRaw("""{"ignore":["app/src/main/**"]}""")
+
+        val result = runBlocking {
+            ReadTool(project, HookManager(project), "ignore-test")
+                .execute(ReadTool.Args(file.absolutePath))
+        }
+
+        assertThat(result).isInstanceOf(ReadTool.Result.Error::class.java)
+        val error = result as ReadTool.Result.Error
+        assertThat(error.error).isEqualTo("File not found: ${file.absolutePath}")
+    }
+
+    fun testReadBlockedByNestedBuildDirectoryRule() {
+        val file = File(project.basePath, "app/build/reports/test.txt").apply {
+            parentFile.mkdirs()
+            writeText("secret")
+        }
+        writeSettings(ignoreEntries = listOf("build/"))
+
+        val result = runBlocking {
+            ReadTool(project, HookManager(project), "ignore-test")
+                .execute(ReadTool.Args(file.absolutePath))
+        }
+
+        assertThat(result).isInstanceOf(ReadTool.Result.Error::class.java)
+        val error = result as ReadTool.Result.Error
+        assertThat(error.error).isEqualTo("File not found: ${file.absolutePath}")
+    }
+
+    fun testWriteBlockedByNestedExtensionRule() {
+        val file = File(project.basePath, "app/certs/private.pem")
+        writeSettings(ignoreEntries = listOf("*.pem"))
+
+        val result = runBlocking {
+            WriteTool(project, HookManager(project))
+                .execute(WriteTool.Args(file.absolutePath, "PRIVATE KEY"))
+        }
+
+        assertThat(result).isInstanceOf(WriteTool.Result.Error::class.java)
+        val error = result as WriteTool.Result.Error
+        assertThat(error.error).isEqualTo("File not found: ${file.absolutePath}")
+    }
+
     private fun writeSettings(ignoreEntries: List<String>): File {
         val ignoreJson = ignoreEntries.joinToString(",") { "\"$it\"" }
         val file = File(project.basePath, ".proxyai/settings.json")
         file.parentFile.mkdirs()
-        file.writeText(
-            """{"ignore":[$ignoreJson],"permissions":{"allow":[],"ask":[],"deny":[]},"hooks":{}}"""
-        )
-        Files.setLastModifiedTime(
-            file.toPath(),
-            FileTime.fromMillis(System.currentTimeMillis() + 1000)
-        )
+        file.writeText("""{"ignore":[$ignoreJson],"permissions":{"allow":[],"ask":[],"deny":[]},"hooks":{}}""")
+        Files.setLastModifiedTime(file.toPath(), FileTime.fromMillis(System.currentTimeMillis() + 1000))
+        return file
+    }
+
+    private fun writeSettingsRaw(rawJson: String): File {
+        val file = File(project.basePath, ".proxyai/settings.json")
+        file.parentFile.mkdirs()
+        file.writeText(rawJson)
+        Files.setLastModifiedTime(file.toPath(), FileTime.fromMillis(System.currentTimeMillis() + 1000))
         return file
     }
 }

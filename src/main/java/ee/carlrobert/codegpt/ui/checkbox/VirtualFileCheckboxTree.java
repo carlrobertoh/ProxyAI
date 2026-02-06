@@ -5,46 +5,75 @@ import com.intellij.notification.NotificationType;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.CheckedTreeNode;
 import com.intellij.util.PlatformIcons;
-import ee.carlrobert.codegpt.ReferencedFile;
+import com.intellij.util.ui.tree.TreeUtil;
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService;
 import ee.carlrobert.codegpt.ui.OverlayUtil;
-import java.io.File;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 public class VirtualFileCheckboxTree extends FileCheckboxTree {
 
-  public VirtualFileCheckboxTree(@NotNull VirtualFile[] rootFiles) {
-    super(createFileTypesRenderer(), createRootNode(rootFiles));
+  private final ProxyAISettingsService settingsService;
+
+  public VirtualFileCheckboxTree(
+      @NotNull VirtualFile[] rootFiles,
+      @NotNull ProxyAISettingsService settingsService) {
+    super(createFileTypesRenderer(), new CheckedTreeNode(null));
+    this.settingsService = settingsService;
+    var rootNode = (CheckedTreeNode) getModel().getRoot();
+    for (VirtualFile file : rootFiles) {
+      var childNode = createNode(file);
+      if (childNode != null) {
+        rootNode.add(childNode);
+      }
+    }
+    setRootVisible(false);
+    setShowsRootHandles(true);
+    TreeUtil.expandAll(this);
   }
 
   public List<VirtualFile> getReferencedFiles() {
     var checkedNodes = getCheckedNodes(VirtualFile.class, Objects::nonNull);
-    if (checkedNodes.length > 1024) {
+    var files = new LinkedHashSet<VirtualFile>();
+    Arrays.stream(checkedNodes)
+        .filter(Objects::nonNull)
+        .forEach(node -> collectVisibleFiles(node, files));
+    if (files.size() > 1024) {
       OverlayUtil.showNotification("Too many files selected.", NotificationType.ERROR);
       throw new RuntimeException("Too many files selected");
     }
-
-    return Arrays.stream(checkedNodes)
-        .filter(Objects::nonNull)
+    return files.stream()
         .toList();
   }
 
-  private static CheckedTreeNode createRootNode(VirtualFile[] files) {
-    CheckedTreeNode rootNode = new CheckedTreeNode(null);
-    for (VirtualFile file : files) {
-      rootNode.add(createNode(file));
+  private void collectVisibleFiles(VirtualFile file, LinkedHashSet<VirtualFile> output) {
+    if (!file.isValid() || !settingsService.isVirtualFileVisible(file)) {
+      return;
     }
-    return rootNode;
+    if (!file.isDirectory()) {
+      output.add(file);
+      return;
+    }
+    Arrays.stream(file.getChildren())
+        .forEach(child -> collectVisibleFiles(child, output));
   }
 
-  private static CheckedTreeNode createNode(VirtualFile file) {
+  private CheckedTreeNode createNode(VirtualFile file) {
+    if (!settingsService.isVirtualFileVisible(file)) {
+      return null;
+    }
+
     CheckedTreeNode node = new CheckedTreeNode(file);
     if (file.isDirectory()) {
       VirtualFile[] children = file.getChildren();
       for (VirtualFile child : children) {
-        node.add(createNode(child));
+        var childNode = createNode(child);
+        if (childNode != null) {
+          node.add(childNode);
+        }
       }
     }
     return node;

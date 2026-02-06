@@ -5,6 +5,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.AbstractLookupActionItem
@@ -17,9 +18,11 @@ class IncludeOpenFilesActionItem : AbstractLookupActionItem() {
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
         val fileTags = userInputPanel.getSelectedTags().filterIsInstance<FileTagDetails>()
+        val settingsService = project.service<ProxyAISettingsService>()
         project.service<FileEditorManager>().openFiles
             .filter { openFile ->
-                fileTags.none { it.virtualFile == openFile }
+                settingsService.isVirtualFileVisible(openFile) &&
+                        fileTags.none { it.virtualFile == openFile }
             }
             .forEach {
                 userInputPanel.addTag(FileTagDetails(it))

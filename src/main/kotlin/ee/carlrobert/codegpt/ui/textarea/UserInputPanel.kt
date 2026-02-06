@@ -29,6 +29,7 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.PromptEnhancer
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -303,7 +304,7 @@ class UserInputPanel @JvmOverloads constructor(
         runInEdt {
             EditorUtil.getSelectedEditor(project)?.let { editor ->
                 if (EditorUtil.hasSelection(editor)) {
-                    tagManager.addTag(
+                    addTag(
                         EditorSelectionTagDetails(editor.virtualFile, editor.selectionModel)
                     )
                 }
@@ -375,7 +376,11 @@ class UserInputPanel @JvmOverloads constructor(
     }
 
     fun includeFiles(referencedFiles: MutableList<VirtualFile>) {
+        val settingsService = project.service<ProxyAISettingsService>()
         referencedFiles.forEach { vf ->
+            if (!settingsService.isVirtualFileVisible(vf)) {
+                return@forEach
+            }
             if (vf.isDirectory) {
                 userInputHeaderPanel.addTag(FolderTagDetails(vf))
             } else {
@@ -611,14 +616,6 @@ class UserInputPanel @JvmOverloads constructor(
         inlineEditControls.forEach { it.isVisible = visible }
         revalidate()
         repaint()
-    }
-
-    fun setApplyVisible(visible: Boolean) {
-        userInputHeaderPanel.setApplyVisible(visible)
-    }
-
-    fun setApplyEnabled(enabled: Boolean) {
-        userInputHeaderPanel.setApplyEnabled(enabled)
     }
 
     fun setThinkingVisible(visible: Boolean, text: String = CodeGPTBundle.get("shared.thinking")) {

@@ -11,6 +11,7 @@ import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.codeStyle.NameUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagUtil
@@ -26,6 +27,7 @@ class FilesGroupItem(
     private val project: Project,
     private val tagManager: TagManager
 ) : AbstractLookupGroupItem(), DynamicLookupGroupItem {
+    private val settingsService = project.service<ProxyAISettingsService>()
 
     override val displayName: String = CodeGPTBundle.get("suggestionGroupItem.files.displayName")
     override val icon = AllIcons.FileTypes.Any_type
@@ -33,7 +35,7 @@ class FilesGroupItem(
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
         withContext(Dispatchers.Default) {
             project.service<ProjectFileIndex>().iterateContent {
-                if (!it.isDirectory && !containsTag(it)) {
+                if (!it.isDirectory && settingsService.isVirtualFileVisible(it) && !containsTag(it)) {
                     val actionItem = FileActionItem(project, it)
                     runInEdt {
                         LookupUtil.addLookupItem(lookup, actionItem)
@@ -52,6 +54,7 @@ class FilesGroupItem(
 
             projectFileIndex.iterateContent { file ->
                 if (!file.isDirectory &&
+                    settingsService.isVirtualFileVisible(file) &&
                     !containsTag(file) &&
                     (searchText.isEmpty() || matcher.matchingDegree(file.name) != Int.MIN_VALUE)
                 ) {
@@ -63,6 +66,7 @@ class FilesGroupItem(
             val openFiles = project.service<FileEditorManager>().openFiles
                 .filter {
                     projectFileIndex.isInContent(it) &&
+                            settingsService.isVirtualFileVisible(it) &&
                             !containsTag(it) &&
                             (searchText.isEmpty() || matcher.matchingDegree(it.name) != Int.MIN_VALUE)
                 }

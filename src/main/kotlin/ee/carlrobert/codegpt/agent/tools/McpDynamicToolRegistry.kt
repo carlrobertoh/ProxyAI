@@ -6,6 +6,7 @@ import ai.koog.agents.core.tools.ToolParameterDescriptor
 import ai.koog.agents.core.tools.ToolParameterType
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.AgentMcpContext
 import ee.carlrobert.codegpt.mcp.ConnectionStatus
 import ee.carlrobert.codegpt.mcp.McpSessionAttachment
@@ -174,7 +175,8 @@ private class SessionBoundMcpTool(
 
     private fun runTool(client: McpSyncClient, args: JsonObject): McpTool.Result {
         return runCatching {
-            val request = McpSchema.CallToolRequest(sourceTool.name, args.toMcpArguments())
+            val callArgs = args.toMcpArguments()
+            val request = McpSchema.CallToolRequest(sourceTool.name, callArgs)
             val result = client.callTool(request)
             val content = result.formatMcpContent()
             if (result.isError == true) {

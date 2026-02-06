@@ -135,7 +135,7 @@ class EditTool(
             if (svc.isPathIgnored(args.filePath)) {
                 return Result.Error(
                     filePath = args.filePath,
-                    error = ".proxyai ignore rules block editing this path"
+                    error = "File not found: ${args.filePath}"
                 )
             }
             val normalizedPath = args.filePath.replace("\\", "/")

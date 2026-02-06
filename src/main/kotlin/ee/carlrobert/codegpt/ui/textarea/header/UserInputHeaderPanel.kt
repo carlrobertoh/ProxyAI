@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.editor.SelectionModel
@@ -21,6 +22,7 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
 import ee.carlrobert.codegpt.EncodingManager
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
@@ -114,6 +116,8 @@ class UserInputHeaderPanel(
     ).apply { isVisible = getMarkdownContent != null }
 
     private val backgroundScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val settingsService = project.service<ProxyAISettingsService>()
+    private var purgingHiddenTags = false
 
     init {
         tagManager.addListener(this)
@@ -131,6 +135,9 @@ class UserInputHeaderPanel(
     }
 
     fun addTag(tagDetails: TagDetails) {
+        if (!isTagVisible(tagDetails)) {
+            return
+        }
         tagManager.addTag(tagDetails)
     }
 
@@ -230,6 +237,16 @@ class UserInputHeaderPanel(
     }
 
     private fun onTagsChanged() {
+        if (!purgingHiddenTags) {
+            val hiddenTags = tagManager.getTags().filterNot(::isTagVisible)
+            if (hiddenTags.isNotEmpty()) {
+                purgingHiddenTags = true
+                hiddenTags.forEach { tagManager.remove(it) }
+                purgingHiddenTags = false
+                return
+            }
+        }
+
         components.filterIsInstance<TagPanel>().forEach { remove(it) }
 
         val allTags = tagManager.getTags()
@@ -333,7 +350,7 @@ class UserInputHeaderPanel(
         if (autoTaggingEnabled) {
             val selectedFile = getSelectedEditor(project)?.virtualFile
             if (selectedFile != null) {
-                tagManager.addTag(
+                addTag(
                     EditorTagDetails(
                         selectedFile,
                         isRemovable = withRemovableSelectedEditorTag
@@ -345,7 +362,7 @@ class UserInputHeaderPanel(
                 .filterNot { it == selectedFile }
                 .take(INITIAL_VISIBLE_FILES)
                 .forEach {
-                    tagManager.addTag(EditorTagDetails(it).apply { selected = false })
+                    addTag(EditorTagDetails(it).apply { selected = false })
                 }
         }
     }
@@ -410,7 +427,7 @@ class UserInputHeaderPanel(
                 if (hasSelectionTag) {
                     tagManager.updateSelectionTag(virtualFile, selectionModel)
                 } else {
-                    tagManager.addTag(EditorSelectionTagDetails(virtualFile, selectionModel))
+                    addTag(EditorSelectionTagDetails(virtualFile, selectionModel))
                 }
             } else {
                 tagManager.remove(EditorSelectionTagDetails(virtualFile, selectionModel))
@@ -439,14 +456,25 @@ class UserInputHeaderPanel(
                     .firstOrNull { it.virtualFile == newFile }
 
                 if (existing == null) {
-                    tagManager.addTag(EditorTagDetails(newFile).apply { selected = false })
+                    addTag(EditorTagDetails(newFile).apply { selected = false })
                 } else if (!existing.selected) {
                     tagManager.remove(existing)
-                    tagManager.addTag(EditorTagDetails(newFile).apply { selected = false })
+                    addTag(EditorTagDetails(newFile).apply { selected = false })
                 }
 
                 emptyText.isVisible = false
             }
+        }
+    }
+
+    private fun isTagVisible(tagDetails: TagDetails): Boolean {
+        return when (tagDetails) {
+            is FileTagDetails -> settingsService.isVirtualFileVisible(tagDetails.virtualFile)
+            is EditorTagDetails -> settingsService.isVirtualFileVisible(tagDetails.virtualFile)
+            is SelectionTagDetails -> settingsService.isVirtualFileVisible(tagDetails.virtualFile)
+            is EditorSelectionTagDetails -> settingsService.isVirtualFileVisible(tagDetails.virtualFile)
+            is FolderTagDetails -> settingsService.isVirtualFileVisible(tagDetails.folder)
+            else -> true
         }
     }
 

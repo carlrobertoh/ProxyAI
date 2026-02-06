@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.actions;
 
 import static com.intellij.openapi.actionSystem.CommonDataKeys.VIRTUAL_FILE_ARRAY;
+import static com.intellij.openapi.actionSystem.CommonDataKeys.VIRTUAL_FILE;
 import static com.intellij.openapi.ui.DialogWrapper.OK_EXIT_CODE;
 import static ee.carlrobert.codegpt.settings.IncludedFilesSettingsState.DEFAULT_PROMPT_TEMPLATE;
 import static ee.carlrobert.codegpt.settings.IncludedFilesSettingsState.DEFAULT_REPEATABLE_CONTEXT;
@@ -26,6 +27,7 @@ import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.settings.IncludedFilesSettings;
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService;
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.ui.checkbox.FileCheckboxTree;
@@ -33,8 +35,6 @@ import ee.carlrobert.codegpt.ui.checkbox.VirtualFileCheckboxTree;
 import ee.carlrobert.codegpt.util.file.FileUtil;
 import java.awt.Dimension;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -57,7 +57,7 @@ public class IncludeFilesInContextAction extends AnAction {
       return;
     }
 
-    var checkboxTree = getCheckboxTree(e.getDataContext());
+    var checkboxTree = getCheckboxTree(project, e.getDataContext());
     if (checkboxTree == null) {
       throw new RuntimeException("Could not obtain file tree");
     }
@@ -92,10 +92,19 @@ public class IncludeFilesInContextAction extends AnAction {
     }
   }
 
-  private @Nullable FileCheckboxTree getCheckboxTree(DataContext dataContext) {
+  private @Nullable FileCheckboxTree getCheckboxTree(Project project, DataContext dataContext) {
+    var settingsService = project.getService(ProxyAISettingsService.class);
     var selectedVirtualFiles = VIRTUAL_FILE_ARRAY.getData(dataContext);
-    if (selectedVirtualFiles != null) {
-      return new VirtualFileCheckboxTree(selectedVirtualFiles);
+    if (selectedVirtualFiles != null && selectedVirtualFiles.length > 0) {
+      return new VirtualFileCheckboxTree(
+          selectedVirtualFiles,
+          settingsService);
+    }
+    var currentVirtualFile = VIRTUAL_FILE.getData(dataContext);
+    if (currentVirtualFile != null) {
+      return new VirtualFileCheckboxTree(
+          new VirtualFile[]{currentVirtualFile},
+          settingsService);
     }
 
     return null;
@@ -103,13 +112,15 @@ public class IncludeFilesInContextAction extends AnAction {
 
   private static class TotalTokensLabel extends JBLabel {
 
-    private static final EncodingManager encodingManager = EncodingManager.getInstance();
+    private final EncodingManager encodingManager = EncodingManager.getInstance();
 
     private int fileCount;
     private int totalTokens;
 
     TotalTokensLabel(List<VirtualFile> referencedFiles) {
-      fileCount = referencedFiles.size();
+      fileCount = (int) referencedFiles.stream()
+          .filter(file -> file != null && !file.isDirectory() && file.isValid())
+          .count();
       totalTokens = calculateTotalTokens(referencedFiles);
       updateText();
     }
@@ -147,13 +158,13 @@ public class IncludeFilesInContextAction extends AnAction {
       return null;
     }
 
-    private String getVirtualFileContent(VirtualFile virtualFile) {
+    private @Nullable String getVirtualFileContent(VirtualFile virtualFile) {
       try {
-        if (!virtualFile.isDirectory()) {
-          return new String(Files.readAllBytes(Paths.get(virtualFile.getPath())));
+        if (virtualFile.isValid() && !virtualFile.isDirectory()) {
+          return new String(virtualFile.contentsToByteArray(), virtualFile.getCharset());
         }
       } catch (IOException ex) {
-        LOG.error(ex);
+        LOG.error("Failed to read file content: " + virtualFile.getPath(), ex);
       }
       return null;
     }
@@ -168,12 +179,13 @@ public class IncludeFilesInContextAction extends AnAction {
 
     private int calculateTotalTokens(List<VirtualFile> referencedFiles) {
       return referencedFiles.stream()
+          .filter(file -> !file.isDirectory() && file.isValid())
           .mapToInt(file -> {
             try {
               return encodingManager.countTokens(
                   new String(file.contentsToByteArray(), file.getCharset()));
             } catch (IOException e) {
-              LOG.error("Failed to read file {} content", file.getName());
+              LOG.error("Failed to read file content: " + file.getPath(), e);
               return 0;
             }
           })

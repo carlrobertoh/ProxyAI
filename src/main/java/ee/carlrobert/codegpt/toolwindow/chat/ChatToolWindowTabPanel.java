@@ -35,6 +35,7 @@ import ee.carlrobert.codegpt.mcp.McpSessionManager;
 import ee.carlrobert.codegpt.mcp.McpTool;
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider;
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
@@ -66,7 +67,9 @@ import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -284,12 +287,41 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private List<ReferencedFile> getReferencedFiles(List<? extends TagDetails> tags) {
-    return tags.stream()
-        .map(this::getVirtualFile)
-        .filter(Objects::nonNull)
-        .distinct()
+    var settingsService = project.getService(ProxyAISettingsService.class);
+    var visibleFiles = collectVisibleFiles(
+        tags.stream()
+            .map(this::getVirtualFile)
+            .filter(Objects::nonNull)
+            .toList(),
+        settingsService
+    );
+
+    return visibleFiles.stream()
         .map(ReferencedFile::from)
         .toList();
+  }
+
+  private List<VirtualFile> collectVisibleFiles(
+      List<VirtualFile> inputFiles,
+      ProxyAISettingsService settingsService) {
+    var visibleFiles = new LinkedHashSet<VirtualFile>();
+    inputFiles.forEach(file -> appendVisibleFiles(file, settingsService, visibleFiles));
+    return visibleFiles.stream().toList();
+  }
+
+  private void appendVisibleFiles(
+      VirtualFile file,
+      ProxyAISettingsService settingsService,
+      LinkedHashSet<VirtualFile> output) {
+    if (!file.isValid() || !settingsService.isVirtualFileVisible(file)) {
+      return;
+    }
+    if (!file.isDirectory()) {
+      output.add(file);
+      return;
+    }
+    Arrays.stream(file.getChildren())
+        .forEach(child -> appendVisibleFiles(child, settingsService, output));
   }
 
   private List<UUID> getConversationHistoryIds(List<? extends TagDetails> tags) {
@@ -383,10 +415,14 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   public void includeFiles(List<VirtualFile> referencedFiles) {
-    userInputPanel.includeFiles(referencedFiles);
+    var settingsService = project.getService(ProxyAISettingsService.class);
+    var visibleReferencedFiles = collectVisibleFiles(referencedFiles, settingsService);
+
+    userInputPanel.includeFiles(new ArrayList<>(visibleReferencedFiles));
     ReadAction.nonBlocking(() -> {
               var encodingManager = EncodingManager.getInstance();
-              return referencedFiles.stream()
+              return visibleReferencedFiles.stream()
+                  .filter(file -> !file.isDirectory())
                   .mapToInt(it -> encodingManager.countTokens(ReferencedFile.from(it).fileContent()))
                   .sum();
             }
