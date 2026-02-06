@@ -10,7 +10,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
-import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
@@ -280,7 +279,6 @@ class EditTool(
                 editLocations = editLocations
             )
 
-            val toolId = sessionId?.let { id -> ToolRunContext.getToolId(id) }
             val payload = mapOf(
                 "file_path" to args.filePath,
                 "replacements_made" to replacementsMade,
@@ -295,7 +293,6 @@ class EditTool(
                 HookEventType.AFTER_FILE_EDIT,
                 payload,
                 "Edit",
-                toolId,
                 sessionId
             )
             if (deniedReason != null) {

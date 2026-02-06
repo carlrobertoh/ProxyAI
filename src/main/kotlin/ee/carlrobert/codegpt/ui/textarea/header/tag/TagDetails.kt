@@ -11,12 +11,16 @@ import ee.carlrobert.codegpt.mcp.McpTool
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.ui.DocumentationDetails
 import git4idea.GitCommit
+import kotlinx.serialization.Contextual
+import kotlinx.serialization.Serializable
 import java.util.*
 import javax.swing.Icon
 
+@Serializable
 sealed class TagDetails(
     val name: String,
     val icon: Icon? = null,
+    @Contextual
     val id: UUID = UUID.randomUUID(),
     val createdOn: Long = System.currentTimeMillis(),
     val isRemovable: Boolean = true
@@ -125,7 +129,7 @@ class EditorSelectionTagDetails(
 
 data class DocumentationTagDetails(var documentationDetails: DocumentationDetails) :
     TagDetails(documentationDetails.name, AllIcons.Toolwindows.Documentation) {
-    override fun getTooltipText(): String? = documentationDetails.url
+    override fun getTooltipText(): String = documentationDetails.url
 }
 
 data class PersonaTagDetails(var personaDetails: PersonaDetails) :
@@ -135,7 +139,7 @@ data class PersonaTagDetails(var personaDetails: PersonaDetails) :
 
 data class GitCommitTagDetails(var gitCommit: GitCommit) :
     TagDetails(gitCommit.id.asString().take(6), AllIcons.Vcs.CommitNode) {
-    override fun getTooltipText(): String? = gitCommit.fullMessage
+    override fun getTooltipText(): String = gitCommit.fullMessage
 }
 
 class CurrentGitChangesTagDetails :

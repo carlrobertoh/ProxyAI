@@ -113,7 +113,6 @@ class TaskTool(
             HookEventType.SUBAGENT_START,
             startPayload,
             "Task",
-            ToolRunContext.getToolId(sessionId),
             sessionId
         )
     }
@@ -188,7 +187,10 @@ class TaskTool(
     }
 
     private fun configuredSubagent(subagentType: String): ConfiguredSubagent? {
-        return if (isBuiltInAgentType(subagentType)) null else findConfiguredSubagent(project, subagentType)
+        return if (isBuiltInAgentType(subagentType)) null else findConfiguredSubagent(
+            project,
+            subagentType
+        )
     }
 
     private suspend fun emitStopHook(args: Args, output: String, duration: Long) {
@@ -201,8 +203,7 @@ class TaskTool(
                 "result" to output,
                 "duration" to duration
             ),
-            "Task",
-            ToolRunContext.getToolId(sessionId),
+            name,
             sessionId
         )
     }
@@ -301,11 +302,14 @@ class TaskTool(
                 details.contains("Unexpected response: no tool calls and no content", true) ->
                     "Subagent '$subagentType' received an invalid model response: no content " +
                             "and no tool calls were returned."
+
                 details.equals("Something went wrong", true) ||
                         details.equals("Something went wrong.", true) ->
                     "Subagent '$subagentType' received a generic provider error without details."
+
                 details.isNotBlank() ->
                     "Subagent '$subagentType' failed in the LLM client: $details"
+
                 else ->
                     "Subagent '$subagentType' failed in the LLM client without an error message."
             }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
+import kotlinx.serialization.SerializationException
 import kotlin.math.pow
 import kotlin.random.Random
 import kotlin.time.Duration
@@ -53,12 +54,13 @@ class RetryingPromptExecutor(
         tools: List<ToolDescriptor>
     ): Flow<StreamFrame> {
         var attempt = 1
+        var refinedPrompt = prompt
         var hasReceivedData: Boolean
 
         fun createStream(attemptNum: Int): Flow<StreamFrame> {
             hasReceivedData = false
 
-            return delegate.executeStreaming(prompt, model, tools)
+            return delegate.executeStreaming(refinedPrompt, model, tools)
                 .onEach { hasReceivedData = true }
                 .catch { error ->
                     val shouldRetry = !hasReceivedData && attemptNum < retryPolicy.maxAttempts
@@ -111,6 +113,10 @@ class RetryingPromptExecutor(
                     } else {
                         throw ce
                     }
+                } catch (_: SerializationException) {
+                    refinedPrompt = prompt.copy(messages = prompt.messages.dropLast(1))
+                    currentAttempt++
+                    continue
                 }
             }
         }

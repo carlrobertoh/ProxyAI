@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent
 
-import ai.koog.agents.core.agent.AIAgent
+import ai.koog.agents.core.agent.AIAgentService
+import ai.koog.agents.core.agent.GraphAIAgentService
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.context.RollbackStrategy
 import ai.koog.agents.core.tools.Tool
@@ -11,13 +12,12 @@ import ai.koog.agents.features.eventHandler.feature.handleEvents
 import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
 import ai.koog.agents.features.tracing.feature.Tracing
 import ai.koog.agents.features.tracing.writer.TraceFeatureMessageLogWriter
-import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.agents.snapshot.feature.Persistence
-import ai.koog.agents.snapshot.feature.persistence
 import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
@@ -40,12 +40,13 @@ import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.BashPayload
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.datetime.Clock
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.reflect.typeOf
 
 data class ToolError(val message: String)
 
@@ -54,9 +55,8 @@ object ProxyAIAgent {
     private const val INSTRUCTION_FILE_NAME = "PROXYAI.md"
 
     private val logger = KotlinLogging.logger { }
-    private val messageWithContextSnapshotType = typeOf<MessageWithContextSnapshot>()
 
-    private fun searchForInstructions(projectPath: String?): String? {
+    internal fun loadProjectInstructions(projectPath: String?): String? {
         if (projectPath == null) return null
         val projectRoot = Paths.get(projectPath)
         if (!Files.exists(projectRoot)) return null
@@ -76,32 +76,29 @@ object ProxyAIAgent {
         return null
     }
 
-    fun create(
+    fun createService(
         project: Project,
         checkpointStorage: JVMFilePersistenceStorageProvider,
-        previousCheckpoint: AgentCheckpointData?,
         provider: ServiceType,
         events: AgentEvents,
         sessionId: String,
         pendingMessages: ConcurrentHashMap<String, ArrayDeque<MessageWithContext>>,
-    ): AIAgent<MessageWithContext, String> {
+    ): GraphAIAgentService<MessageWithContext, String> {
         val modelSelection =
             service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.AGENT)
         val skills = project.service<SkillDiscoveryService>().listSkills()
         val stream = provider != ServiceType.CUSTOM_OPENAI
-        val projectInstructions = searchForInstructions(project.basePath)
+        val projectInstructions = loadProjectInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
         val hookManager = HookManager(project)
         val toolRegistry = createToolRegistry(project, events, sessionId, provider, hookManager)
         val agentModel = service<ModelSelectionService>().getAgentModel()
-        val agent = AIAgent(
+        return AIAgentService<MessageWithContext, String>(
             promptExecutor = executor,
             strategy = SingleRunStrategyProvider().build(
                 project,
                 executor,
-                projectInstructions,
-                previousCheckpoint,
                 pendingMessageQueue,
                 HistoryCompressionConfig(
                     isLimitExceeded = buildHistoryTooBigPredicate(computeAvailableInput(agentModel)),
@@ -122,6 +119,20 @@ object ProxyAIAgent {
                             skills
                         )
                     )
+
+                    projectInstructions?.let {
+                        message(
+                            Message.User(
+                                content = it,
+                                metaInfo = RequestMetaInfo(
+                                    Clock.System.now(),
+                                    JsonObject(buildMap<String, JsonPrimitive> {
+                                        put("cacheable", JsonPrimitive(true))
+                                    })
+                                )
+                            )
+                        )
+                    }
                 },
                 model = agentModel,
                 maxAgentIterations = 100
@@ -135,7 +146,8 @@ object ProxyAIAgent {
             }
             install(Persistence) {
                 storage = checkpointStorage
-                rollbackStrategy = RollbackStrategy.Default
+                enableAutomaticPersistence = true
+                rollbackStrategy = RollbackStrategy.MessageHistoryOnly
             }
             install(MessageTokenizer) {
                 tokenizer = object : Tokenizer {
@@ -159,25 +171,6 @@ object ProxyAIAgent {
                 }
 
                 onNodeExecutionCompleted { ctx ->
-                    val input = ctx.input
-                    val (lastInput, lastInputType) = if (input is MessageWithContext) {
-                        val snapshot = input.toSnapshot()
-                        snapshot to messageWithContextSnapshotType
-                    } else {
-                        input to ctx.inputType
-                    }
-                    val checkpoint = ctx.context.persistence().createCheckpoint(
-                        agentContext = ctx.context,
-                        nodePath = ctx.context.executionInfo.path(),
-                        lastInput = lastInput,
-                        lastInputType = lastInputType,
-                        checkpointId = ctx.context.runId,
-                        version = 0L
-                    )
-                    checkpoint?.checkpointId ?: return@onNodeExecutionCompleted
-
-                    if (stream) return@onNodeExecutionCompleted
-
                     (ctx.output as? List<*>)?.forEach { msg ->
                         (msg as? Message.Assistant)?.let {
                             events.onTextReceived(it.content)
@@ -264,7 +257,6 @@ object ProxyAIAgent {
                 }
             }
         }
-        return agent
     }
 
     private fun createToolRegistry(

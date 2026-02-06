@@ -15,6 +15,7 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.agent.AgentService
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.MessageWithContext
+import ee.carlrobert.codegpt.agent.ToolSpecs
 import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.conversations.Conversation
@@ -26,6 +27,7 @@ import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentToolWindowLandingPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.RollbackPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.TodoListPanel
+import ee.carlrobert.codegpt.toolwindow.agent.ui.ToolCallCard
 import ee.carlrobert.codegpt.toolwindow.chat.MessageBuilder
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository
@@ -42,6 +44,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
@@ -51,6 +54,11 @@ class AgentToolWindowTabPanel(
     private val project: Project,
     private val agentSession: AgentSession
 ) : BorderLayoutPanel(), Disposable {
+    private val replayJson = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+    }
 
     private val scrollablePanel = ChatToolWindowScrollablePanel()
     private val tagManager = TagManager()
@@ -106,13 +114,13 @@ class AgentToolWindowTabPanel(
         sessionIdProvider = { sessionId },
         conversationIdProvider = { conversation.id }
     )
-    private lateinit var rollbackPanel: RollbackPanel
+    private var rollbackPanel: RollbackPanel
     private val todoListPanel = TodoListPanel()
     private val projectMessageBusConnection = project.messageBus.connect()
     private val appMessageBusConnection = ApplicationManager.getApplication().messageBus.connect()
     private val rollbackService = RollbackService.getInstance(project)
 
-    private val agentEventHandler = AgentEventHandler(
+    private val eventHandler = AgentEventHandler(
         project = project,
         sessionId = sessionId,
         agentApprovalManager = AgentApprovalManager(project),
@@ -150,10 +158,12 @@ class AgentToolWindowTabPanel(
 
         if (conversation.messages.isEmpty()) {
             displayLandingView()
+        } else {
+            displayRecoveredConversation()
         }
 
         userInputPanel.setStopEnabled(false)
-        Disposer.register(this, agentEventHandler)
+        Disposer.register(this, eventHandler)
     }
 
     private fun setupMessageBusSubscriptions() {
@@ -172,7 +182,7 @@ class AgentToolWindowTabPanel(
             object : AgentToolOutputNotifier {
                 override fun toolOutput(toolId: String, text: String, isError: Boolean) {
                     val namespacedToolId = "${sessionId}:${toolId}"
-                    agentEventHandler.handleToolOutput(namespacedToolId, text, isError)
+                    eventHandler.handleToolOutput(namespacedToolId, text, isError)
                 }
             }
         )
@@ -220,6 +230,7 @@ class AgentToolWindowTabPanel(
 
     private fun handleSubmit(text: String) {
         if (text.isBlank()) return
+        scrollablePanel.clearLandingViewIfVisible()
         agentSession.serviceType =
             ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AGENT)
 
@@ -233,7 +244,7 @@ class AgentToolWindowTabPanel(
 
             agentService.submitMessage(
                 MessageWithContext(text, userInputPanel.getSelectedTags()),
-                agentEventHandler,
+                eventHandler,
                 sessionId
             )
             return
@@ -271,8 +282,8 @@ class AgentToolWindowTabPanel(
         messagePanel.add(responsePanel)
         scrollablePanel.update()
 
-        agentEventHandler.resetForNewSubmission()
-        agentEventHandler.setCurrentResponseBody(responseBody)
+        eventHandler.resetForNewSubmission()
+        eventHandler.setCurrentResponseBody(responseBody)
 
         loadingLabel.text = CodeGPTBundle.get("toolwindow.chat.loading")
         loadingLabel.isVisible = true
@@ -281,7 +292,7 @@ class AgentToolWindowTabPanel(
         agentService.clearPendingMessages(sessionId)
         userInputPanel.setStopEnabled(true)
 
-        agentService.submitMessage(message, agentEventHandler, sessionId)
+        agentService.submitMessage(message, eventHandler, sessionId)
     }
 
     private fun handleCancel() {
@@ -306,6 +317,102 @@ class AgentToolWindowTabPanel(
 
     private fun displayLandingView() {
         scrollablePanel.displayLandingView(createLandingView())
+    }
+
+    private fun displayRecoveredConversation() {
+        scrollablePanel.clearAll()
+        conversation.messages.forEach { message ->
+            val prompt = message.prompt.orEmpty()
+            val wrapper = scrollablePanel.addMessage(message.id)
+            val userPanel = UserMessagePanel(project, message, this)
+            userPanel.addCopyAction { CopyAction.copyToClipboard(prompt) }
+            wrapper.add(userPanel)
+
+            val responseBody = ChatMessageResponseBody(
+                project,
+                false,
+                false,
+                false,
+                false,
+                false,
+                this
+            )
+            addRecoveredToolCards(responseBody, message)
+            responseBody.withResponse(message.response.orEmpty())
+            val responsePanel = ResponseMessagePanel().apply {
+                setResponseContent(responseBody)
+            }
+            wrapper.add(responsePanel)
+        }
+
+        scrollablePanel.update()
+        scrollablePanel.scrollToBottom()
+    }
+
+    private fun addRecoveredToolCards(responseBody: ChatMessageResponseBody, message: Message) {
+        val toolCalls = message.toolCalls ?: return
+        val toolCallResults = message.toolCallResults ?: emptyMap()
+
+        toolCalls.forEach { toolCall ->
+            val toolName = toolCall.function.name ?: return@forEach
+            if (toolName == "TodoWrite") {
+                return@forEach
+            }
+
+            val rawArgs = toolCall.function.arguments.orEmpty()
+            val args = parseRecoveredToolArgs(toolName, rawArgs)
+            val card = createRecoveredToolCard(toolName, args, rawArgs)
+            responseBody.addToolStatusPanel(card)
+
+            val rawResult = toolCallResults[toolCall.id] ?: return@forEach
+            val parsedResult = parseRecoveredToolResult(toolName, rawResult)
+            val success = inferRecoveredToolSuccess(parsedResult, rawResult)
+            card.complete(success, parsedResult ?: rawResult)
+        }
+    }
+
+    private fun createRecoveredToolCard(
+        toolName: String,
+        args: Any,
+        rawArgs: String
+    ): ToolCallCard {
+        return try {
+            ToolCallCard(project, toolName, args)
+        } catch (_: Exception) {
+            val fallbackName = "Recovered $toolName"
+            val fallbackArgs = rawArgs.ifBlank { "(no arguments)" }
+            ToolCallCard(project, fallbackName, fallbackArgs)
+        }
+    }
+
+    private fun parseRecoveredToolArgs(toolName: String, rawArgs: String): Any {
+        val payload = rawArgs.trim()
+        if (payload.isBlank()) return ""
+
+        return ToolSpecs.decodeArgsOrNull(
+            json = replayJson,
+            toolName = toolName,
+            payload = payload
+        ) ?: payload
+    }
+
+    private fun parseRecoveredToolResult(toolName: String, rawResult: String): Any? {
+        val payload = rawResult.trim()
+        if (payload.isBlank()) return null
+
+        return ToolSpecs.decodeResultOrNull(
+            json = replayJson,
+            toolName = toolName,
+            payload = payload
+        ) ?: payload
+    }
+
+    private fun inferRecoveredToolSuccess(parsedResult: Any?, rawResult: String): Boolean {
+        if (parsedResult != null) {
+            return parsedResult::class.simpleName != "Error"
+        }
+        return !rawResult.contains("failed", ignoreCase = true) &&
+                !rawResult.contains("error", ignoreCase = true)
     }
 
     private fun createLandingView(): AgentToolWindowLandingPanel {
@@ -376,8 +483,8 @@ class AgentToolWindowTabPanel(
         responsePanel.setResponseContent(responseBody)
         messagePanel.add(responsePanel)
 
-        agentEventHandler.resetForNewSubmission()
-        agentEventHandler.setCurrentResponseBody(responseBody)
+        eventHandler.resetForNewSubmission()
+        eventHandler.setCurrentResponseBody(responseBody)
 
         scrollablePanel.update()
     }

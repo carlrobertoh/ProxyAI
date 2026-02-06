@@ -18,7 +18,6 @@ class HookManager(
         event: HookEventType,
         payload: Map<String, Any?>,
         toolName: String? = null,
-        toolId: String? = null,
         sessionId: String? = null
     ): List<HookExecutionResult> {
         val settings = project.service<ProxyAISettingsService>().getSettings()
@@ -81,10 +80,9 @@ class HookManager(
         event: HookEventType,
         payload: Map<String, Any?>,
         toolName: String? = null,
-        toolId: String? = null,
         sessionId: String? = null
     ): String? {
-        val results = executeHooksForEvent(event, payload, toolName, toolId, sessionId)
+        val results = executeHooksForEvent(event, payload, toolName, sessionId)
         results.forEach { result ->
             when (result) {
                 is HookExecutionResult.Denied -> return result.reason

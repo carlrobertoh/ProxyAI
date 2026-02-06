@@ -11,7 +11,6 @@ import ai.koog.agents.core.dsl.extension.*
 import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.environment.result
 import ai.koog.agents.features.tokenizer.feature.tokenizer
-import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.message.Message
@@ -29,6 +28,9 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import java.util.*
 import ee.carlrobert.codegpt.conversations.message.Message as ChatMessage
 
@@ -36,8 +38,6 @@ internal interface AgentRunStrategyProvider {
     fun build(
         project: Project,
         executor: PromptExecutor,
-        projectInstructions: String?,
-        previousCheckpoint: AgentCheckpointData?,
         pendingMessageQueue: ArrayDeque<MessageWithContext>,
         historyCompressionConfig: HistoryCompressionConfig,
         events: AgentEvents,
@@ -56,8 +56,6 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
     override fun build(
         project: Project,
         executor: PromptExecutor,
-        projectInstructions: String?,
-        previousCheckpoint: AgentCheckpointData?,
         pendingMessageQueue: ArrayDeque<MessageWithContext>,
         historyCompressionConfig: HistoryCompressionConfig,
         events: AgentEvents,
@@ -67,29 +65,6 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
     ): AIAgentGraphStrategy<MessageWithContext, String> = strategy("single_run") {
         val nodeCallLLM by node<MessageWithContext, List<Message.Response>> { message ->
             llm.writeSession {
-                if (previousCheckpoint == null) {
-                    projectInstructions?.let {
-                        appendPrompt {
-                            user(it)
-                        }
-                    }
-                } else {
-                    val filteredMessageHistory = previousCheckpoint.messageHistory
-                        .filter { it !is Message.System }
-                        .toMutableList()
-                        .apply {
-                            if (lastOrNull() is Message.Tool.Call) {
-                                removeLast()
-                            }
-                        }
-
-                    for (previousMessage in filteredMessageHistory) {
-                        if (previousMessage !is Message.System) {
-                            appendPrompt { message(previousMessage) }
-                        }
-                    }
-                }
-
                 if (message.tags.isNotEmpty()) {
                     val context = buildTagContext(project, message.tags)
                     if (context.isNotBlank()) {
@@ -206,7 +181,24 @@ private suspend fun AIAgentLLMWriteSession.requestResponses(
     val responses = if (stream) {
         val streamFrames = mutableListOf<StreamFrame>()
         requestLLMStreaming().collect { streamFrames.add(it) }
-        streamFrames.toMessageResponses()
+        streamFrames
+            .toMessageResponses()
+            .map {
+                if (it is Message.Tool.Call) {
+                    try {
+                        // validate json
+                        Json.parseToJsonElement(it.content).jsonObject
+                        it
+                    } catch (_: SerializationException) {
+                        // allows agent to retry the request
+                        it.copy(parts = listOf(it.parts[0].copy(text = "{}")))
+                    } catch (e: Exception) {
+                        throw e
+                    }
+                } else {
+                    it
+                }
+            }
     } else {
         val preparedPrompt = config.missingToolsConversionStrategy.convertPrompt(prompt, tools)
         executor.execute(preparedPrompt, model, tools)

@@ -1,14 +1,19 @@
 package ee.carlrobert.codegpt.agent
 
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
-import java.util.UUID
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
+import java.util.*
 
+@Serializable
 class MessageWithContext(
     val text: String,
-    val tags: List<TagDetails>,
+    @Transient
+    val tags: List<TagDetails> = emptyList(),
     val uiVisible: Boolean = true,
     val uiText: String = text
 ) {
 
+    @Transient
     val id: UUID = UUID.randomUUID()
 }

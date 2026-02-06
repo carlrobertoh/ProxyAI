@@ -1,6 +1,9 @@
 package ee.carlrobert.codegpt.toolwindow.agent.ui
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -13,11 +16,18 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.agent.ProxyAIAgent.loadProjectInstructions
+import ee.carlrobert.codegpt.agent.history.AgentCheckpointConversationMapper
+import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
+import ee.carlrobert.codegpt.agent.history.AgentHistoryThreadSummary
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.settings.agents.SubagentsConfigurable
 import ee.carlrobert.codegpt.tokens.TokenComputationService
+import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
+import ee.carlrobert.codegpt.toolwindow.agent.history.AgentHistoryListPanel
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel
 import ee.carlrobert.codegpt.ui.UIUtil.createTextPane
+import kotlinx.coroutines.runBlocking
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Desktop
@@ -37,6 +47,10 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
         private val logger = thisLogger()
     }
 
+    private val historyService = project.service<AgentCheckpointHistoryService>()
+    private val historyListPanel = AgentHistoryListPanel(defaultLimit = 5)
+    private var refreshHistory = true
+
     private fun createLabel(text: String) = JBLabel(text)
     private fun createLink(text: String, onClick: () -> Unit) = ActionLink(text) { onClick() }
 
@@ -47,7 +61,12 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
     }
 
     init {
+        historyListPanel.onOpen = { thread -> openCheckpointThread(thread) }
+        historyListPanel.onLoadPage = { query, offset, limit, onResult ->
+            loadHistoryPage(query, offset, limit, onResult)
+        }
         addContent(buildContent())
+        loadHistory()
     }
 
     private fun buildContent(): JPanel {
@@ -59,11 +78,20 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
     }
 
     private fun centerPanel(): JPanel {
+        val panel = BorderLayoutPanel()
+        panel.addToTop(topSectionsPanel())
+        panel.addToCenter(previousChatsPanel())
+        return panel
+    }
+
+    private fun topSectionsPanel(): JPanel {
         val panel = JPanel()
         panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+        panel.alignmentX = LEFT_ALIGNMENT
         panel.add(actionsListPanel())
         panel.add(Box.createVerticalStrut(12))
         panel.add(projectInfoPanel())
+        panel.add(Box.createVerticalStrut(12))
         return panel
     }
 
@@ -210,10 +238,25 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
             container.add(Box.createVerticalStrut(2))
             container.add(bottomRow)
         }
+
         panel.add(container)
         return panel
     }
 
+    private fun previousChatsPanel(): JPanel {
+        val panel = BorderLayoutPanel().apply {
+            border = JBUI.Borders.empty()
+        }
+        panel.addToTop(JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            alignmentX = LEFT_ALIGNMENT
+            isOpaque = false
+            add(createLabel("Previous Chats"))
+            add(Box.createVerticalStrut(6))
+        })
+        panel.addToCenter(historyListPanel)
+        return panel
+    }
 
     private fun findProxyAiFile() =
         project.basePath?.let {
@@ -240,8 +283,64 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
     private fun refresh() {
         removeAll()
         addContent(buildContent())
+        loadHistory()
         revalidate()
         repaint()
+    }
+
+    private fun loadHistory() {
+        refreshHistory = true
+        historyListPanel.reload()
+    }
+
+    private fun loadHistoryPage(
+        query: String,
+        offset: Int,
+        limit: Int,
+        onResult: (List<AgentHistoryThreadSummary>, Boolean, Int) -> Unit
+    ) {
+        val shouldRefresh = offset == 0 && refreshHistory
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val page = runCatching {
+                runBlocking {
+                    historyService.listThreadsPage(
+                        query = query,
+                        offset = offset,
+                        limit = limit,
+                        refresh = shouldRefresh
+                    )
+                }
+            }
+                .onFailure { logger.warn("Failed to load checkpoint history", it) }
+                .getOrNull()
+
+            runInEdt {
+                if (page != null) {
+                    refreshHistory = false
+                }
+                onResult(page?.items.orEmpty(), page?.hasMore == true, page?.total ?: 0)
+            }
+        }
+    }
+
+    private fun openCheckpointThread(thread: AgentHistoryThreadSummary) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val conversation = runCatching {
+                val checkpoint = runBlocking { historyService.loadCheckpoint(thread.latest) }
+                    ?: return@executeOnPooledThread
+                AgentCheckpointConversationMapper.toConversation(
+                    checkpoint = checkpoint,
+                    projectInstructions = loadProjectInstructions(project.basePath)
+                )
+            }.onFailure {
+                logger.warn("Failed to open checkpoint thread ${thread.agentId}", it)
+            }.getOrNull() ?: return@executeOnPooledThread
+
+            ApplicationManager.getApplication().invokeLater {
+                project.service<AgentToolWindowContentManager>()
+                    .openCheckpointConversation(thread, conversation)
+            }
+        }
     }
 
     private fun welcomeMessage(): String {

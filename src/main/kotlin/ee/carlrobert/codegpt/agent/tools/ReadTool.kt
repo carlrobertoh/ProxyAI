@@ -8,7 +8,6 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
-import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.ToolPermissionPolicy
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
@@ -216,7 +215,6 @@ class ReadTool(
             }
 
             if (result is Result.Success) {
-                val toolId = sessionId?.let { id -> ToolRunContext.getToolId(id) }
                 val payload = mapOf(
                     "file_path" to args.filePath,
                     "content" to result.content,
@@ -225,8 +223,7 @@ class ReadTool(
                 val deniedReason = hookManager.checkHooksForDenial(
                     HookEventType.BEFORE_READ_FILE,
                     payload,
-                    "Read",
-                    toolId,
+                    name,
                     sessionId
                 )
                 if (deniedReason != null) {

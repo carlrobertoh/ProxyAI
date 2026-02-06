@@ -4,6 +4,7 @@ import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
     READ("Read"),
@@ -22,34 +23,6 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
     ASK_USER_QUESTION("AskUserQuestion"),
     TODO_WRITE("TodoWrite", setOf("TodoWriteTool")),
     EXIT("Exit");
-
-    companion object {
-        val HOOK_AWARE = setOf(
-            READ,
-            WRITE,
-            EDIT,
-            BASH,
-            TASK,
-            INTELLIJ_SEARCH,
-            WEB_SEARCH,
-            MCP,
-            RESOLVE_LIBRARY_ID,
-            GET_LIBRARY_DOCS,
-            LOAD_SKILL,
-            ASK_USER_QUESTION,
-            TODO_WRITE,
-            BASH_OUTPUT,
-            KILL_SHELL
-        )
-
-        fun isHookAware(toolId: String): Boolean {
-            return fromId(toolId) in HOOK_AWARE
-        }
-
-        fun fromId(toolId: String): ToolName? {
-            return entries.find { it.id == toolId }
-        }
-    }
 }
 
 data class ToolSpec<TArgs, TResult>(
@@ -190,5 +163,35 @@ object ToolSpecs {
 
     fun approvalTypeFor(toolName: String): ToolApprovalType {
         return find(toolName)?.approvalType ?: ToolApprovalType.GENERIC
+    }
+
+    fun decodeArgsOrNull(
+        json: Json,
+        toolName: String,
+        payload: String
+    ): Any? {
+        return decodeOrNull(json, find(toolName)?.argsSerializer, payload)
+    }
+
+    fun decodeResultOrNull(
+        json: Json,
+        toolName: String,
+        payload: String
+    ): Any? {
+        return decodeOrNull(json, find(toolName)?.resultSerializer, payload)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun decodeOrNull(
+        json: Json,
+        serializer: KSerializer<*>?,
+        payload: String
+    ): Any? {
+        if (serializer == null || payload.isBlank()) {
+            return null
+        }
+        return runCatching {
+            json.decodeFromString(serializer as KSerializer<Any>, payload)
+        }.getOrNull()
     }
 }

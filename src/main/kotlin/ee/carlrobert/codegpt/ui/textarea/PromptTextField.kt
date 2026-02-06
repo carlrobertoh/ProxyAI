@@ -30,6 +30,7 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.JBColor
+import com.intellij.util.IncorrectOperationException
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
@@ -64,6 +65,8 @@ class PromptTextField(
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val lookupManager = PromptTextFieldLookupManager(project, onLookupAdded)
     private val searchManager = SearchManager(project, tagManager, featureType)
+    @Volatile
+    private var isFieldDisposed = false
 
     private var mouseClickListener: MouseAdapter? = null
     private var mouseMotionListener: MouseMotionAdapter? = null
@@ -85,6 +88,9 @@ class PromptTextField(
     }
 
     override fun onEditorAdded(editor: Editor) {
+        if (isFieldDisposed) {
+            return
+        }
         IdeEventQueue.getInstance().addDispatcher(
             PromptTextFieldEventDispatcher(dispatcherId, onBackSpace) { event ->
                 val shown = lookup?.let { it.isShown && !it.isLookupDisposed } == true
@@ -279,6 +285,9 @@ class PromptTextField(
 
     override fun createEditor(): EditorEx {
         val editorEx = super.createEditor()
+        if (isFieldDisposed) {
+            return editorEx
+        }
         editorEx.settings.isUseSoftWraps = true
         editorEx.backgroundColor = service<EditorColorsManager>().globalScheme.defaultBackground
         setupDocumentListener(editorEx)
@@ -295,6 +304,7 @@ class PromptTextField(
     }
 
     override fun dispose() {
+        isFieldDisposed = true
         showSuggestionsJob?.cancel()
         lastSearchResults = null
         clearPlaceholders()
@@ -452,13 +462,24 @@ class PromptTextField(
     }
 
     private fun setupDocumentListener(editor: EditorEx) {
-        editor.document.addDocumentListener(object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) {
-                adjustHeight(editor)
-                onTextChanged(event.document.text)
-                handleDocumentChange(event)
+        if (isFieldDisposed) {
+            return
+        }
+
+        try {
+            editor.document.addDocumentListener(object : DocumentListener {
+                override fun documentChanged(event: DocumentEvent) {
+                    adjustHeight(editor)
+                    onTextChanged(event.document.text)
+                    handleDocumentChange(event)
+                }
+            }, this)
+        } catch (e: IncorrectOperationException) {
+            if (!isFieldDisposed) {
+                throw e
             }
-        }, this)
+            logger.debug("Skipping document listener registration for disposed PromptTextField", e)
+        }
     }
 
     private fun handleDocumentChange(event: DocumentEvent) {

@@ -28,6 +28,7 @@ import javax.swing.JPanel;
 public class ChatToolWindowScrollablePanel extends ScrollablePanel {
 
   private final Map<UUID, JPanel> visibleMessagePanels = new HashMap<>();
+  private boolean landingViewVisible;
 
   public ChatToolWindowScrollablePanel() {
     super(new VerticalStackLayout());
@@ -36,6 +37,7 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
   public void displayLandingView(JComponent landingView) {
     clearAll();
     add(landingView);
+    landingViewVisible = true;
     if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
         == ServiceType.PROXYAI
         && !CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.CodeGptApiKey.INSTANCE)) {
@@ -73,6 +75,9 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
   }
 
   public JPanel addMessage(UUID messageId) {
+    if (landingViewVisible) {
+      clearAll();
+    }
     var messageWrapper = new JPanel();
     messageWrapper.setLayout(new BoxLayout(messageWrapper, BoxLayout.PAGE_AXIS));
     add(messageWrapper);
@@ -86,8 +91,15 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
     visibleMessagePanels.remove(messageId);
   }
 
+  public void clearLandingViewIfVisible() {
+    if (landingViewVisible) {
+      clearAll();
+    }
+  }
+
   public void clearAll() {
     visibleMessagePanels.clear();
+    landingViewVisible = false;
     removeAll();
     update();
   }

@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.toolwindow.agent
 
 import com.intellij.openapi.vfs.VirtualFile
+import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.settings.service.ServiceType
 
@@ -13,6 +14,8 @@ data class AgentSession(
     val conversation: Conversation,
     var displayName: String = "",
     var serviceType: ServiceType? = null,
+    var runtimeAgentId: String? = null,
+    var resumeCheckpointRef: CheckpointRef? = null,
     val referencedFiles: List<VirtualFile> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     var lastActiveAt: Long = System.currentTimeMillis()

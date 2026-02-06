@@ -71,7 +71,6 @@ abstract class BaseTool<Args : Any, Result : Any>(
                 BEFORE_TOOL_USE,
                 beforePayload,
                 name,
-                toolId,
                 sessionId
             )
 
@@ -111,7 +110,6 @@ abstract class BaseTool<Args : Any, Result : Any>(
             HookEventType.AFTER_TOOL_USE,
             afterPayload,
             name,
-            toolId,
             sessionId
         )
 

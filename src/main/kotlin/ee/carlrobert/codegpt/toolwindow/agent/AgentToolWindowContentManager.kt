@@ -5,9 +5,12 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.wm.ToolWindowManager
 import ee.carlrobert.codegpt.agent.AgentService
+import ee.carlrobert.codegpt.agent.history.AgentHistoryThreadSummary
+import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.conversations.Conversation
-import java.util.UUID
+import java.util.*
 
 @Service(Service.Level.PROJECT)
 class AgentToolWindowContentManager(private val project: Project) : Disposable {
@@ -41,6 +44,35 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
         tabbedPane.addNewTab(tabPanel, select)
 
         return tabPanel
+    }
+
+    fun openCheckpointConversation(
+        thread: AgentHistoryThreadSummary,
+        conversation: Conversation
+    ): AgentToolWindowTabPanel {
+        selectAgentTab()
+        val recoveredName = thread.title.ifBlank { "Recovered ${thread.agentId.take(8)}" }
+        val session = AgentSession(
+            sessionId = UUID.randomUUID().toString(),
+            conversation = conversation,
+            displayName = recoveredName,
+            runtimeAgentId = thread.agentId,
+            resumeCheckpointRef = thread.latest
+        )
+        val panel = createNewAgentTab(session, select = true)
+        return panel
+    }
+
+    private fun selectAgentTab() {
+        val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("ProxyAI") ?: return
+        toolWindow.show()
+
+        val contentManager = toolWindow.contentManager
+        val agentContent = contentManager.contents.firstOrNull { it.tabName == "Agent" }
+            ?: contentManager.getContent(0)
+        if (agentContent != null) {
+            contentManager.setSelectedContent(agentContent)
+        }
     }
 
     fun getActiveTabPanel(): AgentToolWindowTabPanel? {
@@ -81,7 +113,18 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
         project.service<AgentService>().removeSession(sessionId)
     }
 
+    @Synchronized
     fun getSession(sessionId: String): AgentSession? = activeSessions[sessionId]
+
+    @Synchronized
+    fun setRuntimeAgentId(sessionId: String, agentId: String?) {
+        activeSessions[sessionId]?.runtimeAgentId = agentId
+    }
+
+    @Synchronized
+    fun setResumeCheckpointRef(sessionId: String, ref: CheckpointRef?) {
+        activeSessions[sessionId]?.resumeCheckpointRef = ref
+    }
 
     companion object {
         fun getInstance(project: Project): AgentToolWindowContentManager {

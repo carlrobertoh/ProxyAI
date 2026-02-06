@@ -249,8 +249,7 @@ class BashTool(
         val deniedReason = hookManager.checkHooksForDenial(
             HookEventType.BEFORE_BASH_EXECUTION,
             prePayload,
-            "Bash",
-            toolId,
+            name,
             sessionId
         )
         if (deniedReason != null) {
@@ -291,8 +290,7 @@ class BashTool(
                         hookManager.executeHooksForEvent(
                             HookEventType.AFTER_BASH_EXECUTION,
                             postPayload,
-                            "Bash",
-                            toolId,
+                            name,
                             sessionId
                         )
 
@@ -309,8 +307,7 @@ class BashTool(
                     hookManager.executeHooksForEvent(
                         HookEventType.AFTER_BASH_EXECUTION,
                         errorPayload,
-                        "Bash",
-                        toolId,
+                        name,
                         sessionId
                     )
                     Result(
