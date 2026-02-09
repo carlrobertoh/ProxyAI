@@ -11,6 +11,7 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.mcp.McpToolConverter
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicePlaceholders
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
@@ -112,43 +113,34 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
 
             settings.headers.forEach { (key, value) ->
                 val headerValue = when {
-                    credential != null && value.contains("\$CUSTOM_SERVICE_API_KEY") ->
-                        value.replace("\$CUSTOM_SERVICE_API_KEY", credential)
+                    credential != null && value.contains($$"$CUSTOM_SERVICE_API_KEY") ->
+                        value.replace($$"$CUSTOM_SERVICE_API_KEY", credential)
 
                     else -> value
                 }
                 requestBuilder.addHeader(key, headerValue)
             }
 
-            val body = settings.body.toMutableMap().apply {
-                replaceAll { key, value ->
-                    when {
-                        !streamRequest && key == "stream" -> false
-                        value is String && value.trim() == "\$OPENAI_MESSAGES" -> messages
-                        else -> value
-                    }
+            val body = settings.body
+                .mapValues { (key, value) ->
+                    transformBodyValue(
+                        key = key,
+                        value = value,
+                        streamRequest = streamRequest,
+                        messages = messages,
+                        credential = credential
+                    )
                 }
-
-                if (params != null && !params.mcpTools.isNullOrEmpty() && params.toolApprovalMode != ToolApprovalMode.BLOCK_ALL) {
-                    val openAITools = params.mcpTools!!.map { mcpTool ->
-                        McpToolConverter.convertToOpenAITool(mcpTool)
-                    }
-
-                    put("tools", openAITools)
-
-                    when (params.toolApprovalMode) {
-                        ToolApprovalMode.AUTO_APPROVE -> {
-                            put("tool_choice", "auto")
+                .toMutableMap()
+                .apply {
+                    if (params != null && !params.mcpTools.isNullOrEmpty() && params.toolApprovalMode != ToolApprovalMode.BLOCK_ALL) {
+                        val openAITools = params.mcpTools!!.map { mcpTool ->
+                            McpToolConverter.convertToOpenAITool(mcpTool)
                         }
 
-                        ToolApprovalMode.REQUIRE_APPROVAL -> {
-                            put("tool_choice", "auto")
-                        }
-
-                        else -> {}
+                        put("tools", openAITools)
                     }
                 }
-            }
 
             return try {
                 val requestBodyString = ObjectMapper().writerWithDefaultPrettyPrinter()
@@ -160,6 +152,58 @@ class CustomOpenAIRequestFactory : BaseRequestFactory() {
                 requestBuilder.post(requestBody).build()
             } catch (e: Exception) {
                 throw RuntimeException("Failed to build CustomOpenAI request", e)
+            }
+        }
+
+        private fun transformBodyValue(
+            key: String?,
+            value: Any?,
+            streamRequest: Boolean,
+            messages: List<OpenAIChatCompletionMessage>,
+            credential: String?
+        ): Any? {
+            return when (value) {
+                null -> null
+                is String -> when {
+                    !streamRequest && key == "stream" -> false
+                    CustomServicePlaceholders.isMessages(value) -> messages
+                    CustomServicePlaceholders.isPrompt(value) -> renderPrompt(messages)
+                    credential != null && value.contains($$"$CUSTOM_SERVICE_API_KEY") ->
+                        value.replace($$"$CUSTOM_SERVICE_API_KEY", credential)
+
+                    else -> value
+                }
+
+                is Map<*, *> -> value.entries.associate { (nestedKey, nestedValue) ->
+                    nestedKey.toString() to transformBodyValue(
+                        key = nestedKey?.toString(),
+                        value = nestedValue,
+                        streamRequest = streamRequest,
+                        messages = messages,
+                        credential = credential
+                    )
+                }
+
+                is List<*> -> value.map { item ->
+                    transformBodyValue(
+                        key = null,
+                        value = item,
+                        streamRequest = streamRequest,
+                        messages = messages,
+                        credential = credential
+                    )
+                }
+
+                else -> value
+            }
+        }
+
+        private fun renderPrompt(messages: List<OpenAIChatCompletionMessage>): String {
+            return messages.joinToString(separator = "\n\n") { message ->
+                when (message) {
+                    is OpenAIChatCompletionStandardMessage -> message.content
+                    else -> ObjectMapper().writeValueAsString(message)
+                }
             }
         }
     }

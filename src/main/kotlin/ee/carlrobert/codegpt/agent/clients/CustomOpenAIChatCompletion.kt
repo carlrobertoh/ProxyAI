@@ -1,13 +1,12 @@
 package ee.carlrobert.codegpt.agent.clients
 
 import ai.koog.prompt.executor.clients.openai.base.models.*
-import ai.koog.prompt.executor.clients.serialization.AdditionalPropertiesFlatteningSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 @Serializable
-internal class CustomOpenAIChatCompletionRequest(
+class CustomOpenAIChatCompletionRequest(
     val messages: List<OpenAIMessage> = emptyList(),
     val prompt: String? = null,
     override val model: String? = null,
@@ -156,8 +155,3 @@ public class CustomOpenAIChatCompletionStreamResponse(
     public val objectType: String = "chat.completion.chunk",
     public val usage: OpenAIUsage? = null,
 ) : OpenAIBaseLLMStreamResponse
-
-internal object CustomOpenAIChatCompletionRequestSerializer :
-    AdditionalPropertiesFlatteningSerializer<CustomOpenAIChatCompletionRequest>(
-        CustomOpenAIChatCompletionRequest.serializer()
-    )

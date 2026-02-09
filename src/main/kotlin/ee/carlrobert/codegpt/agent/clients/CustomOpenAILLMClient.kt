@@ -9,7 +9,6 @@ import ai.koog.prompt.executor.clients.openai.base.AbstractOpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.base.OpenAIBaseSettings
 import ai.koog.prompt.executor.clients.openai.base.OpenAICompatibleToolDescriptorSchemaGenerator
 import ai.koog.prompt.executor.clients.openai.base.models.*
-import ai.koog.prompt.executor.clients.openai.models.OpenAIChatCompletionStreamResponse
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.LLMChoice
@@ -17,13 +16,21 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
-import ai.koog.prompt.streaming.StreamFrameFlowBuilder
 import ai.koog.prompt.streaming.buildStreamFrameFlow
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.elementNames
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import java.net.URI
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -33,7 +40,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
  * @property baseUrl The base URL of the CustomOpenAI API. Default is "https://CustomOpenAI.ai/api/v1".
  * @property timeoutConfig Configuration for connection timeouts including request, connection, and socket timeouts.
  */
-public class CustomOpenAIClientSettings(
+class CustomOpenAIClientSettings(
     baseUrl: String,
     chatCompletionsPath: String,
     timeoutConfig: ConnectionTimeoutConfig
@@ -47,7 +54,7 @@ public class CustomOpenAIClientSettings(
  * @param settings The base URL and timeouts for the CustomOpenAI API, defaults to "https://CustomOpenAI.ai" and 900s
  * @param clock Clock instance used for tracking response metadata timestamps.
  */
-public class CustomOpenAILLMClient(
+class CustomOpenAILLMClient(
     apiKey: String,
     private val settings: CustomOpenAIClientSettings,
     private val state: CustomServiceChatCompletionSettingsState,
@@ -61,8 +68,7 @@ public class CustomOpenAILLMClient(
     staticLogger,
     OpenAICompatibleToolDescriptorSchemaGenerator()
 ) {
-    public data object CustomOpenAI : LLMProvider("custom-openai", "Custom OpenAI")
-
+    data object CustomOpenAI : LLMProvider("custom-openai", "Custom OpenAI")
 
     companion object {
         private val staticLogger = KotlinLogging.logger { }
@@ -85,7 +91,24 @@ public class CustomOpenAILLMClient(
                 chatCompletionsPath = uri.path,
                 timeoutConfig = timeoutConfig
             )
-            return CustomOpenAILLMClient(apiKey, settings, state, baseClient)
+            val clientWithCustomHeaders = baseClient.config {
+                defaultRequest {
+                    state.headers.forEach { (key, value) ->
+                        val normalizedKey = key.trim()
+                        if (normalizedKey.isEmpty()
+                            || normalizedKey.equals("Authorization", ignoreCase = true)
+                        ) {
+                            return@forEach
+                        }
+
+                        header(
+                            normalizedKey,
+                            value.replace($$"$CUSTOM_SERVICE_API_KEY", apiKey)
+                        )
+                    }
+                }
+            }
+            return CustomOpenAILLMClient(apiKey, settings, state, clientWithCustomHeaders)
         }
     }
 
@@ -100,8 +123,7 @@ public class CustomOpenAILLMClient(
         stream: Boolean
     ): String {
         val customParams = params.toCustomOpenAIParams(state)
-        val responseFormat = createResponseFormat(params.schema, model)
-
+        val responseFormat = createResponseFormat(customParams.schema, model)
         val request = CustomOpenAIChatCompletionRequest(
             messages = messages,
             model = model.id,
@@ -182,60 +204,110 @@ public class CustomOpenAILLMClient(
         finishReason: String?,
         metaInfo: ResponseMetaInfo
     ): List<Message.Response> {
-        return when {
-            this is OpenAIMessage.Assistant && !this.toolCalls.isNullOrEmpty() -> {
-                val result = mutableListOf<Message.Response>()
-                if (this.content != null) {
-                    result.add(
-                        Message.Assistant(
-                            content = this.content!!.text(),
-                            finishReason = finishReason,
-                            metaInfo = metaInfo
-                        )
-                    )
-                }
+        val contentText = content?.text()
 
-                this.toolCalls!!.forEach { toolCall ->
-                    result.add(
-                        Message.Tool.Call(
-                            id = toolCall.id,
-                            tool = toolCall.function.name,
-                            content = toolCall.function.arguments.takeIf { it.isNotEmpty() }
-                                ?: "{}",
-                            metaInfo = metaInfo
+        if (this is OpenAIMessage.Assistant) {
+            val assistantToolCalls = toolCalls
+            if (!assistantToolCalls.isNullOrEmpty()) {
+                return buildList {
+                    contentText?.let {
+                        add(
+                            Message.Assistant(
+                                content = it,
+                                finishReason = finishReason,
+                                metaInfo = metaInfo
+                            )
                         )
-                    )
+                    }
+
+                    assistantToolCalls.forEach { toolCall ->
+                        add(
+                            Message.Tool.Call(
+                                id = toolCall.id,
+                                tool = toolCall.function.name,
+                                content = toolCall.function.arguments.takeIf { it.isNotEmpty() }
+                                    ?: "{}",
+                                metaInfo = metaInfo
+                            )
+                        )
+                    }
                 }
-                return result
             }
 
-            this is OpenAIMessage.Assistant && this.reasoningContent != null && this.content != null -> listOf(
-                Message.Reasoning(
-                    content = this.reasoningContent!!,
-                    metaInfo = metaInfo
-                ),
+            val reasoning = reasoningContent
+            if (reasoning != null && contentText != null) {
+                return listOf(
+                    Message.Reasoning(
+                        content = reasoning,
+                        metaInfo = metaInfo
+                    ),
+                    Message.Assistant(
+                        content = contentText,
+                        finishReason = finishReason,
+                        metaInfo = metaInfo
+                    )
+                )
+            }
+        }
+
+        if (contentText != null) {
+            return listOf(
                 Message.Assistant(
-                    content = this.content!!.text(),
+                    content = contentText,
                     finishReason = finishReason,
                     metaInfo = metaInfo
                 )
             )
+        }
 
-            this.content != null -> listOf(
-                Message.Assistant(
-                    content = this.content!!.text(),
-                    finishReason = finishReason,
-                    metaInfo = metaInfo
-                )
-            )
+        val exception = LLMClientException(
+            clientName,
+            "Unexpected response: no tool calls and no content"
+        )
+        logger.error(exception) { exception.message }
+        throw exception
+    }
+}
 
-            else -> {
-                val exception = LLMClientException(
-                    clientName,
-                    "Unexpected response: no tool calls and no content"
+internal object CustomOpenAIChatCompletionRequestSerializer :
+    CustomOpenAIAdditionalPropertiesFlatteningSerializer(CustomOpenAIChatCompletionRequest.serializer())
+
+abstract class CustomOpenAIAdditionalPropertiesFlatteningSerializer(tSerializer: KSerializer<CustomOpenAIChatCompletionRequest>) :
+    JsonTransformingSerializer<CustomOpenAIChatCompletionRequest>(tSerializer) {
+
+    private val additionalPropertiesField = "additional_properties"
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private val knownProperties = tSerializer.descriptor.elementNames
+
+    override fun transformSerialize(element: JsonElement): JsonElement {
+        val obj = element.jsonObject
+
+        return buildJsonObject {
+            obj.entries.asSequence()
+                .filterNot { (key, _) -> key == additionalPropertiesField }
+                .forEach { (key, value) -> put(key, value) }
+
+            obj[additionalPropertiesField]?.jsonObject?.entries
+                ?.filterNot { (key, _) -> obj.containsKey(key) }
+                ?.forEach { (key, value) -> put(key, value) }
+        }
+    }
+
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        val obj = element.jsonObject
+        val (known, additional) = obj.entries.partition { (key, _) -> key in knownProperties }
+
+        return buildJsonObject {
+            known.forEach { (key, value) -> put(key, value) }
+
+            if (additional.isNotEmpty()) {
+                put(
+                    additionalPropertiesField,
+                    buildJsonObject {
+                        additional.forEach { (key, value) -> put(key, value) }
+                    }
                 )
-                logger.error(exception) { exception.message }
-                throw exception
             }
         }
     }

@@ -6,8 +6,8 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.ToolPermissionPolicy
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
@@ -17,6 +17,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.charset.StandardCharsets
 
 /**
@@ -113,6 +116,20 @@ class ReadTool(
         }
 
         return try {
+            val path = Paths.get(args.filePath).normalize()
+            if (!Files.exists(path)) {
+                return Result.Error(
+                    filePath = args.filePath,
+                    error = "File not found: ${args.filePath}"
+                )
+            }
+            if (Files.isDirectory(path)) {
+                return Result.Error(
+                    filePath = args.filePath,
+                    error = "Path is a directory, not a file: ${args.filePath}"
+                )
+            }
+
             val result = withContext(Dispatchers.Default) {
                 runReadAction {
                     if (settingsService.isPathIgnored(args.filePath)) {
@@ -122,22 +139,13 @@ class ReadTool(
                         )
                     }
 
-                    val virtualFile =
-                        VirtualFileManager.getInstance()
-                            .findFileByUrl("file://${args.filePath}")
-                            ?: return@runReadAction Result.Error(
-                                filePath = args.filePath,
-                                error = "File not found: ${args.filePath}"
-                            )
+                    val fileSystemPath = path.toString().replace('\\', '/')
+                    val virtualFile = LocalFileSystem.getInstance().findFileByPath(fileSystemPath)
 
-                    if (virtualFile.isDirectory) {
-                        return@runReadAction Result.Error(
-                            filePath = args.filePath,
-                            error = "Path is a directory, not a file: ${args.filePath}"
-                        )
+                    val fileType = when {
+                        virtualFile != null -> FileTypeManager.getInstance().getFileTypeByFile(virtualFile)
+                        else -> FileTypeManager.getInstance().getFileTypeByFileName(path.fileName.toString())
                     }
-
-                    val fileType = FileTypeManager.getInstance().getFileTypeByFile(virtualFile)
 
                     when {
                         fileType.isBinary -> {
@@ -148,17 +156,7 @@ class ReadTool(
                         }
 
                         else -> {
-                            val content = try {
-                                val document =
-                                    FileDocumentManager.getInstance().getDocument(virtualFile)
-                                document?.text ?: String(
-                                    virtualFile.contentsToByteArray(),
-                                    StandardCharsets.UTF_8
-                                )
-                            } catch (e: Exception) {
-                                logger.error("Error reading document from $virtualFile", e)
-                                String(virtualFile.contentsToByteArray(), StandardCharsets.UTF_8)
-                            }
+                            val content = readFileContent(path, virtualFile?.path)
 
                             val lines = content.lines()
                             val totalLines = lines.size
@@ -267,6 +265,29 @@ class ReadTool(
 
         is Result.Error -> {
             ("Error reading file '${result.filePath}': ${result.error}").truncateToolResult()
+        }
+    }
+
+    private fun readFileContent(path: Path, virtualFilePath: String?): String {
+        if (virtualFilePath != null) {
+            val virtualFile = LocalFileSystem.getInstance().findFileByPath(virtualFilePath)
+            if (virtualFile != null) {
+                try {
+                    val document = FileDocumentManager.getInstance().getDocument(virtualFile)
+                    if (document != null) {
+                        return document.text
+                    }
+                    return String(virtualFile.contentsToByteArray(), StandardCharsets.UTF_8)
+                } catch (e: Exception) {
+                    logger.error("Error reading document from $virtualFile", e)
+                }
+            }
+        }
+
+        return try {
+            Files.readString(path, StandardCharsets.UTF_8)
+        } catch (_: Exception) {
+            String(Files.readAllBytes(path), StandardCharsets.UTF_8)
         }
     }
 }

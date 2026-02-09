@@ -1,24 +1,157 @@
 package ee.carlrobert.codegpt.agent.clients
 
 import ai.koog.prompt.params.LLMParams
-import ai.koog.prompt.params.LLMParams.Schema
 import ai.koog.prompt.params.LLMParams.ToolChoice
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.*
 
 internal fun LLMParams.toCustomOpenAIParams(state: CustomServiceChatCompletionSettingsState): CustomOpenAIParams {
-    if (this is CustomOpenAIParams) return this
+    val current = this as? CustomOpenAIParams
+    val body = state.body
+
+    val mergedAdditionalProperties = buildMap {
+        body
+            .filterKeys { it !in RESERVED_BODY_KEYS }
+            .forEach { (key, value) -> put(key, value.toJsonElement()) }
+    }.takeIf { it.isNotEmpty() }
+
     return CustomOpenAIParams(
-        temperature = state.body["temperature"] as? Double ?: temperature,
-        maxTokens = state.body["maxTokens"] as? Int ?: maxTokens,
-        numberOfChoices = state.body["numberOfChoices"] as? Int ?: numberOfChoices,
-        speculation = state.body["speculation"] as? String ?: speculation,
-        schema = state.body["schema"] as? Schema ?: schema,
-        toolChoice = state.body["toolChoice"] as? ToolChoice ?: toolChoice,
-        user = state.body["user"] as? String ?: user,
-        additionalProperties = state.body["additionalProperties"] as? Map<String, JsonElement>
-            ?: additionalProperties,
+        additionalProperties = mergedAdditionalProperties,
+        temperature = body.findValue("temperature").asDouble() ?: temperature,
+        maxTokens = body.findValue("maxTokens", "max_tokens").asInt() ?: maxTokens,
+        speculation = body.findValue("speculation").asString() ?: speculation,
+        toolChoice = body.findValue("toolChoice", "tool_choice").asToolChoice() ?: toolChoice,
+        frequencyPenalty = body.findValue("frequencyPenalty", "frequency_penalty").asDouble()
+            ?: current?.frequencyPenalty,
+        presencePenalty = body.findValue("presencePenalty", "presence_penalty").asDouble()
+            ?: current?.presencePenalty,
+        stop = body.findValue("stop").asStopList() ?: current?.stop,
+        topP = body.findValue("topP", "top_p").asDouble() ?: current?.topP,
+        topK = body.findValue("topK", "top_k").asInt() ?: current?.topK,
+        repetitionPenalty = body.findValue("repetitionPenalty", "repetition_penalty").asDouble()
+            ?: current?.repetitionPenalty,
     )
+}
+
+private val RESERVED_BODY_KEYS = setOf(
+    "frequencyPenalty", "frequency_penalty",
+    "maxTokens", "max_tokens",
+    "messages",
+    "minP", "min_p",
+    "presencePenalty", "presence_penalty",
+    "repetitionPenalty", "repetition_penalty",
+    "stop",
+    "temperature",
+    "toolChoice", "tool_choice",
+    "tools",
+    "topK", "top_k",
+    "topP", "top_p",
+)
+
+private fun Map<String, Any>.findValue(vararg keys: String): Any? {
+    keys.forEach { key ->
+        if (containsKey(key)) {
+            return this[key]
+        }
+    }
+    return null
+}
+
+private fun Any?.asDouble(): Double? = when (this) {
+    is Number -> toDouble()
+    is String -> toDoubleOrNull()
+    else -> null
+}
+
+private fun Any?.asInt(): Int? = when (this) {
+    is Int -> this
+    is Long -> takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
+    is Number -> {
+        val value = toDouble()
+        if (!value.isFinite() || value % 1.0 != 0.0) {
+            null
+        } else {
+            value.toInt()
+        }
+    }
+
+    is String -> toIntOrNull()
+    else -> null
+}
+
+private fun Any?.asJsonElementMap(): Map<String, JsonElement>? {
+    if (this !is Map<*, *>) return null
+
+    return buildMap {
+        this@asJsonElementMap.forEach { (key, value) ->
+            key?.toString()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { put(it, value.toJsonElement()) }
+        }
+    }
+}
+
+private fun Any?.asString(): String? = when (this) {
+    is String -> this
+    else -> null
+}
+
+private fun Any?.asStopList(): List<String>? = asStringList(allowEmpty = false)
+
+private fun Any?.asStringList(allowEmpty: Boolean = false): List<String>? = when (this) {
+    is String -> listOf(this)
+    is List<*> -> mapNotNull { item ->
+        when (item) {
+            is String -> item
+            null -> null
+            else -> item.toString()
+        }
+    }.takeIf { allowEmpty || it.isNotEmpty() }
+
+    else -> null
+}
+
+private fun Any?.asToolChoice(): ToolChoice? = when (this) {
+    is ToolChoice -> this
+    is String -> when (trim().lowercase()) {
+        "auto" -> ToolChoice.Auto
+        "none" -> ToolChoice.None
+        "required" -> ToolChoice.Required
+        else -> trim().takeIf { it.isNotEmpty() }?.let { ToolChoice.Named(it) }
+    }
+
+    is Map<*, *> -> {
+        when (this["type"]?.toString()?.trim()?.lowercase()) {
+            "none" -> ToolChoice.None
+            "auto" -> ToolChoice.Auto
+            "required" -> ToolChoice.Required
+            else -> {
+                val directName = this["name"]?.toString()
+                val nestedName = (this["function"] as? Map<*, *>)?.get("name")?.toString()
+                (directName ?: nestedName)
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { ToolChoice.Named(it) }
+            }
+        }
+    }
+
+    else -> null
+}
+
+private fun Any?.toJsonElement(): JsonElement = when (this) {
+    null -> JsonNull
+    is JsonElement -> this
+    is String -> JsonPrimitive(this)
+    is Number -> JsonPrimitive(this)
+    is Boolean -> JsonPrimitive(this)
+    is Map<*, *> -> JsonObject(
+        entries.associate { (key, value) -> key.toString() to value.toJsonElement() }
+    )
+
+    is Iterable<*> -> JsonArray(map { it.toJsonElement() })
+    is Array<*> -> JsonArray(map { it.toJsonElement() })
+    else -> JsonPrimitive(toString())
 }
 
 /**
@@ -125,7 +258,6 @@ public open class CustomOpenAIParams(
     public fun copy(
         temperature: Double? = this.temperature,
         maxTokens: Int? = this.maxTokens,
-        numberOfChoices: Int? = this.numberOfChoices,
         speculation: String? = this.speculation,
         schema: Schema? = this.schema,
         toolChoice: ToolChoice? = this.toolChoice,
@@ -147,7 +279,6 @@ public open class CustomOpenAIParams(
     ): CustomOpenAIParams = CustomOpenAIParams(
         temperature = temperature,
         maxTokens = maxTokens,
-        numberOfChoices = numberOfChoices,
         speculation = speculation,
         schema = schema,
         toolChoice = toolChoice,
