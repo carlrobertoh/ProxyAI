@@ -17,7 +17,6 @@ internal class TagDetailsComparator : Comparator<TagDetails> {
             is EditorSelectionTagDetails -> 0
 
             is SelectionTagDetails -> 5
-            is DocumentationTagDetails,
             is PersonaTagDetails,
             is GitCommitTagDetails,
             is CurrentGitChangesTagDetails,

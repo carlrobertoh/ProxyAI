@@ -22,7 +22,6 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.events.WebSearchEventDetails
 import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
@@ -137,9 +136,8 @@ class UserMessagePanel(
     }
 
     private fun getAdditionalContextPanel(project: Project, message: Message): JPanel? {
-        val documentationDetails = message.documentationDetails
         val referencedFilePaths = message.referencedFilePaths ?: emptyList()
-        if (documentationDetails == null && referencedFilePaths.isEmpty() && message.personaName.isNullOrEmpty()) {
+        if (referencedFilePaths.isEmpty() && message.personaName.isNullOrEmpty()) {
             return null
         }
 
@@ -160,18 +158,6 @@ class UserMessagePanel(
                             .addToTop(JBLabel(it, AllIcons.General.User, SwingUtilities.LEADING))
                             .withBorder(JBUI.Borders.emptyBottom(8))
                             .andTransparent()
-                    )
-                )
-            }
-
-            documentationDetails?.let {
-                val listModel = DefaultListModel<WebSearchEventDetails>().apply {
-                    addElement(WebSearchEventDetails(UUID.randomUUID(), it.name, it.url, it.url))
-                }
-                additionalContextPanel.add(
-                    createAdditionalContextPanel(
-                        CodeGPTBundle.get("userMessagePanel.documentation.title"),
-                        WebpageList(listModel)
                     )
                 )
             }

@@ -137,13 +137,6 @@ class PromptEnhancer(private val project: Project) {
                 builder.append("- ").append(path).append("\n")
             }
         }
-        message.documentationDetails?.let { details ->
-            builder.append("\nDocumentation:\n")
-                .append(details.name)
-                .append(" (")
-                .append(details.url)
-                .append(")\n")
-        }
         message.personaName?.takeIf { it.isNotBlank() }?.let { persona ->
             builder.append("\nPersona:\n").append(persona).append("\n")
         }

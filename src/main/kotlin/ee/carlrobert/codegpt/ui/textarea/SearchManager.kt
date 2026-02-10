@@ -57,7 +57,6 @@ class SearchManager(
         GitGroupItem(project),
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
-        DocsGroupItem(tagManager),
         MCPGroupItem(tagManager, featureType ?: FeatureType.CHAT),
         DiagnosticsActionItem(tagManager),
         WebActionItem(tagManager),

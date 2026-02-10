@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.conversations.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import ee.carlrobert.codegpt.ui.DocumentationDetails;
 import ee.carlrobert.llm.client.openai.completion.response.ToolCall;
 import java.util.HashMap;
 import java.util.List;
@@ -22,7 +21,6 @@ public class Message {
   private List<UUID> conversationsHistoryIds;
   private String imageFilePath;
   private boolean webSearchIncluded;
-  private DocumentationDetails documentationDetails;
   private String personaName;
   private List<ToolCall> toolCalls;
   private Map<String, String> toolCallResults;
@@ -92,14 +90,6 @@ public class Message {
 
   public void setWebSearchIncluded(boolean webSearchIncluded) {
     this.webSearchIncluded = webSearchIncluded;
-  }
-
-  public @Nullable DocumentationDetails getDocumentationDetails() {
-    return documentationDetails;
-  }
-
-  public void setDocumentationDetails(DocumentationDetails documentationDetails) {
-    this.documentationDetails = documentationDetails;
   }
 
   public @Nullable String getPersonaName() {

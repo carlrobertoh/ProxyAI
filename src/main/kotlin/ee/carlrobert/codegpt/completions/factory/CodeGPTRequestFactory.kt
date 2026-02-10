@@ -61,9 +61,6 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         if (params.message.isWebSearchIncluded) {
             requestBuilder.setWebSearchIncluded(true)
         }
-        params.message.documentationDetails?.let {
-            requestBuilder.setDocumentationDetails(DocumentationDetails(it.name, it.url))
-        }
 
         val contextFiles = params.referencedFiles
             ?.mapNotNull { file ->

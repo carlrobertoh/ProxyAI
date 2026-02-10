@@ -35,7 +35,6 @@ object TagProcessorFactory {
             is SelectionTagDetails -> SelectionTagProcessor(project, tagDetails)
             is EditorSelectionTagDetails -> EditorSelectionTagProcessor(project, tagDetails)
             is HistoryTagDetails -> ConversationTagProcessor(tagDetails)
-            is DocumentationTagDetails -> DocumentationTagProcessor(tagDetails)
             is PersonaTagDetails -> PersonaTagProcessor(tagDetails)
             is FolderTagDetails -> FolderTagProcessor(project, tagDetails)
             is WebTagDetails -> WebTagProcessor()
@@ -115,14 +114,6 @@ class EditorSelectionTagProcessor(
         promptBuilder.append(
             CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)
         )
-    }
-}
-
-class DocumentationTagProcessor(
-    private val tagDetails: DocumentationTagDetails,
-) : TagProcessor {
-    override fun process(message: Message, promptBuilder: StringBuilder) {
-        message.documentationDetails = tagDetails.documentationDetails
     }
 }
 

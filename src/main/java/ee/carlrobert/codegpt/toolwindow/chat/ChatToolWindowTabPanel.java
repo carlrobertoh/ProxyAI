@@ -15,8 +15,8 @@ import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
-import ee.carlrobert.codegpt.CodeGPTKeys;
 import ee.carlrobert.codegpt.CodeGPTBundle;
+import ee.carlrobert.codegpt.CodeGPTKeys;
 import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.actions.ActionType;
@@ -101,7 +101,7 @@ public class ChatToolWindowTabPanel implements Disposable {
   private final TagManager tagManager;
   private final JPanel mcpApprovalContainer;
   private @Nullable ToolwindowChatCompletionRequestHandler requestHandler;
-  private JBLabel loadingLabel;
+  private final JBLabel loadingLabel;
   private final JPanel queuedMessageContainer;
 
   public ChatToolWindowTabPanel(@NotNull Project project, @NotNull Conversation conversation) {
@@ -465,7 +465,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         false,
         false,
         message.isWebSearchIncluded(),
-        fileContextIncluded || message.getDocumentationDetails() != null,
+        fileContextIncluded,
         false,
         this));
     return panel;
@@ -568,6 +568,7 @@ public class ChatToolWindowTabPanel implements Disposable {
               hideInputLoading();
             }
           }
+
           @Override
           public void handleTokensExceededPolicyAccepted() {
             call(callParameters, responseMessagePanel, userMessagePanel);

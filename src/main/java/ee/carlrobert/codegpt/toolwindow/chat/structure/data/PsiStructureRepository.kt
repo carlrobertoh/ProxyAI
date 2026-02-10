@@ -223,7 +223,6 @@ class PsiStructureRepository(
 
                     is HistoryTagDetails -> null
                     is EditorSelectionTagDetails -> null
-                    is DocumentationTagDetails -> null
                     is CurrentGitChangesTagDetails -> null
                     is GitCommitTagDetails -> null
                     is PersonaTagDetails -> null
@@ -252,7 +251,6 @@ class PsiStructureRepository(
                 is FolderTagDetails -> false
 
                 is HistoryTagDetails -> false
-                is DocumentationTagDetails -> false
                 is CurrentGitChangesTagDetails -> false
                 is GitCommitTagDetails -> false
                 is PersonaTagDetails -> false
@@ -281,7 +279,6 @@ class PsiStructureRepository(
                     is FolderTagDetails -> null
 
                     is HistoryTagDetails -> null
-                    is DocumentationTagDetails -> null
                     is CurrentGitChangesTagDetails -> null
                     is GitCommitTagDetails -> null
                     is PersonaTagDetails -> null

@@ -9,7 +9,6 @@ import ee.carlrobert.codegpt.mcp.ConnectionStatus
 import ee.carlrobert.codegpt.mcp.McpResource
 import ee.carlrobert.codegpt.mcp.McpTool
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
-import ee.carlrobert.codegpt.ui.DocumentationDetails
 import git4idea.GitCommit
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
@@ -125,11 +124,6 @@ class EditorSelectionTagDetails(
     override fun hashCode(): Int {
         return this::class.hashCode()
     }
-}
-
-data class DocumentationTagDetails(var documentationDetails: DocumentationDetails) :
-    TagDetails(documentationDetails.name, AllIcons.Toolwindows.Documentation) {
-    override fun getTooltipText(): String = documentationDetails.url
 }
 
 data class PersonaTagDetails(var personaDetails: PersonaDetails) :

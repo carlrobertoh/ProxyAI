@@ -463,7 +463,6 @@ class InlineEditSearchReplaceListener(
             copy.referencedFilePaths = original.referencedFilePaths
             copy.conversationsHistoryIds = original.conversationsHistoryIds
             copy.imageFilePath = original.imageFilePath
-            copy.documentationDetails = original.documentationDetails
             copy.personaName = original.personaName
             newConversation.addMessage(copy)
         }
