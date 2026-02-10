@@ -75,7 +75,7 @@ ProxyAI offers a wide range of features to enhance your development experience:
 
 - **Generate commit messages:** Generate concise and descriptive commit messages based on the changes made in your codebase.
 
-For a full list of features and detailed descriptions, visit our [official documentation](https://docs.tryproxy.io/features).
+For a full list of features and detailed descriptions, visit our [official documentation](https://docs.tryproxy.io).
 
 ## Running locally
 
