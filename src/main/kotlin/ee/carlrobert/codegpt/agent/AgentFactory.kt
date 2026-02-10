@@ -285,7 +285,8 @@ object AgentFactory {
                         - Never use Bash to "echo" thoughts or communicate. All communication happens in your response text.
                         - Never guess parameters. If a required argument is unknown, first gather it via an appropriate tool.
                         - Respect approval gates: Edit/Write operations require confirmation hooks and may be denied.
-                        - Use WebSearch for library/framework questions; use ResolveLibraryId/GetLibraryDocs for dependency docs.
+                        - Use WebSearch to discover sources and WebFetch to extract a known URL into Markdown.
+                        - Use ResolveLibraryId/GetLibraryDocs for library/framework/API documentation.
                         - Use TodoWrite to outline and track subtasks when a request spans multiple steps.
 
                         # Tool Routing Rules
@@ -355,7 +356,7 @@ object AgentFactory {
                         }
 
                         # Tool Usage Policy (Read-only)
-                        - Use Read to examine files; IntelliJSearch to search patterns; WebSearch for external context; ResolveLibraryId/GetLibraryDocs for dependencies; TodoWrite to record findings.
+                        - Use Read to examine files; IntelliJSearch to search patterns; WebSearch for source discovery; WebFetch for direct URL extraction; ResolveLibraryId/GetLibraryDocs for dependencies; TodoWrite to record findings.
                         - You may call multiple tools in parallel when independent (e.g., read multiple files, run several searches at once).
                         - Do not use Edit or Write. Avoid destructive Bash. Use Bash only for safe, read-only operations if strictly necessary.
                         - Never guess parameters; first gather precise paths/patterns.
@@ -572,6 +573,12 @@ object AgentFactory {
             )
             if (SubagentTool.WEB_SEARCH in selected) tool(
                 WebSearchTool(
+                    workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    hookManager = hookManager,
+                )
+            )
+            if (SubagentTool.WEB_FETCH in selected) tool(
+                WebFetchTool(
                     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
                     hookManager = hookManager,
                 )

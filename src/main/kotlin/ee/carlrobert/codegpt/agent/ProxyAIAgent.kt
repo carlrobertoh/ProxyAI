@@ -301,6 +301,12 @@ object ProxyAIAgent {
                 )
             )
             tool(
+                WebFetchTool(
+                    workingDirectory = workingDirectory,
+                    hookManager = hookManager,
+                )
+            )
+            tool(
                 BashOutputTool(
                     workingDirectory = workingDirectory,
                     hookManager = hookManager,

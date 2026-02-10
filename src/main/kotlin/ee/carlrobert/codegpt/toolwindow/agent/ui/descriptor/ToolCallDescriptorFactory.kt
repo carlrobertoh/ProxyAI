@@ -71,7 +71,8 @@ object ToolCallDescriptorFactory {
             toolName == "Bash" || args is BashTool.Args -> ToolKind.BASH
             toolName == "BashOutput" || args is BashOutputTool.Args -> ToolKind.BASH_OUTPUT
             toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.KILL_SHELL
-            toolName == "WebSearch" || args is WebSearchTool.Args -> ToolKind.WEB
+            toolName == "WebSearch" || args is WebSearchTool.Args || result is WebSearchTool.Result -> ToolKind.WEB
+            toolName == "WebFetch" || args is WebFetchTool.Args || result is WebFetchTool.Result -> ToolKind.WEB
             toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
             toolName == "MCP" || args is McpTool.Args || result is McpTool.Result -> ToolKind.MCP
             toolName == "ResolveLibraryId" || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
@@ -516,9 +517,20 @@ object ToolCallDescriptorFactory {
         result: Any?,
         projectId: String?
     ): ToolCallDescriptor {
-        val query = when {
-            args is WebSearchTool.Args -> args.query
+        val query = when (args) {
+            is WebSearchTool.Args -> args.query
+            is WebFetchTool.Args -> args.url
             else -> "Unknown"
+        }
+
+        val titlePrefix = when (args) {
+            is WebFetchTool.Args -> "Fetch:"
+            else -> "Web:"
+        }
+
+        val tooltip = when (args) {
+            is WebFetchTool.Args -> "Fetch: $query"
+            else -> "Web search: $query"
         }
 
         val truncatedQuery = truncateQuery(query)
@@ -526,9 +538,9 @@ object ToolCallDescriptorFactory {
         return ToolCallDescriptor(
             kind = ToolKind.WEB,
             icon = AllIcons.General.Web,
-            titlePrefix = "Web:",
+            titlePrefix = titlePrefix,
             titleMain = truncatedQuery,
-            tooltip = "Web search: $query",
+            tooltip = tooltip,
             secondaryBadges = buildWebBadges(args, result),
             args = args,
             result = result,
@@ -821,20 +833,39 @@ object ToolCallDescriptorFactory {
     }
 
     private fun buildWebBadges(args: Any, result: Any?): List<Badge> {
-        if (result !is WebSearchTool.Result) return emptyList()
+        return when (result) {
+            is WebSearchTool.Result -> {
+                val argsObj = args as? WebSearchTool.Args
+                val badges = mutableListOf(Badge(
+                    "[${result.results.size} results]",
+                    JBColor.BLUE,
+                    action = { showWebResultsDialog(result) }
+                ))
+                if (argsObj != null && !argsObj.allowedDomains.isNullOrEmpty()) {
+                    badges.add(Badge("[${argsObj.allowedDomains.size} domains]", JBColor.GRAY))
+                }
+                badges
+            }
 
-        val argsObj = args as? WebSearchTool.Args
-        val badges = mutableListOf(Badge(
-            "[${result.results.size} results]",
-            JBColor.BLUE,
-            action = { showWebResultsDialog(result) }
-        ))
+            is WebFetchTool.Result -> {
+                val badges = mutableListOf<Badge>()
+                if (result.error != null) {
+                    badges.add(Badge("Error", JBColor.RED))
+                } else {
+                    badges.add(
+                        Badge(
+                            "[View Content]",
+                            JBColor.BLUE,
+                            action = { showWebFetchResultDialog(result) }
+                        )
+                    )
+                    result.statusCode?.let { badges.add(Badge("[$it]", JBColor.GRAY)) }
+                }
+                badges
+            }
 
-        if (argsObj != null && !argsObj.allowedDomains.isNullOrEmpty()) {
-            badges.add(Badge("[${argsObj.allowedDomains.size} domains]", JBColor.GRAY))
+            else -> emptyList()
         }
-
-        return badges
     }
 
     private fun showWebResultsDialog(result: WebSearchTool.Result) {
@@ -859,6 +890,33 @@ object ToolCallDescriptorFactory {
         val textArea = UIUtil.createReadOnlyTextArea(content)
         val scrollPane = createScrollPaneWithBorder(textArea)
         val footerPanel = createDialogFooterPanel(dialog)
+        showDialog(dialog, scrollPane, footerPanel)
+    }
+
+    private fun showWebFetchResultDialog(result: WebFetchTool.Result) {
+        val dialog = JDialog().apply {
+            title = "Web Fetch Result"
+            isModal = true
+        }
+
+        val content = buildString {
+            appendLine("Source URL: ${result.url}")
+            result.finalUrl?.let { appendLine("Final URL: $it") }
+            result.title?.let { appendLine("Title: $it") }
+            result.statusCode?.let { appendLine("Status: $it") }
+            result.contentType?.let { appendLine("Content-Type: $it") }
+            result.usedSelector?.let { appendLine("Selector: $it") }
+            appendLine()
+            if (result.error != null) {
+                appendLine("Error: ${result.error}")
+            } else {
+                append(result.markdown)
+            }
+        }
+
+        val textArea = UIUtil.createReadOnlyTextArea(content)
+        val scrollPane = createScrollPaneWithBorder(textArea)
+        val footerPanel = createDialogFooterPanelWithCopy(dialog, content)
         showDialog(dialog, scrollPane, footerPanel)
     }
 

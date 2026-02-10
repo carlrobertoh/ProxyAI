@@ -60,6 +60,18 @@ sealed class RunEntry {
             copy(result = result as? WebSearchTool.Result)
     }
 
+    data class WebFetchEntry(
+        override val id: String,
+        override val parentId: String? = null,
+        override val args: WebFetchTool.Args? = null,
+        override val result: WebFetchTool.Result? = null,
+    ) : RunEntry() {
+        override val kind: ToolKind = ToolKind.WEB
+        override val toolName: String = "WebFetch"
+        override fun withAnyResult(result: Any?): RunEntry =
+            copy(result = result as? WebFetchTool.Result)
+    }
+
     data class WriteEntry(
         override val id: String,
         override val parentId: String? = null,

@@ -145,7 +145,7 @@ class SkillsTest : IntegrationTest() {
             tool.execute(LoadSkillTool.Args("humanizer"))
         }
 
-        assertThat(capturedTitle).isEqualTo("Load skill humanizer into context?")
+        assertThat(capturedTitle).isEqualTo("Load skill humanizer into context")
         assertThat(capturedDetails).isEqualTo("Remove signs of AI-generated writing.")
     }
 

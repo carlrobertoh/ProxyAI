@@ -52,7 +52,7 @@ class ConfirmingLoadSkillTool(
                     it.title.equals(requested, ignoreCase = true)
         }
         if (skill != null) {
-            val promptTitle = "Load skill ${skill.name} into context?"
+            val promptTitle = "Load skill ${skill.name} into context"
             val ok = approve(promptTitle, skill.description)
             if (!ok) {
                 return LoadSkillTool.Result.Error("User rejected loading skill '${skill.name}'")

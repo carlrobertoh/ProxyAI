@@ -27,6 +27,10 @@ object TokenCounter {
             count(res.query) + count(titles)
         } ?: 0
 
+        is RunEntry.WebFetchEntry -> entry.result?.let { res ->
+            count(res.title) + count(res.markdown) + count(res.error)
+        } ?: 0
+
         is RunEntry.WriteEntry -> when (val r = entry.result) {
             is WriteTool.Result.Success -> count(r.message)
             is WriteTool.Result.Error -> count(r.error)

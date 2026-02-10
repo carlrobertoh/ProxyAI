@@ -420,6 +420,7 @@ class AgentEventHandler(
                 )
 
                 is WebSearchTool.Args -> RunEntry.WebEntry(cid, parentId, args, null)
+                is WebFetchTool.Args -> RunEntry.WebFetchEntry(cid, parentId, args, null)
                 is GetLibraryDocsTool.Args -> RunEntry.LibraryDocsEntry(cid, parentId, args, null)
                 is ResolveLibraryIdTool.Args -> RunEntry.LibraryResolveEntry(
                     cid,

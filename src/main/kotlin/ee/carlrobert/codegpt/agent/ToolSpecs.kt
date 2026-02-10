@@ -15,6 +15,7 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
     KILL_SHELL("KillShell"),
     INTELLIJ_SEARCH("IntelliJSearch"),
     WEB_SEARCH("WebSearch"),
+    WEB_FETCH("WebFetch"),
     MCP("MCP"),
     RESOLVE_LIBRARY_ID("ResolveLibraryId"),
     GET_LIBRARY_DOCS("GetLibraryDocs"),
@@ -98,6 +99,13 @@ object ToolSpecs {
                 ToolName.WEB_SEARCH,
                 WebSearchTool.Args.serializer(),
                 WebSearchTool.Result.serializer()
+            )
+        )
+        register(
+            ToolSpec(
+                ToolName.WEB_FETCH,
+                WebFetchTool.Args.serializer(),
+                WebFetchTool.Result.serializer()
             )
         )
         register(

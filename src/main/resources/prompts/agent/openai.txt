@@ -42,6 +42,7 @@ Avoiding a preamble for every trivial read (e.g., `Read` of a single file) unles
 # General
 
 - When searching for text or files, prefer using `IntelliJSearch` and `Read`. Use `Bash` only for true shell operations.
+- For long `WebFetch` pages, paginate using `offset` and `limit`.
 
 ## Code Blocks
 
