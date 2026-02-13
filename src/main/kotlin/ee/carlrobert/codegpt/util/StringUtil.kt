@@ -4,6 +4,13 @@ import ai.grazie.nlp.utils.takeWhitespaces
 
 object StringUtil {
 
+    private val thinkBlockRegex = Regex("(?s)<think>.*?</think>\\s*")
+
+    fun String.stripThinkingBlocks(): String {
+        if (this.isBlank()) return ""
+        return thinkBlockRegex.replace(this, "").trim()
+    }
+
     fun adjustWhitespace(
         completionLine: String,
         editorLine: String
@@ -32,13 +39,5 @@ object StringUtil {
         val bigrams2 = bigrams(s2)
         val intersection = bigrams1.intersect(bigrams2).size
         return (2.0 * intersection) / (bigrams1.size + bigrams2.size)
-    }
-
-    fun String.extractUntilNewline(): String {
-        val index = this.indexOf('\n')
-        if (index == -1) {
-            return this
-        }
-        return this.substring(0, index + 1)
     }
 }

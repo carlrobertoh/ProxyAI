@@ -17,7 +17,6 @@ class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
     assertThat(tabbedPane.activeTabMapping).isEmpty()
   }
 
-
   fun testAddingNewTabs() {
     val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
 

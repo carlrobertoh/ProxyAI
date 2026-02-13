@@ -8,6 +8,7 @@ import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.diff.util.DiffUserDataKeys
 import com.intellij.diff.util.DiffUserDataKeysEx
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Presentation
@@ -34,7 +35,9 @@ import ee.carlrobert.codegpt.agent.tools.EditTool
 import ee.carlrobert.codegpt.agent.tools.WriteTool
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.applyStringReplacement
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.getFileContentWithFallback
+import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.awt.Insets
@@ -54,8 +57,9 @@ import javax.swing.JPanel
  */
 class AgentApprovalManager(
     private val project: Project
-) {
+) : Disposable {
     private val approvalPopups = ConcurrentHashMap<String, JBPopup>()
+    private val backgroundScope = DisposableCoroutineScope(Dispatchers.IO)
 
     companion object {
         private val AGENT_DIFF_REQUEST_KEY: Key<String> = Key.create("agent.approval.diffRequest")
@@ -96,7 +100,7 @@ class AgentApprovalManager(
             args.filePath
         }
 
-        ApplicationManager.getApplication().executeOnPooledThread {
+        backgroundScope.launch {
             val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath(path)
             val factory = DiffContentFactory.getInstance()
 
@@ -338,6 +342,13 @@ class AgentApprovalManager(
                 } catch (_: Exception) {
                 }
             }
+        }
+    }
+
+    override fun dispose() {
+        backgroundScope.dispose()
+        runInEdt {
+            approvalPopups.keys.toList().forEach(::closeDiffById)
         }
     }
 }

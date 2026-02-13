@@ -171,6 +171,8 @@ object ProxyAIAgent {
                 }
 
                 onNodeExecutionCompleted { ctx ->
+                    if (stream) return@onNodeExecutionCompleted
+
                     (ctx.output as? List<*>)?.forEach { msg ->
                         (msg as? Message.Assistant)?.let {
                             events.onTextReceived(it.content)

@@ -4,7 +4,6 @@ import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
-import ee.carlrobert.codegpt.conversations.Conversation
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.JsonNull
@@ -15,7 +14,6 @@ import org.assertj.core.groups.Tuple.tuple
 import kotlin.test.Test
 
 class AgentCheckpointConversationMapperTest {
-    private val actualUserTurn = "Actual user prompt" to "Actual response"
 
     @Test
     fun `maps user and assistant turns into conversation messages`() {
@@ -29,9 +27,9 @@ class AgentCheckpointConversationMapperTest {
             )
         )
 
-        val conversation = AgentCheckpointConversationMapper.toConversation(checkpoint, null)
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(checkpoint, null)
 
-        assertThat(conversation.messages)
+        assertThat(actualConversation.messages)
             .extracting("prompt", "response")
             .containsExactly(
                 tuple("First prompt", "First response"),
@@ -60,14 +58,14 @@ class AgentCheckpointConversationMapperTest {
             )
         )
 
-        val conversation = AgentCheckpointConversationMapper.toConversation(checkpoint, null)
-        val mapped = conversation.messages.single()
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(checkpoint, null)
+        val actualMessage = actualConversation.messages.single()
 
-        assertThat(mapped.response).isEqualTo("Working on it")
-        assertThat(mapped.toolCalls.orEmpty())
+        assertThat(actualMessage.response).isEqualTo("Working on it")
+        assertThat(actualMessage.toolCalls.orEmpty())
             .extracting("function.name", "function.arguments")
             .containsExactly(tuple("Bash", """{"command":"ls"}"""))
-        assertThat(mapped.toolCallResults).containsEntry("tool-1", "file1.txt")
+        assertThat(actualMessage.toolCallResults).containsEntry("tool-1", "file1.txt")
     }
 
     @Test
@@ -81,12 +79,14 @@ class AgentCheckpointConversationMapperTest {
             )
         )
 
-        val conversation = AgentCheckpointConversationMapper.toConversation(
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(
             checkpoint = checkpoint,
             projectInstructions = projectInstructions
         )
 
-        assertSingleTurn(conversation, actualUserTurn)
+        assertThat(actualConversation.messages)
+            .extracting("prompt", "response")
+            .containsExactly(tuple("Actual user prompt", "Actual response"))
     }
 
     @Test
@@ -102,12 +102,43 @@ class AgentCheckpointConversationMapperTest {
             )
         )
 
-        val conversation = AgentCheckpointConversationMapper.toConversation(
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(
             checkpoint = checkpoint,
             projectInstructions = null
         )
 
-        assertSingleTurn(conversation, actualUserTurn)
+        assertThat(actualConversation.messages)
+            .extracting("prompt", "response")
+            .containsExactly(tuple("Actual user prompt", "Actual response"))
+    }
+
+    @Test
+    fun `does not merge hidden user turn output into previous visible turn`() {
+        val checkpoint = checkpoint(
+            listOf(
+                Message.User("Visible prompt 1", RequestMetaInfo.Empty),
+                Message.Assistant("Visible response 1", ResponseMetaInfo.Empty),
+                Message.User(
+                    content = "Hidden cacheable instruction",
+                    metaInfo = cacheableMetaInfo()
+                ),
+                Message.Assistant("Hidden response", ResponseMetaInfo.Empty),
+                Message.User("Visible prompt 2", RequestMetaInfo.Empty),
+                Message.Assistant("Visible response 2", ResponseMetaInfo.Empty)
+            )
+        )
+
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(
+            checkpoint = checkpoint,
+            projectInstructions = null
+        )
+
+        assertThat(actualConversation.messages)
+            .extracting("prompt", "response")
+            .containsExactly(
+                tuple("Visible prompt 1", "Visible response 1"),
+                tuple("Visible prompt 2", "Visible response 2")
+            )
     }
 
     @Test
@@ -136,10 +167,78 @@ class AgentCheckpointConversationMapperTest {
             )
         )
 
-        val conversation = AgentCheckpointConversationMapper.toConversation(checkpoint, null)
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(checkpoint, null)
 
-        assertThat(conversation.messages.single().toolCallResults)
+        assertThat(actualConversation.messages.single().toolCallResults)
             .containsEntry("tool-1", "file1.txt\n\nfile2.txt")
+    }
+
+    @Test
+    fun `filters synthetic timeline user turn and its output`() {
+        val checkpoint = checkpoint(
+            listOf(
+                Message.User("Visible prompt 1", RequestMetaInfo.Empty),
+                Message.Assistant("Visible response 1", ResponseMetaInfo.Empty),
+                Message.User("I haven't created a todo list yet.", RequestMetaInfo.Empty),
+                Message.Assistant("Synthetic response", ResponseMetaInfo.Empty),
+                Message.User("Visible prompt 2", RequestMetaInfo.Empty),
+                Message.Assistant("Visible response 2", ResponseMetaInfo.Empty)
+            )
+        )
+
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(
+            checkpoint = checkpoint,
+            projectInstructions = null
+        )
+
+        assertThat(actualConversation.messages)
+            .extracting("prompt", "response")
+            .containsExactly(
+                tuple("Visible prompt 1", "Visible response 1"),
+                tuple("Visible prompt 2", "Visible response 2")
+            )
+    }
+
+    @Test
+    fun `filters internal timeline tools from mapped message`() {
+        val checkpoint = checkpoint(
+            listOf(
+                Message.User("Visible prompt", RequestMetaInfo.Empty),
+                Message.Tool.Call(
+                    id = "todo-1",
+                    tool = "TodoWrite",
+                    content = """{"todos":[{"content":"x","status":"pending"}]}""",
+                    metaInfo = ResponseMetaInfo.Empty
+                ),
+                Message.Tool.Result(
+                    id = "todo-1",
+                    tool = "TodoWrite",
+                    content = "ok",
+                    metaInfo = RequestMetaInfo.Empty
+                ),
+                Message.Tool.Call(
+                    id = "tool-1",
+                    tool = "Bash",
+                    content = """{"command":"ls"}""",
+                    metaInfo = ResponseMetaInfo.Empty
+                ),
+                Message.Tool.Result(
+                    id = "tool-1",
+                    tool = "Bash",
+                    content = "file1.txt",
+                    metaInfo = RequestMetaInfo.Empty
+                )
+            )
+        )
+
+        val actualConversation = AgentCheckpointConversationMapper.toConversation(checkpoint, null)
+
+        val actualMessage = actualConversation.messages.single()
+        assertThat(actualMessage.toolCalls.orEmpty())
+            .extracting("function.name")
+            .containsExactly("Bash")
+        assertThat(actualMessage.toolCallResults)
+            .containsOnlyKeys("tool-1")
     }
 
     private fun cacheableMetaInfo(): RequestMetaInfo {
@@ -147,15 +246,6 @@ class AgentCheckpointConversationMapperTest {
             timestamp = Clock.System.now(),
             metadata = JsonObject(mapOf("cacheable" to JsonPrimitive(true)))
         )
-    }
-
-    private fun assertSingleTurn(
-        conversation: Conversation,
-        expectedTurn: Pair<String, String>
-    ) {
-        assertThat(conversation.messages)
-            .extracting("prompt", "response")
-            .containsExactly(tuple(expectedTurn.first, expectedTurn.second))
     }
 
     private fun checkpoint(history: List<Message>): AgentCheckpointData {

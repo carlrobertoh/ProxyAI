@@ -2,8 +2,9 @@ package ee.carlrobert.codegpt.agent
 
 import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.agent.rollback.ChangeKind
+import ee.carlrobert.codegpt.agent.rollback.RollbackResult
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
-import ee.carlrobert.codegpt.agent.tools.WriteTool
+import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import java.io.File
@@ -31,10 +32,10 @@ class RollbackServiceTrackingTest : IntegrationTest() {
             filePath = filePath,
             originalContent = "before"
         )
-        val snapshot = rollbackService.finishSession(sessionId)
+        val actualSnapshot = rollbackService.finishSession(sessionId)
 
-        assertThat(snapshot!!.changes).hasSize(1)
-        assertThat(snapshot.changes.single())
+        assertThat(actualSnapshot!!.changes).hasSize(1)
+        assertThat(actualSnapshot.changes.single())
             .extracting("path", "kind")
             .containsExactly(filePath, ChangeKind.MODIFIED)
     }
@@ -46,10 +47,10 @@ class RollbackServiceTrackingTest : IntegrationTest() {
         val sessionId = "s2"
         rollbackService.startSession(sessionId)
 
-        rollbackService.trackWrite(sessionId, filePath, WriteTool.Args(filePath, "hello"))
-        val snapshot = rollbackService.finishSession(sessionId)
+        rollbackService.trackWrite(sessionId, filePath)
+        val actualSnapshot = rollbackService.finishSession(sessionId)
 
-        assertThat(snapshot).isNotNull
+        assertThat(actualSnapshot).isNotNull
             .extracting { it!!.changes.single().kind }
             .isEqualTo(ChangeKind.ADDED)
     }
@@ -62,14 +63,81 @@ class RollbackServiceTrackingTest : IntegrationTest() {
         val sessionId = "s3"
         rollbackService.startSession(sessionId)
 
-        rollbackService.trackWrite(sessionId, filePath, WriteTool.Args(filePath, "after"))
+        rollbackService.trackWrite(sessionId, filePath)
         file.writeText("after")
         LocalFileSystem.getInstance().refreshAndFindFileByPath(filePath)
-        val snapshot = rollbackService.finishSession(sessionId)
+        val actualSnapshot = rollbackService.finishSession(sessionId)
+        val actualDiff = rollbackService.getDiffData(sessionId, filePath)
 
-        assertThat(snapshot!!.changes.single().kind).isEqualTo(ChangeKind.MODIFIED)
-        assertThat(rollbackService.getDiffData(sessionId, filePath))
+        assertThat(actualSnapshot!!.changes.single().kind).isEqualTo(ChangeKind.MODIFIED)
+        assertThat(actualDiff)
             .extracting("beforeText", "afterText")
             .containsExactly("before", "after")
+    }
+
+    fun testSnapshotsRemainAvailablePerRunWithinSameSession() {
+        val rollbackService = RollbackService(project)
+        val sessionId = "run-scoped-session"
+
+        val firstPath = getTestFilePath("run_scoped_a.txt")
+        File(firstPath).delete()
+        val firstRunId = rollbackService.startSession(sessionId)
+        rollbackService.trackWrite(sessionId, firstPath)
+        File(firstPath).writeText("run-a")
+        rollbackService.finishSession(sessionId)
+
+        val secondPath = getTestFilePath("run_scoped_b.txt")
+        File(secondPath).delete()
+        val secondRunId = rollbackService.startSession(sessionId)
+        rollbackService.trackWrite(sessionId, secondPath)
+        File(secondPath).writeText("run-b")
+        rollbackService.finishSession(sessionId)
+
+        val firstRunSnapshot = rollbackService.getRunSnapshot(firstRunId)
+        val secondRunSnapshot = rollbackService.getRunSnapshot(secondRunId)
+        val latestSessionSnapshot = rollbackService.getSnapshot(sessionId)
+
+        assertThat(firstRunSnapshot)
+            .extracting("runId")
+            .isEqualTo(firstRunId)
+        assertThat(secondRunSnapshot)
+            .extracting("runId")
+            .isEqualTo(secondRunId)
+        assertThat(latestSessionSnapshot)
+            .extracting("runId")
+            .isEqualTo(secondRunId)
+    }
+
+    fun testRollbackRunDoesNotClearOtherRunSnapshots() {
+        val rollbackService = RollbackService(project)
+        val sessionId = "run-rollback-session"
+
+        val firstPath = getTestFilePath("run_rollback_a.txt")
+        File(firstPath).delete()
+        val firstRunId = rollbackService.startSession(sessionId)
+        rollbackService.trackWrite(sessionId, firstPath)
+        File(firstPath).writeText("run-a")
+        rollbackService.finishSession(sessionId)
+
+        val secondPath = getTestFilePath("run_rollback_b.txt")
+        File(secondPath).delete()
+        val secondRunId = rollbackService.startSession(sessionId)
+        rollbackService.trackWrite(sessionId, secondPath)
+        File(secondPath).writeText("run-b")
+        rollbackService.finishSession(sessionId)
+
+        val actualRollbackResult = runBlocking {
+            rollbackService.rollbackRun(firstRunId)
+        }
+        val firstRunSnapshotAfterRollback = rollbackService.getRunSnapshot(firstRunId)
+        val secondRunSnapshotAfterRollback = rollbackService.getRunSnapshot(secondRunId)
+        val latestSessionSnapshot = rollbackService.getSnapshot(sessionId)
+
+        assertThat(actualRollbackResult).isInstanceOf(RollbackResult.Success::class.java)
+        assertThat(firstRunSnapshotAfterRollback).isNull()
+        assertThat(secondRunSnapshotAfterRollback).isNotNull()
+        assertThat(latestSessionSnapshot)
+            .extracting("runId")
+            .isEqualTo(secondRunId)
     }
 }

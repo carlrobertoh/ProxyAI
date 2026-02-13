@@ -8,11 +8,15 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.psi.PsiDocumentManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.io.File
@@ -122,43 +126,59 @@ class WriteTool(
                 )
             }
 
-            val fileUrl = file.toURI().toString()
-            val virtualFile =
-                VirtualFileManager.getInstance().findFileByUrl(fileUrl)
-                    ?: if (isNewFile) {
-                        VirtualFileManager.getInstance().refreshAndFindFileByUrl(fileUrl)
-                    } else {
-                        null
-                    }
-
             val bytesWritten = args.content.toByteArray(StandardCharsets.UTF_8).size
             val projectToUse = project
 
+            val normalizedPath = filePath.replace("\\", "/")
+            val fileUrl = "file://$normalizedPath"
+
+            // Never do filesystem IO or synchronous VFS refreshes on the EDT.
+            // If we can resolve a VirtualFile+Document, use the Document API for proper IDE integration.
+            val vfm = VirtualFileManager.getInstance()
+            val virtualFile = if (!isNewFile) {
+                vfm.findFileByUrl(fileUrl) ?: vfm.refreshAndFindFileByUrl(fileUrl)
+            } else {
+                vfm.findFileByUrl(fileUrl)
+            }
+
             if (virtualFile != null) {
-                val document =
+                val document = withContext(Dispatchers.Default) {
                     runReadAction { FileDocumentManager.getInstance().getDocument(virtualFile) }
-                runInEdt {
-                    if (document != null) {
+                }
+                if (document != null) {
+                    runInEdt {
                         runWriteAction {
-                            PsiDocumentManager.getInstance(projectToUse).commitDocument(document)
                             document.setText(StringUtil.convertLineSeparators(args.content))
+                            PsiDocumentManager.getInstance(projectToUse).commitDocument(document)
                             FileDocumentManager.getInstance().saveDocument(document)
                         }
-                    } else {
-                        runWriteAction {
-                            virtualFile.setBinaryContent(args.content.toByteArray(StandardCharsets.UTF_8))
-                        }
                     }
+                } else {
+                    // For non-document-backed files, fall back to plain IO and refresh the specific VirtualFile.
+                    withContext(Dispatchers.IO) {
+                        file.writeBytes(args.content.toByteArray(StandardCharsets.UTF_8))
+                    }
+                    VfsUtil.markDirtyAndRefresh(true, false, false, virtualFile)
                 }
-            } else if (isNewFile) {
-                runInEdt {
-                    runWriteAction {
-                        file.writeText(
-                            StringUtil.convertLineSeparators(args.content),
-                            StandardCharsets.UTF_8
-                        )
-                        VirtualFileManager.getInstance().syncRefresh()
-                    }
+            } else {
+                // Fallback for files not present in VFS (e.g., newly created or external paths).
+                withContext(Dispatchers.IO) {
+                    file.writeText(
+                        StringUtil.convertLineSeparators(args.content),
+                        StandardCharsets.UTF_8
+                    )
+                }
+
+                val lfs = LocalFileSystem.getInstance()
+                val parentVf = file.parentFile?.let { parent ->
+                    lfs.findFileByIoFile(parent) ?: lfs.refreshAndFindFileByIoFile(parent)
+                }
+                if (parentVf != null) {
+                    // Reload the directory children so the newly created file shows up.
+                    VfsUtil.markDirtyAndRefresh(true, false, true, parentVf)
+                } else {
+                    // As a last resort, refresh just the file path.
+                    lfs.refreshAndFindFileByIoFile(file)
                 }
             }
 

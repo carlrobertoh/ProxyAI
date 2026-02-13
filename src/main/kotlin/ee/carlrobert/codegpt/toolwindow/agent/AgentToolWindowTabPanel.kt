@@ -2,21 +2,23 @@ package ee.carlrobert.codegpt.toolwindow.agent
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.agent.AgentService
-import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
-import ee.carlrobert.codegpt.agent.MessageWithContext
-import ee.carlrobert.codegpt.agent.ToolSpecs
-import ee.carlrobert.codegpt.agent.ToolRunContext
+import ee.carlrobert.codegpt.agent.*
+import ee.carlrobert.codegpt.agent.ProxyAIAgent.loadProjectInstructions
+import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
+import ee.carlrobert.codegpt.agent.history.AgentCheckpointTurnSequencer
+import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
@@ -42,9 +44,12 @@ import ee.carlrobert.codegpt.ui.queue.QueuedMessagePanel
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.util.EditorUtil
+import ee.carlrobert.codegpt.util.StringUtil.stripThinkingBlocks
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
-import kotlinx.coroutines.launch
+import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
+import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
+import java.util.*
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
@@ -54,6 +59,10 @@ class AgentToolWindowTabPanel(
     private val project: Project,
     private val agentSession: AgentSession
 ) : BorderLayoutPanel(), Disposable {
+    companion object {
+        private const val RECOVERED_CONVERSATION_RENDER_BATCH_SIZE = 6
+    }
+
     private val replayJson = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -63,6 +72,7 @@ class AgentToolWindowTabPanel(
     private val scrollablePanel = ChatToolWindowScrollablePanel()
     private val tagManager = TagManager()
     private val dispatchers = CoroutineDispatchers()
+    private val backgroundScope = DisposableCoroutineScope(dispatchers.io())
     private val sessionId = agentSession.sessionId
     private val conversation = agentSession.conversation
     private val psiRepository = PsiStructureRepository(
@@ -107,18 +117,43 @@ class AgentToolWindowTabPanel(
         this,
         FeatureType.AGENT,
         tagManager,
-        onSubmit = { text -> handleSubmit(text) },
-        onStop = { handleCancel() },
+        onSubmit = ::handleSubmit,
+        onStop = ::handleCancel,
         withRemovableSelectedEditorTag = true,
         agentTokenCounterPanel = TokenUsageCounterPanel(project, sessionId),
         sessionIdProvider = { sessionId },
-        conversationIdProvider = { conversation.id }
+        conversationIdProvider = { conversation.id },
+        onStartSessionTimeline = ::showSessionStartTimelineDialog
     )
     private var rollbackPanel: RollbackPanel
     private val todoListPanel = TodoListPanel()
     private val projectMessageBusConnection = project.messageBus.connect()
     private val appMessageBusConnection = ApplicationManager.getApplication().messageBus.connect()
     private val rollbackService = RollbackService.getInstance(project)
+    private val historyService = project.service<AgentCheckpointHistoryService>()
+
+    private data class RunCardState(
+        val runMessageId: UUID,
+        val rollbackRunId: String,
+        var responsePanel: ResponseMessagePanel,
+        var sourceMessage: Message? = null,
+        var completed: Boolean = false
+    )
+
+    // Insertion order matters: timeline run numbering depends on the message order.
+    private val runCardsByMessageId = linkedMapOf<UUID, RunCardState>()
+    private var activeRunMessageId: UUID? = null
+    private var recoveredConversationJob: Job? = null
+    private var activeLandingPanel: AgentToolWindowLandingPanel? = null
+
+    private val timelineController = AgentSessionTimelineController(
+        project = project,
+        agentSession = agentSession,
+        conversation = conversation,
+        runStateForRunIndex = ::runStateForRunIndex,
+        applySeededSessionState = ::applySeededSessionState,
+        onAfterRollbackRefresh = ::refreshViewAfterRollback
+    )
 
     private val eventHandler = AgentEventHandler(
         project = project,
@@ -139,6 +174,12 @@ class AgentToolWindowTabPanel(
             revalidate()
             repaint()
             rollbackPanel.refreshOperations()
+        },
+        onRunFinishedCallback = {
+            markActiveRunCompleted()
+        },
+        onRunCheckpointUpdatedCallback = { runMessageId, ref ->
+            updateRunCheckpoint(runMessageId, ref)
         },
         onQueuedMessagesResolved = { message ->
             runInEdt {
@@ -163,12 +204,15 @@ class AgentToolWindowTabPanel(
         }
 
         userInputPanel.setStopEnabled(false)
+        Disposer.register(this, rollbackPanel)
         Disposer.register(this, eventHandler)
+        Disposer.register(this, timelineController)
+        Disposer.register(this, backgroundScope)
     }
 
     private fun setupMessageBusSubscriptions() {
         project.service<AgentService>().queuedMessageProcessed.let { flow ->
-            kotlinx.coroutines.CoroutineScope(dispatchers.io()).launch {
+            backgroundScope.launch {
                 flow.collect { processedMessage ->
                     ApplicationManager.getApplication().invokeLater {
                         removeQueuedMessage(processedMessage)
@@ -230,6 +274,7 @@ class AgentToolWindowTabPanel(
 
     private fun handleSubmit(text: String) {
         if (text.isBlank()) return
+        disposeLandingPanelIfPresent()
         scrollablePanel.clearLandingViewIfVisible()
         agentSession.serviceType =
             ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AGENT)
@@ -255,7 +300,7 @@ class AgentToolWindowTabPanel(
                 .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.RUNNING)
         }
 
-        rollbackService.startSession(sessionId)
+        val rollbackRunId = rollbackService.startSession(sessionId)
         rollbackPanel.refreshOperations()
 
         val message = MessageWithContext(text, userInputPanel.getSelectedTags())
@@ -282,8 +327,16 @@ class AgentToolWindowTabPanel(
         messagePanel.add(responsePanel)
         scrollablePanel.update()
 
+        registerRunCard(
+            runMessageId = message.id,
+            rollbackRunId = rollbackRunId,
+            responsePanel = responsePanel,
+            prompt = text
+        )
+
         eventHandler.resetForNewSubmission()
         eventHandler.setCurrentResponseBody(responseBody)
+        eventHandler.setCurrentRollbackRunId(rollbackRunId)
 
         loadingLabel.text = CodeGPTBundle.get("toolwindow.chat.loading")
         loadingLabel.isVisible = true
@@ -300,7 +353,15 @@ class AgentToolWindowTabPanel(
         agentService.cancelCurrentRun(sessionId)
         agentService.clearPendingMessages(sessionId)
 
-        rollbackService.finishSession(sessionId)
+        val activeRun = activeRunMessageId?.let { runCardsByMessageId[it] }
+        if (activeRun != null) {
+            rollbackService.finishRun(activeRun.rollbackRunId)
+            runCardsByMessageId.remove(activeRun.runMessageId)
+            activeRunMessageId = null
+        } else {
+            rollbackService.finishSession(sessionId)
+        }
+        eventHandler.setCurrentRollbackRunId(null)
         rollbackPanel.refreshOperations()
 
         approvalContainer.removeAll()
@@ -316,37 +377,182 @@ class AgentToolWindowTabPanel(
     }
 
     private fun displayLandingView() {
-        scrollablePanel.displayLandingView(createLandingView())
+        disposeLandingPanelIfPresent()
+        val landingPanel = createLandingView()
+        activeLandingPanel = landingPanel
+        scrollablePanel.displayLandingView(landingPanel)
     }
 
     private fun displayRecoveredConversation() {
+        disposeLandingPanelIfPresent()
         scrollablePanel.clearAll()
-        conversation.messages.forEach { message ->
-            val prompt = message.prompt.orEmpty()
-            val wrapper = scrollablePanel.addMessage(message.id)
-            val userPanel = UserMessagePanel(project, message, this)
-            userPanel.addCopyAction { CopyAction.copyToClipboard(prompt) }
-            wrapper.add(userPanel)
+        recoveredConversationJob?.cancel()
+        recoveredConversationJob = backgroundScope.launch {
+            val recoveredTurns =
+                runCatching { loadRecoveredTurnsFromResumeCheckpoint() }.getOrNull()
+            renderRecoveredConversation(recoveredTurns)
+        }
+    }
 
-            val responseBody = ChatMessageResponseBody(
-                project,
-                false,
-                false,
-                false,
-                false,
-                false,
-                this
-            )
-            addRecoveredToolCards(responseBody, message)
-            responseBody.withResponse(message.response.orEmpty())
-            val responsePanel = ResponseMessagePanel().apply {
-                setResponseContent(responseBody)
+    private suspend fun renderRecoveredConversation(
+        recoveredTurns: List<AgentCheckpointTurnSequencer.Turn>?
+    ) {
+        withContext(Dispatchers.EDT) {
+            if (!isActive || project.isDisposed) return@withContext
+
+            val canRenderInOrder = recoveredTurns != null &&
+                    recoveredTurns.size == conversation.messages.size &&
+                    recoveredTurns.indices.all { index ->
+                        recoveredTurns[index].prompt == conversation.messages[index].prompt.orEmpty()
+                            .trim()
+                    }
+
+            val messages = conversation.messages.toList()
+            var nextIndex = 0
+            while (nextIndex < messages.size) {
+                if (!isActive || project.isDisposed) return@withContext
+
+                val batchEnd = minOf(
+                    nextIndex + RECOVERED_CONVERSATION_RENDER_BATCH_SIZE,
+                    messages.size
+                )
+
+                while (nextIndex < batchEnd) {
+                    if (!isActive || project.isDisposed) return@withContext
+
+                    val index = nextIndex
+                    val message = messages[index]
+                    val prompt = message.prompt.orEmpty()
+                    val wrapper = scrollablePanel.addMessage(message.id)
+                    val userPanel = UserMessagePanel(project, message, this@AgentToolWindowTabPanel)
+                    userPanel.addCopyAction { CopyAction.copyToClipboard(prompt) }
+                    wrapper.add(userPanel)
+
+                    val responseBody = ChatMessageResponseBody(
+                        project,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        this@AgentToolWindowTabPanel
+                    )
+
+                    val renderedInOrder = if (canRenderInOrder) {
+                        renderRecoveredTurnInOrder(responseBody, recoveredTurns[index].events)
+                    } else {
+                        false
+                    }
+
+                    if (!renderedInOrder) {
+                        addRecoveredToolCards(responseBody, message)
+                        responseBody.withResponse(message.response.orEmpty().stripThinkingBlocks())
+                    }
+
+                    val responsePanel = ResponseMessagePanel().apply {
+                        setResponseContent(responseBody)
+                    }
+                    wrapper.add(responsePanel)
+                    registerRecoveredRunCard(message, responsePanel)
+                    nextIndex += 1
+                }
+
+                scrollablePanel.update()
+                if (nextIndex < messages.size) {
+                    yield()
+                }
             }
-            wrapper.add(responsePanel)
+
+            scrollablePanel.scrollToBottom()
+        }
+    }
+
+    private suspend fun loadRecoveredTurnsFromResumeCheckpoint(): List<AgentCheckpointTurnSequencer.Turn>? {
+        val resumeRef = agentSession.resumeCheckpointRef ?: return null
+        val checkpoint = historyService.loadCheckpoint(resumeRef)
+            ?: historyService.loadResumeCheckpoint(resumeRef)
+            ?: return null
+        val projectInstructions = loadProjectInstructions(project.basePath)
+        return AgentCheckpointTurnSequencer.toVisibleTurns(
+            history = checkpoint.messageHistory,
+            projectInstructions = projectInstructions,
+            preserveSyntheticContinuation = true
+        )
+    }
+
+    private fun renderRecoveredTurnInOrder(
+        responseBody: ChatMessageResponseBody,
+        events: List<AgentCheckpointTurnSequencer.TurnEvent>
+    ): Boolean {
+        if (events.isEmpty()) {
+            return false
         }
 
-        scrollablePanel.update()
-        scrollablePanel.scrollToBottom()
+        val pendingById = mutableMapOf<String, ToolCallCard>()
+        val pendingWithoutId = ArrayDeque<ToolCallCard>()
+        var rendered = false
+
+        events.forEach { event ->
+            when (event) {
+                is AgentCheckpointTurnSequencer.TurnEvent.Assistant -> {
+                    val text = event.content.stripThinkingBlocks()
+                    if (text.isNotBlank()) {
+                        responseBody.withResponse(text)
+                        rendered = true
+                    }
+                }
+
+                is AgentCheckpointTurnSequencer.TurnEvent.Reasoning -> {
+                    val text = event.content.stripThinkingBlocks()
+                    if (text.isNotBlank()) {
+                        responseBody.withResponse(text)
+                        rendered = true
+                    }
+                }
+
+                is AgentCheckpointTurnSequencer.TurnEvent.ToolCall -> {
+                    val toolName = event.tool.ifBlank { "Tool" }
+                    if (AgentCheckpointTurnSequencer.isTodoWriteTool(toolName)) {
+                        return@forEach
+                    }
+                    val rawArgs = event.content
+                    val args = parseRecoveredToolArgs(toolName, rawArgs)
+                    val card = createRecoveredToolCard(toolName, args, rawArgs)
+                    responseBody.addToolStatusPanel(card)
+                    val callId = event.id?.takeIf { it.isNotBlank() }
+                    if (callId != null) {
+                        pendingById[callId] = card
+                    } else {
+                        pendingWithoutId.addLast(card)
+                    }
+                    rendered = true
+                }
+
+                is AgentCheckpointTurnSequencer.TurnEvent.ToolResult -> {
+                    val toolName = event.tool.ifBlank { "Tool" }
+                    if (AgentCheckpointTurnSequencer.isTodoWriteTool(toolName)) {
+                        return@forEach
+                    }
+                    val rawResult = event.content
+                    val parsedResult = parseRecoveredToolResult(toolName, rawResult)
+                    val success = inferRecoveredToolSuccess(parsedResult, rawResult)
+                    val card = event.id
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { pendingById.remove(it) }
+                        ?: pendingWithoutId.pollFirst()
+                        ?: run {
+                            val orphan = createRecoveredToolCard(toolName, "", "")
+                            responseBody.addToolStatusPanel(orphan)
+                            orphan
+                        }
+                    card.complete(success, parsedResult ?: rawResult)
+                    rendered = true
+                }
+
+            }
+        }
+
+        return rendered
     }
 
     private fun addRecoveredToolCards(responseBody: ChatMessageResponseBody, message: Message) {
@@ -355,7 +561,7 @@ class AgentToolWindowTabPanel(
 
         toolCalls.forEach { toolCall ->
             val toolName = toolCall.function.name ?: return@forEach
-            if (toolName == "TodoWrite") {
+            if (AgentCheckpointTurnSequencer.isTodoWriteTool(toolName)) {
                 return@forEach
             }
 
@@ -417,6 +623,11 @@ class AgentToolWindowTabPanel(
 
     private fun createLandingView(): AgentToolWindowLandingPanel {
         return AgentToolWindowLandingPanel(project)
+    }
+
+    private fun disposeLandingPanelIfPresent() {
+        activeLandingPanel?.let { Disposer.dispose(it) }
+        activeLandingPanel = null
     }
 
     fun getSessionId(): String = sessionId
@@ -483,8 +694,19 @@ class AgentToolWindowTabPanel(
         responsePanel.setResponseContent(responseBody)
         messagePanel.add(responsePanel)
 
+        val rollbackRunId = activeRunMessageId
+            ?.let { runCardsByMessageId[it] }
+            ?.rollbackRunId
+
         eventHandler.resetForNewSubmission()
         eventHandler.setCurrentResponseBody(responseBody)
+        eventHandler.setCurrentRollbackRunId(rollbackRunId)
+
+        activeRunMessageId?.let { runMessageId ->
+            runCardsByMessageId[runMessageId]?.let { state ->
+                state.responsePanel = responsePanel
+            }
+        }
 
         scrollablePanel.update()
     }
@@ -518,8 +740,118 @@ class AgentToolWindowTabPanel(
         }
     }
 
+    private fun registerRunCard(
+        runMessageId: UUID,
+        rollbackRunId: String,
+        responsePanel: ResponseMessagePanel,
+        prompt: String
+    ) {
+        val state = RunCardState(
+            runMessageId = runMessageId,
+            rollbackRunId = rollbackRunId,
+            responsePanel = responsePanel,
+            sourceMessage = Message(prompt)
+        )
+        runCardsByMessageId[runMessageId] = state
+        activeRunMessageId = runMessageId
+    }
+
+    private fun registerRecoveredRunCard(message: Message, responsePanel: ResponseMessagePanel) {
+        val copiedMessage = Message(
+            message.prompt.orEmpty(),
+            message.response.orEmpty().stripThinkingBlocks()
+        ).apply {
+            message.toolCalls?.let { toolCalls = ArrayList(it) }
+            message.toolCallResults?.let { toolCallResults = LinkedHashMap(it) }
+        }
+        val state = RunCardState(
+            runMessageId = message.id,
+            rollbackRunId = "",
+            responsePanel = responsePanel,
+            sourceMessage = copiedMessage,
+            completed = true
+        )
+        runCardsByMessageId[message.id] = state
+        timelineController.invalidateTimelineCache()
+    }
+
+    private fun markActiveRunCompleted() {
+        val runMessageId = activeRunMessageId ?: return
+        val state = runCardsByMessageId[runMessageId] ?: return
+        state.completed = true
+        activeRunMessageId = null
+    }
+
+    private fun updateRunCheckpoint(runMessageId: UUID, ref: CheckpointRef?) {
+        val state = runCardsByMessageId[runMessageId] ?: return
+        timelineController.invalidateTimelineCache()
+        if (ref != null) {
+            state.sourceMessage = null
+        }
+    }
+
+    private fun showSessionStartTimelineDialog() {
+        timelineController.showSessionStartTimelineDialog()
+    }
+
+    private fun runStateForRunIndex(runIndex: Int): AgentTimelineRunState? {
+        if (runIndex <= 0) return null
+        val state = runCardsByMessageId.values.elementAtOrNull(runIndex - 1) ?: return null
+        return AgentTimelineRunState(
+            rollbackRunId = state.rollbackRunId,
+            sourceMessage = state.sourceMessage
+        )
+    }
+
+    private fun applySeededSessionState(seededConversation: Conversation, seedRef: CheckpointRef) {
+        conversation.messages = seededConversation.messages
+        runCardsByMessageId.clear()
+        activeRunMessageId = null
+        timelineController.invalidateTimelineCache()
+
+        agentSession.runtimeAgentId = seedRef.agentId
+        agentSession.resumeCheckpointRef = seedRef
+
+        val contentManager = project.service<AgentToolWindowContentManager>()
+        contentManager.setRuntimeAgentId(sessionId, seedRef.agentId)
+        contentManager.setResumeCheckpointRef(sessionId, seedRef)
+
+        project.service<AgentService>().clearPendingMessages(sessionId)
+        loadingLabel.isVisible = false
+        clearQueuedMessages()
+        approvalContainer.removeAll()
+        approvalContainer.isVisible = false
+        eventHandler.resetForNewSubmission()
+        eventHandler.setCurrentRollbackRunId(null)
+        userInputPanel.setStopEnabled(false)
+
+        if (conversation.messages.isEmpty()) {
+            displayLandingView()
+        } else {
+            displayRecoveredConversation()
+        }
+
+        refreshViewAfterRollback()
+        runCatching {
+            contentManager.setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.STOPPED)
+        }
+    }
+
+    private fun refreshViewAfterRollback() {
+        timelineController.invalidateTimelineCache()
+        runCatching { VirtualFileManager.getInstance().asyncRefresh(null) }
+        rollbackPanel.refreshOperations()
+        scrollablePanel.update()
+        revalidate()
+        repaint()
+    }
+
     override fun dispose() {
+        recoveredConversationJob?.cancel()
+        disposeLandingPanelIfPresent()
         ToolRunContext.cleanupSession(sessionId)
+        runCardsByMessageId.clear()
+        activeRunMessageId = null
 
         projectMessageBusConnection.disconnect()
         appMessageBusConnection.disconnect()

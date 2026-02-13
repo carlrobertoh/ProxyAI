@@ -96,6 +96,13 @@ class AgentCheckpointHistoryService(project: Project) {
                 ?: checkpoints.maxByOrNull { it.createdAt }
         }
 
+    suspend fun listCheckpoints(agentId: String): List<AgentCheckpointData> =
+        withContext(Dispatchers.IO) {
+            storage.getCheckpoints(agentId)
+                .filterNot { it.isTombstone() }
+                .sortedByDescending { it.createdAt }
+        }
+
     private suspend fun buildSummary(agentId: String): AgentHistoryThreadSummary? {
         val checkpoints = storage.getCheckpoints(agentId)
             .filterNot { it.isTombstone() }

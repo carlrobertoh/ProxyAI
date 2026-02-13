@@ -69,26 +69,26 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         val secondMessage = MessageWithContext("Second request")
 
         submitAndAwait(sessionId, firstMessage)
-        val firstSnapshot = snapshot(sessionId)
+        val firstActualSnapshot = snapshot(sessionId)
         submitAndAwait(sessionId, secondMessage)
-        val secondSnapshot = snapshot(sessionId)
+        val secondActualSnapshot = snapshot(sessionId)
 
-        val runtimeAgentId = firstSnapshot.runtimeAgentId
-        val managedService = factory.createdServices.single()
-        assertThat(runtimeAgentId).isNotBlank()
+        val actualRuntimeAgentId = firstActualSnapshot.runtimeAgentId
+        val actualManagedService = factory.createdServices.single()
+        assertThat(actualRuntimeAgentId).isNotBlank()
         assertThat(factory.createdServices).hasSize(1)
-        assertThat(listOf(firstSnapshot, secondSnapshot))
+        assertThat(listOf(firstActualSnapshot, secondActualSnapshot))
             .extracting("runtimeAgentId", "resumeCheckpointRef.agentId")
             .containsExactly(
-                tuple(runtimeAgentId, runtimeAgentId),
-                tuple(runtimeAgentId, runtimeAgentId)
+                tuple(actualRuntimeAgentId, actualRuntimeAgentId),
+                tuple(actualRuntimeAgentId, actualRuntimeAgentId)
             )
-        assertThat(firstSnapshot.resumeCheckpointRef?.checkpointId).isNotBlank()
-        assertThat(secondSnapshot.resumeCheckpointRef?.checkpointId).isNotBlank()
-        assertThat(secondSnapshot.resumeCheckpointRef?.checkpointId)
-            .isNotEqualTo(firstSnapshot.resumeCheckpointRef?.checkpointId)
-        assertThat(managedService.createdAgentIds).hasSize(2)
-        assertThat(managedService.createdAgentIds.last()).isEqualTo(runtimeAgentId)
+        assertThat(firstActualSnapshot.resumeCheckpointRef?.checkpointId).isNotBlank()
+        assertThat(secondActualSnapshot.resumeCheckpointRef?.checkpointId).isNotBlank()
+        assertThat(secondActualSnapshot.resumeCheckpointRef?.checkpointId)
+            .isNotEqualTo(firstActualSnapshot.resumeCheckpointRef?.checkpointId)
+        assertThat(actualManagedService.createdAgentIds).hasSize(2)
+        assertThat(actualManagedService.createdAgentIds.last()).isEqualTo(actualRuntimeAgentId)
     }
 
     fun testSubmitMessageRebuildsRuntimeWhenMcpSelectionChanges() {
@@ -102,10 +102,36 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         submitAndAwait(sessionId, withoutMcp)
         submitAndAwait(sessionId, withMcp)
 
-        assertThat(factory.createdServices).hasSize(2)
-        assertThat(factory.createdServices)
+        val actualCreatedServices = factory.createdServices
+        assertThat(actualCreatedServices).hasSize(2)
+        assertThat(actualCreatedServices)
             .extracting("closeAllCalls")
             .containsExactly(1, 0)
+    }
+
+    fun testSubmitMessageEmitsRunCheckpointCallback() {
+        val sessionId = createSession("agent-runtime-callback")
+        val factory = RecordingRuntimeFactory(agentModel())
+        agentService.runtimeFactory = factory
+        val message = MessageWithContext("Callback request")
+        var callbackMessageId: UUID? = null
+        var callbackRef: CheckpointRef? = null
+        val events = object : AgentEvents {
+            override fun onQueuedMessagesResolved() = Unit
+
+            override fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {
+                callbackMessageId = runMessageId
+                callbackRef = ref
+            }
+        }
+
+        agentService.submitMessage(message, events, sessionId)
+        awaitSessionToFinish(sessionId)
+
+        val actualSession = contentManager.getSession(sessionId)
+        assertThat(callbackMessageId).isEqualTo(message.id)
+        assertThat(callbackRef).isNotNull
+        assertThat(callbackRef?.agentId).isEqualTo(actualSession?.runtimeAgentId)
     }
 
     fun testGetCheckpointFallsBackToRuntimeAgentIdWhenResumeRefIsStale() {
@@ -133,11 +159,11 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         contentManager.setRuntimeAgentId(sessionId, runtimeAgentId)
         contentManager.setResumeCheckpointRef(sessionId, staleRef)
 
-        val checkpoint = runBlocking { agentService.getCheckpoint(sessionId) }
-
-        assertThat(checkpoint).isNotNull
-        assertThat(checkpoint!!.checkpointId).isEqualTo(checkpointId)
-        assertThat(contentManager.getSession(sessionId)!!.resumeCheckpointRef)
+        val actualCheckpoint = runBlocking { agentService.getCheckpoint(sessionId) }
+        val actualSession = contentManager.getSession(sessionId)
+        assertThat(actualCheckpoint).isNotNull
+        assertThat(actualCheckpoint!!.checkpointId).isEqualTo(checkpointId)
+        assertThat(actualSession!!.resumeCheckpointRef)
             .isEqualTo(CheckpointRef(runtimeAgentId, checkpointId))
     }
 

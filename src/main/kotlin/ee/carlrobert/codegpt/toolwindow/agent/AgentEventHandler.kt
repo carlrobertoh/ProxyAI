@@ -13,6 +13,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.agent.*
+import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -24,6 +25,7 @@ import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.*
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
+import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import kotlinx.coroutines.*
 import java.awt.Component
 import java.util.*
@@ -40,6 +42,8 @@ class AgentEventHandler(
     private val userInputPanel: UserInputPanel,
     private val onShowLoading: (String) -> Unit,
     private val onHideLoading: () -> Unit,
+    private val onRunFinishedCallback: () -> Unit = {},
+    private val onRunCheckpointUpdatedCallback: (UUID, CheckpointRef?) -> Unit = { _, _ -> },
     private val onQueuedMessagesResolved: (MessageWithContext) -> Unit = {}
 ) : AgentEvents, Disposable {
 
@@ -67,6 +71,9 @@ class AgentEventHandler(
     @Volatile
     private var lastEditArgs: EditTool.Args? = null
 
+    @Volatile
+    private var currentRollbackRunId: String? = null
+
     private val approvalQueue: ArrayDeque<ApprovalRequest> = ArrayDeque()
 
     @Volatile
@@ -84,7 +91,7 @@ class AgentEventHandler(
     private var runViewHolder: RunViewHolder? = null
 
     private val subagentViewHolders = ConcurrentHashMap<String, RunViewHolder>()
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val serviceScope = DisposableCoroutineScope(Dispatchers.Default)
 
     data class ApprovalRequest(
         var model: ToolApprovalRequest,
@@ -105,6 +112,7 @@ class AgentEventHandler(
         runViewHolder = null
         subagentViewHolders.clear()
         lastReportedPromptTokens = 0
+        currentRollbackRunId = null
     }
 
     private fun clearApprovalContainer() {
@@ -160,6 +168,10 @@ class AgentEventHandler(
 
     fun setCurrentResponseBody(responseBody: ChatMessageResponseBody) {
         currentResponseBody = responseBody
+    }
+
+    fun setCurrentRollbackRunId(runId: String?) {
+        currentRollbackRunId = runId
     }
 
     override fun onAgentCompleted(agentId: String) {
@@ -226,8 +238,12 @@ class AgentEventHandler(
 
     private fun handleDone() {
         runInEdt {
-            project.service<RollbackService>().finishSession(sessionId)
+            currentRollbackRunId?.let { runId ->
+                project.service<RollbackService>().finishRun(runId)
+            } ?: project.service<RollbackService>().finishSession(sessionId)
+            currentRollbackRunId = null
             currentResponseBody?.finishThinking()
+            onRunFinishedCallback()
             onHideLoading()
             userInputPanel.setStopEnabled(false)
             scrollablePanel.update()
@@ -481,6 +497,12 @@ class AgentEventHandler(
             .getPendingMessages(sessionId)
             .firstOrNull { it.uiVisible } ?: return
         onQueuedMessagesResolved(pendingMessage)
+    }
+
+    override fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {
+        runInEdt {
+            onRunCheckpointUpdatedCallback(runMessageId, ref)
+        }
     }
 
     override fun onTokenUsageAvailable(tokenUsage: Long) {
@@ -739,6 +761,8 @@ class AgentEventHandler(
     }
 
     override fun dispose() {
+        serviceScope.dispose()
+        agentApprovalManager.dispose()
         mainToolCards.clear()
         approvalQueue.clear()
         subagentViewHolders.clear()
@@ -752,16 +776,26 @@ class AgentEventHandler(
             val documentText = vf?.let { file ->
                 runReadAction { FileDocumentManager.getInstance().getDocument(file)?.text }
             }
-            documentText ?: java.io.File(normalizedPath).readText()
+            documentText ?: java.io.File(normalizedPath).readText(Charsets.UTF_8)
         }.getOrNull() ?: ""
-        project.service<RollbackService>()
-            .trackEdit(sessionId, normalizedPath, originalContent)
+        val rollbackService = project.service<RollbackService>()
+        val runId = currentRollbackRunId
+        if (runId != null) {
+            rollbackService.trackEditForRun(runId, normalizedPath, originalContent)
+        } else {
+            rollbackService.trackEdit(sessionId, normalizedPath, originalContent)
+        }
     }
 
     private fun trackWriteOperation(args: WriteTool.Args) {
         lastWriteArgs = args
         val normalizedPath = args.filePath.replace("\\", "/")
-        project.service<RollbackService>()
-            .trackWrite(sessionId, normalizedPath, args)
+        val rollbackService = project.service<RollbackService>()
+        val runId = currentRollbackRunId
+        if (runId != null) {
+            rollbackService.trackWriteForRun(runId, normalizedPath)
+        } else {
+            rollbackService.trackWrite(sessionId, normalizedPath)
+        }
     }
 }

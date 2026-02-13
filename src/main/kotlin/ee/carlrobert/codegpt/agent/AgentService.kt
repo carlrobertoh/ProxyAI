@@ -19,9 +19,12 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.datetime.Clock
+import kotlinx.serialization.json.JsonNull
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.Path
+import ai.koog.prompt.message.Message as PromptMessage
 
 internal fun interface AgentRuntimeFactory {
     fun create(
@@ -53,16 +56,17 @@ class AgentService(private val project: Project) {
     private val pendingMessages = ConcurrentHashMap<String, ArrayDeque<MessageWithContext>>()
     private val sessionAgents = ConcurrentHashMap<String, AIAgent<MessageWithContext, String>>()
     private val sessionRuntimes = ConcurrentHashMap<String, SessionRuntime>()
-    internal var runtimeFactory: AgentRuntimeFactory = AgentRuntimeFactory { p, storage, provider, events, sid, pending ->
-        ProxyAIAgent.createService(
-            project = p,
-            checkpointStorage = storage,
-            provider = provider,
-            events = events,
-            sessionId = sid,
-            pendingMessages = pending
-        )
-    }
+    internal var runtimeFactory: AgentRuntimeFactory =
+        AgentRuntimeFactory { p, storage, provider, events, sid, pending ->
+            ProxyAIAgent.createService(
+                project = p,
+                checkpointStorage = storage,
+                provider = provider,
+                events = events,
+                sessionId = sid,
+                pendingMessages = pending
+            )
+        }
     private val checkpointStorage =
         JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
     private val historyService = project.service<AgentCheckpointHistoryService>()
@@ -132,7 +136,8 @@ class AgentService(private val project: Project) {
             } catch (ex: Exception) {
                 logger.error(ex)
             } finally {
-                refreshSessionResumeCheckpoint(sessionId, agent.id)
+                val ref = refreshSessionResumeCheckpoint(sessionId, agent.id)
+                events.onRunCheckpointUpdated(message.id, ref)
                 sessionAgents.remove(sessionId, agent)
                 runCatching { runtime.service.removeAgentWithId(agent.id) }
                     .onFailure { ex ->
@@ -201,7 +206,39 @@ class AgentService(private val project: Project) {
             .update(sessionId, conversationId, selectedServerIds)
     }
 
-    private suspend fun refreshSessionResumeCheckpoint(sessionId: String, agentId: String) {
+    suspend fun createSeedCheckpointFromHistory(history: List<PromptMessage>): CheckpointRef? =
+        withContext(Dispatchers.IO) {
+            if (history.isEmpty()) {
+                return@withContext null
+            }
+
+            val agentId = UUID.randomUUID().toString()
+            val checkpointId = UUID.randomUUID().toString()
+            val checkpoint = AgentCheckpointData(
+                checkpointId = checkpointId,
+                createdAt = Clock.System.now(),
+                nodePath = "$agentId/single_run/nodeExecuteTool",
+                lastInput = JsonNull,
+                messageHistory = history,
+                version = 0
+            )
+
+            runCatching {
+                checkpointStorage.saveCheckpoint(agentId, checkpoint)
+                CheckpointRef(agentId, checkpointId)
+            }.onFailure { ex ->
+                logger.warn(
+                    "Agent checkpoints: failed to create seed checkpoint from history " +
+                            "agentId=$agentId error=${ex.message}",
+                    ex
+                )
+            }.getOrNull()
+        }
+
+    private suspend fun refreshSessionResumeCheckpoint(
+        sessionId: String,
+        agentId: String
+    ): CheckpointRef? {
         val ref = runCatching {
             historyService.loadLatestResumeCheckpoint(agentId)
                 ?.let { CheckpointRef(agentId, it.checkpointId) }
@@ -216,6 +253,7 @@ class AgentService(private val project: Project) {
         if (ref != null) {
             project.service<AgentToolWindowContentManager>().setResumeCheckpointRef(sessionId, ref)
         }
+        return ref
     }
 
     private fun ensureSessionRuntime(

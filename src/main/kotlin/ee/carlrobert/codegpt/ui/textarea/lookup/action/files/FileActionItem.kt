@@ -10,9 +10,10 @@ import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.AbstractLookupActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.InsertsDisplayNameLookupItem
 
 class FileActionItem(private val project: Project, val file: VirtualFile) :
-    AbstractLookupActionItem() {
+    AbstractLookupActionItem(), InsertsDisplayNameLookupItem {
 
     override val displayName = file.name
     override val icon = file.fileType.icon ?: AllIcons.FileTypes.Any_type

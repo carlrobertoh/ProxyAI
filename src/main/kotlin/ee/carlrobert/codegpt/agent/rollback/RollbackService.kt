@@ -13,9 +13,7 @@ import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
-import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
-import ee.carlrobert.codegpt.agent.tools.WriteTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,85 +21,100 @@ import java.nio.file.Paths
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 
-/**
- * Tracks file changes during agent runs and provides rollback to a checkpoint.
- *
- * Uses IntelliJ's LocalHistory labels for persistence and a lightweight in-memory
- * snapshot of modified files for fast restore.
- * 
- * Now uses direct tracking via trackEdit() and trackWrite() methods instead of
- * VFS event monitoring to avoid capturing build artifacts and temporary files.
- */
 @Service(Service.Level.PROJECT)
 class RollbackService(private val project: Project) {
 
     private val activeRuns = ConcurrentHashMap<String, RunTracker>()
-    private val snapshots = ConcurrentHashMap<String, SnapshotState>()
+    private val activeRunsBySession = ConcurrentHashMap<String, String>()
+    private val snapshotsByRunId = ConcurrentHashMap<String, SnapshotState>()
+    private val latestSnapshotRunIdBySession = ConcurrentHashMap<String, String>()
 
-    @Volatile
-    private var isApplyingRollback = false
+    private val MAX_TRACKABLE_BYTES = 10 * 1024 * 1024
 
-    private val MAX_TRACKABLE_BYTES = 10 * 1024 * 1024 // 10MB
-
-    init {
-        // No VFS listener - using direct tracking via trackEdit() and trackWrite()
-    }
-
-    /**
-     * Track an EditTool operation directly from the agent.
-     * This captures the original file content before the edit is applied.
-     */
     fun trackEdit(
         sessionId: String,
         filePath: String,
         originalContent: String
     ) {
-        val tracker = activeRuns[sessionId] ?: return
-        val normalizedPath = filePath.replace("\\", "/")
-        tracker.recordExplicitEdit(normalizedPath,  originalContent)
+        val runId = activeRunsBySession[sessionId] ?: return
+        trackEditForRun(runId, filePath, originalContent)
     }
 
-    /**
-     * Track a WriteTool operation directly from the agent.
-     * This determines if the file was new or existing before the write.
-     */
-    fun trackWrite(sessionId: String, filePath: String, args: WriteTool.Args) {
-        val tracker = activeRuns[sessionId] ?: return
+    fun trackEditForRun(
+        runId: String,
+        filePath: String,
+        originalContent: String
+    ) {
+        val tracker = activeRuns[runId] ?: return
         val normalizedPath = filePath.replace("\\", "/")
-        tracker.recordExplicitWrite(normalizedPath, args)
+        tracker.recordExplicitEdit(normalizedPath, originalContent)
     }
 
-    fun startSession(sessionId: String) {
+    fun trackWrite(sessionId: String, filePath: String) {
+        val runId = activeRunsBySession[sessionId] ?: return
+        trackWriteForRun(runId, filePath)
+    }
+
+    fun trackWriteForRun(runId: String, filePath: String) {
+        val tracker = activeRuns[runId] ?: return
+        val normalizedPath = filePath.replace("\\", "/")
+        tracker.recordExplicitWrite(normalizedPath)
+    }
+
+    fun startSession(sessionId: String): String {
         val labelText = "ProxyAI: Agent run ${DateTimeFormatter.ISO_INSTANT.format(Instant.now())}"
         val label = LocalHistory.getInstance().putSystemLabel(project, labelText)
-        activeRuns[sessionId] = RunTracker(sessionId, Instant.now(), labelText, label)
-        snapshots.remove(sessionId)
+        val runId = UUID.randomUUID().toString()
+        val tracker = RunTracker(runId, sessionId, Instant.now(), labelText, label)
+        activeRuns[runId] = tracker
+        activeRunsBySession[sessionId] = runId
+        latestSnapshotRunIdBySession.remove(sessionId)
+        return runId
     }
 
     fun finishSession(sessionId: String): RollbackSnapshot? {
-        val tracker = activeRuns.remove(sessionId) ?: return getSnapshot(sessionId)
+        val runId = activeRunsBySession.remove(sessionId) ?: return getSnapshot(sessionId)
+        return finishRun(runId)
+    }
+
+    fun finishRun(runId: String): RollbackSnapshot? {
+        val tracker = activeRuns.remove(runId) ?: return getRunSnapshot(runId)
         val snapshot = SnapshotState(
-            sessionId = sessionId,
+            runId = runId,
+            sessionId = tracker.sessionId,
             label = tracker.label,
             labelRef = tracker.labelRef,
             startedAt = tracker.startedAt,
             completedAt = Instant.now(),
             changes = tracker.changes.toMap()
         )
-        snapshots[sessionId] = snapshot
+        snapshotsByRunId[runId] = snapshot
+        latestSnapshotRunIdBySession[tracker.sessionId] = runId
         return snapshot.toSnapshot()
     }
 
-    fun getSnapshot(sessionId: String): RollbackSnapshot? =
-        snapshots[sessionId]?.toSnapshot()
+    fun getSnapshot(sessionId: String): RollbackSnapshot? {
+        val runId = latestSnapshotRunIdBySession[sessionId] ?: return null
+        return snapshotsByRunId[runId]?.toSnapshot()
+    }
+
+    fun getRunSnapshot(runId: String): RollbackSnapshot? =
+        snapshotsByRunId[runId]?.toSnapshot()
 
     fun clearSnapshot(sessionId: String) {
-        snapshots.remove(sessionId)
+        val runId = latestSnapshotRunIdBySession.remove(sessionId) ?: return
+        snapshotsByRunId.remove(runId)
+    }
+
+    fun clearRunSnapshot(runId: String) {
+        val snapshot = snapshotsByRunId.remove(runId) ?: return
+        latestSnapshotRunIdBySession.remove(snapshot.sessionId, runId)
     }
 
     fun getDiffData(sessionId: String, path: String): RollbackDiffData? {
-        val snapshot = snapshots[sessionId] ?: return null
+        val snapshot = snapshotForSession(sessionId) ?: return null
         val change = snapshot.changes[path] ?: return null
         if (change.kind != ChangeKind.DELETED && !isTrackable(path)) return null
         val beforeText = when (change.kind) {
@@ -131,28 +144,19 @@ class RollbackService(private val project: Project) {
     }
 
     fun isRollbackAvailable(sessionId: String): Boolean =
-        snapshots[sessionId]?.changes?.isNotEmpty() == true && !activeRuns.containsKey(sessionId)
+        snapshotForSession(sessionId)?.changes?.isNotEmpty() == true &&
+                !activeRunsBySession.containsKey(sessionId)
 
     fun isDisplayable(path: String): Boolean = isTrackable(path)
 
     suspend fun rollbackFile(sessionId: String, path: String): RollbackResult =
         withContext(Dispatchers.IO) {
-            val snapshot = snapshots[sessionId]
+            val snapshot = snapshotForSession(sessionId)
                 ?: return@withContext RollbackResult.Failure("No rollback snapshot available")
             val change = snapshot.changes[path]
                 ?: return@withContext RollbackResult.Failure("No change tracked for $path")
 
-            val errors = mutableListOf<String>()
-            runInEdt(ModalityState.defaultModalityState()) {
-                runWriteAction {
-                    try {
-                        isApplyingRollback = true
-                        applyChangeWithLabel(snapshot.labelRef, path, change, errors)
-                    } finally {
-                        isApplyingRollback = false
-                    }
-                }
-            }
+            val errors = applyChanges(snapshot.labelRef, mapOf(path to change))
 
             if (errors.isNotEmpty()) {
                 RollbackResult.Failure(errors.joinToString("\n"))
@@ -160,36 +164,38 @@ class RollbackService(private val project: Project) {
                 val updated = snapshot.changes.toMutableMap()
                 updated.remove(path)
                 if (updated.isEmpty()) {
-                    snapshots.remove(sessionId)
+                    clearRunSnapshot(snapshot.runId)
                 } else {
-                    snapshots[sessionId] = snapshot.copy(changes = updated.toMap())
+                    snapshotsByRunId[snapshot.runId] = snapshot.copy(changes = updated.toMap())
                 }
                 RollbackResult.Success("Rollback completed")
             }
         }
 
-    suspend fun rollbackSession(sessionId: String): RollbackResult = withContext(Dispatchers.Main) {
-        val snapshot = snapshots[sessionId]
+    suspend fun rollbackSession(sessionId: String): RollbackResult = withContext(Dispatchers.IO) {
+        val snapshot = snapshotForSession(sessionId)
             ?: return@withContext RollbackResult.Failure("No rollback snapshot available")
 
-        val errors = mutableListOf<String>()
-        runInEdt(ModalityState.defaultModalityState()) {
-            runWriteAction {
-                try {
-                    isApplyingRollback = true
-                    snapshot.changes.forEach { (path, change) ->
-                        applyChangeWithLabel(snapshot.labelRef, path, change, errors)
-                    }
-                } finally {
-                    isApplyingRollback = false
-                }
-            }
-        }
+        val errors = applyChanges(snapshot.labelRef, snapshot.changes)
 
         if (errors.isNotEmpty()) {
             RollbackResult.Failure(errors.joinToString("\n"))
         } else {
-            snapshots.remove(sessionId)
+            clearRunSnapshot(snapshot.runId)
+            RollbackResult.Success("Rollback completed")
+        }
+    }
+
+    suspend fun rollbackRun(runId: String): RollbackResult = withContext(Dispatchers.IO) {
+        val snapshot = snapshotsByRunId[runId]
+            ?: return@withContext RollbackResult.Failure("No rollback snapshot available")
+
+        val errors = applyChanges(snapshot.labelRef, snapshot.changes)
+
+        if (errors.isNotEmpty()) {
+            RollbackResult.Failure(errors.joinToString("\n"))
+        } else {
+            clearRunSnapshot(runId)
             RollbackResult.Success("Rollback completed")
         }
     }
@@ -269,8 +275,8 @@ class RollbackService(private val project: Project) {
                     errors.add("Missing parent directory for $path")
                     return@runCatching null
                 }
-                val parentVf = VirtualFileManager.getInstance()
-                    .findFileByUrl("file://$parentPath") ?: return@runCatching null
+                val parentVf = LocalFileSystem.getInstance()
+                    .refreshAndFindFileByPath(parentPath) ?: return@runCatching null
                 parentVf.createChildData(this, ioFile.name)
             }.getOrNull()
 
@@ -345,12 +351,31 @@ class RollbackService(private val project: Project) {
     ): ByteArray? {
         val labelContent = runCatching { label.getByteContent(path) }
             .getOrNull()?.bytes
-        // If label content is null or empty, use fallback (captured at track time)
         return if (labelContent == null || labelContent.isEmpty()) {
             fallback
         } else {
             labelContent
         }
+    }
+
+    private fun applyChanges(
+        label: Label,
+        changes: Map<String, TrackedChange>
+    ): List<String> {
+        val errors = mutableListOf<String>()
+        runInEdt(ModalityState.defaultModalityState()) {
+            runWriteAction {
+                changes.forEach { (path, change) ->
+                    applyChangeWithLabel(label, path, change, errors)
+                }
+            }
+        }
+        return errors
+    }
+
+    private fun snapshotForSession(sessionId: String): SnapshotState? {
+        val runId = latestSnapshotRunIdBySession[sessionId] ?: return null
+        return snapshotsByRunId[runId]
     }
 
     companion object {
@@ -360,6 +385,7 @@ class RollbackService(private val project: Project) {
     }
 
     private class RunTracker(
+        val runId: String,
         val sessionId: String,
         val startedAt: Instant,
         val label: String,
@@ -378,24 +404,23 @@ class RollbackService(private val project: Project) {
             )
         }
 
-        fun recordExplicitWrite(filePath: String, args: WriteTool.Args) {
-            val path = filePath.replace("\\", "/")
-            val existing = changes[path]
-            val file = File(path)
-            
+        fun recordExplicitWrite(filePath: String) {
+            val existing = changes[filePath]
+            val file = File(filePath)
+
             if (existing?.kind == ChangeKind.DELETED) {
-                changes[path] = existing.copy(kind = ChangeKind.MODIFIED)
+                changes[filePath] = existing.copy(kind = ChangeKind.MODIFIED)
                 return
             }
 
             if (existing == null) {
                 val originalContent = if (file.exists()) {
-                    runCatching { file.readText() }.getOrNull()
+                    runCatching { file.readText(Charsets.UTF_8) }.getOrNull()
                 } else null
-                changes[path] = TrackedChange(
+                changes[filePath] = TrackedChange(
                     kind = if (file.exists()) ChangeKind.MODIFIED else ChangeKind.ADDED,
                     originalPath = null,
-                    originalContent = originalContent?.toByteArray()
+                    originalContent = originalContent?.toByteArray(Charsets.UTF_8)
                 )
             }
         }
@@ -428,6 +453,7 @@ class RollbackService(private val project: Project) {
     }
 
     private data class SnapshotState(
+        val runId: String,
         val sessionId: String,
         val label: String,
         val labelRef: Label,
@@ -438,6 +464,7 @@ class RollbackService(private val project: Project) {
         fun toSnapshot(): RollbackSnapshot? {
             if (changes.isEmpty()) return null
             return RollbackSnapshot(
+                runId = runId,
                 sessionId = sessionId,
                 label = label,
                 startedAt = startedAt,
@@ -455,6 +482,7 @@ class RollbackService(private val project: Project) {
 }
 
 data class RollbackSnapshot(
+    val runId: String,
     val sessionId: String,
     val label: String,
     val startedAt: Instant,

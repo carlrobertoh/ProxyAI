@@ -70,6 +70,10 @@ abstract class BaseMessagePanel : BorderLayoutPanel() {
         )
     }
 
+    fun addHeaderAction(action: AnAction, actionCode: String) {
+        addIconActionButton(IconActionButton(action, actionCode))
+    }
+
     fun addContent(content: JComponent) {
         body.addContent(content)
     }

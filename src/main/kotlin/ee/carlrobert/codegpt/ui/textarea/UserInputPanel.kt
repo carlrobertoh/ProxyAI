@@ -73,6 +73,7 @@ class UserInputPanel @JvmOverloads constructor(
     private val agentTokenCounterPanel: JComponent? = null,
     private val sessionIdProvider: (() -> String?)? = null,
     private val conversationIdProvider: (() -> UUID?)? = null,
+    private val onStartSessionTimeline: (() -> Unit)? = null,
 ) : BorderLayoutPanel() {
 
     constructor(
@@ -97,6 +98,7 @@ class UserInputPanel @JvmOverloads constructor(
         null,
         null,
         withRemovableSelectedEditorTag,
+        null,
         null,
         null
     )
@@ -220,7 +222,26 @@ class UserInputPanel @JvmOverloads constructor(
     } else {
         null
     }
-    private val promptEnhancerSeparator = if (featureType == FeatureType.AGENT) {
+    private val sessionTimelineButton = if (featureType == FeatureType.AGENT) {
+        IconActionButton(
+            object : AnAction(
+                "Timeline",
+                "Choose a timeline point from this session",
+                AllIcons.Vcs.History
+            ) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    onStartSessionTimeline?.invoke()
+                }
+            },
+            "SESSION_TIMELINE"
+        ).apply {
+            isVisible = onStartSessionTimeline != null
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+    } else {
+        null
+    }
+    private val sessionTimelineSeparator = if (featureType == FeatureType.AGENT) {
         createActionSeparator()
     } else {
         null
@@ -600,9 +621,12 @@ class UserInputPanel @JvmOverloads constructor(
                     panel {
                         row {
                             if (applyChip != null) cell(applyChip).gap(RightGap.SMALL)
-                            if (promptEnhancerButton != null && promptEnhancerSeparator != null) {
+                            if (promptEnhancerButton != null) {
                                 cell(promptEnhancerButton).gap(RightGap.SMALL)
-                                cell(promptEnhancerSeparator).gap(RightGap.SMALL)
+                            }
+                            if (sessionTimelineButton != null && sessionTimelineSeparator != null) {
+                                cell(sessionTimelineButton).gap(RightGap.SMALL)
+                                cell(sessionTimelineSeparator).gap(RightGap.SMALL)
                             }
                             cell(submitButton).gap(RightGap.SMALL)
                             cell(stopButton)

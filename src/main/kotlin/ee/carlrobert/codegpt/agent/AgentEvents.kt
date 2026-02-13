@@ -1,11 +1,13 @@
 package ee.carlrobert.codegpt.agent
 
 import ai.koog.prompt.executor.clients.LLMClientException
+import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.tools.AskUserQuestionTool
 import ee.carlrobert.codegpt.conversations.message.TokenUsage
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
+import java.util.UUID
 
 interface AgentEvents {
     fun onTextReceived(text: String) {}
@@ -22,6 +24,7 @@ interface AgentEvents {
     }
 
     fun onRetry(attempt: Int, maxAttempts: Int, reason: String? = null) {}
+    fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {}
     fun onQueuedMessagesResolved()
     fun onTokenUsageAvailable(tokenUsage: Long) {}
     fun onCreditsAvailable(event: AgentCreditsEvent) {}

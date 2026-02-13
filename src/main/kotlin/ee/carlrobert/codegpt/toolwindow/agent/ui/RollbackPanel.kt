@@ -5,6 +5,7 @@ import com.intellij.diff.DiffManager
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.icons.AllIcons
 import com.intellij.ide.actions.OpenFileAction
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.EDT
@@ -23,6 +24,7 @@ import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.drawCenteredText
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.lineDiffStats
 import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.components.LeftEllipsisLabel
+import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import kotlinx.coroutines.*
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -40,15 +42,11 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.*
 
-/**
- * Panel showing file operations performed by the agent with rollback controls.
- *
- */
 class RollbackPanel(
     private val project: Project,
     private val sessionId: String,
     private val onRollbackComplete: () -> Unit
-) : BorderLayoutPanel() {
+) : BorderLayoutPanel(), Disposable {
     private val rollbackService = RollbackService.getInstance(project)
     private val titleLabel = JBLabel()
     private val timeLabel = JBLabel()
@@ -58,7 +56,8 @@ class RollbackPanel(
     private val keepAllLink = createKeepAllLink()
     private val diffStatsCache = ConcurrentHashMap<String, Triple<Int, Int, Int>>()
     private val diffDataCache = ConcurrentHashMap<String, RollbackDiffData>()
-    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var lastSnapshotRunId: String? = null
+    private val backgroundScope = DisposableCoroutineScope(Dispatchers.IO)
 
     init {
         setupUI()
@@ -130,12 +129,26 @@ class RollbackPanel(
                 .sortedBy { it.path }
 
             withContext(Dispatchers.EDT) {
-                refreshOperationsUI(changes, snapshot?.completedAt)
+                refreshOperationsUI(
+                    changes = changes,
+                    completedAt = snapshot?.completedAt,
+                    snapshotRunId = snapshot?.runId
+                )
             }
         }
     }
 
-    private fun refreshOperationsUI(changes: List<FileChange>, completedAt: Instant?) {
+    private fun refreshOperationsUI(
+        changes: List<FileChange>,
+        completedAt: Instant?,
+        snapshotRunId: String?
+    ) {
+        if (snapshotRunId != lastSnapshotRunId) {
+            diffStatsCache.clear()
+            diffDataCache.clear()
+            lastSnapshotRunId = snapshotRunId
+        }
+
         isVisible = changes.isNotEmpty()
         if (changes.isEmpty()) {
             titleLabel.text = "Changes"
@@ -168,10 +181,10 @@ class RollbackPanel(
     }
 
     private fun handleRollback() {
-        CoroutineScope(Dispatchers.Main).launch {
+        backgroundScope.launch {
             val result = rollbackService.rollbackSession(sessionId)
 
-            withContext(Dispatchers.Main) {
+            withContext(Dispatchers.EDT) {
                 when (result) {
                     is RollbackResult.Success -> {
                         refreshOperations()
@@ -424,10 +437,10 @@ class RollbackPanel(
     }
 
     private fun rollbackFile(path: String) {
-        CoroutineScope(Dispatchers.Main).launch {
+        backgroundScope.launch {
             val result = rollbackService.rollbackFile(sessionId, path)
 
-            withContext(Dispatchers.Main) {
+            withContext(Dispatchers.EDT) {
                 when (result) {
                     is RollbackResult.Success -> {
                         refreshOperations()
@@ -466,7 +479,7 @@ class RollbackPanel(
         backgroundScope.launch {
             val diffData = rollbackService.getDiffData(sessionId, path) ?: return@launch
             diffDataCache[path] = diffData
-            withContext(Dispatchers.Main) {
+            withContext(Dispatchers.EDT) {
                 openDiff(diffData)
             }
         }
@@ -479,5 +492,9 @@ class RollbackPanel(
         val title = "Agent change: ${displayFileName(diffData.path)}"
         val request = SimpleDiffRequest(title, before, after, "Before", "After")
         DiffManager.getInstance().showDiff(project, request)
+    }
+
+    override fun dispose() {
+        backgroundScope.dispose()
     }
 }

@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.toolwindow.agent.ui
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
@@ -21,27 +20,33 @@ import ee.carlrobert.codegpt.agent.history.AgentCheckpointConversationMapper
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
 import ee.carlrobert.codegpt.agent.history.AgentHistoryThreadSummary
 import ee.carlrobert.codegpt.settings.GeneralSettings
+import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.ProxyAISubagent
 import ee.carlrobert.codegpt.settings.agents.SubagentsConfigurable
+import ee.carlrobert.codegpt.settings.hooks.HookConfig
+import ee.carlrobert.codegpt.settings.hooks.HookConfiguration
+import ee.carlrobert.codegpt.settings.skills.SkillDescriptor
+import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.tokens.TokenComputationService
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
 import ee.carlrobert.codegpt.toolwindow.agent.history.AgentHistoryListPanel
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel
 import ee.carlrobert.codegpt.ui.UIUtil.createTextPane
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
+import com.intellij.openapi.Disposable
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Desktop
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JPanel
 
-class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessagePanel() {
+class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessagePanel(), Disposable {
 
     companion object {
         private val logger = thisLogger()
@@ -49,7 +54,10 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
 
     private val historyService = project.service<AgentCheckpointHistoryService>()
     private val historyListPanel = AgentHistoryListPanel(defaultLimit = 5)
+    private val backgroundScope = DisposableCoroutineScope(Dispatchers.IO)
     private var refreshHistory = true
+    @Volatile
+    private var disposed = false
 
     private fun createLabel(text: String) = JBLabel(text)
     private fun createLink(text: String, onClick: () -> Unit) = ActionLink(text) { onClick() }
@@ -166,77 +174,39 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
             tokensLabel.foreground = healthColor(tokens)
             topRow.add(tokensLabel)
 
-            val bottomRow = JPanel()
-            bottomRow.layout = BoxLayout(bottomRow, BoxLayout.X_AXIS)
-            bottomRow.alignmentX = LEFT_ALIGNMENT
+            val settingsService = project.service<ProxyAISettingsService>()
+            val skills = project.service<SkillDiscoveryService>().listSkills()
+            val subagents = settingsService.getSubagents()
+            val hookEntries = collectHookEntries(settingsService.getHooks())
+            val enabledHooksCount = hookEntries.count { it.hook.enabled }
 
-            val ts = vf.timeStamp
-            val now = Instant.now()
-            val fileTime = Instant.ofEpochMilli(ts)
-            val zonedNow = now.atZone(ZoneId.systemDefault())
-            val zonedFileTime = fileTime.atZone(ZoneId.systemDefault())
-
-            val timeLabel = when {
-                zonedFileTime.toLocalDate() == zonedNow.toLocalDate() -> {
-                    val timeFormat =
-                        DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault())
-                    JBLabel("Modified today at ${timeFormat.format(fileTime)}")
-                }
-
-                zonedFileTime.toLocalDate() == zonedNow.minusDays(1).toLocalDate() -> {
-                    val timeFormat =
-                        DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault())
-                    JBLabel("Modified yesterday at ${timeFormat.format(fileTime)}")
-                }
-
-                fileTime.isAfter(now.minusSeconds(7 * 24 * 60 * 60)) -> {
-                    val dayFormat =
-                        DateTimeFormatter.ofPattern("EEEE").withZone(ZoneId.systemDefault())
-                    val timeFormat =
-                        DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault())
-                    JBLabel(
-                        "Modified on ${dayFormat.format(fileTime)} at ${
-                            timeFormat.format(
-                                fileTime
-                            )
-                        }"
-                    )
-                }
-
-                zonedFileTime.toLocalDate().year == zonedNow.toLocalDate().year -> {
-                    val dateFormat =
-                        DateTimeFormatter.ofPattern("MMM d").withZone(ZoneId.systemDefault())
-                    val timeFormat =
-                        DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault())
-                    JBLabel(
-                        "Modified on ${dateFormat.format(fileTime)} at ${
-                            timeFormat.format(
-                                fileTime
-                            )
-                        }"
-                    )
-                }
-
-                else -> {
-                    val dateFormat =
-                        DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneId.systemDefault())
-                    val timeFormat =
-                        DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault())
-                    JBLabel(
-                        "Modified on ${dateFormat.format(fileTime)} at ${
-                            timeFormat.format(
-                                fileTime
-                            )
-                        }"
-                    )
-                }
-            }
-            timeLabel.foreground = SimpleTextAttributes.GRAYED_ATTRIBUTES.fgColor
-            bottomRow.add(timeLabel)
+            val detailsRow = JPanel()
+            detailsRow.layout = BoxLayout(detailsRow, BoxLayout.X_AXIS)
+            detailsRow.alignmentX = LEFT_ALIGNMENT
+            detailsRow.add(
+                createHoverDetailsLabel(
+                    text = "Skills ${skills.size}",
+                    tooltip = buildSkillsTooltip(skills)
+                )
+            )
+            detailsRow.add(createDetailsSeparator())
+            detailsRow.add(
+                createHoverDetailsLabel(
+                    text = "Hooks $enabledHooksCount",
+                    tooltip = buildHooksTooltip(hookEntries)
+                )
+            )
+            detailsRow.add(createDetailsSeparator())
+            detailsRow.add(
+                createHoverDetailsLabel(
+                    text = "Subagents ${subagents.size}",
+                    tooltip = buildSubagentsTooltip(subagents)
+                )
+            )
 
             container.add(topRow)
             container.add(Box.createVerticalStrut(2))
-            container.add(bottomRow)
+            container.add(detailsRow)
         }
 
         panel.add(container)
@@ -299,22 +269,23 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
         limit: Int,
         onResult: (List<AgentHistoryThreadSummary>, Boolean, Int) -> Unit
     ) {
+        if (disposed || project.isDisposed) return
         val shouldRefresh = offset == 0 && refreshHistory
-        ApplicationManager.getApplication().executeOnPooledThread {
+        backgroundScope.launch {
             val page = runCatching {
-                runBlocking {
-                    historyService.listThreadsPage(
-                        query = query,
-                        offset = offset,
-                        limit = limit,
-                        refresh = shouldRefresh
-                    )
-                }
+                historyService.listThreadsPage(
+                    query = query,
+                    offset = offset,
+                    limit = limit,
+                    refresh = shouldRefresh
+                )
             }
                 .onFailure { logger.warn("Failed to load checkpoint history", it) }
                 .getOrNull()
 
+            if (disposed || project.isDisposed) return@launch
             runInEdt {
+                if (disposed || project.isDisposed) return@runInEdt
                 if (page != null) {
                     refreshHistory = false
                 }
@@ -324,23 +295,35 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
     }
 
     private fun openCheckpointThread(thread: AgentHistoryThreadSummary) {
-        ApplicationManager.getApplication().executeOnPooledThread {
+        if (disposed || project.isDisposed) return
+        backgroundScope.launch {
+            val checkpoint = runCatching {
+                historyService.loadCheckpoint(thread.latest)
+            }.onFailure {
+                logger.warn("Failed to open checkpoint thread ${thread.agentId}", it)
+            }.getOrNull() ?: return@launch
+
             val conversation = runCatching {
-                val checkpoint = runBlocking { historyService.loadCheckpoint(thread.latest) }
-                    ?: return@executeOnPooledThread
                 AgentCheckpointConversationMapper.toConversation(
                     checkpoint = checkpoint,
                     projectInstructions = loadProjectInstructions(project.basePath)
                 )
             }.onFailure {
                 logger.warn("Failed to open checkpoint thread ${thread.agentId}", it)
-            }.getOrNull() ?: return@executeOnPooledThread
+            }.getOrNull() ?: return@launch
 
-            ApplicationManager.getApplication().invokeLater {
+            if (disposed || project.isDisposed) return@launch
+            runInEdt {
+                if (disposed || project.isDisposed) return@runInEdt
                 project.service<AgentToolWindowContentManager>()
                     .openCheckpointConversation(thread, conversation)
             }
         }
+    }
+
+    override fun dispose() {
+        disposed = true
+        backgroundScope.dispose()
     }
 
     private fun welcomeMessage(): String {
@@ -385,4 +368,93 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
         val bl = (a.blue + (b.blue - a.blue) * t).toInt()
         return Color(r, g, bl)
     }
+
+    private fun createHoverDetailsLabel(text: String, tooltip: String): JBLabel {
+        return JBLabel(text).apply {
+            foreground = SimpleTextAttributes.GRAYED_ATTRIBUTES.fgColor
+            toolTipText = tooltip
+        }
+    }
+
+    private fun createDetailsSeparator(): JBLabel {
+        return JBLabel(" • ").apply {
+            foreground = SimpleTextAttributes.GRAYED_ATTRIBUTES.fgColor
+        }
+    }
+
+    private fun collectHookEntries(configuration: HookConfiguration): List<HookEntry> = buildList {
+        addAll(configuration.beforeToolUse.map { HookEntry("Before tool", it) })
+        addAll(configuration.afterToolUse.map { HookEntry("After tool", it) })
+        addAll(configuration.subagentStart.map { HookEntry("Subagent start", it) })
+        addAll(configuration.subagentStop.map { HookEntry("Subagent stop", it) })
+        addAll(configuration.beforeShellExecution.map { HookEntry("Before shell", it) })
+        addAll(configuration.afterShellExecution.map { HookEntry("After shell", it) })
+        addAll(configuration.beforeReadFile.map { HookEntry("Before read", it) })
+        addAll(configuration.afterFileEdit.map { HookEntry("After edit", it) })
+        addAll(configuration.stop.map { HookEntry("Stop", it) })
+    }
+
+    private fun buildSkillsTooltip(skills: List<SkillDescriptor>): String {
+        if (skills.isEmpty()) {
+            return tooltipHtml("Skills", listOf("No skills discovered in .proxyai/skills"))
+        }
+
+        val lines = skills.take(5).map { "• ${it.name} — ${it.title}" }.toMutableList()
+        val remaining = skills.size - lines.size
+        if (remaining > 0) {
+            lines.add("+$remaining more")
+        }
+
+        return tooltipHtml("Skills (${skills.size})", lines)
+    }
+
+    private fun buildHooksTooltip(hookEntries: List<HookEntry>): String {
+        val enabled = hookEntries.filter { it.hook.enabled }
+        if (hookEntries.isEmpty()) {
+            return tooltipHtml("Hooks", listOf("No hooks configured"))
+        }
+
+        val lines = mutableListOf<String>()
+        enabled.take(4).forEach { entry ->
+            lines.add("• ${entry.event}: ${entry.hook.command}")
+        }
+        val remainingEnabled = enabled.size - 4
+        if (remainingEnabled > 0) {
+            lines.add("+$remainingEnabled more enabled")
+        }
+
+        return tooltipHtml("Hooks", lines)
+    }
+
+    private fun buildSubagentsTooltip(subagents: List<ProxyAISubagent>): String {
+        if (subagents.isEmpty()) {
+            return tooltipHtml("Subagents", listOf("No subagents configured"))
+        }
+
+        val lines = subagents.take(5).map { "• ${it.title}" }.toMutableList()
+        val remaining = subagents.size - lines.size
+        if (remaining > 0) {
+            lines.add("+$remaining more")
+        }
+
+        return tooltipHtml("Subagents (${subagents.size})", lines)
+    }
+
+    private fun tooltipHtml(title: String, lines: List<String>): String {
+        val escapedTitle = escapeHtml(title)
+        val escapedLines = lines.joinToString("<br>") { escapeHtml(it) }
+        return "<html><b>$escapedTitle</b><br>$escapedLines</html>"
+    }
+
+    private fun escapeHtml(value: String): String {
+        return value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+    }
+
+    private data class HookEntry(
+        val event: String,
+        val hook: HookConfig
+    )
 }

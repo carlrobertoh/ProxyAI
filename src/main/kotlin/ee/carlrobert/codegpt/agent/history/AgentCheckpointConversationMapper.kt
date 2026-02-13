@@ -3,9 +3,9 @@ package ee.carlrobert.codegpt.agent.history
 import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.util.StringUtil.stripThinkingBlocks
 import ee.carlrobert.llm.client.openai.completion.response.ToolCall
 import ee.carlrobert.llm.client.openai.completion.response.ToolFunctionResponse
-import ai.koog.prompt.message.Message as PromptMessage
 
 object AgentCheckpointConversationMapper {
 
@@ -14,21 +14,54 @@ object AgentCheckpointConversationMapper {
         projectInstructions: String?
     ): Conversation {
         val conversation = Conversation()
-        val history = checkpoint.messageHistory.filterNot { it is PromptMessage.System }
+        val turns = AgentCheckpointTurnSequencer.toVisibleTurns(
+            history = checkpoint.messageHistory,
+            projectInstructions = projectInstructions
+        )
 
-        var currentPrompt: String? = null
-        val response = StringBuilder()
-        val toolCalls = mutableListOf<ToolCall>()
-        val toolResults = LinkedHashMap<String, String>()
-        var syntheticToolIdIndex = 0
+        turns.forEach { turn ->
+            val response = StringBuilder()
+            val toolCalls = mutableListOf<ToolCall>()
+            val toolResults = LinkedHashMap<String, String>()
+            var syntheticToolIdIndex = 0
 
-        fun flushTurn() {
-            val prompt = currentPrompt?.trim().orEmpty()
-            if (prompt.isBlank()) {
-                return
+            turn.events.forEach { event ->
+                when (event) {
+                    is AgentCheckpointTurnSequencer.TurnEvent.Assistant -> {
+                        appendAssistant(response, event.content)
+                    }
+
+                    is AgentCheckpointTurnSequencer.TurnEvent.Reasoning -> {
+                        appendAssistant(response, event.content)
+                    }
+
+                    is AgentCheckpointTurnSequencer.TurnEvent.ToolCall -> {
+                        val callId = event.id?.takeIf { it.isNotBlank() }
+                            ?: "tool-call-${++syntheticToolIdIndex}"
+                        toolCalls.add(
+                            ToolCall(
+                                null,
+                                callId,
+                                "function",
+                                ToolFunctionResponse(event.tool, event.content.trim())
+                            )
+                        )
+                    }
+
+                    is AgentCheckpointTurnSequencer.TurnEvent.ToolResult -> {
+                        val callId = event.id?.takeIf { it.isNotBlank() }
+                            ?: toolCalls.lastOrNull()?.id
+                            ?: "tool-call-${++syntheticToolIdIndex}"
+                        val prior = toolResults[callId]
+                        val merged = if (prior.isNullOrBlank()) event.content.trim() else {
+                            "$prior\n\n${event.content.trim()}"
+                        }
+                        toolResults[callId] = merged
+                    }
+                }
             }
 
-            val uiMessage = Message(prompt)
+            val uiMessage = Message(turn.prompt)
             uiMessage.response = response.toString().trim()
             if (toolCalls.isNotEmpty()) {
                 uiMessage.toolCalls = ArrayList(toolCalls)
@@ -37,64 +70,13 @@ object AgentCheckpointConversationMapper {
                 uiMessage.toolCallResults = LinkedHashMap(toolResults)
             }
             conversation.addMessage(uiMessage)
-            currentPrompt = null
-            response.setLength(0)
-            toolCalls.clear()
-            toolResults.clear()
         }
 
-        history.forEach { msg ->
-            when (msg) {
-                is PromptMessage.User -> {
-                    val text = msg.content.trim()
-                    if (shouldHideInAgentToolWindow(msg, projectInstructions)) {
-                        return@forEach
-                    }
-                    flushTurn()
-                    currentPrompt = text
-                }
-
-                is PromptMessage.Assistant -> appendAssistant(response, msg.content)
-                is PromptMessage.Reasoning -> appendAssistant(response, msg.content)
-                is PromptMessage.Tool.Call -> {
-                    if (currentPrompt != null) {
-                        val callId =
-                            msg.id?.takeIf { it.isNotBlank() }
-                                ?: "tool-call-${++syntheticToolIdIndex}"
-                        toolCalls.add(
-                            ToolCall(
-                                null,
-                                callId,
-                                "function",
-                                ToolFunctionResponse(msg.tool, msg.content.trim())
-                            )
-                        )
-                    }
-                }
-
-                is PromptMessage.Tool.Result -> {
-                    if (currentPrompt != null) {
-                        val callId = msg.id?.takeIf { it.isNotBlank() }
-                            ?: toolCalls.lastOrNull()?.id
-                            ?: "tool-call-${++syntheticToolIdIndex}"
-                        val prior = toolResults[callId]
-                        val merged = if (prior.isNullOrBlank()) msg.content.trim() else {
-                            "$prior\n\n${msg.content.trim()}"
-                        }
-                        toolResults[callId] = merged
-                    }
-                }
-
-                else -> Unit
-            }
-        }
-
-        flushTurn()
         return conversation
     }
 
     private fun appendAssistant(sb: StringBuilder, content: String) {
-        val text = content.trim()
+        val text = content.stripThinkingBlocks()
         if (text.isBlank()) {
             return
         }

@@ -84,12 +84,12 @@ class BashTool(
         - If the commands depend on each other and must run sequentially, use a single Bash call with '&&' to chain them together (e.g., `git add . && git commit -m "message" && git push`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before Bash for git operations, or git add before git commit), run these operations sequentially instead.
         - Use ';' only when you need to run commands sequentially but don't care if earlier commands fail
         - DO NOT use newlines to separate commands (newlines are ok in quoted strings)
-      - Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of `cd`. You may use `cd` if the User explicitly requests it.
+      - Commands run with the working directory already set to the project root. Prefer relative project paths (e.g., `src/...` or `./src/...`) instead of root-absolute paths like `/src` or hardcoded machine-specific paths like `/Users/.../project/...`. You may use `cd` only if the user explicitly requests it.
         <good-example>
-        pytest /foo/bar/tests
+        find src -type f -name "*.kt"
         </good-example>
         <bad-example>
-        cd /foo/bar && pytest tests
+        find /src -type f -name "*.kt"
         </bad-example>
     
     # Committing changes with git
@@ -261,11 +261,10 @@ class BashTool(
             )
         }
 
-        val isAskPattern = shouldAskForConfirmation(args.command)
         val resolvedToolId = toolId ?: throw IllegalArgumentException("Tool ID is missing")
 
         val confirmation = when {
-            isWhiteListed(args) && !isAskPattern -> ShellCommandConfirmation.Approved
+            isWhiteListed(args) -> ShellCommandConfirmation.Approved
             else -> confirmationHandler.requestConfirmation(args)
         }
         return when (confirmation) {
@@ -377,7 +376,6 @@ class BashTool(
                             }
                         }
                     } catch (_: IOException) {
-                        // Ignore IO exception if the stream is closed
                     }
                 }
 
@@ -391,7 +389,6 @@ class BashTool(
                             }
                         }
                     } catch (_: IOException) {
-                        // Ignore IO exception if the stream is closed
                     }
                 }
 
@@ -463,8 +460,7 @@ class BashTool(
             }
             when (event) {
                 WaitEvent.EXIT -> done = true
-                WaitEvent.ACTIVITY -> { /* reset idle timer */
-                }
+                WaitEvent.ACTIVITY -> Unit
 
                 null -> {
                     timedOut.set(true)
@@ -541,28 +537,6 @@ class BashTool(
         }
     }
 
-    private fun shouldAskForConfirmation(command: String): Boolean {
-        val askPatterns = listOf(
-            "find * -delete*",
-            "find * -exec*",
-            "find * -fprint*",
-            "find * -fls*",
-            "find * -fprintf*",
-            "find * -ok*",
-            "sort --output=*",
-            "sort -o *",
-            "tree -o *"
-        )
-
-        return askPatterns.any { pattern ->
-            if (pattern.contains("*")) {
-                command.startsWith(pattern.removeSuffix("*"))
-            } else {
-                command == pattern
-            }
-        }
-    }
-
     private fun shouldBlockByIgnore(command: String): Boolean {
         val readers = setOf(
             "cat",
@@ -607,8 +581,6 @@ class BashTool(
             lastWasReader = tokenIsReader
         }
         val settingsService = project.service<ProxyAISettingsService>()
-        // TODO(PROXYAI-IGNORE): Replace deny-style bash path checks with visibility filtering.
-        // Bash output and directory listings should hide ignored paths instead of returning policy-denied.
         return paths.any { candidate ->
             settingsService.isPathIgnored(toAbsolute(candidate))
         }

@@ -169,25 +169,20 @@ object ToolSpecs {
 
     fun find(toolName: String): ToolSpec<*, *>? = specsByName[toolName.lowercase()]
 
-    fun approvalTypeFor(toolName: String): ToolApprovalType {
-        return find(toolName)?.approvalType ?: ToolApprovalType.GENERIC
-    }
+    fun approvalTypeFor(toolName: String): ToolApprovalType =
+        find(toolName)?.approvalType ?: ToolApprovalType.GENERIC
 
     fun decodeArgsOrNull(
         json: Json,
         toolName: String,
         payload: String
-    ): Any? {
-        return decodeOrNull(json, find(toolName)?.argsSerializer, payload)
-    }
+    ) = decodeOrNull(json, find(toolName)?.argsSerializer, payload)
 
     fun decodeResultOrNull(
         json: Json,
         toolName: String,
         payload: String
-    ): Any? {
-        return decodeOrNull(json, find(toolName)?.resultSerializer, payload)
-    }
+    ) = decodeOrNull(json, find(toolName)?.resultSerializer, payload)
 
     @Suppress("UNCHECKED_CAST")
     private fun decodeOrNull(

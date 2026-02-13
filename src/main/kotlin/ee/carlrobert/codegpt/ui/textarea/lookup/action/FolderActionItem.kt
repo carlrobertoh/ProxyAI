@@ -13,7 +13,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
 class FolderActionItem(
     private val project: Project,
     private val folder: VirtualFile
-) : AbstractLookupActionItem() {
+) : AbstractLookupActionItem(), InsertsDisplayNameLookupItem {
 
     override val displayName = folder.name
     override val icon = AllIcons.Nodes.Folder
