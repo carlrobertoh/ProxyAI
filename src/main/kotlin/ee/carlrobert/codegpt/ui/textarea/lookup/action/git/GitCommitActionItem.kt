@@ -5,11 +5,12 @@ import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.AbstractLookupActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.InsertsDisplayNameLookupItem
 import git4idea.GitCommit
 
 class GitCommitActionItem(
     private val gitCommit: GitCommit,
-) : AbstractLookupActionItem() {
+) : AbstractLookupActionItem(), InsertsDisplayNameLookupItem {
 
     val description: String = gitCommit.id.asString().take(6)
 
@@ -17,6 +18,6 @@ class GitCommitActionItem(
     override val icon = AllIcons.Vcs.CommitNode
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
-        userInputPanel.addTag(GitCommitTagDetails(gitCommit))
+        userInputPanel.addTag(GitCommitTagDetails(gitCommit.id.asString(), gitCommit.fullMessage))
     }
 }

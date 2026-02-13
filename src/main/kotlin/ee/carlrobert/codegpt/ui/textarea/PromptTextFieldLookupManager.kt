@@ -17,9 +17,9 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.InsertsDisplayNameLookupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.git.GitCommitActionItem
 
 class PromptTextFieldLookupManager(
     private val project: Project,
@@ -215,7 +215,7 @@ class PromptTextFieldLookupManager(
     private fun shouldInsertDisplayName(lookupItem: LookupItem): Boolean {
         return lookupItem is FileActionItem
                 || lookupItem is FolderActionItem
-                || lookupItem is GitCommitActionItem
+                || lookupItem is InsertsDisplayNameLookupItem
     }
 
     private fun insertWithHighlight(editor: Editor, position: Int, text: String) {

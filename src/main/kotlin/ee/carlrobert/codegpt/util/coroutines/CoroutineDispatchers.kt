@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.util.coroutines
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -21,9 +22,19 @@ class CoroutineDispatchers {
 object EdtDispatchers {
     val NonModal = EdtCoroutineDispatcher(ModalityState.nonModal())
     val Default = EdtCoroutineDispatcher()
-    val Current = EdtCoroutineDispatcher(ModalityState.current())
+    val Current: CoroutineDispatcher
+        get() = EdtCoroutineDispatcher(currentOrDefaultModalityState())
 
     fun withModalityState(modalityState: ModalityState): CoroutineDispatcher {
         return EdtCoroutineDispatcher(modalityState)
+    }
+
+    private fun currentOrDefaultModalityState(): ModalityState {
+        val app = ApplicationManager.getApplication()
+        return if (app.isDispatchThread) {
+            ModalityState.current()
+        } else {
+            ModalityState.defaultModalityState()
+        }
     }
 }

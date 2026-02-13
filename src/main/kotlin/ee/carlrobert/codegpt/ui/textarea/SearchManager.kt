@@ -35,18 +35,18 @@ class SearchManager(
         else -> getAllGroups()
     }
 
-    private fun getInlineEditGroups() = listOf(
+    private fun getInlineEditGroups() = listOfNotNull(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
-        GitGroupItem(project),
+        if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
         DiagnosticsActionItem(tagManager)
     ).filter { it.enabled }
 
-    private fun getAgentGroups() = listOf(
+    private fun getAgentGroups() = listOfNotNull(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
-        GitGroupItem(project),
+        if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         MCPGroupItem(tagManager, FeatureType.AGENT),
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
@@ -54,7 +54,7 @@ class SearchManager(
     private fun getAllGroups() = listOfNotNull(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
-        GitGroupItem(project),
+        if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         MCPGroupItem(tagManager, featureType ?: FeatureType.CHAT),

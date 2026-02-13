@@ -11,6 +11,7 @@ import com.intellij.openapi.vcs.history.VcsRevisionNumber
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
+import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails
 import ee.carlrobert.codegpt.util.GitUtil
 import git4idea.GitCommit
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +37,7 @@ class ExplainGitCommitAction : AnAction(
         scope.launch {
             val gitCommits =
                 getCommitsForRevisions(project, e.getData(VcsDataKeys.VCS_REVISION_NUMBERS))
+                    .map { GitCommitTagDetails(it.id.asString(), it.fullMessage) }
 
             project.service<ChatToolWindowContentManager>().apply {
                 runInEdt {

@@ -62,7 +62,6 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
-import git4idea.GitCommit;
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -190,7 +189,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     userInputPanel.addSelection(editorFile, selectionModel);
   }
 
-  public void addCommitReferences(List<GitCommit> gitCommits) {
+  public void addCommitReferences(List<GitCommitTagDetails> gitCommits) {
     userInputPanel.addCommitReferences(gitCommits);
   }
 
@@ -263,7 +262,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         .ifPresent(tag -> builder.personaDetails(tag.getPersonaDetails()));
 
     findTagOfType(selectedTags, GitCommitTagDetails.class)
-        .ifPresent(tag -> builder.gitDiff(tag.getGitCommit().getFullMessage()));
+        .ifPresent(tag -> builder.gitDiff(tag.getFullMessage()));
 
     var mcpTools = new ArrayList<McpTool>();
     var mcpServerIds = new ArrayList<String>();

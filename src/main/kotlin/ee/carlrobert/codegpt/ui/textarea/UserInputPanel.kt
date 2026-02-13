@@ -47,14 +47,13 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
-import git4idea.GitCommit
 import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.geom.Area
 import java.awt.geom.Rectangle2D
 import java.awt.geom.RoundRectangle2D
-import java.util.UUID
+import java.util.*
 import javax.swing.JComponent
 import javax.swing.JPanel
 
@@ -332,7 +331,7 @@ class UserInputPanel @JvmOverloads constructor(
         selectionModel.removeSelection()
     }
 
-    fun addCommitReferences(gitCommits: List<GitCommit>) {
+    fun addCommitReferences(gitCommits: List<GitCommitTagDetails>) {
         runInEdt {
             setCommitPromptIfEmpty(gitCommits)
             addCommitTags(gitCommits)
@@ -340,22 +339,24 @@ class UserInputPanel @JvmOverloads constructor(
         }
     }
 
-    private fun setCommitPromptIfEmpty(gitCommits: List<GitCommit>) {
+    private fun setCommitPromptIfEmpty(gitCommits: List<GitCommitTagDetails>) {
         if (promptTextField.text.isEmpty()) {
             promptTextField.text = buildCommitPrompt(gitCommits)
         }
     }
 
-    private fun buildCommitPrompt(gitCommits: List<GitCommit>): String {
+    private fun buildCommitPrompt(gitCommits: List<GitCommitTagDetails>): String {
         return if (gitCommits.size == 1) {
-            "Explain the commit `${gitCommits[0].id.toShortString()}`"
+            "Explain the commit `${gitCommits[0].commitHash.take(7)}`"
         } else {
-            "Explain the commits ${gitCommits.joinToString(", ") { "`${it.id.toShortString()}`" }}"
+            "Explain the commits ${
+                gitCommits.joinToString(", ") { "`${it.commitHash.take(7)}`" }
+            }"
         }
     }
 
-    private fun addCommitTags(gitCommits: List<GitCommit>) {
-        gitCommits.forEach { addTag(GitCommitTagDetails(it)) }
+    private fun addCommitTags(gitCommits: List<GitCommitTagDetails>) {
+        gitCommits.forEach { addTag(it) }
     }
 
     private fun focusOnPromptEnd() {

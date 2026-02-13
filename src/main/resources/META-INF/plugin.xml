@@ -13,7 +13,7 @@
     <!--    <depends optional="true" config-file="plugin-ruby.xml">com.intellij.modules.ruby</depends>-->
     <!--    <depends optional="true" config-file="plugin-php.xml">com.jetbrains.php</depends>-->
     <!--    <depends optional="true" config-file="plugin-swift.xml">com.intellij.swift</depends>-->
-    <depends optional="true">Git4Idea</depends>
+    <depends optional="true" config-file="plugin-git.xml">Git4Idea</depends>
 
     <projectListeners>
         <listener topic="com.intellij.codeInsight.lookup.LookupManagerListener"
@@ -189,18 +189,6 @@
             <separator/>
         </group>
 
-        <group id="CodeGPT.VcsLogContextMenu">
-            <separator/>
-            <action
-              id="CodeGPT.ExplainGitCommitAction"
-              class="ee.carlrobert.codegpt.actions.ExplainGitCommitAction"/>
-            <add-to-group
-              group-id="Vcs.Log.ContextMenu"
-              relative-to-action="Vcs.Log.CompareRevisions"
-              anchor="after"/>
-            <separator/>
-        </group>
-
         <group id="CodeGPT.FloatingCodeToolbarMenuRootGroup">
             <action
               id="CodeGPT.FloatingMenuInlineEditAction"
@@ -322,24 +310,5 @@
             <reference id="statusbar.enableCompletions"/>
         </group>
 
-        <group id="CodeGPT.GenerateGitCommitMessageGroup"
-               text="ProxyAI"
-               popup="true"
-               icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
-            <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
-            <action
-                    id="CodeGPT.GenerateGitCommitMessage"
-                    text="Generate Commit Message"
-                    class="ee.carlrobert.codegpt.actions.GenerateCommitMessageAction"/>
-            <action
-                    id="CodeGPT.GenerateGitCommitMessageWithAdditionalInput"
-                    text="Generate Commit Message with Additional Input"
-                    class="ee.carlrobert.codegpt.actions.GenerateCommitMessageWithAdditionalInputAction"/>
-            <separator/>
-            <action
-                    id="CodeGPT.ReviewChanges"
-                    text="Review Changes"
-                    class="ee.carlrobert.codegpt.actions.ReviewChangesAction"/>
-        </group>
     </actions>
 </idea-plugin>

@@ -24,7 +24,6 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.GitUtil
-import git4idea.GitCommit
 import java.util.*
 
 object TagProcessorFactory {
@@ -171,18 +170,17 @@ class GitCommitTagProcessor(
     override fun process(message: Message, promptBuilder: StringBuilder) {
         promptBuilder
             .append("\n```shell\n")
-            .append(getDiffString(project, tagDetails.gitCommit))
+            .append(getDiffString(project, tagDetails.commitHash))
             .append("\n```\n")
     }
 
-    private fun getDiffString(project: Project, gitCommit: GitCommit): String {
+    private fun getDiffString(project: Project, commitHash: String): String {
         return ProgressManager.getInstance().runProcessWithProgressSynchronously<String, Exception>(
             {
                 val repository = GitUtil.getProjectRepository(project)
                     ?: return@runProcessWithProgressSynchronously ""
 
-                val commitId = gitCommit.id.asString()
-                val diff = GitUtil.getCommitDiffs(project, repository, commitId)
+                val diff = GitUtil.getCommitDiffs(project, repository, commitHash)
                     .joinToString("\n")
 
                 service<EncodingManager>().truncateText(diff, 8192, true)

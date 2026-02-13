@@ -9,7 +9,6 @@ import ee.carlrobert.codegpt.mcp.ConnectionStatus
 import ee.carlrobert.codegpt.mcp.McpResource
 import ee.carlrobert.codegpt.mcp.McpTool
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
-import git4idea.GitCommit
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import java.util.*
@@ -131,9 +130,11 @@ data class PersonaTagDetails(var personaDetails: PersonaDetails) :
     override fun getTooltipText(): String? = null
 }
 
-data class GitCommitTagDetails(var gitCommit: GitCommit) :
-    TagDetails(gitCommit.id.asString().take(6), AllIcons.Vcs.CommitNode) {
-    override fun getTooltipText(): String = gitCommit.fullMessage
+data class GitCommitTagDetails(
+    val commitHash: String,
+    val fullMessage: String
+) : TagDetails(commitHash.take(6), AllIcons.Vcs.CommitNode) {
+    override fun getTooltipText(): String = fullMessage
 }
 
 class CurrentGitChangesTagDetails :

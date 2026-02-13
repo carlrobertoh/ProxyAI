@@ -1,0 +1,35 @@
+<idea-plugin>
+    <actions>
+        <group id="CodeGPT.VcsLogContextMenu">
+            <separator/>
+            <action
+                    id="CodeGPT.ExplainGitCommitAction"
+                    class="ee.carlrobert.codegpt.actions.ExplainGitCommitAction"/>
+            <add-to-group
+                    group-id="Vcs.Log.ContextMenu"
+                    relative-to-action="Vcs.Log.CompareRevisions"
+                    anchor="after"/>
+            <separator/>
+        </group>
+
+        <group id="CodeGPT.GenerateGitCommitMessageGroup"
+               text="ProxyAI"
+               popup="true"
+               icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
+            <action
+                    id="CodeGPT.GenerateGitCommitMessage"
+                    text="Generate Commit Message"
+                    class="ee.carlrobert.codegpt.actions.GenerateCommitMessageAction"/>
+            <action
+                    id="CodeGPT.GenerateGitCommitMessageWithAdditionalInput"
+                    text="Generate Commit Message with Additional Input"
+                    class="ee.carlrobert.codegpt.actions.GenerateCommitMessageWithAdditionalInputAction"/>
+            <separator/>
+            <action
+                    id="CodeGPT.ReviewChanges"
+                    text="Review Changes"
+                    class="ee.carlrobert.codegpt.actions.ReviewChangesAction"/>
+        </group>
+    </actions>
+</idea-plugin>
