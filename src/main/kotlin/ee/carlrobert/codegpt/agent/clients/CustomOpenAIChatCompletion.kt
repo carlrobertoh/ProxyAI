@@ -132,7 +132,7 @@ public class ErrorResponse(
 public class CustomOpenAIChatCompletionResponse(
     public val choices: List<CustomOpenAIChoice>,
     override val created: Long,
-    override val id: String,
+    override val id: String = "",
     override val model: String,
     public val systemFingerprint: String? = null,
     @SerialName("object")
@@ -148,7 +148,7 @@ public class CustomOpenAIChatCompletionResponse(
 public class CustomOpenAIChatCompletionStreamResponse(
     public val choices: List<CustomOpenAIStreamChoice>,
     override val created: Long,
-    override val id: String,
+    override val id: String = "",
     override val model: String,
     public val systemFingerprint: String? = null,
     @SerialName("object")
