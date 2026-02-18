@@ -13,6 +13,7 @@ import ee.carlrobert.llm.client.anthropic.completion.ClaudeCompletionRequest;
 import ee.carlrobert.llm.client.codegpt.request.InlineEditRequest;
 import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest;
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest;
+import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionEventSourceListener;
 import ee.carlrobert.llm.client.openai.completion.OpenAITextCompletionEventSourceListener;
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest;
@@ -27,9 +28,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import okhttp3.sse.EventSource;
 import okhttp3.sse.EventSources;
+import okio.Buffer;
+import org.jetbrains.annotations.NotNull;
 
 @Service
 public final class CompletionRequestService {
@@ -53,10 +60,85 @@ public final class CompletionRequestService {
   public EventSource getCustomOpenAIChatCompletionAsync(
       Request customRequest,
       CompletionEventListener<String> eventListener) {
+    if (!isStreamingRequest(customRequest)) {
+      return getCustomOpenAINonStreamingChatCompletionAsync(customRequest, eventListener);
+    }
+
     var httpClient = CompletionClientProvider.getDefaultClientBuilder().build();
     return EventSources.createFactory(httpClient).newEventSource(
         customRequest,
         new OpenAIChatCompletionEventSourceListener(eventListener));
+  }
+
+  private EventSource getCustomOpenAINonStreamingChatCompletionAsync(
+      Request customRequest,
+      CompletionEventListener<String> eventListener) {
+    var httpClient = CompletionClientProvider.getDefaultClientBuilder().build();
+    var call = httpClient.newCall(customRequest);
+
+    eventListener.onOpen();
+    call.enqueue(new Callback() {
+      @Override
+      public void onFailure(@NotNull Call call, @NotNull IOException e) {
+        if (call.isCanceled()) {
+          eventListener.onCancelled(new StringBuilder());
+          return;
+        }
+        eventListener.onError(new ErrorDetails(e.getMessage()), e);
+      }
+
+      @Override
+      public void onResponse(@NotNull Call call, @NotNull Response response) {
+        try (response) {
+          var completion =
+              DeserializationUtil.mapResponse(response, OpenAIChatCompletionResponse.class);
+          var content = tryExtractContent(completion).orElse("");
+          eventListener.onComplete(new StringBuilder(content));
+        } catch (Exception e) {
+          eventListener.onError(new ErrorDetails(e.getMessage()), e);
+        }
+      }
+    });
+
+    return new EventSource() {
+      @Override
+      public @NotNull Request request() {
+        return customRequest;
+      }
+
+      @Override
+      public void cancel() {
+        call.cancel();
+      }
+    };
+  }
+
+  private boolean isStreamingRequest(Request customRequest) {
+    RequestBody body = customRequest.body();
+    if (body == null) {
+      return true;
+    }
+
+    try {
+      var buffer = new Buffer();
+      body.writeTo(buffer);
+      var json = DeserializationUtil.OBJECT_MAPPER.readTree(buffer.readUtf8());
+      var stream = json.get("stream");
+
+      if (stream == null || stream.isNull()) {
+        return true;
+      }
+      if (stream.isBoolean()) {
+        return stream.booleanValue();
+      }
+      if (stream.isTextual()) {
+        return Boolean.parseBoolean(stream.asText());
+      }
+    } catch (Exception ignored) {
+      return true;
+    }
+
+    return true;
   }
 
   public String getLookupCompletion(LookupCompletionParameters params) {
