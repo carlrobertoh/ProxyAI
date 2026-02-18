@@ -1,0 +1,105 @@
+---
+title: Permissions
+description: Configure allow, ask, and deny permission rules for Bash and Read.
+---
+
+# Permissions
+
+Permissions define how tool calls are handled before execution.
+
+In the current implementation phase, permission enforcement is applied to:
+
+- `Bash` (specifier matches the command string)
+- `Read` (specifier matches file path and file name)
+
+## Permission settings
+
+| Key | Description | Example |
+| --- | --- | --- |
+| `allow` | Rules that allow tool use. | `[ "Bash(git diff *)" ]` |
+| `ask` | Rules that require confirmation before tool use. | `[ "Bash(git push *)" ]` |
+| `deny` | Rules that block tool use. | `[ "Bash(curl *)", "Read(./.env)", "Read(./secrets/**)" ]` |
+
+## Permission rule syntax
+
+Rules follow this format:
+
+- `Tool`
+- `Tool(specifier)`
+
+Use this syntax to match as broadly or as narrowly as needed.
+
+## Rule evaluation order
+
+When multiple rules match, they are evaluated in this order:
+
+1. `deny`
+2. `ask`
+3. `allow`
+
+The first matching tier determines behavior.  
+This means a deny rule takes precedence even if an allow rule also matches.
+
+## Matching all uses of a tool
+
+Use the bare tool name to match all uses:
+
+| Rule | Effect |
+| --- | --- |
+| `Bash` | Matches all Bash commands |
+| `Read` | Matches all Read calls |
+
+`Tool(*)` is equivalent to `Tool`.
+
+## Using specifiers for fine-grained control
+
+Add a specifier in parentheses for exact or pattern-based matching:
+
+| Rule | Effect |
+| --- | --- |
+| `Bash(npm run build)` | Matches the exact command `npm run build` |
+| `Read(./.env)` | Matches reading `./.env` |
+| `Read(./secrets/**)` | Matches files under `./secrets/` |
+| `Read(config.json)` | Matches reads by filename target `config.json` |
+
+## Wildcard patterns
+
+Wildcard `*` is supported inside specifiers and may appear at the beginning, middle, or end.
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(git commit *)",
+      "Bash(git * main)",
+      "Bash(* --version)",
+      "Read(./src/**)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Read(./.env)"
+    ]
+  }
+}
+```
+
+The space before `*` matters:
+
+- `Bash(ls *)` matches `ls -la`, but not `lsof`
+- `Bash(ls*)` matches both `ls -la` and `lsof`
+
+## Bash pattern limitations
+
+Bash argument-constraining patterns are useful but not a security boundary.
+
+For example, `Bash(curl http://github.com/ *)` may miss variants such as:
+
+- flags before URL (`curl -X GET http://github.com/...`)
+- different protocol (`curl https://github.com/...`)
+- shell-variable forms
+
+Use deny rules and path-level ignore rules together for stronger protection.
+
+- For path-level protections, see [Ignore Rules](/configuration/ignore-rules)
+- For maximum-level of control, see [Hooks](/agent/hooks)

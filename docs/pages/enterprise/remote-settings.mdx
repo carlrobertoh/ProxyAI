@@ -1,0 +1,317 @@
+---
+title: Remote Settings
+description: Centrally manage and synchronize ProxyAI configurations across your organization.
+---
+
+import { Callout, Tabs, Tab } from 'nextra/components'
+
+# Remote Settings
+
+Remote Settings provide administrators with the ability to centrally define and distribute ProxyAI configurations to all users within their organization.
+
+### Benefits
+
+*   **Consistency:** Ensure all developers use the same AI models, prompts, and configurations.
+*   **Compliance & Security:** Enforce the use of approved, secure AI endpoints and disable non-compliant features.
+*   **Simplified Management:** Update configurations centrally without manual changes on each developer's machine.
+*   **Easier Onboarding:** New team members automatically receive the standard configuration.
+
+This feature is available as part of the **[Custom Extension](/enterprise/custom-extension)**.
+
+## Prerequisites
+
+Before configuring Remote Settings:
+1.  Identify the AI providers, models, and custom prompts your organization needs.
+2.  Prepare a secure internal web server or location to host the configuration JSON file.
+3.  Ensure the hosting URL is accessible from your developers' workstations where ProxyAI is installed.
+4.  Plan how to distribute the URL to the ProxyAI instances (e.g., via the Custom Extension or direct communication).
+
+## How it Works
+
+Administrators define a standard configuration profile within a JSON file. This configuration file is hosted at a secure internal URL accessible to developers within the organization.
+
+The ProxyAI plugin is configured (either manually by the user or automatically via the Custom Extension) with this URL. ProxyAI then fetches the file and applies the settings defined within it to the user's instance. This synchronization ensures that the user's ProxyAI setup aligns with the centrally managed configuration.
+
+<Callout type="warning">
+  **Security:** Ensure the URL hosting your configuration JSON is secure and only accessible within your organization's network or via appropriate authentication mechanisms. Avoid exposing sensitive information like API keys directly in this file; use placeholders like `$CUSTOM_SERVICE_API_KEY`.
+</Callout>
+
+## Configuration Overview
+
+Remote settings are defined in a single JSON file. The root object can contain `prompts` and `providers` keys. You only need to include the sections you wish to manage centrally.
+
+<Callout type="info" title="Placeholders">
+  Configuration values can use placeholders that ProxyAI replaces at runtime:
+  *   `$CUSTOM_SERVICE_API_KEY`: User's API key entered in ProxyAI settings (used in `providers` headers).
+  *   `$OPENAI_MESSAGES`: Formatted chat history array (used in `chatCompletionSettings.body`).
+  *   `$PREFIX`: Code before the cursor (used in `codeCompletionSettings.body`).
+  *   `$SUFFIX`: Code after the cursor (used in `codeCompletionSettings.body` for infill).
+  *   `{SELECTION}`: Selected code in the editor (used in `chatActions` prompts).
+  *   `{BRANCH_NAME}`, `{DATE_ISO_8601}`: Git context (used in `coreActions` prompts).
+</Callout>
+
+<Tabs items={['Prompts Configuration', 'Providers Configuration']}>
+  <Tab>
+    ### `prompts`
+
+    Override default prompts or add custom chat actions and personas.
+
+    ```json
+    // Structure example for prompts
+    {
+      "prompts": {
+        "coreActions": {
+          "generateCommitMessages": "Branch: {BRANCH_NAME}..."
+        },
+        "chatActions": [
+          {
+            "name": "Explain Selection",
+            "instructions": "Explain: {SELECTION}"
+          }
+        ],
+        "personas": [
+          {
+            "name": "Code Reviewer",
+            "instructions": "Review the code..."
+          }
+        ]
+      }
+    }
+    ```
+
+    *   **`coreActions`**: (Object) Map action IDs (e.g., `editCode`, `generateCommitMessages`, `reviewChanges`) to custom prompt strings. Use placeholders like `{BRANCH_NAME}`, `{DATE_ISO_8601}` as needed.
+    *   **`chatActions`**: (Array) Define custom actions for the chat panel. Each object needs:
+    *   `name`: (String) Display name (e.g., "Find Bugs", "Write Tests").
+    *   `prompt`: (String) Prompt template. Use `{SELECTION}` for selected code.
+    *   **`personas`**: (Array) Define chat personas to modify base AI instructions. Each object needs:
+    *   `name`: (String) Display name (e.g., "CodeGPT Default", "Rubber Duck").
+    *   `instructions`: (String) Detailed instructions defining the persona.
+
+    *(See the full example JSON below for detailed prompt examples)*
+  </Tab>
+  <Tab>
+    ### `providers`
+
+    Define connections to custom AI providers (like self-hosted models or specific cloud endpoints).
+
+    ```json
+    // Structure example for providers
+    {
+      "providers": {
+        "customOpenAI": [
+            {
+              "name": "Internal Llama 3",
+              "chatCompletionSettings": {
+                "url": "https://your-internal-llm-service.example.com/v1/chat/completions",
+                "headers": {},
+                "body": {
+                  "stream": true,
+                  "model": "llama-4-maverick-17b",
+                  "messages": "$OPENAI_MESSAGES",
+                  "temperature": 0.0,
+                  "max_tokens": 8192
+                }
+              },
+              "codeCompletionSettings": { /* ... */ }
+          }
+        ]
+      }
+    }
+    ```
+
+    *   **`customOpenAI`**: (Array) A list of provider configurations. Each object defines a selectable service endpoint compatible with the OpenAI API format.
+
+    #### Provider Object Fields:
+    *   `name`: (String, Required) Display name for the provider in ProxyAI settings (e.g., "Internal Llama 3").
+    *   `template`: (String, Required) API format template.
+    *   `chatCompletionSettings`: (Object, Optional) Settings for chat completions. See details below.
+    *   `codeCompletionSettings`: (Object, Optional) Settings for code completions. See details below.
+
+    ---
+
+    #### `chatCompletionSettings` Fields
+    Configure the chat API endpoint:
+
+    | Field     | Type    | Required | Description                                                                                                | Example/Placeholder      |
+    | :-------- | :------ | :------- | :--------------------------------------------------------------------------------------------------------- | :----------------------- |
+    | `url`     | String  | Yes      | The full URL of the chat completion API endpoint.                                                          | `"https://.../chat/completions"` |
+    | `headers` | Object  | Yes      | Key-value pairs for HTTP headers. Use `$CUSTOM_SERVICE_API_KEY` for the user's API key.                    | `{ "Authorization": "Bearer $CUSTOM_SERVICE_API_KEY", ... }` |
+    | `body`    | Object  | Yes      | The JSON body structure for the API request. See notes below.                                              | `{ "model": "...", "messages": "$OPENAI_MESSAGES", ... }` |
+    | `model`   | String  | Yes (in `body`) | The specific model identifier to use.                                                              | `"llama-4-maverick-17b"` |
+    | `messages`| String  | Yes (in `body`) | Placeholder `$OPENAI_MESSAGES`; replaced by the plugin with formatted conversation history.            | `"$OPENAI_MESSAGES"`     |
+    | `stream`  | Boolean | Yes (in `body`) | Typically `true` to enable streaming responses.                                                        | `true`                   |
+    | *...other body params* | *Type* | *Optional* | Other parameters supported by your endpoint (e.g., `temperature`, `max_tokens`).                 | `0.0`, `8192`            |
+
+    <Callout type="info" title="Note on `chatCompletionSettings.body`">
+      This object defines the API request payload. It **must** include `model`, `messages` (using the `$OPENAI_MESSAGES` placeholder), and `stream`. Add other parameters like `temperature`, `max_tokens`, `top_p` as needed by your specific endpoint. The `$CUSTOM_SERVICE_API_KEY` placeholder in `headers` is replaced by the API key entered by the user in the plugin settings.
+    </Callout>
+
+    ---
+
+    #### `codeCompletionSettings` Fields
+    Configure the code completion API endpoint (optional):
+
+    | Field                             | Type    | Required | Description                                                                                                | Example/Placeholder      |
+    | :-------------------------------- | :------ | :------- | :--------------------------------------------------------------------------------------------------------- | :----------------------- |
+    | `codeCompletionsEnabled`          | Boolean | No       | Set to `true` to enable code completions for this provider. Defaults to `false`.                           | `true`                   |
+    | `infillTemplate`                  | String  | No       | Specifies how infill requests (prefix/suffix) should be formatted. "OpenAI" is common. Defaults `null`. | `"OpenAI"`               |
+    | `url`                             | String  | If Enabled | The full URL of the code completion API endpoint.                                                          | `"https://.../completions"` |
+    | `headers`                         | Object  | If Enabled | Key-value pairs for HTTP headers. Use `$CUSTOM_SERVICE_API_KEY`.                                           | `{ "Authorization": "...", ... }` |
+    | `body`                            | Object  | If Enabled | The JSON body structure for the API request. See notes below.                                              | `{ "model": "...", "prompt": "$PREFIX", ... }` |
+    | `model`                           | String  | Yes (in `body`) | The model identifier for code completion.                                                              | `"gpt-3.5-turbo-instruct"` |
+    | `prompt`                          | String  | Yes (in `body`) | Placeholder `$PREFIX`; replaced by the plugin with code before the cursor.                               | `"$PREFIX"`              |
+    | `suffix`                          | String  | Yes (in `body`, if infill) | Placeholder `$SUFFIX`; replaced by the plugin with code after the cursor (for infill).       | `"$SUFFIX"`              |
+    | `stream`                          | Boolean | Yes (in `body`) | Typically `true` to enable streaming responses.                                                        | `true`                   |
+    | *...other body params*            | *Type*  | *Optional* | Other parameters supported by your endpoint (e.g., `temperature`, `max_tokens`).                 | `0.2`, `24`              |
+
+    <Callout type="info" title="Note on `codeCompletionSettings.body`">
+      The `body` object defines the API request payload. It **must** include `model`, `prompt` (using `$PREFIX`), and `stream`. If using infill (`infillTemplate` is set), it **must** also include `suffix` (using `$SUFFIX`). Add other parameters like `temperature`, `max_tokens` as needed by your endpoint.
+    </Callout>
+    <Callout type="info" title="Placeholders for Code Completion">
+      *   `$PREFIX`: Code before the cursor.
+      *   `$SUFFIX`: Code after the cursor (used when `infillTemplate` is active).
+      *   `$CUSTOM_SERVICE_API_KEY`: User's API key (used in `headers`).
+    </Callout>
+
+  </Tab>
+</Tabs>
+
+## Applying Remote Settings in ProxyAI
+
+Once your administrator has set up the remote configuration file and provided you with the URL, you can sync these settings within your ProxyAI plugin.
+
+### Manual Sync via Settings
+
+You can manually fetch and apply the latest remote settings at any time:
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/remote-settings-configurable.mp4"
+    alt="Manual Sync via Settings"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+1.  Open your IDE and go to **Settings / Preferences > Tools > ProxyAI Enterprise > Remote Settings**.
+2.  Find the **Remote settings URL** field.
+3.  Enter the URL provided by your administrator.
+4.  Click **Sync Settings**.
+5.  ProxyAI will fetch the latest configuration and compare it with your current settings.
+6.  If changes are found, a dialog will show what's different (such as new providers or updated prompts).
+7.  Review these changes.
+8.  Click **Apply Changes** to activate the new configuration.
+
+### Automatic Check on Startup
+
+ProxyAI checks for updates to your remote settings **once when your IDE starts up**:
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/remote-settings-notification.mp4"
+    alt="Notification for applying remote settings updates"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+Remember, you can always use the **Manual Sync** option described above if you need to fetch updates without restarting the IDE.
+
+## Example Full Configuration JSON
+
+Below is an example demonstrating how to structure the JSON file with both `prompts` and `providers` defined. Host this file at a secure internal URL accessible by your developers' IDEs.
+
+```json
+{
+  "prompts": {
+    "coreActions": {
+      "editCode": "You are a code modification assistant. Your task is to modify the provided code based on the user's instructions.\n\nRules:\n1. Return only the modified code, with no additional text or explanations.\n2. The first character of your response must be the first character of the code.\n3. The last character of your response must be the last character of the code.\n4. NEVER use triple backticks (```) or any other markdown formatting in your response.\n5. Do not use any code block indicators, syntax highlighting markers, or any other formatting characters.\n6. Present the code exactly as it would appear in a plain text editor, preserving all whitespace, indentation, and line breaks.\n7. Maintain the original code structure and only make changes as specified by the user's instructions.\n8. Ensure that the modified code is syntactically and semantically correct for the given programming language.\n9. Use consistent indentation and follow language-specific style guidelines.\n10. If the user's request cannot be translated into code changes, respond only with the word NULL (without quotes or any formatting).\n11. Do not include any comments or explanations within the code unless specifically requested.\n12. Assume that any necessary dependencies or libraries are already imported or available.\n\nIMPORTANT: Your response must NEVER begin or end with triple backticks, single backticks, or any other formatting characters.",
+      "fixCompileErrors": "I will provide you with a snippet of code that is causing a compilation error.\nYour task is to identify the potential causes of the compilation error(s) and propose code solutions to fix them.\nPlease approach this step by step, explaining your reasoning as you go.",
+      "generateCommitMessages": "Branch: {BRANCH_NAME}\nDate: {DATE_ISO_8601}\n\nWrite a short and descriptive git commit message for the following git diff.\nUse imperative mood, present tense, active voice and verbs.\nYour entire response will be passed directly into git commit.",
+      "generateNameLookups": "Provide five alternative names for a given function or method body. Your response should be a list of names, separated by commas, without any extra information.\n",
+      "reviewChanges": "You are an experienced software developer tasked with reviewing code changes and providing concise, valuable feedback. Your goal is to analyze the provided git diff and open files, then suggest logical and meaningful improvements if needed, focusing on brevity and specific code examples.\n\nFollow these steps to complete your review:\n\n1. Analyze the git diff and open files:\n   Be concise and focus on the most important points. Include:\n   - For each modified file:\n     * Specific line numbers of changes\n     * Brief description of changes, quoting specific lines of modified code\n     * Change category (e.g., bug fix, feature addition, refactoring)\n     * Purpose and potential impact\n     * Any potential issues, risks, or bugs\n     * Impact on code readability and maintainability\n     * Potential impact on performance and scalability\n   - Identification of any code smells or anti-patterns in the changes\n   - Key relationships between changes in different files\n   - Overall coherence and consistency of the changes\n   - Any potential security concerns\n   - For each change, consider and note its impact on the overall codebase\n\n2. Determine if improvements are needed:\n   Based on your analysis, decide if any improvements are necessary. If so, provide your suggestions using the following format:\n\n   ```{lang}\n   // Your code suggestion here.\n   ```\n\n   Ensure your suggestions are:\n   - Specific and actionable\n   - Relevant to the changes in the git diff and the context of open files\n   - Aligned with best practices in software development\n   - Accompanied by brief explanations of their importance\n\n   If no improvements are needed, briefly explain why the current changes are sufficient.\n\n3. Provide a short summary:\n   - A brief overview of the changes reviewed\n   - Main findings from your analysis\n   - A concise list of key suggestions (if any), ordered by importance\n   - Your overall assessment of the code changes\n\nRemember to keep your analysis, suggestions, and summary concise and to the point. Focus on providing specific code examples in your suggestions rather than verbose explanations."
+    },
+    "chatActions": [
+      {
+        "name": "Explain",
+        "instructions": "Your task is to provide a clear, concise explanation of what this code does. Focus on the main functionality and purpose of the code, avoiding unnecessary details. Explain any complex logic or algorithms if present.\n\nProvide your explanation in a few sentences, using simple language that a junior programmer could understand. If there are any notable best practices or potential improvements, briefly mention them at the end.\n\nHere's the code to analyze:\n{SELECTION}"
+      },
+      {
+        "name": "Refactor",
+        "instructions": "Your task is to improve the code's readability, efficiency, and maintainability without changing its functionality. Follow these steps:\n\n1. Analyze the following selected code:\n\n2. Identify areas for improvement, such as:\n   - Simplifying complex logic\n   - Removing redundant code\n   - Improving naming conventions\n   - Enhancing code structure\n\n3. Refactor the code, keeping these guidelines in mind:\n   - Maintain the original functionality\n   - Follow best practices for the programming language used\n   - Prioritize readability and maintainability\n\nBe concise in your explanation, focusing on the most important improvements made.\n\nHere's the code to refactor:\n{SELECTION}"
+      }
+    ],
+    "personas": [
+      {
+        "name": "CodeGPT Default",
+        "instructions": "You are an AI programming assistant.\nFollow the user's requirements carefully & to the letter.\nYour responses should be informative and logical.\nYou should always adhere to technical information.\nIf the user asks for code or technical questions, you must provide code suggestions and adhere to technical information.\nIf the question is related to a developer, you must respond with content related to a developer.\nFirst think step-by-step - describe your plan for what to build in pseudocode, written out in great detail.\nThen output the code in a single code block.\nMinimize any other prose.\nKeep your answers short and impersonal.\nUse Markdown formatting in your answers.\nAlways format code using Markdown code blocks, with the programming language specified at the start.\nAvoid wrapping the whole response in triple backticks.\nThe user works in an IDE built by JetBrains which has a concept for editors with open files, integrated unit test support, and output pane that shows the output of running the code as well as an integrated terminal.\nYou can only give one reply for each conversation turn."
+      }
+    ]
+  },
+  "providers": {
+    "customOpenAI": [
+      {
+        "name": "Default Self-Hosted",
+        "chatCompletionSettings": {
+          "url": "https://your-internal-llm-service.example.com/v1/chat/completions",
+          "headers": {
+            "Authorization": "Bearer $CUSTOM_SERVICE_API_KEY",
+            "X-LLM-Application-Tag": "proxyai",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "stream": true,
+            "model": "llama-4-maverick-17b",
+            "messages": "$OPENAI_MESSAGES",
+            "temperature": 0.0,
+            "max_tokens": 8192
+          }
+        },
+        "codeCompletionSettings": {
+          "codeCompletionsEnabled": true,
+          "infillTemplate": "OPENAI",
+          "url": "https://your-internal-llm-service.example.com/v1/completions",
+          "headers": {
+            "Authorization": "Bearer $CUSTOM_SERVICE_API_KEY",
+            "X-LLM-Application-Tag": "proxyai",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "suffix": "$SUFFIX",
+            "stream": true,
+            "model": "gpt-3.5-turbo-instruct",
+            "temperature": 0.2,
+            "prompt": "$PREFIX",
+            "max_tokens": 24
+          }
+        }
+      },
+      {
+        "name": "Azure OpenAI East US",
+        "chatCompletionSettings": {
+          "url": "https://your-azure-endpoint.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME/chat/completions?api-version=2023-05-15",
+          "headers": {
+            "api-key": "$CUSTOM_SERVICE_API_KEY",
+            "X-LLM-Application-Tag": "proxyai",
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "stream": true,
+            "model": "gpt-4",
+            "messages": "$OPENAI_MESSAGES",
+            "temperature": 0.1,
+            "max_tokens": 4096
+          }
+        },
+        "codeCompletionSettings": {
+          "codeCompletionsEnabled": false
+        }
+      }
+    ]
+  }
+}
+```

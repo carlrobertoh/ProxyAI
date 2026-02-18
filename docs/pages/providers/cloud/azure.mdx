@@ -1,0 +1,38 @@
+# Azure OpenAI
+
+Website: https://azure.microsoft.com/en-us/products/ai-services/openai-service
+
+import { Callout } from 'nextra/components'
+
+<Callout type="warning" emoji="⚠️">
+  Code completions are currently unsupported by Azure OpenAI. To enable this feature, please
+  configure it manually using the Custom OpenAI provider.
+</Callout>
+
+## Getting Started
+
+Follow these steps to get started:
+
+import { Steps } from 'nextra/components'
+
+<Steps>
+  ### Get Your API Key
+
+  Azure OpenAI provides two methods for authentication. You can use either API Keys or Microsoft Entra ID.
+  To obtain your secret key, please refer to [this guide](https://learn.microsoft.com/en-us/azure/api-management/api-management-authenticate-authorize-azure-openai).
+
+  ### Apply Your API Key
+
+  Next, configure the plugin to use the secret key you obtained, along with three additional fields.
+
+  - Navigate to the plugin's settings via **File > Settings/Preferences > Tools > ProxyAI > Providers > Azure**.
+  - Paste your API Key or Microsoft Entra ID into the designated field.
+  - Fill in the following additional fields:
+      - **Resource Name**: You can find this on your Azure Cognitive Services page under `Resource Management` → `Resource Management` → `Keys and Endpoints`. It is the first part of the URL provided to you for using the service: "https://**my-resource-name**.openai.azure.com/".
+      - **Deployment ID**: You can find this in the Azure AI Studio under `Management` → `Deployment`, in the `Deployment Name` column.
+      - **API Version**: Use the most recent, non-preview version.
+  - Click `Apply` or `OK` to save your changes.
+  <br/>
+
+  <img alt="animated" src="/images/providers/azure-settings.png"/>
+</Steps>

@@ -1,0 +1,77 @@
+---
+title: Ignore Rules
+description: Configure path-level visibility filtering in .proxyai/settings.json.
+---
+
+# Ignore Rules
+
+Use `.proxyai/settings.json` `ignore` rules to make files and folders invisible to AI-facing features.
+
+This is a visibility filter, not just an access denial.
+
+## Settings shape
+
+```json
+{
+  "ignore": [
+    ".env",
+    ".env.*",
+    ".git/",
+    "node_modules/",
+    "build/",
+    "dist/",
+    "*.pem",
+    "secrets/**",
+    "app/src/main/"
+  ]
+}
+```
+
+## What gets filtered
+
+Ignored paths should be removed from:
+
+- file and folder suggestions in `@` search
+- attach-file and folder pickers
+- MCP browse/listing responses
+- agent/chat file discovery outputs
+
+For direct tool calls, ignored paths should appear as non-existent.
+
+## Pattern behavior
+
+Ignore entries are path globs:
+
+| Pattern | Meaning | Example match |
+| --- | --- | --- |
+| `.env` | exact file name | `.env` |
+| `.env.*` | same segment wildcard | `.env.local` |
+| `*.pem` | extension in one segment | `cert.pem` |
+| `secrets/**` | directory subtree | `secrets/prod/key.txt` |
+| `build/` | directory and children | `build/`, `build/out/a.txt` |
+| `app/src/main/` | exact directory path | `app/src/main/` |
+| `**/*Outdated*/` | any nested matching directory | `src/fooOutdatedBar/a.kt` |
+
+Paths are normalized before matching, and both relative and absolute forms are considered.
+
+## Recommended folder rules
+
+When you want to hide a folder completely, define both the folder and its subtree:
+
+```json
+{
+  "ignore": [
+    "app/src/main/",
+    "app/src/main/**"
+  ]
+}
+```
+
+This avoids edge cases where descendants are matched but the directory entry itself is still visible.
+
+## Current notes
+
+- Bash handling can still show deny-style behavior in some flows and is being aligned with full visibility filtering.
+- If you update ignore rules during a running session, ensure settings are reloaded before validating behavior.
+
+For tool allow/ask/deny policy rules, see [Permissions](/configuration/permissions).

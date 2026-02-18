@@ -1,0 +1,59 @@
+---
+title: Agent Timeline
+description: Inspect past agent runs, roll back changes, and branch into a new session from any checkpoint.
+---
+
+
+# Agent Timeline
+
+Agent Timeline lets you move through a session's history as a sequence of runs and checkpoints. You can inspect what happened, copy outputs, roll back file changes, and continue from an earlier point.
+
+## Open the timeline
+
+1. Open an **Agent** tab that already has at least one completed run.
+2. In the input toolbar, click the **Timeline** (history) icon.
+3. Select a run/checkpoint from the timeline tree.
+
+If a run is still active, stop it first. Timeline context editing is blocked while the session is running.
+
+## How the timeline is organized
+
+- The dialog groups history by **Run 1, Run 2, ...**.
+- Each run contains checkpoints for user messages, assistant responses, reasoning messages, and tool calls.
+- Thinking blocks (`<think>...</think>`) are stripped from visible assistant text.
+
+## Right-click actions
+
+Right-click any checkpoint row to open actions:
+
+- **Rollback**: Rewinds file changes and syncs the current session view back to that point.
+- **Continue From New Session**: Creates a new Agent tab starting from the selected checkpoint.
+- **Copy Output**: Copies output for assistant/reasoning/tool-call entries.
+
+You can also double-click a checkpoint (or press `Enter`) to continue from that point in a new session.
+
+## Edit session context
+
+Click **Edit** to enter context selection mode:
+
+- Check or uncheck full runs or individual checkpoints to decide what stays in context.
+- Watch the context stats label (`messages` and estimated `tokens`) update as you select.
+- Click **Apply** to rewrite the current tab's session context.
+- Click **New Session** to create a fresh tab from the selected context.
+
+When you select assistant/tool checkpoints, ProxyAI keeps required linked messages (for example the matching user prompt or tool result) so the history stays coherent.
+
+## Rollback behavior
+
+Rollback is run-aware:
+
+- For the current run, ProxyAI uses tracked run snapshots and shows a confirmation list of changed files.
+- For older checkpoints, ProxyAI reconstructs reversible `Edit`/`Write` operations from checkpoint history and applies them in reverse order.
+
+If a file has diverged too far from expected content, rollback can be partial and ProxyAI will show which operations failed.
+
+## Related pages
+
+- [Agent overview](/agent)
+- [Tools reference](/agent/tools)
+- [Hooks](/agent/hooks)

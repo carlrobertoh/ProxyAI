@@ -1,0 +1,100 @@
+---
+title: Subagents
+description: Delegate focused tasks to specialized agents with controlled tool access.
+---
+
+# Subagents
+
+Subagents are specialized agents launched by the main Agent through the `Task` tool. They let the main agent delegate focused work (like exploration or implementation) while keeping tool access and behavior scoped.
+
+## Custom subagents
+
+Custom subagents are user-defined agent profiles. You can create them either in the UI or by editing your config file.
+
+Each custom subagent has:
+
+- A **title** (this is the value you pass in `subagent_type`)
+- An **objective/behavior** description
+- A **tool allowlist** that controls what it can do
+
+### Create in the UI
+
+1. Open settings and go to Subagents.
+2. Click **Add** (or **Generate** if you want ProxyAI to draft it from a prompt).
+3. Set the title, objective, and allowed tools.
+4. Save.
+
+### Create via settings.json
+
+You can also add subagents directly in your project's `.proxyai/settings.json`.
+
+**Subagent definition fields**
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | number | Yes | Unique numeric ID for this subagent. |
+| `title` | string | Yes | Display name and the value you pass as `subagent_type`. |
+| `objective` | string | Yes | Instructions that shape how the subagent behaves. |
+| `tools` | string[] | Yes | Allowed tools, stored as lowercase tool IDs (for example `read`, `intellijsearch`, `edit`). |
+
+Example:
+
+```json
+{
+  "subagents": [
+    {
+      "id": 200,
+      "title": "Dependency Researcher",
+      "objective": "Help choose the best dependency for the user's topic (e.g., auth, logging, HTTP, testing). Compare 2-4 realistic options, call out licensing, maintenance signals, and ecosystem fit. Prefer reading existing repo usage first, then use Context7 for API details, and WebSearch only for release notes/security/official docs. Provide a short recommendation with sources.",
+      "tools": [
+        "read",
+        "intellijsearch",
+        "resolvelibraryid",
+        "getlibrarydocs",
+        "websearch",
+        "todowrite",
+        "exit"
+      ]
+    }
+  ]
+}
+```
+
+## Generate subagents
+
+If you don't want to hand-write subagent definitions, you can generate one from natural language in the UI.
+
+### Steps
+
+1. Open settings and go to Subagents.
+2. Click **Generate**.
+3. Describe what you want (for example: "Review Kotlin code for style and complexity").
+4. Review the generated title and objective.
+5. Adjust the tool allowlist if needed, then save.
+
+### Notes
+
+- Generation creates the title and objective text. Tool access is suggested based on your prompt, but it's still your call.
+- If your prompt includes words like "edit", "implement", or "modify", ProxyAI will usually suggest write-capable tools.
+
+## Task input reference
+
+When the agent spawns a subagent, it calls the `Task` tool with the inputs below.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `description` | string | Yes | Short label for the run. |
+| `prompt` | string | Yes | Full instruction for the subagent. |
+| `subagent_type` | string | Yes | Which subagent to run (built-in type or a custom title). |
+| `model` | string | No | Optional model override for that subagent run. |
+| `project_path` | string | No | Optional working directory override. |
+
+## How subagents are surfaced
+
+Subagent tool calls are bridged back to the parent agent run so the UI can display them and approval prompts still work as expected.
+
+## See also
+
+- [Tools](/agent/tools) for the tool registry and schemas.
+- [Skills](/agent/skills) for on-demand reusable instructions.
+- [Hooks](/agent/hooks) for `subagentStart` and `subagentStop`.

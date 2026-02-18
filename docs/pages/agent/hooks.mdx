@@ -1,0 +1,736 @@
+---
+title: Hooks
+description: Observe, control, and extend the agent loop with custom scripts.
+---
+
+# Hooks
+
+Hooks are small programs that run alongside ProxyAI's agent loop. They let you plug in checks and automation at well-defined points.
+
+A hook runs as its own process. ProxyAI sends it a JSON payload on stdin and reads JSON back from stdout (if you print any).
+
+What hooks are good for:
+
+- Run a formatter or linter after edits
+- Record tool usage for debugging or analytics
+- Scan content for secrets
+- Block high-risk operations
+- Inject additional context at any point of time
+
+## Where hooks run
+
+Hooks are grouped by when they fire:
+
+Agent-level hooks (every tool call):
+- `beforeToolUse` (runs before a tool executes)
+- `afterToolUse` (runs after a tool completes)
+
+Tool-level hooks (only for certain tools):
+- Bash: `beforeShellExecution`, `afterShellExecution`
+- Read: `beforeReadFile`
+- Edit: `afterFileEdit`
+- Task: `subagentStart`, `subagentStop`
+
+Lifecycle:
+- `stop` (runs when the agent finishes or errors)
+
+## Quickstart
+
+This example logs every tool call to a file. It's useful when you're debugging an agent, trying to understand why it made a decision, or just want a paper trail.
+
+Add a hooks config to `.proxyai/settings.json`:
+
+```json
+{
+  "ignore": [],
+  "permissions": { "allow": [] },
+  "hooks": {
+    "afterToolUse": [
+      {
+        "command": ".proxyai/hooks/tool-audit.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}
+```
+
+Create the hook script:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+# .proxyai/hooks/tool-audit.sh
+
+# Read the JSON payload ProxyAI sends on stdin.
+payload=$(cat)
+
+# Append one JSON object per line.
+# (If you prefer pretty logs, pipe through jq in your own version.)
+printf '%s\n' "$payload" >> "$PROXYAI_PROJECT_DIR/.proxyai/hooks/tool-audit.log"
+```
+
+Make it executable:
+
+```bash
+chmod +x .proxyai/hooks/tool-audit.sh
+```
+
+Once the settings file is saved, ProxyAI picks up the hook configuration automatically.
+
+## Hook types
+
+ProxyAI hooks are command-based.
+
+You provide a `command` to run (typically a shell script). ProxyAI feeds the hook a JSON payload on stdin and captures JSON output on stdout (if you produce any).
+
+```json
+{
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": ".proxyai/hooks/approve-network.sh",
+        "timeout": 30,
+        "matcher": "curl|wget|nc"
+      }
+    ]
+  }
+}
+```
+
+## Configuration
+
+Configure hooks in your project's `.proxyai/settings.json`. Each hook event (for example `afterFileEdit`) maps to an array of hook entries.
+
+### Working directory
+
+Hooks run from the project root.
+
+- Relative paths in `command` resolve from the project root
+- Child processes inherit the project root as their working directory
+- `PROXYAI_PROJECT_DIR` contains the absolute project path
+
+### Hook settings format
+
+```json
+{
+  "ignore": [],
+  "permissions": { "allow": [] },
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": ".proxyai/hooks/validate-shell.sh",
+        "matcher": "Shell"
+      }
+    ],
+    "subagentStart": [
+      {
+        "command": ".proxyai/hooks/validate-explore.sh",
+        "matcher": "explore|shell"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".proxyai/hooks/approve-network.sh",
+        "matcher": "curl|wget|nc "
+      }
+    ]
+  }
+}
+```
+
+### Hook fields
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `command` | string | required | Executable path to a hook script (for example `.proxyai/hooks/tool-audit.sh`). |
+| `timeout` | number | `30` | Optional timeout value in seconds (defaults to 30 if not set). |
+| `matcher` | string | `null` | Optional matcher string (used to filter when hook runs). |
+| `enabled` | boolean | `true` | Whether the hook is active. |
+
+### Matcher behavior
+
+If `matcher` is provided, it is evaluated against a target string that depends on the event:
+
+- `preToolUse`, `afterToolUse`: tool name (for example `Bash`).
+- `beforeShellExecution`, `afterShellExecution`: full command string.
+- `beforeReadFile`, `afterFileEdit`: file path.
+- `subagentStart`, `subagentStop`: subagent type.
+- `stop`: status or reason.
+
+Matcher uses regex if valid; otherwise it falls back to substring matching.
+
+### Timeout behavior
+
+Hooks that exceed their timeout are forcibly terminated and treated as failures. This prevents hung hook scripts from blocking the agent indefinitely. The default timeout is 30 seconds.
+
+### Hook execution order
+
+When multiple hooks are configured for the same event:
+1. All matching hooks (based on `enabled` flag and `matcher`) execute in order
+2. Each hook runs independently; failure of one doesn't stop others
+3. Any hook returning a deny decision prevents the action
+4. Hooks are executed sequentially, not in parallel
+
+## Hook generation
+
+If you prefer not to write hooks by hand, you can generate a hook from natural language in the UI.
+
+### Steps
+
+1. Open settings and go to Hooks.
+2. Click **Generate**.
+3. Describe what you want (for example: "Log every tool execution to a file for auditing").
+4. Review the preview:
+- Event (you can change which event triggers the hook)
+- Command, matcher, and timeout
+- Generated script content
+5. Click **Add Hook** to save:
+- Scripts are written to `.proxyai/hooks/` in your project.
+- The hook entry is added to `.proxyai/settings.json`.
+
+### Notes
+
+- Generated scripts are marked executable on macOS/Linux. On Windows, you may need to adjust how the script is invoked.
+- Generation uses the configured agent model and can take a few seconds.
+
+## How hooks work
+
+When a hook runs, ProxyAI launches your command and sends it a JSON payload on stdin.
+
+Your hook can:
+
+- Do nothing and exit (for logging-only hooks)
+- Print JSON on stdout to allow/deny the action
+- Print JSON on stdout to rewrite the tool input or output
+
+### Runtime details
+
+| Item | Description |
+| --- | --- |
+| Input | JSON payload on stdin. |
+| Common field | `hook_event_name` is included in every payload. |
+| Working directory | Project root directory (`{projectRoot}/.proxyai/`). |
+| Visibility | Hook runs appear in the tool output panel (event, hook name, status, details). |
+
+### Environment variables
+
+Hooks receive these environment variables:
+
+| Variable | Description | Always Present |
+| --- | --- | --- |
+| `PROXYAI_PROJECT_DIR` | Project root directory (absolute path) | Yes |
+| `PROXYAI_HOOK_EVENT` | The hook event name (for example `beforeShellExecution`) | Yes |
+
+### Exit codes
+
+ProxyAI treats the hook's exit code as the hook status:
+
+- `0`: success
+- `2`: deny (include JSON with a `reason` on stdout)
+- any other code: failure (hook failures do not block the tool)
+
+### Output JSON fields (stdout)
+
+If you print JSON, you can return any of the fields below.
+
+- `decision`: `"allow"` or `"deny"`
+- `reason`: shown when the hook denies
+- `user_message`: shown in the UI tool output
+- `agent_message`: shown to the agent
+- `updated_input`: replaces the tool input
+- `updated_output`: replaces the tool output
+
+## Examples
+
+### Audit every tool call
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Log all tool calls to a file.
+payload=$(cat)
+printf '%s\n' "$payload" >> .proxyai/hooks/tool-audit.log
+exit 0
+```
+
+### Return a deny decision
+
+```json
+{"reason":"Blocked by policy"}
+```
+
+Exit with code `2` when emitting the JSON above.
+
+### Block network commands
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Read JSON payload
+payload=$(cat)
+command=$(echo "$payload" | grep -o '"command":"[^"]*"' | cut -d'"' -f4)
+
+# Block network commands that aren't explicitly whitelisted
+if echo "$command" | grep -qE 'curl|wget|nc|ssh' 2>/dev/null; then
+  echo '{"reason":"Network commands require approval"}'
+  exit 2
+fi
+
+exit 0
+```
+
+Configuration:
+
+```json
+{
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": ".proxyai/hooks/network-deny.sh",
+        "matcher": "curl|wget|nc"
+      }
+    ]
+  }
+}
+```
+
+### Block Bash tool commands (generic)
+
+Use `beforeShellExecution` to deny high-risk command patterns.
+
+```bash
+#!/usr/bin/env sh
+set -eu
+
+# Consume JSON payload from stdin.
+cat >/dev/null
+
+# Exit code 2 means "deny".
+printf '{"reason":"Blocked by project policy: this command is not allowed."}\n'
+exit 2
+```
+
+Configuration:
+
+```json
+{
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": ".proxyai/hooks/block-command.sh",
+        "matcher": "rm -rf|terraform apply|docker system prune"
+      }
+    ]
+  }
+}
+```
+
+### Prefer settings.json for path restrictions
+
+If your goal is to protect files or folders, prefer `.proxyai/settings.json` `ignore` patterns over hooks. Ignore patterns are simpler and apply consistently across tools.
+
+- Use `ignore` for path-level protection (for example `.env`, `.git/`, `node_modules/`)
+- Use hooks when you need command-level policy checks
+- See [Ignore Rules](/agent/security/ignore-rules) and [Permissions](/agent/security/permissions) for baseline guardrails
+
+## Event reference
+
+### preToolUse
+
+Called before any tool execution. This is a generic hook that fires for all tool types.
+
+#### Input Payload
+
+```json
+{
+  "tool_name": "Bash",
+  "tool_input": { "command": "pnpm install", "working_directory": "/project" },
+  "tool_use_id": "abc123",
+  "cwd": "/project",
+  "hook_event_name": "beforeToolUse"
+}
+```
+
+**Input Fields:**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `tool_name` | string | Yes | Name of the tool being executed (e.g., `Bash`, `Read`, `Edit`) |
+| `tool_input` | object | Yes | Input parameters passed to the tool (structure varies by tool type) |
+| `tool_use_id` | string | Yes | Unique identifier for this tool invocation |
+| `cwd` | string | Yes | Current working directory for the operation |
+| `hook_event_name` | string | Yes | Always `"beforeToolUse"` for this event |
+
+#### Output Payload (Optional)
+
+```json
+{
+  "decision": "allow",
+  "reason": "Reason if denied",
+  "updated_input": { "command": "npm ci" }
+}
+```
+
+**Output Fields:**
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `decision` | string | `"deny"` to block, `"allow"` to proceed |
+| `reason` | string | *(Optional)* Explanation shown to the agent/user when denied |
+| `updated_input` | object | *(Optional)* Modified tool input to use instead |
+
+### afterToolUse
+
+Called after successful tool execution.
+
+**Input:**
+```json
+{
+  "tool_name": "Bash",
+  "tool_input": { "command": "pnpm test" },
+  "tool_output": "All tests passed",
+  "tool_use_id": "abc123",
+  "cwd": "/project",
+  "hook_event_name": "afterToolUse"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `tool_name` | string | The name of the tool that was executed |
+| `tool_input` | object | Input parameters passed to the tool |
+| `tool_output` | string | Full output from the tool |
+| `tool_use_id` | string | Unique identifier for this tool use |
+| `cwd` | string | Current working directory |
+| `hook_event_name` | string | The hook event name ("afterToolUse") |
+
+**Output (optional):**
+```json
+{
+  "updated_output": { "modified": "tool output" }
+}
+```
+
+**Output parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `updated_output` | object (optional) | Modified tool output to use instead |
+
+### subagentStart
+
+Called before spawning a subagent (Task tool). Can allow or deny subagent creation.
+
+**Input:**
+```json
+{
+  "subagent_type": "generalPurpose",
+  "description": "Explore auth flow",
+  "prompt": "Explore the authentication flow",
+  "hook_event_name": "subagentStart"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `subagent_type` | string | Type of subagent: "generalPurpose", "explore", "shell", etc. |
+| `description` | string | Short description of the subagent task |
+| `prompt` | string | Full prompt given to the subagent |
+| `hook_event_name` | string | The hook event name ("subagentStart") |
+
+**Output (optional):**
+```json
+{
+  "decision": "allow",
+  "reason": "Reason if denied"
+}
+```
+
+**Output parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `decision` | string | "deny" to block, "allow" to proceed |
+| `reason` | string (optional) | Explanation shown if denied |
+
+### subagentStop
+
+Called when a subagent completes or errors.
+
+**Input:**
+```json
+{
+  "subagent_type": "generalPurpose",
+  "status": "completed",
+  "result": "<subagent output>",
+  "duration": 45000,
+  "hook_event_name": "subagentStop"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `subagent_type` | string | Type of subagent that ran: "generalPurpose", "explore", "shell", etc. |
+| `status` | string | "completed" or "error" |
+| `result` | string | Output/result from the subagent |
+| `duration` | number | Execution time in milliseconds |
+| `hook_event_name` | string | The hook event name ("subagentStop") |
+
+**Output (optional):**
+```json
+{
+  "followup_message": "Continue with this message"
+}
+```
+
+**Output parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `followup_message` | string | Optional follow-up message to auto-submit |
+
+### beforeShellExecution
+
+Called immediately before a Bash command runs.
+
+**Input:**
+```json
+{
+  "command": "pnpm lint",
+  "cwd": "/project",
+  "timeout": 30,
+  "hook_event_name": "beforeShellExecution"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `command` | string | The full terminal command to execute |
+| `cwd` | string | Current working directory |
+| `timeout` | number | Execution timeout in seconds |
+| `hook_event_name` | string | The hook event name ("beforeShellExecution") |
+
+**Output (optional):**
+```json
+{
+  "decision": "allow",
+  "user_message": "Message shown in client",
+  "agent_message": "Message sent to agent"
+}
+```
+
+**Output parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `decision` | string | "deny" to block, "allow" to (default) proceed |
+| `user_message` | string (optional) | Message shown to the user |
+| `agent_message` | string (optional) | Message sent to the agent |
+
+**Fail-closed behavior:** If the hook script fails (crashes, times out, or returns invalid JSON), the shell command is blocked for security.
+
+### afterShellExecution
+
+Called after a Bash command executes.
+
+**Input:**
+```json
+{
+  "command": "pnpm lint",
+  "output": "...",
+  "exit_code": 0,
+  "hook_event_name": "afterShellExecution"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `command` | string | The full terminal command that was executed |
+| `output` | string | Full output captured from the terminal |
+| `exit_code` | number | Exit code from the command execution |
+| `hook_event_name` | string | The hook event name ("afterShellExecution") |
+
+**Note:** When a command fails with an exception, the payload uses `error` instead of `output`:
+```json
+{
+  "command": "pnpm lint",
+  "error": "Command failed",
+  "exit_code": "null",
+  "hook_event_name": "afterShellExecution"
+}
+```
+
+**Output:** No output fields currently supported (observable only).
+
+### beforeReadFile
+
+Called before a file is read, after content is loaded but before returned to the tool. Can inspect content and deny access.
+
+**Input:**
+```json
+{
+  "file_path": "/project/README.md",
+  "content": "<file contents>",
+  "attachments": [],
+  "hook_event_name": "beforeReadFile"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `file_path` | string | Absolute path to the file being read |
+| `content` | string | Full contents of the file |
+| `attachments` | array | Context attachments associated with the prompt |
+| `hook_event_name` | string | The hook event name ("beforeReadFile") |
+
+**Output (optional):**
+```json
+{
+  "decision": "allow",
+  "user_message": "Message shown when denied"
+}
+```
+
+**Output parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `decision` | string | "deny" to block, "allow" to (default) proceed |
+| `user_message` | string (optional) | Message shown to the user when denied |
+
+**Fail-closed behavior:** If the hook script fails, the file read is blocked for security.
+
+### afterFileEdit
+
+Called after a file edit is applied. Can deny the edit even after it was applied.
+
+**Input:**
+```json
+{
+  "file_path": "/project/README.md",
+  "replacements_made": 2,
+  "edit_locations": [{ "line": 10, "column": 4 }],
+  "hook_event_name": "afterFileEdit"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `file_path` | string | Absolute path to the edited file |
+| `replacements_made` | number | Number of string replacements applied |
+| `edit_locations` | array | Array of edit location objects with line/column info |
+| `hook_event_name` | string | The hook event name ("afterFileEdit") |
+
+**Output (optional):**
+```json
+{
+  "reason": "Denial reason"
+}
+```
+
+**Output parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `reason` | string (optional) | Reason for denying the edit |
+
+### stop
+
+Called when the agent loop ends.
+
+**Input:**
+```json
+{
+  "status": "completed",
+  "agent_id": "agent-123",
+  "hook_event_name": "stop"
+}
+```
+
+Or when an error occurs:
+```json
+{
+  "status": "error",
+  "agent_id": "agent-123",
+  "error": "Error message",
+  "hook_event_name": "stop"
+}
+```
+
+**Input parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `status` | string | "completed" or "error" |
+| `agent_id` | string | Identifier for the agent instance |
+| `error` | string (optional) | Error message when status is "error" |
+| `hook_event_name` | string | The hook event name ("stop") |
+
+**Output (optional):**
+```json
+{
+  "followup_message": "Auto-continue with this message"
+}
+```
+
+**Output parameters:**
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `followup_message` | string | Optional follow-up message to auto-submit |
+
+## Troubleshooting
+
+### Hooks not executing
+
+1. Verify the hook command path is correct relative to the project root
+2. Ensure the hook file is executable (`chmod +x path/to/hook.sh`)
+3. Check that the hook is in `.proxyai/settings.json` under the correct event key
+4. Verify the hook returns valid JSON if it produces output
+
+### Hook timeout issues
+
+- Increase the `timeout` value in the hook configuration
+- Profile your hook script to identify slow operations
+- Consider moving expensive operations to background jobs or caching
+
+### Access denied errors
+
+- Verify `.proxyai/settings.json` file permissions are readable
+- Ensure the hook file has execute permissions
+- Check that the working directory is correct (use `PROXYAI_PROJECT_DIR` env var)
+
+### Debug hook execution
+
+1. Enable debug logging in ProxyAI settings
+2. Check the tool output panel for hook execution details
+3. The `hook_event_name` field in payloads confirms which event triggered the hook
+4. Add `printf` or `echo` statements to your hook script with stderr redirect
+
+### Exit code blocking
+
+- Exit code 2 from command hooks blocks the action (equivalent to returning a deny decision)
+- Exit code 0 allows the action to proceed
+- Other exit codes are treated as failures but do not block the action (fail-open)
+
+## See also
+
+- [Subagents](/agent/subagents) for Task inputs and subagent setup.
+- [Tools](/agent/tools) for which tools require approval.

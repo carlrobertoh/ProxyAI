@@ -1,0 +1,412 @@
+---
+title: Tools
+description: "Tool reference: inputs, outputs, and approval behavior."
+---
+
+# Tools
+
+This is the reference for ProxyAI's built-in tools: what each tool does, what inputs it accepts, and what it returns. Tools are the contract between the model and your machine. If something feels "magical", it usually maps to one of these tools.
+
+## Quick map
+
+- Need to inspect a file? Use **Read**.
+- Need to find a file/symbol name-first? Use **IntelliJSearch**.
+- Need to change files? Use **Edit** (precise replace) or **Write** (create/overwrite).
+- Need to run commands? Use **Bash**, and monitor with **BashOutput**.
+- Need content from a specific URL? Use **WebFetch**.
+- Need to delegate? Use **Task**.
+- Need reusable workflow instructions? Use **LoadSkill**.
+
+## Approvals
+
+The UI asks for approval for:
+
+- **Edit** and **Write**
+- **Bash**
+
+For path-level restrictions, see [Ignore Rules](/agent/security/ignore-rules). For tool allow rules (`Bash`, `Read`), see [Permissions](/agent/security/permissions).
+
+## Tool reference
+
+### Read
+
+Reads a file from disk and returns it in numbered `cat -n` format.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `file_path` | string | Yes | Must be an absolute path. |
+| `offset` | number | No | 1-indexed line offset. |
+| `limit` | number | No | Number of lines to read. |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `filePath` | string | Echoes the path requested. |
+| `content` | string | Numbered content (lines truncated to 2000 chars each). |
+| `lineCount` | number | Lines returned (not total lines). |
+| `truncated` | boolean | True when the file/selection exceeds the read limit. |
+| `fileType` | string \| null | IntelliJ file type name. |
+| `startLine` | number \| null | First line returned (when offset is used). |
+| `endLine` | number \| null | Last line returned (when limit truncates). |
+
+### IntelliJSearch
+
+Name-oriented search (files/classes/symbols). Use it when you don't know the exact path yet.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `pattern` | string | Yes | Search query. |
+| `scope` | string | No | `project`, `module`, `directory`, `file`, `custom`. |
+| `path` | string | No | Used with `directory` or `file` scope. |
+| `fileType` | string | No | Filter by language/file type. |
+| `context` | string | No | Search context selector. |
+| `caseSensitive` | boolean | No | Defaults to false. |
+| `regex` | boolean | No | Defaults to false. |
+| `wholeWords` | boolean | No | Defaults to false. |
+| `outputMode` | string | No | `content`, `files_with_matches`, `count`. |
+| `limit` | number | No | Max results. |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `pattern` | string | Echoes the query. |
+| `scope` | string | Effective scope. |
+| `totalMatches` | number | Number of matches included. |
+| `matches` | array | Structured matches (file, line, column, text, context). |
+| `output` | string | Human-readable summary. |
+
+### Edit
+
+Exact string replacement in a file.
+
+**Approval required.**
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `file_path` | string | Yes | Must be an absolute path. |
+| `old_string` | string | Yes | Must match exactly (including whitespace). |
+| `new_string` | string | Yes | Replacement text; can be empty. |
+| `short_description` | string | Yes | Shown in UI/logs. |
+| `replace_all` | boolean | No | Defaults to false. |
+
+**Output (success)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `filePath` | string | Edited file path. |
+| `replacementsMade` | number | Count of replacements. |
+| `message` | string | Human-readable message. |
+| `oldStringPreview` | string \| null | Preview (up to ~200 chars). |
+| `newStringPreview` | string \| null | Preview (up to ~200 chars). |
+| `editLocations` | array | Line/column + small context for each replacement. |
+
+**Output (error)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `filePath` | string | Requested file path. |
+| `error` | string | Error message. |
+
+### Write
+
+Creates a file or overwrites an existing file.
+
+**Approval required.**
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `file_path` | string | Yes | Absolute path to the file. |
+| `content` | string | Yes | Full file contents. |
+
+**Output (success)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `filePath` | string | Written file path. |
+| `bytesWritten` | number | UTF-8 byte count. |
+| `isNewFile` | boolean | Whether the file was created. |
+| `message` | string | Human-readable message. |
+
+**Output (error)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `filePath` | string | Requested file path. |
+| `error` | string | Error message. |
+
+### Bash
+
+Runs a shell command.
+
+**Approval required.**
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `command` | string | Yes | Shell command to execute. |
+| `timeout` | number | No | Timeout in ms (defaults to 60000 in the tool implementation). |
+| `description` | string \| null | No | Short description of what the command does. |
+| `run_in_background` | boolean \| null | No | Start in background; use BashOutput to monitor. |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `command` | string | Echoes the command. |
+| `exitCode` | number \| null | Null when running in background or timed out. |
+| `output` | string | Combined stdout/stderr and status messages. |
+| `bash_id` | string \| null | Present when started in background. |
+
+### BashOutput
+
+Reads incremental output from a background Bash process.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `bash_id` | string | Yes | ID returned by Bash. |
+| `filter` | string \| null | No | Regex filter to include matching lines only. |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `bash_id` | string | Echoes the ID. |
+| `stdout` | string | New stdout since last check. |
+| `stderr` | string | New stderr since last check. |
+| `status` | string | `running`, `completed`, `terminated`, `not_found`, `denied`. |
+| `exit_code` | number \| null | Exit code when available. |
+
+### KillShell
+
+Stops a background Bash process.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `bash_id` | string | Yes | ID returned by Bash. |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `bash_id` | string | Echoes the ID. |
+| `success` | boolean | Whether the process was terminated. |
+| `message` | string | Human-readable status message. |
+
+### WebSearch
+
+Web search tool. Use it for general web content; for library/API docs use Context7 tools.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `query` | string | Yes | Search query. |
+| `allowed_domains` | string[] \| null | No | Domain allowlist. |
+| `blocked_domains` | string[] \| null | No | Domain blocklist. |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `query` | string | Echoes query. |
+| `results` | array | `title`, `url`, `content`. |
+| `sources` | string[] | Markdown links to sources. |
+
+### WebFetch
+
+Fetches a specific URL and converts HTML content to Markdown.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `url` | string | Yes | Full `http://` or `https://` URL. |
+| `selector` | string \| null | No | Optional CSS selector to scope extraction (for example `main`, `article`). |
+| `timeout_ms` | number | No | Request timeout in milliseconds (default `10000`). |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `url` | string | Source URL requested. |
+| `final_url` | string \| null | Final URL after redirects. |
+| `title` | string \| null | Page title, when available. |
+| `markdown` | string | Converted Markdown content. |
+| `content_type` | string \| null | Response content type. |
+| `status_code` | number \| null | HTTP status code. |
+| `used_selector` | string \| null | Echoes selector if provided. |
+| `error` | string \| null | Error message on failure. |
+
+### ResolveLibraryId
+
+Resolves a library name into a Context7-compatible ID.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `library_name` | string | Yes | Name to search for (e.g. "nextjs", "mongodb"). |
+
+**Output (success)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `libraryName` | string | Echoes the search query. |
+| `libraries` | array | Candidate libraries; includes `id` you pass to GetLibraryDocs. |
+
+**Output (error)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `error` | string | Error message. |
+
+### GetLibraryDocs
+
+Fetches docs from Context7 for a specific library ID.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `context7CompatibleLibraryID` | string | Yes | `/org/project[/version]`. |
+| `mode` | string | No | `code` (default) or `info`. |
+| `topic` | string \| null | No | Topic filter. |
+| `page` | number | No | Page number (1-10). |
+
+**Output (success)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `libraryId` | string | Echoes the library id. |
+| `documentation` | string | Plain text docs (truncated). |
+| `docMode` | string | `code` or `info`. |
+| `page` | number | Page number returned. |
+
+**Output (error)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `error` | string | Error message. |
+
+### LoadSkill
+
+Loads a configured skill and injects it back into the run as a new user message.
+Skills are discovered from `.proxyai/skills/**/SKILL.md`.
+
+**Approval required** (generic ask/approve flow).
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `skill_name` | string | Yes | Exact skill title from the available skills list in the system prompt. |
+
+**Output (success)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `title` | string | Loaded skill title. |
+| `description` | string | Loaded skill description. |
+| `queued` | boolean | Whether the user-message injection was queued. |
+
+**Output (error)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `message` | string | Error message with available skills when possible. |
+
+### AskUserQuestion
+
+Asks the user a structured question in the UI.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `questions` | array | Yes | Max 1-4 questions. Each question includes `header`, `question`, `options`, and `multiSelect`. |
+| `answers` | object \| null | No | Prefill answers (rare). |
+
+**Output (success)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `answers` | object | Map of header -> selected value(s). |
+
+**Output (error)**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `message` | string | Error message. |
+
+### TodoWrite
+
+Creates/updates a todo list rendered in the UI.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `title` | string | Yes | Short title (max 4 words). |
+| `todos` | array | Yes | Todo items: `content`, `status`, `activeForm`. |
+
+**Output**
+
+Returns a formatted string summary (used to render the UI todo widget).
+
+### Task
+
+Launches a subagent.
+
+**Input**
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `description` | string | Yes | Short label. |
+| `prompt` | string | Yes | Full instruction for the subagent. |
+| `subagent_type` | string | Yes | Built-in type or custom subagent title. |
+| `model` | string \| null | No | Optional model override. |
+| `project_path` | string \| null | No | Optional working directory override. |
+
+**Output**
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `agentType` | string | The subagent type used. |
+| `description` | string | Echoes description. |
+| `prompt` | string | Echoes prompt. |
+| `output` | string | Subagent output text. |
+| `executionTime` | number | Duration in ms. |
+| `totalTokens` | number | Token usage (when available). |
+
+### Exit
+
+Ends the current agent run.
+
+**Input**
+
+No input.
+
+**Output**
+
+No output.
+
+## See also
+
+- [Timeline](/agent/timeline)
+- [Subagents](/agent/subagents)
+- [Hooks](/agent/hooks)

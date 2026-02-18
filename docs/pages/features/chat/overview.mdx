@@ -1,0 +1,44 @@
+---
+title: Chat Overview
+description: Learn how to use ProxyAI chat for questions, actions, and code edits in your JetBrains IDE.
+---
+
+import Image from 'next/image'
+
+# Chat Overview
+
+Use the ProxyAI Chat to ask questions, run actions, and edit your code, from small tweaks to larger changes.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/chat.mp4"
+    alt="Chat Demo"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+## Using Codebase Context
+
+Providing context enhances the AI's understanding and improves the relevance of its responses. ProxyAI enables the integration of context from various sources into chat prompts.
+
+Use the `@` symbol to reference specific context, including files, directories, Git history, documentation, and web resources.
+
+Refer to the [@ Symbols documentation](/context/symbols/overview) for detailed usage instructions.
+
+## Chat Actions
+
+ProxyAI includes built-in actions to help you with common coding tasks. Access them directly from the chat:
+
+- **Find Bugs**: Let the AI scan your code for potential bugs and suggest fixes.
+
+- **Write Tests**: Generate unit tests for your functions and classes quickly.
+
+- **Explain**: Get clear explanations for selected code snippets or complex concepts.
+
+- **Refactor**: Ask the AI to restructure your code for better readability or maintainability without changing what it does.
+
+<Image src="/images/features/prompts.png" alt="Prompts" width={1200} height={800}
+       className="nx-rounded-lg nx-my-4"/>

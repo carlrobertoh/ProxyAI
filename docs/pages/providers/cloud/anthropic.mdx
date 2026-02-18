@@ -1,0 +1,41 @@
+# Anthropic
+
+Website: https://anthropic.com
+
+## Getting Started
+
+Follow these steps to get started:
+
+import { Steps } from 'nextra/components'
+
+<Steps>
+  ### Create Your Account
+
+  First, you'll need an Anthropic account. If you don't have one, [sign up here](https://console.anthropic.com/login).
+
+  ### Get Your API Key
+
+  After signing up, create your API key on the [API Keys page](https://console.anthropic.com/settings/keys). This key is essential for authenticating your requests against the Anthropic API. If you already have a key, simply copy it to your clipboard.
+
+  ### Configure the Plugin
+
+  Next, you'll need to configure the plugin to use the API key, version, and model:
+
+  - Navigate to the plugin's settings via **File > Settings/Preferences > Tools > ProxyAI > Providers > Anthropic**.
+  - Paste your API key into the designated field.
+  - The plugin automatically sets the `anthropic-version` value. If you want to use older versions, find more information [here](https://docs.anthropic.com/en/api/versioning).
+  - Select a model for messages and commands from the list below:
+
+    | Model           | Latest 1P API model name |
+    | :-----          | :----: |
+    | Claude 3 Opus   | claude-3-opus-20240229
+    | Claude 3 Sonnet | claude-3-sonnet-20240229
+    | Claude 3 Haiku  | claude-3-haiku-20240307
+
+    See the full list of available models [here](https://docs.anthropic.com/en/docs/models-overview#claude-3-a-new-generation-of-ai).
+
+  - Click `Apply` or `OK` to save your changes.
+  <br/>
+
+  <img alt="animated" src="/images/providers/anthropic-settings.png" />
+</Steps>

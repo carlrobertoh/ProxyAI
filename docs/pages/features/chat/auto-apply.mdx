@@ -1,0 +1,53 @@
+---
+title: Auto Apply
+description: Overview of Auto Apply feature
+---
+
+
+
+import Image from 'next/image'
+import {Steps} from 'nextra/components'
+
+# Auto Apply
+
+Apply AI-suggested code directly into your codebase. Preview modifications in diff view and approve or reject them with a single click.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/auto-apply.mp4"
+    alt="Auto Apply"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+## How it Works
+
+<Steps>
+  ### Start chatting
+
+  Tell ProxyAI what you want to change in your code. It could be a bug fix, a new feature, or any
+  other code modification.
+
+  ### Click the Auto Apply icon
+
+  For each block of code ProxyAI generates, you'll see the lightning icon (⚡) appear on top of the
+  code block. Click this icon to have ProxyAI analyze and implement the changes.
+
+  <Image
+      src="https://www.tryproxy.io/_next/image?url=%2Fimages%2Fblog%2Fauto-apply-1.png&w=1920&q=75"
+      alt="Auto Apply" width={1200} height={800}
+      className="nx-rounded-lg nx-my-4"/>
+
+  ### Accept or Reject the changes
+
+  Review the proposed changes in the diff view. You can choose to accept all changes, applying them
+  directly to your file, or reject them to maintain the current version.
+
+  <Image
+      src="https://www.tryproxy.io/_next/image?url=%2Fimages%2Fblog%2Fauto-apply-2.png&w=3840&q=75"
+      alt="Auto Apply" width={1200} height={800}
+      className="nx-rounded-lg nx-my-4"/>
+</Steps>

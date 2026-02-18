@@ -1,0 +1,32 @@
+{
+  "name": "proxyai-docs",
+  "version": "0.0.1",
+  "description": "ProxyAI Documentation",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+hhttps://github.com/carlrobertoh/ProxyAI.git"
+  },
+  "author": "Carl-Robert Linnupuu <carlrobertoh@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/carlrobertoh/ProxyAI/issues"
+  },
+  "homepage": "https://github.com/carlrobertoh/ProxyAI/issues#readme",
+  "dependencies": {
+    "@vercel/analytics": "^1.5.0",
+    "next": "^14.2.3",
+    "nextra": "^2.13.4",
+    "nextra-theme-docs": "^2.13.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "18.11.10",
+    "typescript": "^4.9.3"
+  }
+}

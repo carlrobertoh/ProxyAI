@@ -1,0 +1,23 @@
+{
+  "index": "Introduction",
+  "getting-started": "Getting Started",
+  "agent": "Agent",
+  "features": "Features",
+  "context": "Context",
+  "providers": "Providers",
+  "configuration": "Configuration",
+  "enterprise": "Enterprise",
+  "privacy": "Privacy & Security",
+  "tutorials": "Tutorials",
+  "about": {
+    "title": "About",
+    "type": "page",
+    "href": "https://tryproxy.io"
+  },
+  "contact": {
+    "title": "Contact ↗",
+    "type": "page",
+    "href": "mailto:contact@codegpt.ee",
+    "newWindow": true
+  }
+}

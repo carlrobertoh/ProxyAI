@@ -1,0 +1,43 @@
+# Ollama
+
+Website: https://ollama.ai
+
+Ollama enables you to run open-source large language models, such as Llama 3, on your local machine.
+
+## Getting Started
+
+Follow these steps to get started:
+
+import { Steps } from 'nextra/components'
+
+<Steps>
+  ### Download the Client
+
+  First, download the Ollama client if you don't already have it. You can [download it here](https://ollama.com/download).
+
+  ### Run Your Model
+
+  Open terminal and run the following command:
+  ```
+  ollama run codellama
+  ```
+
+  This command will download the model (if it doesn't already exist) and run it. This step is necessary before using the model in the plugin.
+
+  ### Configure the Plugin
+
+  Next, connect Ollama with the plugin:
+
+  - Navigate to the plugin's settings via **File > Settings/Preferences > Tools > ProxyAI >
+  Providers > Ollama (Local)**.
+  - Click `Refresh Models` to sync all Ollama models with the plugin.
+  - Optionally, choose the appropriate FIM template for code completions. Before enabling code completions, ensure that the model supports fill-in-the-Middle (FIM).
+  - Click `Apply` or `OK` to save your changes.
+  <br/>
+
+  <img alt="animated" src="/images/providers/ollama-settings.png"/>
+</Steps>
+
+## Integration with DeepSeek R1
+
+Follow [this guide](https://meyer-laurent.com/run-deepseek-r1-locally-mac-mini-pycharm) to set up DeepSeek R1 locally on a Mac. This guide covers installing ProxyAI, configuring Ollama, and using a local Large Language Model for secure, AI-assisted coding without relying on public LLMs.

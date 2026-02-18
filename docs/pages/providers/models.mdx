@@ -1,0 +1,96 @@
+---
+title: Available Models
+description: Learn about the AI models available through ProxyAI and how context windows work.
+---
+
+# Models
+
+ProxyAI connects you to powerful large language models (LLMs) for chat and code generation.
+
+## Selecting a Model
+
+You can choose your preferred model in two ways:
+
+### From the Chat Window:
+
+Select directly from the dropdown in the chat interface.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/selecting-model-dropdown.mp4"
+    alt="Selecting a model using the dropdown in the chat window"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+### From Settings:
+
+Go to **Settings/Preferences > Tools > ProxyAI > Providers**. Select your provider and choose your model.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/selecting-model-settings.mp4"
+    alt="Selecting a model within the provider settings panel"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+## Available Models via ProxyAI Cloud
+
+The models listed below are available through the default **ProxyAI Cloud** service. Model availability and usage limits depend on your ProxyAI Cloud plan (Free or Pro).
+
+### Chat Models
+
+| Model                | Provider  | Free | Pro |
+|----------------------|:---------:|:----:|:---:|
+| `o3-mini`            |  OpenAI   |      |  ✅  |
+| `gpt-4o`             |  OpenAI   |      |  ✅  |
+| `gpt-4o-mini`        |  OpenAI   |  ✅  |  ✅  |
+| `claude-3.7-sonnet`  | Anthropic |      |  ✅  |
+| `gemini-pro-2.5`     |  Google   |      |  ✅  |
+| `gemini-flash-2.0`   |  Google   |  ✅  |  ✅  |
+| `qwen-2.5-coder-32b` | Fireworks |  ✅  |  ✅  |
+| `llama-3.1-405b`     | Fireworks |  ✅  |  ✅  |
+| `deepseek-r1`        | Fireworks |      |  ✅  |
+| `deepseek-v3`        | Fireworks |  ✅  |  ✅  |
+
+### Code Models
+
+| Model                    | Provider  | Free | Pro | Type                        |
+|--------------------------|:---------:|:----:|:---:|:---------------------------:|
+| `gpt-3.5-turbo-instruct` |  OpenAI   |  ✅  |  ✅ | [Autocomplete](/editor/tab#autocomplete) |
+| `codestral`              |  Mistral  |  ✅  |  ✅ | [Autocomplete](/editor/tab#autocomplete) |
+| `qwen-2.5-coder-32b`     | Fireworks |  ✅  |  ✅ | [Autocomplete](/editor/tab#autocomplete) |
+| `zeta`                   |  ProxyAI  |  ✅  |  ✅ | [Next Edits](/editor/tab#next-edits) |
+
+*Note: Model availability may change over time. When using your own API key, availability depends on the provider's offerings.*
+
+## Context Windows
+
+A model's context window defines how much information (measured in tokens) it can process at once, including both your inputs and the model's responses.
+
+### ProxyAI Cloud
+
+- Each chat session uses a managed context window up to 16,000 tokens
+- ProxyAI automatically summarizes or removes older parts of the conversation to stay within this service-specific limit
+- Keep your total input context (files, selections, etc.) under 200,000 tokens for optimal processing
+
+### Other Providers (OpenAI, Anthropic, Local, Custom)
+
+- When using your own API key or running models locally, context window size is determined by the specific model and provider you choose
+- ProxyAI passes your context to the provider, but the ultimate limit is set by the provider
+- Check your chosen provider's documentation for their specific context window limitations
+
+For complex or distinct tasks, regardless of the provider, starting a new chat session can improve performance and relevance.
+
+## Model Hosting and Privacy
+
+All **ProxyAI Cloud** models are hosted by their original providers (OpenAI, Anthropic, etc.), trusted partners, or ProxyAI directly, primarily on US-based infrastructure.
+
+When connecting to other providers or using local models, hosting location and privacy considerations follow those specific services or your local environment settings.

@@ -1,0 +1,30 @@
+---
+title: Agent
+description: How the ProxyAI agent works, what it can do, and how it runs tasks.
+---
+
+# Agent
+
+The Agent is ProxyAI's autonomous mode for multi-step work. It plans and executes tasks, calls tools on your behalf, and can delegate specific work to subagents when it needs focused help.
+
+## What it can do
+
+- Plan and execute multi-step work with approvals for risky actions
+- Support multi-turn conversations by asking clarifying questions when needed
+- Read, search, edit, and run commands across your project
+- Inspect prior runs, roll back changes, and continue from checkpoints with [Timeline](/agent/timeline)
+- Delegate focused work to [Subagents](/agent/subagents)
+- Load reusable instruction packs with [Skills](/agent/skills)
+- Extend and control runs with [Hooks](/agent/hooks) (for example: block risky operations, log tool usage, build usage dashboards)
+- Follow project-specific instructions from a `PROXYAI.md` file at the repo root
+- Run with many different models and providers (see [Providers](/providers/overview))
+- Automatically compress long-running context to stay within model limits
+
+## Where to go next
+
+- Learn how specialized agents work in [Subagents](/agent/subagents)
+- Work with checkpoints and rollback using [Timeline](/agent/timeline)
+- Define reusable instruction packs in [Skills](/agent/skills)
+- Configure guardrails in [Security](/agent/security)
+- Customize automation with [Hooks](/agent/hooks)
+- See the available tools in [Tools](/agent/tools)

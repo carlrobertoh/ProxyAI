@@ -1,0 +1,78 @@
+---
+title: Skills
+description: Reusable instruction packs that the agent can load on demand.
+---
+
+# Skills
+
+Skills are reusable instruction packs stored as markdown files in your project under `.proxyai/skills`.
+They help the agent follow consistent workflows without stuffing every run's prompt with long instructions.
+
+## How Skills work
+
+1. You create skill folders in `.proxyai/skills/<skill-folder>/`.
+2. Each folder contains a `SKILL.md` file.
+3. ProxyAI scans `SKILL.md` files and reads metadata from markdown frontmatter.
+4. ProxyAI includes each discovered skill in the system prompt (name + title + description).
+5. When needed, the agent calls `LoadSkill` with the skill name (or title).
+4. ProxyAI injects the full skill content back into the conversation as a **new user message**.
+5. The agent continues with that new context.
+
+This keeps the default system prompt compact while still allowing deep, task-specific guidance when needed.
+
+## Skill file interface (common format)
+
+Each skill must define metadata in frontmatter:
+
+- `name` (required): stable identifier for tool lookup.
+- `description` (required): short purpose statement shown in system prompt.
+- `title` (optional): display title. If omitted, ProxyAI uses the first `# Heading` in the file, then falls back to `name`.
+
+Example `.proxyai/skills/kotlin-test-writer/SKILL.md`:
+
+```md
+---
+name: kotlin-test-writer
+title: Kotlin Test Writer
+description: Write focused unit tests for Kotlin services and tools.
+---
+
+# Kotlin Test Writer
+
+When writing tests:
+- Prefer existing `IntegrationTest` patterns in this repo.
+- Cover behavior + edge cases.
+- Keep assertions explicit and deterministic.
+```
+
+## `LoadSkill` tool
+
+Use the `LoadSkill` tool when the system prompt indicates a relevant skill.
+For the exact schema and behavior, see [LoadSkill reference](/agent/tools#loadskill).
+
+### Input
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_name` | string | Yes | Exact skill name (or title) from the available list. |
+
+### Behavior
+
+- If found, the skill is queued as a user message.
+- If not found, the tool returns an error with available discovered skills.
+- The agent asks for approval before loading the skill into context.
+- The tool does not directly edit files; it only injects context.
+
+## Best practices
+
+- Keep skill descriptions specific so the model can choose correctly.
+- Keep content procedural and actionable (checklists, constraints, style rules).
+- Split broad guidance into multiple focused skills rather than one giant skill.
+- Put volatile facts (versions, dates) in normal conversation, not in long-lived skills.
+
+## See also
+
+- [LoadSkill reference](/agent/tools#loadskill) for exact input/output details.
+- [Subagents](/agent/subagents) for delegated agent runs.
+- [Hooks](/agent/hooks) for execution-time policy and automation.
+- [Agent Skills](https://agentskills.io/) for the broader skills concept and ecosystem.

@@ -1,0 +1,10 @@
+{
+  "proxyai": "ProxyAI",
+  "openai": "OpenAI",
+  "custom": "Custom OpenAI",
+  "anthropic": "Anthropic",
+  "google": "Google",
+  "mistral": "Mistral",
+  "inception": "Inception",
+  "azure": { "title": "Azure OpenAI", "display": "hidden" }
+}

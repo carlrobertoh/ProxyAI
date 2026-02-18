@@ -1,0 +1,86 @@
+# Custom OpenAI
+
+API reference: https://platform.openai.com/docs/api-reference/chat
+
+ProxyAI works with most OpenAI-compatible cloud providers, including Together.ai, Groq, Anyscale, and others, or you can set up a custom configuration.
+
+## Getting Started
+
+Before you begin, make sure you understand the basics of [REST API](https://www.redhat.com/en/topics/api/what-is-a-rest-api) principles.
+
+import { Steps } from 'nextra/components'
+
+<Steps>
+  ### Chat Completions
+
+  In this example, we'll use Groq to power our messages and commands.
+
+  - Navigate to the plugin's settings via **File > Settings/Preferences > Tools > ProxyAI > Providers > Custom OpenAI**.
+  - Choose `Groq` from the Preset template dropdown.
+  <img alt="animated" src="/images/providers/groq-settings.png" />
+  - Obtain your key from [Groq's console](https://console.groq.com/keys) and paste it into the designated field.
+  <img alt="animated" src="/images/providers/groq-api-key.png" />
+  - Verify that everything is configured correctly and that the connection is successful.
+  <img alt="animated" src="/images/settings/test-connection.png" />
+  - Click `Apply` or `OK` to save the changes.
+
+  ### Code Completions
+
+  Groq doesn't provide an LLM that supports fill-in-the-middle (FIM) completions, but you can use StarCoder 16B via the Fireworks API. ProxyAI includes a preset template for Fireworks—just get the API key and add it in the settings field.
+  <br/>
+
+  <img alt="animated" src="/images/providers/fireworks-settings.png" />
+</Steps>
+
+## Advanced Request Configuration
+
+The `Headers` and `Body` tabs support structured editing for complex request payloads.
+
+- Add, edit, and remove individual headers and body properties.
+- For body properties, choose a value type:
+  - `String`
+  - `Placeholder`
+  - `Number`
+  - `Boolean`
+  - `Null`
+  - `Object` (JSON object)
+  - `Array` (JSON array)
+- Use `Edit JSON` in both tabs to edit the entire headers/body payload as raw JSON.
+- JSON input is validated before saving.
+
+## Placeholders
+
+You can use the following placeholders in Custom OpenAI request configs:
+
+- `$OPENAI_MESSAGES`: Replaced with structured OpenAI-format messages (JSON array).
+- `$PROMPT`: Replaced with concatenated message content.
+- `$CUSTOM_SERVICE_API_KEY`: Replaced with the API key from your Custom OpenAI settings.
+
+## Nested Params Support
+
+Placeholder and API key replacement works recursively, including inside nested objects and arrays in the request body.
+
+This enables payloads like:
+
+```json
+{
+  "model": "my-model",
+  "payload": {
+    "prompt_alias": "$PROMPT",
+    "messages_alias": "$OPENAI_MESSAGES",
+    "auth": "Bearer $CUSTOM_SERVICE_API_KEY",
+    "items": [
+      {
+        "kind": "prompt",
+        "value": "$PROMPT"
+      },
+      {
+        "kind": "messages",
+        "value": "$OPENAI_MESSAGES"
+      }
+    ]
+  }
+}
+```
+
+If ProxyAI sends a non-stream request, any `stream` field (including nested ones) is automatically normalized to `false`.

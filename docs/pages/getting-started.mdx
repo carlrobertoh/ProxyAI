@@ -1,0 +1,114 @@
+---
+title: Getting Started
+description: Install ProxyAI and start using AI in your IDE, whether using the public plugin or a private enterprise extension.
+---
+
+import { Steps, Tabs, Tab } from 'nextra/components'
+import { Callout } from 'nextra/components'
+
+# Getting Started
+
+This guide explains how to install ProxyAI and begin using AI coding assistance inside your JetBrains IDE. The steps differ slightly depending on whether you are using the publicly available plugin or a private one provided by your organization.
+
+<Tabs items={['Public Plugin (Marketplace)', 'Private Plugin (Enterprise)']}>
+  <Tab>
+    Follow these steps if you are installing the standard ProxyAI plugin available to everyone.
+
+    <Steps>
+      ### Install the Plugin from Marketplace
+
+      1. Open **Settings / Preferences → Plugins** in your JetBrains IDE.
+      2. Search for `ProxyAI` in the Marketplace tab.
+      3. Click **Install** and restart your IDE when prompted.
+
+      <img alt="Install ProxyAI from JetBrains Marketplace" src="/images/getting_started/marketplace.png"
+           style={{margin: '8px 0', borderRadius: '6px', overflow: 'hidden'}}/>
+
+      ### Launch ProxyAI
+
+      Once installed, find the **ProxyAI Chat** tool window (usually on the right-hand side) or activate it via **Find Action** (`⌘/Ctrl + Shift + A` → search "ProxyAI Chat").
+
+      <img alt="ProxyAI Tool Window location" src="/images/getting_started/toolwindow.png"
+           style={{margin: '8px 0', borderRadius: '6px', overflow: 'hidden'}}/>
+
+      ### Ask Your First Question
+
+      Open the chat window and ask anything!
+
+      <img alt="Asking a question in ProxyAI Chat" src="/images/getting_started/ask_questions.gif"
+           style={{margin: '8px 0', borderRadius: '6px', overflow: 'hidden'}}/>
+    </Steps>
+
+    **Initial Configuration:**
+
+    Upon first use, the public ProxyAI plugin defaults to using its own cloud service (ProxyAI Cloud) with basic model access. To unlock more powerful models or use different AI providers:
+
+    *   Upgrade your ProxyAI Cloud plan ([see pricing](https://tryproxy.io/#pricing)).
+    *   Configure the plugin to use an external provider (like OpenAI, Anthropic) with your own API key ([See Providers](/providers/overview)).
+    *   Set up a connection to a local model using Ollama or Llama.cpp ([See Local Providers](/providers/local)).
+
+  </Tab>
+  <Tab>
+    Follow these instructions if your organization provides a private, customized version of ProxyAI (Custom Extension).
+
+    <Steps>
+      ### Obtain the Plugin
+
+      The ProxyAI Custom Extension is **not available** on the public JetBrains Marketplace. Your organization (e.g., your IT department or development tools team) will provide you with the plugin (usually a `.zip`) and specific installation instructions.
+
+      ### Install the Plugin from Disk
+
+      Typically, installation involves:
+      1. Open **Settings / Preferences → Plugins** in your JetBrains IDE.
+      2. Click the gear icon ⚙️ and select **Install Plugin from Disk...**.
+      3. Locate and select the `.zip` file provided by your organization.
+      4. Click **OK** or **Install**.
+      5. Restart your IDE when prompted to complete the installation.
+
+      <img alt="Install ProxyAI Manually" src="/images/getting_started/install-manually.png"
+           style={{margin: '8px 0', borderRadius: '6px', overflow: 'hidden'}}/>
+
+      *(Always consult your organization's internal documentation for precise installation steps, as they may differ slightly.)*
+
+      ### Launch ProxyAI & Verify Configuration
+
+      After restarting, find the **ProxyAI Chat** tool window (usually on the right sidebar) or activate it via **Find Action** (`⌘/Ctrl + Shift + A` → search "ProxyAI Chat").
+
+      <img alt="Open ProxyAI Tool Window" src="/images/getting_started/toolwindow-enterprise.png"
+           style={{margin: '8px 0', borderRadius: '6px', overflow: 'hidden'}}/>
+
+      The Custom Extension is typically pre-configured by your administrator to connect to approved internal or private AI models using **[Remote Settings](/enterprise/remote-settings)**. It should connect automatically.
+
+      <Callout type="info">
+        **What are Remote Settings?** Your administrator defines standard configurations (like approved AI providers, models, and custom prompts) in a central file. The ProxyAI plugin fetches this file to ensure your setup aligns with organizational standards.
+      </Callout>
+
+      ### Configure Remote Settings URL
+
+      In most cases, the Remote Settings URL will be pre-filled in your Custom Extension. However, if the plugin doesn't connect automatically or if instructed by your administrator:
+
+      1. Go to **Settings / Preferences → Tools → ProxyAI Enterprise → Remote Settings**.
+      2. Enter the **Remote settings URL** provided by your administrator into the field.
+      3. Click **Sync Settings**.
+      4. Review the detected configuration changes (if any) and click **Apply Changes**.
+
+      <Callout type="warning">
+        If you don't have the Remote Settings URL or encounter issues, contact your organization's internal support or the team that provided the plugin file.
+      </Callout>
+
+      *(For a detailed guide on how Remote Settings work and how to sync them, see [Applying Remote Settings in ProxyAI](/enterprise/remote-settings#applying-remote-settings-in-proxyai).)*
+
+      ### Start Using AI Features
+
+      Once configured (either automatically or manually via Remote Settings sync), you can begin interacting with the chat or using features like autocomplete and AI commit messages. Your available models and features are determined by the central configuration managed by your administrator.
+
+    </Steps>
+
+    **Key Points for Custom Extension Users:**
+
+    *   **Pre-configured:** Your extension is usually set up by your administrator to connect to specific, approved AI endpoints. You typically **do not** need to manually configure providers or API keys like users of the public plugin.
+    *   **Remote Settings:** Your configuration is likely managed centrally via [Remote Settings](/enterprise/remote-settings). Changes made by your administrator may be automatically detected, prompting you to apply updates.
+    *   **Internal Support:** For any issues related to installation, configuration, available models, or usage of the Custom Extension, please refer to your organization's internal support channels or documentation first.
+
+  </Tab>
+</Tabs>

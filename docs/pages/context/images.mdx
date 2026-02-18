@@ -1,0 +1,49 @@
+---
+title: Image Context
+description: Using images as context within ProxyAI chat.
+---
+
+import Image from 'next/image'
+
+# Image Context
+
+Chat with your images directly within ProxyAI. Upload screenshots, diagrams, or error messages and let the AI analyze them for you.
+
+## How it Works
+
+When you share an image with ProxyAI, the AI analyzes what it sees. This works especially well with:
+
+- Screenshots of error messages
+- UI mockups or interfaces
+- Diagrams and flowcharts
+- Code snippets captured as images
+
+The AI can describe what it sees, explain diagrams, help with UI elements, extract text, or troubleshoot errors shown in your images.
+
+## Adding Images
+
+You can add images to your chat in two ways:
+
+- **Manual Upload:** Click the upload button in the chat interface or simply drag and drop an image.
+
+- **Auto-detect Screenshots:** Enable this feature in settings to have ProxyAI monitor for new screenshots. When you take a screenshot, ProxyAI will offer to add it to your current conversation.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/images.mp4"
+    alt="Use Images"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+## Screenshot Detection
+
+When auto-detect is enabled, you'll see a notification like this whenever you take a new screenshot:
+
+<Image src="/images/features/images-upload.png" alt="Screenshot detection notification" width={960} height={400}
+       className="nx-rounded-lg nx-my-4"/>
+
+You can turn screenshot detection on or off from: **Settings/Preferences > Tools > ProxyAI > Configuration > Check for new screenshots automatically**.

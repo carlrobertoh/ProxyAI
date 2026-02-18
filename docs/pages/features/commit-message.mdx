@@ -1,0 +1,100 @@
+---
+title: AI Commit Features
+description: Use ProxyAI to generate Git commit messages or review staged changes in your JetBrains IDE.
+---
+
+import Image from 'next/image'
+
+# AI Commit Message
+
+Use ProxyAI to write clear Git commit messages and review code changes directly in your JetBrains IDE.
+
+## Generate Message
+
+ProxyAI analyzes your staged changes and suggests a consistent commit message for you.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/generate-message.mp4"
+    alt="Generating a commit message from staged changes"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+To generate a commit message:
+
+- Open the Commit tool window (`Cmd+K` / `Ctrl+K`)
+- Stage the files you want to include in the commit
+- Select the **Generate message** option from the dropdown above the text input field
+
+## Generate Message with Additional Input
+
+You can provide extra instructions for the commit message when you need specific details or want to follow a style guide.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/generate-message-additional-input.mp4"
+    alt="Generating a commit message with additional input"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+## Review Changes
+
+Send your staged changes to ProxyAI for quick analysis and feedback before committing.
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/review-changes.mp4"
+    alt="Reviewing staged changes using the AI Chat panel"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+## Review Past Commits
+
+Analyze and understand previous commits to codebase.
+
+To review past commits:
+
+- Open the Git tool window (`View > Tool Windows > Git` or `Cmd+9`/`Alt+9`)
+- In the Log tab, right-click the commit you want explained
+- Select **ProxyAI > Explain Commit with ProxyAI**
+
+<video
+    src="https://proxyai-assets.s3.eu-central-1.amazonaws.com/videos/review-past-commits.mp4"
+    alt="Explaining a past commit using ProxyAI from the Git log"
+    width="1200"
+    height="800"
+    className="nx-rounded-lg nx-my-4"
+    autoPlay
+    muted
+    loop
+/>
+
+## Customize the Commit Message Prompt
+
+Change the instructions ProxyAI uses to generate commit messages:
+
+- Go to **Settings/Preferences > Tools > ProxyAI > Prompts > Generate Commit Message**
+- Find the **Commit Message Prompt Template** field
+- Change the template text to fit your needs. Click Apply
+
+<Image src="/images/features/commit-message-prompt.png" alt="Configure the prompt used when generating a commit message" width={1200} height={800}
+       className="nx-rounded-lg nx-my-4"/>
+
+### Available Placeholders
+
+When customizing your commit message template, you can use these dynamic placeholders:
+
+- **BRANCH_NAME**: Automatically inserts the name of the current branch (e.g., `feature/user-auth`)
+- **DATE_ISO_8601**: Inserts the current date in ISO 8601 format (e.g., `2023-05-15`)
