@@ -259,4 +259,31 @@ class SseMessageParserStreamTest {
         val codeEndSegments = segments.filterIsInstance<CodeEnd>()
         assertThat(codeEndSegments).hasSize(1)
     }
+
+    @Test
+    fun `test handles mermaid block with long fence and header metadata`() {
+        val parser = SseMessageParser()
+        val input = """
+            Here is a diagram:
+            ````mermaid title="System Flow"
+            flowchart TD
+              A[Start] --> B[Finish]
+            ````
+            Done.
+        """.trimIndent()
+
+        val segments = simulateStreaming(parser, input, minChunkSize = 2, maxChunkSize = 9, seed = 321)
+
+        val codeHeaders = segments.filterIsInstance<CodeHeader>()
+        assertThat(codeHeaders).isNotEmpty
+        assertThat(codeHeaders.last().language).isEqualTo("mermaid")
+
+        val codeSegments = segments.filterIsInstance<Code>()
+        assertThat(codeSegments).isNotEmpty
+        assertThat(codeSegments.last().content).contains("flowchart TD")
+        assertThat(codeSegments.last().content).doesNotContain("````")
+
+        val codeEndSegments = segments.filterIsInstance<CodeEnd>()
+        assertThat(codeEndSegments).hasSize(1)
+    }
 }

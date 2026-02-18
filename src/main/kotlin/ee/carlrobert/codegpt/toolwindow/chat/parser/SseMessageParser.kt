@@ -121,7 +121,7 @@ class SseMessageParser : MessageParser {
         consumeFromBuffer(nlIdx + 1)
 
         return when {
-            line.trimEnd() == state.indentation + CODE_FENCE -> {
+            isCodeFenceLine(line, state.indentation) -> {
                 if (state.content.isNotEmpty()) {
                     segments.add(Code(state.content, state.header.language, state.header.filePath))
                 }
@@ -204,7 +204,7 @@ class SseMessageParser : MessageParser {
                 true
             }
 
-            line.trimEnd() == state.indentation + CODE_FENCE -> {
+            isCodeFenceLine(line, state.indentation) -> {
                 segments.add(CodeEnd(""))
                 parserState = ParserState.Outside
                 true
@@ -277,7 +277,7 @@ class SseMessageParser : MessageParser {
             is ParserState.InCode -> {
                 val segments = mutableListOf<Segment>()
 
-                if (buffer.toString().trimEnd() == state.indentation + CODE_FENCE) {
+                if (isCodeFenceLine(buffer.toString(), state.indentation)) {
                     if (state.content.isNotBlank()) {
                         segments.add(
                             Code(state.content, state.header.language, state.header.filePath)
@@ -340,11 +340,33 @@ class SseMessageParser : MessageParser {
     private fun parseCodeHeader(headerText: String): CodeHeader? {
         val parts = headerText.split(HEADER_DELIMITER, limit = HEADER_PARTS_LIMIT)
         return if (parts.isNotEmpty()) {
+            val rawLanguage = parts.getOrNull(0).orEmpty()
+            val normalizedLanguage = rawLanguage
+                .trim()
+                .trimStart('`')
+                .takeWhile { !it.isWhitespace() }
+
             CodeHeader(
-                language = parts.getOrNull(0) ?: "",
+                language = normalizedLanguage,
                 filePath = parts.getOrNull(1)?.trim()?.ifEmpty { null }
             )
         } else null
+    }
+
+    private fun isCodeFenceLine(line: String, indentation: String): Boolean {
+        val trimmedEnd = line.trimEnd()
+        if (!trimmedEnd.startsWith(indentation)) {
+            return false
+        }
+        val afterIndent = trimmedEnd.substring(indentation.length)
+        if (afterIndent.isEmpty() || afterIndent.first() != '`') {
+            return false
+        }
+        if (!afterIndent.all { it == '`' || it.isWhitespace() }) {
+            return false
+        }
+        val fenceCandidate = afterIndent.trim()
+        return fenceCandidate.length >= CODE_FENCE.length && fenceCandidate.all { it == '`' }
     }
 
     private fun isSearchStartLine(line: String): Boolean {

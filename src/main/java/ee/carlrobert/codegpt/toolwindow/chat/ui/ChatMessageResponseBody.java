@@ -18,6 +18,7 @@ import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.VerticalFlowLayout;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -58,6 +59,7 @@ import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.ui.hover.PsiLinkHoverPreview;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import java.awt.BorderLayout;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Stream;
 import javax.swing.DefaultListModel;
@@ -85,6 +87,7 @@ public class ChatMessageResponseBody extends JPanel {
       new JPanel(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, 4, true, false));
 
   private ResponseEditorPanel currentlyProcessedEditorPanel;
+  private MermaidResponsePanel currentlyProcessedMermaidPanel;
   private JEditorPane currentlyProcessedTextPane;
   private JPanel webpageListPanel;
 
@@ -131,6 +134,7 @@ public class ChatMessageResponseBody extends JPanel {
         processResponse(item, false);
         currentlyProcessedTextPane = null;
         currentlyProcessedEditorPanel = null;
+        currentlyProcessedMermaidPanel = null;
       }
     } catch (Exception e) {
       LOG.error("Something went wrong while processing input", e);
@@ -141,6 +145,7 @@ public class ChatMessageResponseBody extends JPanel {
   public void addToolStatusPanel(JComponent component) {
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel = null;
+    currentlyProcessedMermaidPanel = null;
     streamOutputParser.clear();
     contentPanel.add(component);
   }
@@ -317,6 +322,7 @@ public class ChatMessageResponseBody extends JPanel {
         handleHeaderOnCompletion(currentlyProcessedEditorPanel);
       }
       currentlyProcessedEditorPanel = null;
+      currentlyProcessedMermaidPanel = null;
       return;
     }
 
@@ -349,6 +355,11 @@ public class ChatMessageResponseBody extends JPanel {
   }
 
   private void processCode(Segment item) {
+    if (isMermaidCode(item)) {
+      processMermaid(item.getContent());
+      return;
+    }
+
     var content = item.getContent();
     if (currentlyProcessedEditorPanel == null) {
       prepareProcessingCode(item);
@@ -376,6 +387,7 @@ public class ChatMessageResponseBody extends JPanel {
   @Synchronized
   private void prepareProcessingText(boolean caretVisible) {
     currentlyProcessedEditorPanel = null;
+    currentlyProcessedMermaidPanel = null;
     currentlyProcessedTextPane = createTextPane("", caretVisible);
     contentPanel.add(currentlyProcessedTextPane);
     contentPanel.revalidate();
@@ -386,11 +398,52 @@ public class ChatMessageResponseBody extends JPanel {
   private void prepareProcessingCode(Segment item) {
     hideCaret();
     currentlyProcessedTextPane = null;
+    currentlyProcessedMermaidPanel = null;
     currentlyProcessedEditorPanel =
         new ResponseEditorPanel(project, item, readOnly, compact, parentDisposable);
     contentPanel.add(currentlyProcessedEditorPanel);
     contentPanel.revalidate();
     contentPanel.repaint();
+  }
+
+  @Synchronized
+  private void prepareProcessingMermaid() {
+    hideCaret();
+    currentlyProcessedTextPane = null;
+    currentlyProcessedEditorPanel = null;
+    currentlyProcessedMermaidPanel = new MermaidResponsePanel();
+    Disposer.register(parentDisposable, currentlyProcessedMermaidPanel);
+    contentPanel.add(currentlyProcessedMermaidPanel);
+    contentPanel.revalidate();
+    contentPanel.repaint();
+  }
+
+  private void processMermaid(String source) {
+    if (currentlyProcessedMermaidPanel == null) {
+      prepareProcessingMermaid();
+    }
+    if (currentlyProcessedMermaidPanel != null) {
+      currentlyProcessedMermaidPanel.render(source);
+    }
+  }
+
+  private boolean isMermaidCode(Segment item) {
+    if (!MermaidResponsePanel.isSupported()) {
+      return false;
+    }
+    if (!(item instanceof Code code)) {
+      return false;
+    }
+    var language = code.getLanguage();
+    if (language == null) {
+      return false;
+    }
+    var normalized = language.trim().toLowerCase(Locale.ROOT);
+    if (normalized.isEmpty()) {
+      return false;
+    }
+    var primaryToken = normalized.split("\\s+", 2)[0];
+    return primaryToken.startsWith("mermaid");
   }
 
   private void handleHeaderOnCompletion(ResponseEditorPanel editorPanel) {

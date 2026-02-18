@@ -1,0 +1,517 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https: file: data:;" />
+    <style>
+      :root {
+        --fg: __THEME_FOREGROUND__;
+        --fg-muted: __THEME_MUTED_FOREGROUND__;
+        --hud-bg: __THEME_HUD_BACKGROUND__;
+        --hud-border: __THEME_HUD_BORDER__;
+        --button-bg: __THEME_BUTTON_BACKGROUND__;
+        --button-bg-hover: __THEME_BUTTON_BACKGROUND_HOVER__;
+        --button-border: __THEME_BUTTON_BORDER__;
+        --error: __THEME_ERROR__;
+        --font-family: __THEME_FONT_FAMILY__;
+        --font-size: __THEME_FONT_SIZE__;
+      }
+      html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+      body {
+        color: var(--fg);
+        font-family: var(--font-family), sans-serif;
+        font-size: var(--font-size);
+      }
+      #viewport {
+        height: 100%;
+        overflow: hidden;
+        position: relative;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+      }
+      #viewport.dragging {
+        cursor: grabbing;
+      }
+      #diagramTypeBadge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 2;
+        pointer-events: none;
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--hud-border);
+        background: var(--hud-bg);
+        color: var(--fg-muted);
+        font-size: 11px;
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+      }
+      #hud {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        pointer-events: none;
+      }
+      #controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        pointer-events: auto;
+        padding: 3px 6px;
+        border-radius: 999px;
+        border: 1px solid var(--hud-border);
+        background: var(--hud-bg);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+      }
+      #controls button {
+        font-family: var(--font-family);
+        font-size: 11px;
+        font-weight: 500;
+        border: 1px solid var(--button-border);
+        background: var(--button-bg);
+        border-radius: 6px;
+        padding: 1px 7px;
+        line-height: 1.2;
+        cursor: pointer;
+        color: var(--fg);
+      }
+      #controls button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      #controls button:hover {
+        background: var(--button-bg-hover);
+      }
+      #zoomValue {
+        min-width: 42px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--fg-muted);
+        padding-right: 2px;
+      }
+      #diagram {
+        position: absolute;
+        left: 0;
+        top: 0;
+        will-change: transform, width, height;
+      }
+      #diagram svg {
+        max-width: none !important;
+        height: auto !important;
+        shape-rendering: geometricPrecision;
+        text-rendering: geometricPrecision;
+      }
+      #status {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 1;
+      }
+      #status.hidden {
+        display: none;
+      }
+      #statusCard {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+        max-width: calc(100% - 24px);
+        font-size: 12px;
+        border: 1px solid var(--hud-border);
+        border-radius: 8px;
+        padding: 8px 10px;
+        background: var(--hud-bg);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+      }
+      #status.error #statusCard {
+        border-color: var(--error);
+      }
+      #statusSpinner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--fg-muted);
+        border-top-color: transparent;
+        border-radius: 999px;
+        animation: spin 0.8s linear infinite;
+        flex-shrink: 0;
+      }
+      #statusSpinner.hidden {
+        display: none;
+      }
+      #retryRender {
+        display: none;
+        font-family: var(--font-family);
+        font-size: 11px;
+        font-weight: 500;
+        border: 1px solid var(--button-border);
+        background: var(--button-bg);
+        border-radius: 6px;
+        padding: 1px 7px;
+        line-height: 1.2;
+        cursor: pointer;
+        color: var(--fg);
+      }
+      #retryRender:hover {
+        background: var(--button-bg-hover);
+      }
+      #status.showRetry #retryRender {
+        display: inline-flex;
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .error {
+        color: var(--error);
+        font-size: 13px;
+        margin: 8px;
+        white-space: pre-wrap;
+      }
+    </style>
+    <title>Mermaid Diagram</title>
+  </head>
+  <body>
+    <div id="viewport">
+      <div id="diagramTypeBadge"></div>
+      <div id="hud">
+        <div id="controls">
+          <button id="zoomOut" type="button" title="Zoom out">-</button>
+          <button id="zoomIn" type="button" title="Zoom in">+</button>
+          <button id="zoomReset" type="button" title="Reset zoom">100%</button>
+          <span id="zoomValue">100%</span>
+        </div>
+      </div>
+      <div id="diagram"></div>
+      <div id="status" aria-live="polite">
+        <div id="statusCard">
+          <span id="statusSpinner" aria-hidden="true"></span>
+          <span id="statusMessage">Loading Mermaid preview...</span>
+          <button id="retryRender" type="button">Retry</button>
+        </div>
+      </div>
+    </div>
+    <div id="error" class="error"></div>
+    <script>
+      const source = __MERMAID_SOURCE__;
+      const diagramTypeLabel = __DIAGRAM_TYPE_LABEL__;
+      const nodeTargets = __NODE_TARGETS_JSON__;
+      const viewport = document.getElementById('viewport');
+      const diagramTypeBadge = document.getElementById('diagramTypeBadge');
+      const diagram = document.getElementById('diagram');
+      const error = document.getElementById('error');
+      const status = document.getElementById('status');
+      const statusMessage = document.getElementById('statusMessage');
+      const statusSpinner = document.getElementById('statusSpinner');
+      const retryRender = document.getElementById('retryRender');
+      const zoomIn = document.getElementById('zoomIn');
+      const zoomOut = document.getElementById('zoomOut');
+      const zoomReset = document.getElementById('zoomReset');
+      const zoomValue = document.getElementById('zoomValue');
+      const MERMAID_SCRIPT_URL = __MERMAID_SCRIPT_URL__;
+      const MERMAID_LOAD_TIMEOUT_MS = 8000;
+      const RENDER_TIMEOUT_MS = 12000;
+      let zoom = 1;
+      let panX = 0;
+      let panY = 0;
+      let currentSvg = null;
+      let baseWidth = 1;
+      let baseHeight = 1;
+      let dragging = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let dragStartPanX = 0;
+      let dragStartPanY = 0;
+      let dragMoved = false;
+      let suppressClick = false;
+      const DRAG_THRESHOLD = 6;
+      const MIN_ZOOM = 0.15;
+      const MAX_ZOOM = 4.5;
+      let mermaidLoadPromise = null;
+
+      diagramTypeBadge.textContent = diagramTypeLabel;
+
+      function onNodeClick(nodeId) {
+        if (!nodeTargets || !nodeTargets[nodeId]) {
+          return;
+        }
+        __NODE_CLICK_HANDLER__;
+      }
+
+      function setControlsEnabled(enabled) {
+        zoomIn.disabled = !enabled;
+        zoomOut.disabled = !enabled;
+        zoomReset.disabled = !enabled;
+      }
+
+      function setStatus(message, { isError = false, showSpinner = false, allowRetry = false } = {}) {
+        status.classList.remove('hidden', 'error', 'showRetry');
+        if (isError) {
+          status.classList.add('error');
+        }
+        if (allowRetry) {
+          status.classList.add('showRetry');
+        }
+        statusMessage.textContent = message;
+        statusSpinner.classList.toggle('hidden', !showSpinner);
+      }
+
+      function clearStatus() {
+        status.classList.add('hidden');
+        status.classList.remove('error', 'showRetry');
+        statusMessage.textContent = '';
+        statusSpinner.classList.add('hidden');
+      }
+
+      function withTimeout(promise, timeoutMs, timeoutMessage) {
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+        });
+        return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+      }
+
+      function loadMermaidScript() {
+        if (window.mermaid) {
+          return Promise.resolve(window.mermaid);
+        }
+        if (!mermaidLoadPromise) {
+          mermaidLoadPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = MERMAID_SCRIPT_URL;
+            script.async = true;
+            script.dataset.mermaidLoader = 'true';
+            script.onload = () => {
+              if (window.mermaid) {
+                resolve(window.mermaid);
+              } else {
+                reject(new Error('Mermaid script loaded but API is unavailable.'));
+              }
+            };
+            script.onerror = () => reject(new Error('Bundled Mermaid script could not be loaded.'));
+            document.head.appendChild(script);
+          });
+        }
+        return withTimeout(
+          mermaidLoadPromise,
+          MERMAID_LOAD_TIMEOUT_MS,
+          'Loading Mermaid timed out.'
+        ).catch((e) => {
+          if (!window.mermaid) {
+            mermaidLoadPromise = null;
+          }
+          throw e;
+        });
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function applyTransform() {
+        diagram.style.transform = `translate(${panX}px, ${panY}px)`;
+        if (currentSvg) {
+          const scaledWidth = Math.max(1, baseWidth * zoom);
+          const scaledHeight = Math.max(1, baseHeight * zoom);
+          currentSvg.style.width = `${scaledWidth}px`;
+          currentSvg.style.height = `${scaledHeight}px`;
+          currentSvg.setAttribute('width', `${scaledWidth}`);
+          currentSvg.setAttribute('height', `${scaledHeight}`);
+        }
+        zoomValue.textContent = `${Math.round(zoom * 100)}%`;
+      }
+
+      function setZoomAt(nextZoom, anchorX, anchorY) {
+        const clamped = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
+        if (clamped === zoom) return;
+        const worldX = (anchorX - panX) / zoom;
+        const worldY = (anchorY - panY) / zoom;
+        zoom = clamped;
+        panX = anchorX - worldX * zoom;
+        panY = anchorY - worldY * zoom;
+        applyTransform();
+      }
+
+      function fitToViewport() {
+        const svg = currentSvg;
+        const viewportWidth = Math.max(1, viewport.clientWidth);
+        const viewportHeight = Math.max(1, viewport.clientHeight);
+        if (!svg) {
+          zoom = 1;
+          panX = 0;
+          panY = 0;
+          applyTransform();
+          return;
+        }
+
+        const fitScale = clamp(
+          Math.min((viewportWidth - 8) / baseWidth, (viewportHeight - 8) / baseHeight),
+          MIN_ZOOM,
+          MAX_ZOOM
+        );
+
+        zoom = fitScale;
+        panX = (viewportWidth - baseWidth * zoom) / 2;
+        panY = (viewportHeight - baseHeight * zoom) / 2;
+        applyTransform();
+      }
+
+      function measureBaseSize(svg) {
+        const vb = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal : null;
+        if (vb && vb.width > 0 && vb.height > 0) {
+          return { width: vb.width, height: vb.height };
+        }
+        const bbox = svg.getBBox();
+        return {
+          width: Math.max(1, bbox.width),
+          height: Math.max(1, bbox.height)
+        };
+      }
+
+      viewport.addEventListener('wheel', (e) => {
+        if (!currentSvg) return;
+        e.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const anchorX = e.clientX - rect.left;
+        const anchorY = e.clientY - rect.top;
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        setZoomAt(zoom * factor, anchorX, anchorY);
+      }, { passive: false });
+
+      zoomIn.addEventListener('click', () => {
+        setZoomAt(zoom * 1.15, viewport.clientWidth / 2, viewport.clientHeight / 2);
+      });
+
+      zoomOut.addEventListener('click', () => {
+        setZoomAt(zoom / 1.15, viewport.clientWidth / 2, viewport.clientHeight / 2);
+      });
+
+      zoomReset.addEventListener('click', () => {
+        fitToViewport();
+      });
+
+      retryRender.addEventListener('click', () => {
+        renderDiagram();
+      });
+
+      viewport.addEventListener('mousedown', (e) => {
+        if (!currentSvg) return;
+        if (e.button !== 0) return;
+        dragging = true;
+        dragMoved = false;
+        suppressClick = false;
+        viewport.classList.add('dragging');
+        dragStartX = e.pageX;
+        dragStartY = e.pageY;
+        dragStartPanX = panX;
+        dragStartPanY = panY;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.pageX - dragStartX;
+        const dy = e.pageY - dragStartY;
+        if (!dragMoved && Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) {
+          return;
+        }
+        dragMoved = true;
+        e.preventDefault();
+        panX = dragStartPanX + dx;
+        panY = dragStartPanY + dy;
+        applyTransform();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (dragMoved) {
+          suppressClick = true;
+        }
+        dragging = false;
+        dragMoved = false;
+        viewport.classList.remove('dragging');
+      });
+
+      viewport.addEventListener('click', (e) => {
+        if (!suppressClick) return;
+        e.preventDefault();
+        e.stopPropagation();
+        suppressClick = false;
+      }, true);
+
+      async function renderDiagram() {
+        setControlsEnabled(false);
+        setStatus('Rendering Mermaid diagram...', { showSpinner: true });
+        error.textContent = '';
+        diagram.innerHTML = '';
+        currentSvg = null;
+        fitToViewport();
+        try {
+          const mermaidApi = await loadMermaidScript();
+          mermaidApi.initialize({
+            startOnLoad: false,
+            securityLevel: 'loose',
+            theme: '__MERMAID_THEME__'
+          });
+          const id = 'd' + Date.now();
+          const renderResult = await withTimeout(
+            mermaidApi.render(id, source),
+            RENDER_TIMEOUT_MS,
+            'Rendering Mermaid timed out. The diagram may be too large or invalid.'
+          );
+          const svgMarkup = (renderResult && typeof renderResult.svg === 'string')
+            ? renderResult.svg.trim()
+            : '';
+          if (!svgMarkup) {
+            throw new Error('Mermaid returned an empty diagram.');
+          }
+          diagram.innerHTML = svgMarkup;
+          if (renderResult.bindFunctions) {
+            renderResult.bindFunctions(diagram);
+          }
+          currentSvg = diagram.querySelector('svg');
+          if (!currentSvg) {
+            throw new Error('Rendered output does not contain an SVG element.');
+          }
+          const measured = measureBaseSize(currentSvg);
+          baseWidth = measured.width;
+          baseHeight = measured.height;
+          fitToViewport();
+          clearStatus();
+          setControlsEnabled(true);
+        } catch (e) {
+          const message = (e && e.message) ? e.message : String(e);
+          setStatus('Unable to render Mermaid diagram.', { isError: true, allowRetry: true });
+          error.textContent = message;
+          diagram.innerHTML = '';
+          currentSvg = null;
+          baseWidth = 1;
+          baseHeight = 1;
+          fitToViewport();
+          __RENDER_ERROR_HANDLER__;
+        }
+      }
+
+      window.addEventListener('resize', () => {
+        if (!currentSvg) return;
+        fitToViewport();
+      });
+
+      setControlsEnabled(false);
+      renderDiagram();
+    </script>
+  </body>
+</html>

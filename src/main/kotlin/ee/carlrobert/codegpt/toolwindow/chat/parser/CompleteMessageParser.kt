@@ -7,7 +7,7 @@ class CompleteMessageParser : MessageParser {
 
     companion object {
         private val CODE_BLOCK_PATTERN: Pattern =
-            Pattern.compile("```([a-zA-Z0-9_+-]*)(?::([^\\n]*))?\\n(.*?)```", Pattern.DOTALL)
+            Pattern.compile("(`{3,})([^\\n`]*)\\n(.*?)\\n\\1", Pattern.DOTALL)
         private val SEARCH_REPLACE_PATTERN: Pattern =
             Pattern.compile(
                 "<<<<<<< SEARCH\\n(.*?)\\n=======\\n(.*?)\\n>>>>>>> REPLACE",
@@ -18,8 +18,7 @@ class CompleteMessageParser : MessageParser {
 
         private const val THINK_OPEN_TAG = "<think>"
         private const val THINK_CLOSE_TAG = "</think>\n\n"
-        private const val LANGUAGE_GROUP_INDEX = 1
-        private const val FILE_PATH_GROUP_INDEX = 2
+        private const val CODE_HEADER_GROUP_INDEX = 2
         private const val CODE_CONTENT_GROUP_INDEX = 3
         private const val SEARCH_CONTENT_GROUP_INDEX = 1
         private const val REPLACE_CONTENT_GROUP_INDEX = 2
@@ -105,12 +104,11 @@ class CompleteMessageParser : MessageParser {
      * Processes a code block and adds all related segments.
      */
     private fun MutableList<Segment>.addCodeBlockSegments(codeBlockMatcher: Matcher) {
-        val language = codeBlockMatcher.group(LANGUAGE_GROUP_INDEX).orEmpty()
-        val filePath = codeBlockMatcher.group(FILE_PATH_GROUP_INDEX)
+        val header = parseCodeHeader(codeBlockMatcher.group(CODE_HEADER_GROUP_INDEX).orEmpty())
         val codeContent = codeBlockMatcher.group(CODE_CONTENT_GROUP_INDEX).orEmpty()
 
-        add(CodeHeader(language, filePath))
-        processCodeContent(codeContent, language, filePath)
+        add(CodeHeader(header.language, header.filePath))
+        processCodeContent(codeContent, header.language, header.filePath)
         add(CodeEnd(codeContent))
     }
 
@@ -360,4 +358,18 @@ class CompleteMessageParser : MessageParser {
         val segments: List<Segment>,
         val lastIndex: Int
     )
+
+    private fun parseCodeHeader(headerText: String): CodeHeader {
+        val parts = headerText.trim().split(":", limit = 2)
+        val rawLanguage = parts.getOrNull(0).orEmpty()
+        val normalizedLanguage = rawLanguage
+            .trim()
+            .trimStart('`')
+            .takeWhile { !it.isWhitespace() }
+        val filePath = parts.getOrNull(1)?.trim()?.ifEmpty { null }
+        return CodeHeader(
+            language = normalizedLanguage,
+            filePath = filePath
+        )
+    }
 }
