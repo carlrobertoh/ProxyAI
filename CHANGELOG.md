@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Agent timeline and checkpoint-level rollback logic
+- WebFetch tool
+- Nested request params support for Custom OpenAI services
+- Mermaid diagrams support [#788](https://github.com/carlrobertoh/ProxyAI/issues/788)
+
+### Removed
+
+- ProxyAI Documentation tags
+
+### Fixed
+
+- Ignore list is now respected across search/read operations [#1126](https://github.com/carlrobertoh/ProxyAI/issues/1126)
+- Compatibility issues with Remote Development feature [#962](https://github.com/carlrobertoh/ProxyAI/issues/962)
+
 ## [3.7.3-241.1] - 2026-02-05
 
 ### Added
