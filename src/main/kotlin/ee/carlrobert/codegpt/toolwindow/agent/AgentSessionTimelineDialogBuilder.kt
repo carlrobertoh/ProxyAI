@@ -352,7 +352,7 @@ internal object AgentSessionTimelineDialogBuilder {
                         object : DumbAwareAction(
                             "Copy Output",
                             "Copies the Tool or Assistant's output",
-                            AllIcons.General.Copy
+                            AllIcons.Actions.Copy
                         ) {
                             override fun actionPerformed(event: AnActionEvent) {
                                 val timelinePoint = point ?: return
