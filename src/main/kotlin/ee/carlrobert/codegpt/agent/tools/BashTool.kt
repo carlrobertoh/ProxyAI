@@ -529,11 +529,11 @@ class BashTool(
     }
 
     private fun buildShellCommand(command: String): List<String> {
-        val isWindows = System.getProperty("os.name").lowercase().contains("windows")
-        return if (isWindows) {
-            listOf("cmd", "/c", command)
-        } else {
-            listOf("sh", "-c", command)
+        val osName = System.getProperty("os.name").lowercase()
+        return when {
+            osName.contains("windows") -> listOf("cmd", "/c", command)
+            osName.contains("linux") -> listOf("bash", "-c", command)
+            else -> listOf("sh", "-c", command)
         }
     }
 
