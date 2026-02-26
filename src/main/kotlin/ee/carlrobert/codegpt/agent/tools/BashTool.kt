@@ -21,6 +21,7 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.selects.select
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.io.File
 import java.io.IOException
 import java.nio.file.Paths
 import java.util.*
@@ -34,7 +35,7 @@ fun interface BashCommandConfirmationHandler {
 class BashTool(
     private val project: Project,
     private val confirmationHandler: BashCommandConfirmationHandler,
-    private val sessionId: String = "global",
+    private val sessionId: String,
     private val hookManager: HookManager
 ) : BaseTool<BashTool.Args, BashTool.Result>(
     workingDirectory = project.basePath ?: "",
@@ -72,7 +73,6 @@ class BashTool(
       - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
       - If the output exceeds 30000 characters, output will be truncated before being returned to you.
       - You can use the `run_in_background` parameter to run the command in the background, which allows you to continue working while the command runs. You can monitor the output using the Bash tool as it becomes available. You do not need to use '&' at the end of the command when using this parameter.
-      
       - Avoid using Bash with the `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
         - Content search: Use Grep (NOT grep or rg)
         - Read files: Use Read (NOT cat/head/tail)
@@ -91,6 +91,7 @@ class BashTool(
         <bad-example>
         find /src -type f -name "*.kt"
         </bad-example>
+      - Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of cd. You may use cd if the User explicitly requests it. pytest /foo/bar/tests cd /foo/bar && pytest tests
     
     # Committing changes with git
     
@@ -166,7 +167,6 @@ class BashTool(
     </example>
     
     Important:
-    - DO NOT use the TodoWrite or Task tools
     - Return the PR URL when you're done, so the user can see it
     
     # Other common operations
@@ -183,6 +183,8 @@ class BashTool(
             "The command to execute"
         )
         val command: String,
+        @property:LLMDescription("Optional working directory. If not specified, defaults to the project base directory.")
+        val workingDirectory: String? = null,
         @property:LLMDescription(
             "Optional timeout in milliseconds (max 600000)"
         )
@@ -221,6 +223,7 @@ class BashTool(
     }
 
     override suspend fun doExecute(args: Args): Result {
+        val workingDirectory = args.workingDirectory ?: super.workingDirectory
         val toolId = ToolRunContext.getToolId(sessionId)
         if (project.service<ProxyAISettingsService>()
                 .isToolInvocationDenied(this, args.command)
@@ -271,7 +274,7 @@ class BashTool(
             is ShellCommandConfirmation.Approved -> {
                 try {
                     if (args.runInBackground == true) {
-                        val bashId = executeBackground(args.command)
+                        val bashId = executeBackground(workingDirectory, args.command)
                         Result(
                             args.command,
                             null,
@@ -279,7 +282,7 @@ class BashTool(
                             bashId
                         )
                     } else {
-                        val result = runForegroundWithStreaming(resolvedToolId, args)
+                        val result = runForegroundWithStreaming(resolvedToolId, args, workingDirectory)
 
                         val postPayload = mapOf(
                             "command" to args.command,
@@ -341,7 +344,11 @@ class BashTool(
         )
     }
 
-    private suspend fun runForegroundWithStreaming(toolId: String, args: Args): Result {
+    private suspend fun runForegroundWithStreaming(
+        toolId: String,
+        args: Args,
+        workingDirectory: String
+    ): Result {
         val publisher = ApplicationManager.getApplication().messageBus
             .syncPublisher(AgentToolOutputNotifier.AGENT_TOOL_OUTPUT_TOPIC)
 
@@ -353,7 +360,7 @@ class BashTool(
             val shellCommand = buildShellCommand(args.command)
             val process = ProcessBuilder(shellCommand)
                 .apply {
-                    directory(java.io.File(workingDirectory))
+                    directory(File(workingDirectory))
                     redirectErrorStream(false)
                 }
                 .start()
@@ -514,12 +521,12 @@ class BashTool(
         raw.truncateToolResult()
     }
 
-    private fun executeBackground(command: String): String {
+    private fun executeBackground(workingDirectory: String, command: String): String {
         val bashId = UUID.randomUUID().toString()
         val shellCommand = buildShellCommand(command)
         val process = ProcessBuilder(shellCommand)
             .apply {
-                directory(java.io.File(workingDirectory))
+                directory(File(workingDirectory))
                 redirectErrorStream(false)
             }
             .start()
@@ -531,9 +538,14 @@ class BashTool(
     private fun buildShellCommand(command: String): List<String> {
         val osName = System.getProperty("os.name").lowercase()
         return when {
-            osName.contains("windows") -> listOf("cmd", "/c", command)
-            osName.contains("linux") -> listOf("bash", "-c", command)
-            else -> listOf("sh", "-c", command)
+            osName.contains("win") -> {
+                val systemRoot = System.getenv("SystemRoot")
+                    ?: System.getenv("WINDIR")
+                    ?: "C:\\Windows"
+                listOf("$systemRoot\\System32\\cmd.exe", "/c", command)
+            }
+
+            else -> listOf("bash", "-c", command)
         }
     }
 
