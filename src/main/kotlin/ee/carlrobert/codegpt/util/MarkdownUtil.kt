@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.util
 
+import com.vladsch.flexmark.ext.tables.TablesExtension
 import com.vladsch.flexmark.html.HtmlRenderer
 import com.vladsch.flexmark.parser.Parser
 import com.vladsch.flexmark.util.data.MutableDataSet
@@ -37,6 +38,7 @@ object MarkdownUtil {
     @JvmStatic
     fun convertMdToHtml(message: String): String {
         val options = MutableDataSet()
+        options.set(Parser.EXTENSIONS, listOf(TablesExtension.create()))
         options.set(HtmlRenderer.SOFT_BREAK, "<br/>")
 
         val document = Parser.builder(options).build().parse(message)

@@ -6,6 +6,40 @@ import org.junit.Test
 class MarkdownUtilTest {
 
   @Test
+  fun shouldRenderTableCorrectly() {
+    val markdown = """
+        <think>thinking content</think>
+        Here's a basic fruits table:
+        
+        | Fruit | Color | Price ($/kg) | Season | Calories (per 100g) |
+        |-------|-------|--------------|--------|---------------------|
+        | Apple | Red | 3.50 | Fall | 52 |
+        | Banana | Yellow | 2.80 | Year-round | 89 |
+        | Orange | Orange | 4.20 | Winter | 47 |
+        | Strawberry | Red | 6.00 | Spring | 32 |
+        | Grape | Purple | 5.50 | Summer | 69 |
+        | Mango | Orange | 7.00 | Summer | 60 |
+        | Watermelon | Green | 1.90 | Summer | 30 |
+        | Kiwi | Brown | 4.80 | Winter | 61 |
+        | Pineapple | Yellow | 5.00 | Year-round | 50 |
+        | Blueberry | Blue | 8.50 | Summer | 57 |
+    """.trimIndent()
+
+    val html = MarkdownUtil.convertMdToHtml(markdown)
+
+    assertThat(html).contains("thead")
+    assertThat(html).contains("/thead")
+    assertThat(html).contains("tbody")
+    assertThat(html).contains("/tbody")
+    assertThat(html).contains("th")
+    assertThat(html).contains("Fruit")
+    assertThat(html).contains("td")
+    assertThat(html).contains("Apple")
+    val tableCount = html.split("<table").size - 1
+    assertThat(tableCount).isEqualTo(1)
+  }
+
+  @Test
   fun shouldExtractMarkdownCodeBlocks() {
     val testInput = """
             **C++ Code Block**

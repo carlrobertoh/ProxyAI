@@ -9,6 +9,10 @@ import com.vladsch.flexmark.ast.Heading;
 import com.vladsch.flexmark.ast.Link;
 import com.vladsch.flexmark.ast.OrderedListItem;
 import com.vladsch.flexmark.ast.Paragraph;
+import com.vladsch.flexmark.ext.tables.TableBlock;
+import com.vladsch.flexmark.ext.tables.TableCell;
+import com.vladsch.flexmark.ext.tables.TableHead;
+import com.vladsch.flexmark.ext.tables.TableRow;
 import com.vladsch.flexmark.html.HtmlWriter;
 import com.vladsch.flexmark.html.renderer.NodeRenderer;
 import com.vladsch.flexmark.html.renderer.NodeRendererContext;
@@ -28,8 +32,47 @@ public class ResponseNodeRenderer implements NodeRenderer {
         new NodeRenderingHandler<>(CodeBlock.class, this::renderCodeBlock),
         new NodeRenderingHandler<>(BulletListItem.class, this::renderBulletListItem),
         new NodeRenderingHandler<>(Heading.class, this::renderHeading),
-        new NodeRenderingHandler<>(OrderedListItem.class, this::renderOrderedListItem)
+        new NodeRenderingHandler<>(OrderedListItem.class, this::renderOrderedListItem),
+        new NodeRenderingHandler<>(TableBlock.class, this::renderTable),
+        new NodeRenderingHandler<>(TableRow.class, this::renderTableRow),
+        new NodeRenderingHandler<>(TableCell.class, this::renderTableCell)
     );
+  }
+
+  private void renderTable(TableBlock node, NodeRendererContext context, HtmlWriter html) {
+    var borderColor = ColorUtil.toHex(new JBColor(0xD0D0D0, 0x3C3F47));
+    html.attr("style",
+        "border-collapse: collapse; width: 100%; margin: 8px 0; border-top: 1px solid "
+            + borderColor);
+    context.delegateRender();
+  }
+
+  private void renderTableRow(TableRow node, NodeRendererContext context, HtmlWriter html) {
+    html.attr("style",
+        "border-bottom: 1px solid " + ColorUtil.toHex(new JBColor(0xE3E3E3, 0x2D2F35)) + ";");
+    context.delegateRender();
+  }
+
+  private void renderTableCell(TableCell node, NodeRendererContext context, HtmlWriter html) {
+    TableRow row = (TableRow) node.getParent();
+    var isHeaderCell = row != null && row.getParent() instanceof TableHead;
+    var tag = isHeaderCell ? "th" : "td";
+
+    var styleBuilder = new StringBuilder();
+    styleBuilder.append("padding: 8px 12px; text-align: left; vertical-align: middle;");
+
+    if (isHeaderCell) {
+      var bgColor = ColorUtil.toHex(new JBColor(0xF2F3F5, 0x3A3D41));
+      styleBuilder.append(" font-weight: 600; background-color: ").append(bgColor).append("; color: white; min-width: 200px;");
+    }
+
+    html.attr("style", styleBuilder.toString().trim());
+    if (isHeaderCell) {
+      html.attr("scope", "col");
+    }
+    html.withAttr().tag(tag);
+    context.renderChildren(node);
+    html.tag("/" + tag);
   }
 
   private void renderCodeBlock(CodeBlock node, NodeRendererContext context, HtmlWriter html) {
