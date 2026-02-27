@@ -636,13 +636,24 @@ class PromptTextField(
     }
 
     private suspend fun updateLookupWithSearchResults(searchText: String) {
-        val matchedResults = searchManager.performGlobalSearch(searchText)
-
-        if (lastSearchResults != matchedResults) {
-            lastSearchResults = matchedResults
+        // Phase 1: Show instant results (builtins, history, personas, MCP) immediately
+        val instantResults = searchManager.performInstantSearch(searchText)
+        if (instantResults.isNotEmpty()) {
             withContext(Dispatchers.Main) {
-                showGlobalSearchResults(matchedResults, searchText)
+                showGlobalSearchResults(instantResults, searchText)
             }
+        }
+
+        // Phase 2: Get heavy results (files, folders, git) and merge
+        val heavyResults = searchManager.performHeavySearch(searchText)
+        if (heavyResults.isNotEmpty()) {
+            val allResults = searchManager.mergeResults(instantResults, heavyResults, searchText)
+            lastSearchResults = allResults
+            withContext(Dispatchers.Main) {
+                showGlobalSearchResults(allResults, searchText)
+            }
+        } else {
+            lastSearchResults = instantResults
         }
     }
 

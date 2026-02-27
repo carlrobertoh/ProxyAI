@@ -51,16 +51,21 @@ class FilesGroupItem(
             val projectFileIndex = project.service<ProjectFileIndex>()
             val matcher = NameUtil.buildMatcher("*$searchText").build()
             val matchingFiles = mutableListOf<VirtualFile>()
+            val maxFiles = if (searchText.isNotEmpty()) MAX_SEARCH_FILES else Int.MAX_VALUE
 
             projectFileIndex.iterateContent { file ->
-                if (!file.isDirectory &&
-                    settingsService.isVirtualFileVisible(file) &&
-                    !containsTag(file) &&
-                    (searchText.isEmpty() || matcher.matchingDegree(file.name) != Int.MIN_VALUE)
-                ) {
-                    matchingFiles.add(file)
+                if (matchingFiles.size >= maxFiles) {
+                    false
+                } else {
+                    if (!file.isDirectory &&
+                        settingsService.isVirtualFileVisible(file) &&
+                        !containsTag(file) &&
+                        (searchText.isEmpty() || matcher.matchingDegree(file.name) != Int.MIN_VALUE)
+                    ) {
+                        matchingFiles.add(file)
+                    }
+                    true
                 }
-                true
             }
 
             val openFiles = project.service<FileEditorManager>().openFiles
@@ -73,6 +78,10 @@ class FilesGroupItem(
 
             (matchingFiles + openFiles).distinctBy { it.path }.toFileSuggestions()
         }
+    }
+
+    companion object {
+        private const val MAX_SEARCH_FILES = 200
     }
 
     private fun containsTag(file: VirtualFile): Boolean {

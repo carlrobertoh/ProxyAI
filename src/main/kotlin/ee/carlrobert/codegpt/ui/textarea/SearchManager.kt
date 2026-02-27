@@ -11,8 +11,12 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.DiagnosticsActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.git.IncludeCurrentChangesActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 data class SearchState(
     val isInSearchContext: Boolean = false,
@@ -63,33 +67,83 @@ class SearchManager(
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
 
-    suspend fun performGlobalSearch(searchText: String): List<LookupActionItem> {
-        val allGroups =
-            getDefaultGroups().filterNot { it is WebActionItem || it is ImageActionItem }
-        val allResults = mutableListOf<LookupActionItem>()
+    suspend fun performInstantSearch(searchText: String): List<LookupActionItem> {
+        val groups = getDefaultGroups()
+        val results = mutableListOf<LookupActionItem>()
 
-        allGroups.forEach { group ->
+        // Standalone action items that are normally buried inside heavy groups
+        if (groups.any { it is FilesGroupItem }) {
+            results.add(IncludeOpenFilesActionItem())
+        }
+        if (GitFeatureAvailability.isAvailable && groups.any { it is GitGroupItem }) {
+            results.add(IncludeCurrentChangesActionItem())
+        }
+
+        // Lightweight groups (in-memory data only)
+        val lightGroups = groups
+            .filterNot { it is FilesGroupItem || it is FoldersGroupItem || it is GitGroupItem }
+            .filterNot { it is WebActionItem || it is ImageActionItem }
+
+        lightGroups.forEach { group ->
             try {
                 if (group is LookupGroupItem) {
-                    val lookupActionItems =
-                        group.getLookupItems("").filterIsInstance<LookupActionItem>()
-                    allResults.addAll(lookupActionItems)
+                    results.addAll(
+                        group.getLookupItems(searchText).filterIsInstance<LookupActionItem>()
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                logger.error("Error getting results from ${group::class.simpleName}", e)
+                logger.error("Error getting instant results from ${group::class.simpleName}", e)
             }
         }
 
         if (featureType != FeatureType.INLINE_EDIT && featureType != FeatureType.AGENT) {
             val webAction = WebActionItem(tagManager)
             if (webAction.enabled()) {
-                allResults.add(webAction)
+                results.add(webAction)
             }
         }
 
-        return filterAndSortResults(allResults, searchText)
+        return filterAndSortResults(results, searchText)
+    }
+
+    suspend fun performHeavySearch(searchText: String): List<LookupActionItem> = coroutineScope {
+        val heavyGroups = getDefaultGroups()
+            .filter { it is FilesGroupItem || it is FoldersGroupItem || it is GitGroupItem }
+
+        heavyGroups.map { group ->
+            async {
+                try {
+                    if (group is LookupGroupItem) {
+                        group.getLookupItems(searchText).filterIsInstance<LookupActionItem>()
+                    } else {
+                        emptyList()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.error("Error getting results from ${group::class.simpleName}", e)
+                    emptyList()
+                }
+            }
+        }.flatMap { it.await() }
+    }
+
+    fun mergeResults(
+        instantResults: List<LookupActionItem>,
+        heavyResults: List<LookupActionItem>,
+        searchText: String
+    ): List<LookupActionItem> {
+        val seenNames = instantResults.map { it.displayName }.toMutableSet()
+        val dedupedHeavy = heavyResults.filter { seenNames.add(it.displayName) }
+        return filterAndSortResults(instantResults + dedupedHeavy, searchText)
+    }
+
+    suspend fun performGlobalSearch(searchText: String): List<LookupActionItem> {
+        val instant = performInstantSearch(searchText)
+        val heavy = performHeavySearch(searchText)
+        return mergeResults(instant, heavy, searchText)
     }
 
     private fun filterAndSortResults(
