@@ -25,6 +25,7 @@ import ee.carlrobert.codegpt.settings.Placeholder
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceCodeCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicePlaceholders
+import ee.carlrobert.codegpt.completions.factory.ResponsesApiUtil
 import ee.carlrobert.codegpt.util.JsonMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -79,6 +80,8 @@ class CustomOpenAILLMClient(
 ),
     CodeCompletionCapable {
     data object CustomOpenAI : LLMProvider("custom-openai", "Custom OpenAI")
+
+    private val isResponsesApi: Boolean = ResponsesApiUtil.isResponsesApiUrl(chatState?.url)
 
     companion object {
         private val staticLogger = KotlinLogging.logger { }
@@ -188,6 +191,11 @@ class CustomOpenAILLMClient(
         val state = requireNotNull(chatState) {
             "Custom OpenAI chat request requested on a code-completion-only client"
         }
+
+        if (isResponsesApi) {
+            return serializeResponsesApiRequest(state, messages, model, tools)
+        }
+
         val customParams: CustomOpenAIParams = params.toCustomOpenAIParams(state)
         val streamRequest = state.shouldStream()
         val additionalProperties = buildCustomOpenAIAdditionalProperties(
@@ -226,6 +234,39 @@ class CustomOpenAILLMClient(
         )
 
         return json.encodeToString(CustomOpenAIChatCompletionRequestSerializer, request)
+    }
+
+    /**
+     * Builds the Responses API request body directly from the template body configuration.
+     * The template body uses "input" instead of "messages" and "max_output_tokens" instead
+     * of "max_tokens", so we process it as-is to produce the correct format.
+     */
+    private fun serializeResponsesApiRequest(
+        state: CustomServiceChatCompletionSettingsState,
+        messages: List<OpenAIMessage>,
+        model: LLModel,
+        tools: List<OpenAITool>?
+    ): String {
+        val streamRequest = state.shouldStream()
+
+        return buildJsonObject {
+            state.body.forEach { (key, value) ->
+                put(
+                    key, transformCustomOpenAIBodyValue(
+                        key = key,
+                        value = value,
+                        streamRequest = streamRequest,
+                        messages = messages,
+                        credential = apiKey,
+                        json = json
+                    )
+                )
+            }
+            put("model", JsonPrimitive(model.id))
+            if (!tools.isNullOrEmpty()) {
+                put("tools", json.encodeToJsonElement(ListSerializer(OpenAITool.serializer()), tools))
+            }
+        }.toString()
     }
 
     private fun buildCodeCompletionRequestBody(
@@ -376,11 +417,166 @@ class CustomOpenAILLMClient(
         }
     }
 
-    override fun decodeStreamingResponse(data: String): CustomOpenAIChatCompletionStreamResponse =
-        json.decodeFromString(data)
+    override fun decodeStreamingResponse(data: String): CustomOpenAIChatCompletionStreamResponse {
+        if (!isResponsesApi) {
+            return json.decodeFromString(data)
+        }
+        return adaptResponsesApiStreamEvent(data)
+    }
 
-    override fun decodeResponse(data: String): CustomOpenAIChatCompletionResponse =
-        json.decodeFromString(data)
+    override fun decodeResponse(data: String): CustomOpenAIChatCompletionResponse {
+        if (!isResponsesApi) {
+            return json.decodeFromString(data)
+        }
+        return adaptResponsesApiResponse(data)
+    }
+
+    /**
+     * Adapts a Responses API SSE event into a [CustomOpenAIChatCompletionStreamResponse].
+     * Maps Responses API event types to the chat completions delta format that
+     * [processStreamingResponse] already knows how to handle.
+     */
+    private fun adaptResponsesApiStreamEvent(data: String): CustomOpenAIChatCompletionStreamResponse {
+        val event = json.parseToJsonElement(data).jsonObject
+        val type = event["type"]?.jsonPrimitive?.contentOrNull ?: ""
+
+        val choice = when (type) {
+            "response.output_text.delta" -> {
+                val delta = event["delta"]?.jsonPrimitive?.contentOrNull ?: ""
+                CustomOpenAIStreamChoice(
+                    delta = CustomOpenAIStreamDelta(content = delta)
+                )
+            }
+
+            "response.function_call_arguments.delta" -> {
+                val argsDelta = event["delta"]?.jsonPrimitive?.contentOrNull ?: ""
+                val callId = event["call_id"]?.jsonPrimitive?.contentOrNull ?: ""
+                val index = event["output_index"]?.jsonPrimitive?.intOrNull ?: 0
+                CustomOpenAIStreamChoice(
+                    delta = CustomOpenAIStreamDelta(
+                        toolCalls = listOf(
+                            CustomOpenAIToolCall(
+                                id = callId,
+                                index = index,
+                                function = CustomOpenAIFunction(arguments = argsDelta)
+                            )
+                        )
+                    )
+                )
+            }
+
+            "response.output_item.added" -> {
+                val item = event["item"]?.jsonObject
+                if (item?.get("type")?.jsonPrimitive?.contentOrNull == "function_call") {
+                    val callId = item["call_id"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val name = item["name"]?.jsonPrimitive?.contentOrNull ?: ""
+                    val index = event["output_index"]?.jsonPrimitive?.intOrNull ?: 0
+                    CustomOpenAIStreamChoice(
+                        delta = CustomOpenAIStreamDelta(
+                            toolCalls = listOf(
+                                CustomOpenAIToolCall(
+                                    id = callId,
+                                    index = index,
+                                    function = CustomOpenAIFunction(name = name)
+                                )
+                            )
+                        )
+                    )
+                } else null
+            }
+
+            "response.completed" -> CustomOpenAIStreamChoice(
+                finishReason = "stop",
+                delta = CustomOpenAIStreamDelta()
+            )
+
+            else -> null
+        }
+
+        return CustomOpenAIChatCompletionStreamResponse(
+            choices = listOfNotNull(choice),
+            created = 0,
+            id = "",
+            model = ""
+        )
+    }
+
+    /**
+     * Adapts a non-streaming Responses API response into a [CustomOpenAIChatCompletionResponse].
+     * Builds a synthetic chat-completions-format JSON and deserializes it, avoiding direct
+     * construction of Koog internal types.
+     */
+    private fun adaptResponsesApiResponse(data: String): CustomOpenAIChatCompletionResponse {
+        val response = json.parseToJsonElement(data).jsonObject
+        val output = response["output"]?.jsonArray ?: JsonArray(emptyList())
+
+        val textContent = StringBuilder()
+        val toolCallsJson = mutableListOf<JsonElement>()
+
+        for (item in output) {
+            val itemObj = item.jsonObject
+            when (itemObj["type"]?.jsonPrimitive?.contentOrNull) {
+                "message" -> {
+                    itemObj["content"]?.jsonArray?.forEach { contentPart ->
+                        val partObj = contentPart.jsonObject
+                        if (partObj["type"]?.jsonPrimitive?.contentOrNull == "output_text") {
+                            textContent.append(partObj["text"]?.jsonPrimitive?.contentOrNull ?: "")
+                        }
+                    }
+                }
+
+                "function_call" -> {
+                    toolCallsJson.add(buildJsonObject {
+                        put("id", itemObj["call_id"] ?: JsonPrimitive(""))
+                        put("type", JsonPrimitive("function"))
+                        putJsonObject("function") {
+                            put("name", itemObj["name"] ?: JsonPrimitive(""))
+                            put("arguments", itemObj["arguments"] ?: JsonPrimitive("{}"))
+                        }
+                    })
+                }
+            }
+        }
+
+        val syntheticJson = buildJsonObject {
+            put("id", response["id"] ?: JsonPrimitive(""))
+            put("created", JsonPrimitive(0))
+            put("model", response["model"] ?: JsonPrimitive(""))
+            put("object", JsonPrimitive("chat.completion"))
+            putJsonArray("choices") {
+                addJsonObject {
+                    put("finish_reason", JsonPrimitive("stop"))
+                    putJsonObject("message") {
+                        put("role", JsonPrimitive("assistant"))
+                        if (textContent.isNotEmpty()) {
+                            put("content", JsonPrimitive(textContent.toString()))
+                        }
+                        if (toolCallsJson.isNotEmpty()) {
+                            put("tool_calls", JsonArray(toolCallsJson))
+                        }
+                    }
+                }
+            }
+            response["usage"]?.let { put("usage", parseResponsesApiUsageJson(it)) }
+        }
+
+        return json.decodeFromString(syntheticJson.toString())
+    }
+
+    /**
+     * Converts Responses API usage JSON (input_tokens/output_tokens) to
+     * OpenAI-compatible usage JSON (prompt_tokens/completion_tokens/total_tokens).
+     */
+    private fun parseResponsesApiUsageJson(usageElement: JsonElement): JsonElement {
+        val usageObj = usageElement.jsonObject
+        val inputTokens = usageObj["input_tokens"]?.jsonPrimitive?.intOrNull ?: 0
+        val outputTokens = usageObj["output_tokens"]?.jsonPrimitive?.intOrNull ?: 0
+        return buildJsonObject {
+            put("prompt_tokens", JsonPrimitive(inputTokens))
+            put("completion_tokens", JsonPrimitive(outputTokens))
+            put("total_tokens", JsonPrimitive(inputTokens + outputTokens))
+        }
+    }
 
     override fun processStreamingResponse(
         response: Flow<CustomOpenAIChatCompletionStreamResponse>

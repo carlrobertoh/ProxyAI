@@ -72,6 +72,11 @@ enum class CustomServiceTemplate(
         "OpenRouter",
         "https://openrouter.ai/docs#quick-start",
         CustomServiceChatCompletionTemplate.OPEN_ROUTER
+    ),
+    OPENAI_RESPONSES(
+        "OpenAI (Responses API)",
+        "https://platform.openai.com/docs/api-reference/responses",
+        CustomServiceChatCompletionTemplate.OPENAI_RESPONSES
     );
 
     override fun toString(): String {

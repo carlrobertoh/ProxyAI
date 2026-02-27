@@ -115,6 +115,16 @@ enum class CustomServiceChatCompletionTemplate(
                 "max_tokens" to 8192
             )
         )
+    ),
+    OPENAI_RESPONSES(
+        "https://api.openai.com/v1/responses",
+        getDefaultHeaders("Authorization", "Bearer \$CUSTOM_SERVICE_API_KEY"),
+        getResponsesApiDefaultBodyParams(
+            mapOf(
+                "model" to "gpt-4.1",
+                "max_output_tokens" to 8192
+            )
+        )
     );
 }
 
@@ -143,6 +153,16 @@ private fun getDefaultBodyParams(additionalParams: Map<String, Any>): MutableMap
     val defaultParams = mutableMapOf<String, Any>(
         "stream" to true,
         "messages" to "\$OPENAI_MESSAGES",
+        "temperature" to 0.1
+    )
+    defaultParams.putAll(additionalParams)
+    return defaultParams
+}
+
+private fun getResponsesApiDefaultBodyParams(additionalParams: Map<String, Any>): MutableMap<String, Any> {
+    val defaultParams = mutableMapOf<String, Any>(
+        "stream" to true,
+        "input" to "\$OPENAI_MESSAGES",
         "temperature" to 0.1
     )
     defaultParams.putAll(additionalParams)
