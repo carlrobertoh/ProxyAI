@@ -22,7 +22,6 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
-import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceSettingsData
@@ -136,7 +135,7 @@ class CustomServiceForm(
 
     init {
         val selectedItem = formState.value.services.first()
-        apiKeyField.text = getCredential(CredentialKey.CustomServiceApiKeyById(selectedItem.id))
+        apiKeyField.text = selectedItem.apiKey ?: ""
         chatCompletionsForm =
             CustomServiceChatCompletionForm(selectedItem.chatCompletionSettings, this::getApiKey)
         codeCompletionsForm =
@@ -220,7 +219,7 @@ class CustomServiceForm(
                     codeCompletionSettings.parseResponseAsChatCompletions
             }
 
-            apiKeyField.text = getCredential(CredentialKey.CustomServiceApiKeyById(selectedItem.id))
+            apiKeyField.text = selectedItem.apiKey ?: ""
             nameField.text = selectedItem.name
             templateComboBox.selectedItem = selectedItem.template
             updateTemplateHelpTextTooltip(selectedItem.template)
@@ -375,6 +374,9 @@ class CustomServiceForm(
     }
 
     private fun handleDuplicateAction() {
+        if (lastSelectedIndex >= 0 && lastSelectedIndex < formState.value.services.size) {
+            updateStateFromForm(lastSelectedIndex)
+        }
         formState.update {
             val selectedIndex = customProvidersJBList.selectedIndex
             val src = it.services[selectedIndex]
