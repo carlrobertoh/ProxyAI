@@ -18,41 +18,43 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.RequestMetaInfo
-import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
+import ee.carlrobert.codegpt.agent.clients.shouldStream
 import ee.carlrobert.codegpt.agent.strategy.CODE_AGENT_COMPRESSION
 import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
 import ee.carlrobert.codegpt.agent.strategy.buildHistoryTooBigPredicate
 import ee.carlrobert.codegpt.agent.tools.*
-import ee.carlrobert.codegpt.mcp.McpSessionManager
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.BashPayload
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
+import ee.carlrobert.codegpt.util.ReasoningFrameTextAdapter
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.datetime.Clock
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Clock
 
 data class ToolError(val message: String)
 
 object ProxyAIAgent {
 
     private const val INSTRUCTION_FILE_NAME = "PROXYAI.md"
+    private const val MAX_AGENT_ITERATIONS = 250
 
     private val logger = KotlinLogging.logger { }
 
@@ -85,15 +87,15 @@ object ProxyAIAgent {
         pendingMessages: ConcurrentHashMap<String, ArrayDeque<MessageWithContext>>,
     ): GraphAIAgentService<MessageWithContext, String> {
         val modelSelection =
-            service<ModelSelectionService>().getModelSelectionForFeature(FeatureType.AGENT)
+            service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
         val skills = project.service<SkillDiscoveryService>().listSkills()
-        val stream = provider != ServiceType.CUSTOM_OPENAI
+        val stream = shouldStreamAgentToolLoop(project, provider)
         val projectInstructions = loadProjectInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
         val hookManager = HookManager(project)
         val toolRegistry = createToolRegistry(project, events, sessionId, provider, hookManager)
-        val agentModel = service<ModelSelectionService>().getAgentModel()
+        val agentModel = service<ModelSettings>().getAgentModel()
         return AIAgentService<MessageWithContext, String>(
             promptExecutor = executor,
             strategy = SingleRunStrategyProvider().build(
@@ -135,7 +137,7 @@ object ProxyAIAgent {
                     }
                 },
                 model = agentModel,
-                maxAgentIterations = 100
+                maxAgentIterations = MAX_AGENT_ITERATIONS
             ),
             toolRegistry = toolRegistry,
         ) {
@@ -160,13 +162,15 @@ object ProxyAIAgent {
             handleEvents {
                 val toolCallToUiId: MutableMap<String, String> = HashMap()
                 val anonymousToolIds: ArrayDeque<String> = ArrayDeque()
+                val frameAdapter = ReasoningFrameTextAdapter()
 
                 onLLMStreamingFrameReceived { ctx ->
                     if (!stream) return@onLLMStreamingFrameReceived
 
-                    val frame = ctx.streamFrame
-                    if (frame is StreamFrame.Append) {
-                        events.onTextReceived(frame.text)
+                    frameAdapter.consume(ctx.streamFrame).forEach { chunk ->
+                        if (chunk.isNotEmpty()) {
+                            events.onTextReceived(chunk)
+                        }
                     }
                 }
 
@@ -178,7 +182,9 @@ object ProxyAIAgent {
                             events.onTextReceived(it.content)
                         }
                         (msg as? Message.Reasoning)?.let {
-                            events.onTextReceived(it.content)
+                            if (it.content.isNotBlank()) {
+                                events.onTextReceived("<think>${it.content}</think>")
+                            }
                         }
                     }
                 }
@@ -255,9 +261,27 @@ object ProxyAIAgent {
                         ),
                         sessionId = sessionId
                     )
-                    events.onAgentCompleted(it.agentId)
+                    events.onAgentException(provider, it.throwable)
                 }
             }
+        }
+    }
+
+    private fun shouldStreamAgentToolLoop(
+        project: Project,
+        provider: ServiceType,
+    ): Boolean {
+        return when (provider) {
+            ServiceType.CUSTOM_OPENAI -> {
+                val selectedServiceId =
+                    project.service<ModelSettings>().getStoredModelForFeature(FeatureType.AGENT)
+                project.service<CustomServicesSettings>().state.services
+                    .firstOrNull { it.id == selectedServiceId }?.chatCompletionSettings?.shouldStream()
+                    ?: false
+            }
+
+            ServiceType.GOOGLE -> false
+            else -> true
         }
     }
 
@@ -270,67 +294,75 @@ object ProxyAIAgent {
     ): ToolRegistry {
         val workingDirectory = project.basePath ?: System.getProperty("user.dir")
         val contextService = project.service<AgentMcpContextService>()
-        val mcpSessionManager = service<McpSessionManager>()
         val standardApproval = approvalHandler(events)
         val writeApproval = writeApprovalHandler(events)
         val genericApproval = genericApprovalHandler(events)
         return ToolRegistry {
-            tool(ReadTool(project, hookManager, sessionId))
-            tool(ConfirmingEditTool(EditTool(project, hookManager, sessionId), standardApproval))
-            tool(ConfirmingWriteTool(WriteTool(project, hookManager), writeApproval))
+            tool(ReadTool(project, sessionId, hookManager))
+            tool(ConfirmingEditTool(EditTool(project, sessionId, hookManager), standardApproval))
+            tool(ConfirmingWriteTool(WriteTool(project, sessionId, hookManager), writeApproval))
             tool(TodoWriteTool(project, sessionId, hookManager))
             tool(
                 AskUserQuestionTool(
                     workingDirectory = workingDirectory,
+                    sessionId = sessionId,
                     hookManager = hookManager,
                     events = events
                 )
             )
             createMcpTools(
-                project = project,
                 sessionId = sessionId,
                 contextService = contextService,
-                sessionManager = mcpSessionManager,
-                hookManager = hookManager,
                 approve = genericApproval
             ).forEach { mcpTool -> tool(mcpTool) }
             tool(ExitTool)
-            tool(IntelliJSearchTool(project = project, hookManager = hookManager))
+            tool(
+                IntelliJSearchTool(
+                    project = project,
+                    sessionId = sessionId,
+                    hookManager = hookManager,
+                )
+            )
             tool(
                 WebSearchTool(
                     workingDirectory = workingDirectory,
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
             tool(
                 WebFetchTool(
                     workingDirectory = workingDirectory,
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
             tool(
                 BashOutputTool(
                     workingDirectory = workingDirectory,
+                    sessionId = sessionId,
                     hookManager = hookManager,
-                    sessionId = sessionId
                 )
             )
             tool(
                 KillShellTool(
                     workingDirectory = workingDirectory,
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
             tool(
                 ResolveLibraryIdTool(
                     workingDirectory = workingDirectory,
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
             tool(
                 GetLibraryDocsTool(
                     workingDirectory = workingDirectory,
-                    hookManager = hookManager
+                    sessionId = sessionId,
+                    hookManager = hookManager,
                 )
             )
             tool(
@@ -412,35 +444,15 @@ object ProxyAIAgent {
     }
 
     private fun createMcpTools(
-        project: Project,
         sessionId: String,
         contextService: AgentMcpContextService,
-        sessionManager: McpSessionManager,
-        hookManager: HookManager,
         approve: suspend (String, String) -> Boolean
     ): List<Tool<*, *>> {
         val context = contextService.get(sessionId) ?: return emptyList()
         if (!context.hasSelection() || context.conversationId == null) {
             return emptyList()
         }
-
-        val dynamicTools = McpDynamicToolRegistry.createTools(context, approve)
-        if (dynamicTools.isNotEmpty()) {
-            return dynamicTools
-        }
-
-        return listOf(
-            ConfirmingMcpTool(
-                McpTool(
-                    project = project,
-                    sessionId = sessionId,
-                    context = context,
-                    sessionManager = sessionManager,
-                    hookManager = hookManager
-                ),
-                approve = approve
-            )
-        )
+        return McpDynamicToolRegistry.createTools(context, approve)
     }
 
     private suspend fun safeApprove(
@@ -452,8 +464,8 @@ object ProxyAIAgent {
     }
 
     private fun computeAvailableInput(model: LLModel): Long {
-        val contextLength = model.contextLength
-        val outputLength = model.maxOutputTokens ?: 0
+        val contextLength = model.contextLength ?: 128_000L
+        val outputLength = model.maxOutputTokens ?: 0L
         return (contextLength - outputLength).coerceAtLeast(1L)
     }
 }

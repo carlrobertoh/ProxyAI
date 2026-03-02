@@ -19,7 +19,7 @@ class IgnoreRulesTest : IntegrationTest() {
         writeSettings(ignoreEntries = listOf(".env"))
 
         val result = runBlocking {
-            ReadTool(project, HookManager(project), "ignore-test")
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(envFile.absolutePath))
         }
 
@@ -33,7 +33,7 @@ class IgnoreRulesTest : IntegrationTest() {
         writeSettings(ignoreEntries = listOf("**/*.pem"))
 
         val result = runBlocking {
-            WriteTool(project, HookManager(project))
+            WriteTool(project, "test-session-id", HookManager(project))
                 .execute(WriteTool.Args(pemFile.absolutePath, "PRIVATE KEY"))
         }
 
@@ -52,7 +52,7 @@ class IgnoreRulesTest : IntegrationTest() {
         val tool = BashTool(
             project = project,
             confirmationHandler = { ShellCommandConfirmation.Approved },
-            sessionId = "ignore-bash",
+            sessionId = "test-session-id",
             hookManager = HookManager(project)
         )
         val result = runBlocking {
@@ -76,7 +76,7 @@ class IgnoreRulesTest : IntegrationTest() {
         writeSettings(ignoreEntries = listOf("secrets/**"))
 
         val result = runBlocking {
-            ReadTool(project, HookManager(project), "ignore-test")
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(file.absolutePath))
         }
 
@@ -91,7 +91,7 @@ class IgnoreRulesTest : IntegrationTest() {
         writeSettingsRaw("""{"ignore":["app/src/main/**"]}""")
 
         val result = runBlocking {
-            ReadTool(project, HookManager(project), "ignore-test")
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(file.absolutePath))
         }
 
@@ -108,7 +108,7 @@ class IgnoreRulesTest : IntegrationTest() {
         writeSettings(ignoreEntries = listOf("build/"))
 
         val result = runBlocking {
-            ReadTool(project, HookManager(project), "ignore-test")
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(file.absolutePath))
         }
 
@@ -122,7 +122,7 @@ class IgnoreRulesTest : IntegrationTest() {
         writeSettings(ignoreEntries = listOf("*.pem"))
 
         val result = runBlocking {
-            WriteTool(project, HookManager(project))
+            WriteTool(project, "test-session-id", HookManager(project))
                 .execute(WriteTool.Args(file.absolutePath, "PRIVATE KEY"))
         }
 
@@ -136,7 +136,10 @@ class IgnoreRulesTest : IntegrationTest() {
         val file = File(project.basePath, ".proxyai/settings.json")
         file.parentFile.mkdirs()
         file.writeText("""{"ignore":[$ignoreJson],"permissions":{"allow":[],"ask":[],"deny":[]},"hooks":{}}""")
-        Files.setLastModifiedTime(file.toPath(), FileTime.fromMillis(System.currentTimeMillis() + 1000))
+        Files.setLastModifiedTime(
+            file.toPath(),
+            FileTime.fromMillis(System.currentTimeMillis() + 1000)
+        )
         return file
     }
 
@@ -144,7 +147,10 @@ class IgnoreRulesTest : IntegrationTest() {
         val file = File(project.basePath, ".proxyai/settings.json")
         file.parentFile.mkdirs()
         file.writeText(rawJson)
-        Files.setLastModifiedTime(file.toPath(), FileTime.fromMillis(System.currentTimeMillis() + 1000))
+        Files.setLastModifiedTime(
+            file.toPath(),
+            FileTime.fromMillis(System.currentTimeMillis() + 1000)
+        )
         return file
     }
 }

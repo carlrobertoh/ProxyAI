@@ -11,11 +11,14 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.agent.ProxyAIAgent.loadProjectInstructions
+import ee.carlrobert.codegpt.credentials.CredentialsStore
+import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointConversationMapper
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
 import ee.carlrobert.codegpt.agent.history.AgentHistoryThreadSummary
@@ -25,15 +28,19 @@ import ee.carlrobert.codegpt.settings.ProxyAISubagent
 import ee.carlrobert.codegpt.settings.agents.SubagentsConfigurable
 import ee.carlrobert.codegpt.settings.hooks.HookConfig
 import ee.carlrobert.codegpt.settings.hooks.HookConfiguration
+import ee.carlrobert.codegpt.settings.models.ModelSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable
 import ee.carlrobert.codegpt.settings.skills.SkillDescriptor
 import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.tokens.TokenComputationService
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
 import ee.carlrobert.codegpt.toolwindow.agent.history.AgentHistoryListPanel
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel
+import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.ui.UIUtil.createTextPane
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import com.intellij.openapi.Disposable
 import java.awt.BorderLayout
@@ -80,8 +87,53 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
     private fun buildContent(): JPanel {
         return BorderLayoutPanel().apply {
             border = JBUI.Borders.empty(0)
-            add(createTextPane(welcomeMessage(), false), BorderLayout.NORTH)
+            add(topPanel(), BorderLayout.NORTH)
             add(centerPanel(), BorderLayout.CENTER)
+        }
+    }
+
+    private fun topPanel(): JPanel {
+        return BorderLayoutPanel().apply {
+            isOpaque = false
+            apiKeyPanel()?.let { addToTop(it) }
+            addToCenter(createTextPane(welcomeMessage(), false))
+        }
+    }
+
+    private fun apiKeyPanel(): JPanel? {
+        val provider = ModelSettings.getInstance().getServiceForFeature(FeatureType.AGENT)
+        if (provider != ServiceType.PROXYAI || CredentialsStore.isCredentialSet(CodeGptApiKey)) {
+            return null
+        }
+
+        return ResponseMessagePanel().apply {
+            addContent(
+                createTextPane(
+                    """
+                    <html>
+                    <p style="margin-top: 4px; margin-bottom: 4px;">
+                      It looks like you haven't configured your API key yet. Visit <a href="#OPEN_SETTINGS">ProxyAI settings</a> to do so.
+                    </p>
+                    <p style="margin-top: 4px; margin-bottom: 4px;">
+                      Don't have an account? <a href="https://tryproxy.io/signin">Sign up</a> to get started.
+                    </p>
+                    </html>
+                    """.trimIndent(),
+                    false
+                ) { event ->
+                    if (event.eventType == javax.swing.event.HyperlinkEvent.EventType.ACTIVATED &&
+                        event.description == "#OPEN_SETTINGS"
+                    ) {
+                        ShowSettingsUtil.getInstance().showSettingsDialog(
+                            project,
+                            CodeGPTServiceConfigurable::class.java
+                        )
+                    } else {
+                        UIUtil.handleHyperlinkClicked(event)
+                    }
+                }
+            )
+            border = JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0)
         }
     }
 

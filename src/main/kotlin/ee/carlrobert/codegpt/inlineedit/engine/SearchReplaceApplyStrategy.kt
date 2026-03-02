@@ -1,12 +1,11 @@
 package ee.carlrobert.codegpt.inlineedit.engine
 
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.util.TextRange
-import ee.carlrobert.codegpt.inlineedit.InlineEditSearchReplaceListener
-import ee.carlrobert.codegpt.completions.CompletionRequestService
-import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
 import com.intellij.openapi.components.service
-import ee.carlrobert.codegpt.conversations.Conversation
+import com.intellij.openapi.util.TextRange
+import ee.carlrobert.codegpt.completions.CompletionService
+import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
+import ee.carlrobert.codegpt.inlineedit.InlineEditSearchReplaceListener
 
 class SearchReplaceApplyStrategy : ApplyStrategy {
     override fun apply(ctx: ApplyContext) {
@@ -45,7 +44,7 @@ class SearchReplaceApplyStrategy : ApplyStrategy {
         editor.putUserData(InlineEditSearchReplaceListener.LISTENER_KEY, listener)
 
         try {
-            service<CompletionRequestService>().getInlineEditCompletionAsync(parameters, listener)
+            service<CompletionService>().getInlineEditCompletion(parameters, listener)
         } catch (_: Exception) {
             runInEdt {
                 inlay.setThinkingVisible(false)

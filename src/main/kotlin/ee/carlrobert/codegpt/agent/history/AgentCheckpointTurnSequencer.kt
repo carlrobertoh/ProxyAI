@@ -75,7 +75,13 @@ object AgentCheckpointTurnSequencer {
                 when (message) {
                     is PromptMessage.User -> {
                         if (isSyntheticTimelineUserMessage(message)) {
-                            if (preserveSyntheticContinuation && currentPrompt != null) {
+                            if (
+                                preserveSyntheticContinuation &&
+                                currentPrompt != null &&
+                                currentEvents.any {
+                                    it is TurnEvent.ToolCall || it is TurnEvent.ToolResult
+                                }
+                            ) {
                                 // Keep collecting events for the currently active visible turn.
                                 // Synthetic todo prompts are injected internally mid-run.
                                 return@forEachIndexed

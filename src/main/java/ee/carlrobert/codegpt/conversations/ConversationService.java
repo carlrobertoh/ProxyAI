@@ -4,9 +4,9 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import ee.carlrobert.codegpt.completions.ChatToolCall;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.conversations.message.Message;
-import ee.carlrobert.llm.client.openai.completion.response.ToolCall;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -72,9 +72,9 @@ public final class ConversationService {
     saveConversation(conversation);
   }
 
-  public void saveAssistantMessageWithToolCalls(@NotNull Conversation conversation, @NotNull Message message, List<ToolCall> toolCalls) {
+  public void saveAssistantMessageWithToolCalls(@NotNull Conversation conversation, @NotNull Message message, List<ChatToolCall> toolCalls) {
     if (toolCalls != null && !toolCalls.isEmpty()) {
-      for (ToolCall toolCall : toolCalls) {
+      for (ChatToolCall toolCall : toolCalls) {
         message.addToolCall(toolCall);
       }
     }
@@ -82,7 +82,7 @@ public final class ConversationService {
     saveConversation(conversation);
   }
 
-  public void saveAssistantMessageWithToolCalls(ChatCompletionParameters callParameters, List<ToolCall> toolCalls) {
+  public void saveAssistantMessageWithToolCalls(ChatCompletionParameters callParameters, List<ChatToolCall> toolCalls) {
     saveAssistantMessageWithToolCalls(callParameters.getConversation(), callParameters.getMessage(), toolCalls);
   }
 

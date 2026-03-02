@@ -64,6 +64,10 @@ class RollbackPanel(
     }
 
     private fun setupUI() {
+        isVisible = false
+        rollbackAllLink.isVisible = false
+        keepAllLink.isVisible = false
+
         val headerPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply {
             isOpaque = false
             add(titleLabel.apply {

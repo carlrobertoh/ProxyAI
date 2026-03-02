@@ -1,6 +1,6 @@
 package ee.carlrobert.codegpt.agent
 
-import ee.carlrobert.codegpt.settings.models.ModelRegistry
+import ee.carlrobert.codegpt.settings.models.ModelCatalog
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.skills.SkillDescriptor
@@ -42,7 +42,7 @@ internal object AgentSystemPrompts {
         projectPath: String?
     ): String {
         val modelId = modelSelection?.model
-        return if (modelId == ModelRegistry.PROXYAI_AUTO || modelId?.startsWith("claude") == true) {
+        return if (modelId == ModelCatalog.PROXYAI_AUTO || modelId?.startsWith("claude") == true) {
             createAnthropicSystemPrompt(projectPath)
         } else {
             createOpenAiSystemPrompt(projectPath)

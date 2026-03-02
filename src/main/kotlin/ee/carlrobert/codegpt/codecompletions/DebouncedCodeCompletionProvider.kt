@@ -6,9 +6,9 @@ import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSin
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSuggestion
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_CODE_COMPLETION
-import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.codegpt.completions.CancellableRequest
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -20,7 +20,6 @@ import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
-import okhttp3.sse.EventSource
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
@@ -28,7 +27,7 @@ import kotlin.time.toDuration
 
 class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
-    private val currentCallRef = AtomicReference<EventSource?>(null)
+    private val currentCallRef = AtomicReference<CancellableRequest?>(null)
 
     override val id: InlineCompletionProviderID
         get() = InlineCompletionProviderID("CodeGPTInlineCompletionProvider")
@@ -70,19 +69,11 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
                 CompletionProgressNotifier.update(project, true)
 
-                var eventListener = CodeCompletionEventListener(request.editor, this)
+                val eventListener = CodeCompletionEventListener(request.editor, this)
                 val infillRequest = InfillRequestUtil.buildInfillRequest(request)
-
-                if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI) {
-                    val grpcClient = project.service<GrpcClientService>()
-                    grpcClient.cancelCodeCompletion()
-                    grpcClient.getCodeCompletionAsync(infillRequest, eventListener, this)
-                    return@channelFlow
-                }
-
                 val call = service<CodeCompletionService>().getCodeCompletionAsync(
                     infillRequest,
-                    CodeCompletionEventListener(request.editor, this)
+                    eventListener
                 )
                 currentCallRef.set(call)
             } finally {
@@ -110,7 +101,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
         val selectedService =
-            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION)
+            service<ModelSettings>().getServiceForFeature(FeatureType.CODE_COMPLETION)
         val codeCompletionsEnabled = when (selectedService) {
             ServiceType.PROXYAI -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
             ServiceType.OPENAI -> OpenAISettings.getCurrentState().isCodeCompletionsEnabled

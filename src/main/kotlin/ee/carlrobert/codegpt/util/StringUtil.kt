@@ -1,7 +1,5 @@
 package ee.carlrobert.codegpt.util
 
-import ai.grazie.nlp.utils.takeWhitespaces
-
 object StringUtil {
 
     private val thinkBlockRegex = Regex("(?s)<think>.*?</think>\\s*")
@@ -15,14 +13,14 @@ object StringUtil {
         completionLine: String,
         editorLine: String
     ): String {
-        val editorWhitespaces = editorLine.takeWhitespaces()
+        val editorWhitespaces = editorLine.leadingWhitespaces()
 
         if (completionLine.isNotEmpty() && editorWhitespaces.isNotEmpty()) {
             if (completionLine.startsWith(editorWhitespaces)) {
                 return completionLine.substring(editorWhitespaces.length)
             }
             if (editorLine.isBlank()) {
-                val completionWhitespaces = completionLine.takeWhitespaces()
+                val completionWhitespaces = completionLine.leadingWhitespaces()
                 return completionLine.substring(completionWhitespaces.length)
             }
         }
@@ -40,4 +38,6 @@ object StringUtil {
         val intersection = bigrams1.intersect(bigrams2).size
         return (2.0 * intersection) / (bigrams1.size + bigrams2.size)
     }
+
+    private fun String.leadingWhitespaces(): String = takeWhile { it.isWhitespace() }
 }

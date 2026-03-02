@@ -11,7 +11,6 @@ import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.file.FileUtil
-import ee.carlrobert.llm.client.openai.completion.response.ToolCall
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
@@ -32,7 +31,7 @@ class ChatCompletionParameters private constructor(
     var mcpAttachedServerIds: List<String>?,
     var mcpTools: List<McpTool>?,
     var toolApprovalMode: ToolApprovalMode,
-    var toolResults: List<Pair<ToolCall, String>>? = null,
+    var toolResults: List<Pair<ChatToolCall, String>>? = null,
     var project: Project?,
     var chatMode: ChatMode = ChatMode.ASK,
     var featureType: FeatureType = FeatureType.CHAT,
@@ -72,7 +71,7 @@ class ChatCompletionParameters private constructor(
         private var mcpAttachedServerIds: List<String>? = null
         private var mcpTools: List<McpTool>? = null
         private var toolApprovalMode: ToolApprovalMode = ToolApprovalMode.AUTO_APPROVE
-        private var toolResults: List<Pair<ToolCall, String>>? = null
+        private var toolResults: List<Pair<ChatToolCall, String>>? = null
         private var project: Project? = null
         private var chatMode: ChatMode = ChatMode.ASK
         private var featureType: FeatureType = FeatureType.CHAT
@@ -111,7 +110,7 @@ class ChatCompletionParameters private constructor(
 
         fun mcpTools(tools: List<McpTool>?) = apply { this.mcpTools = tools }
         fun toolApprovalMode(mode: ToolApprovalMode) = apply { this.toolApprovalMode = mode }
-        fun toolResults(results: List<Pair<ToolCall, String>>?) =
+        fun toolResults(results: List<Pair<ChatToolCall, String>>?) =
             apply { this.toolResults = results }
 
         fun project(project: Project?) = apply { this.project = project }

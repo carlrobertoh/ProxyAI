@@ -9,7 +9,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.AgentFactory
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.util.file.FileUtil
 import kotlinx.serialization.SerialName
@@ -73,7 +73,7 @@ object HookGenerator {
 
     suspend fun generate(query: String, project: Project? = null): GeneratedHookResult {
         return try {
-            val modelService = service<ModelSelectionService>()
+            val modelService = service<ModelSettings>()
             val provider: ServiceType = modelService.getServiceForFeature(FeatureType.AGENT)
             val model = modelService.getAgentModel()
             val executor = AgentFactory.createExecutor(provider)

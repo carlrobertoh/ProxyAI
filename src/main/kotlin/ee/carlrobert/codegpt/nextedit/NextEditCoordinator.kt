@@ -5,7 +5,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 
 object NextEditCoordinator {
@@ -22,7 +22,7 @@ object NextEditCoordinator {
         addToQueue: Boolean = false,
     ) {
         val serviceType =
-            service<ModelSelectionService>().getServiceForFeature(FeatureType.NEXT_EDIT)
+            service<ModelSettings>().getServiceForFeature(FeatureType.NEXT_EDIT)
         val provider = providers[serviceType] ?: return
 
         editor.project?.let { CompletionProgressNotifier.Companion.update(it, true) }

@@ -13,9 +13,6 @@ import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.util.ApplicationUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import java.awt.Component
-import javax.swing.DefaultListCellRenderer
-import javax.swing.JList
 import javax.swing.JPanel
 
 class CodeGPTServiceForm {
@@ -90,22 +87,5 @@ class CodeGPTServiceForm {
                 codeCompletionSettings.codeCompletionsEnabled
         }
         apiKeyField.text = getCredential(CodeGptApiKey)
-    }
-
-    private class CustomComboBoxRenderer : DefaultListCellRenderer() {
-        override fun getListCellRendererComponent(
-            list: JList<*>,
-            value: Any?,
-            index: Int,
-            isSelected: Boolean,
-            cellHasFocus: Boolean
-        ): Component {
-            val component =
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
-            if (value is CodeGPTModel) {
-                text = value.name
-            }
-            return component
-        }
     }
 }

@@ -14,6 +14,7 @@ import java.net.URI
 class WebFetchTool(
     workingDirectory: String,
     private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)",
+    sessionId: String,
     hookManager: HookManager,
 ) : BaseTool<WebFetchTool.Args, WebFetchTool.Result>(
     workingDirectory = workingDirectory,
@@ -29,7 +30,8 @@ Use this tool when you already have a specific URL and need the page content as 
 """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     @Serializable

@@ -1,5 +1,10 @@
 package ee.carlrobert.codegpt.completions
 
+import ai.koog.prompt.dsl.Prompt
+import ai.koog.prompt.dsl.PromptBuilder
+import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.message.AttachmentContent
+import ai.koog.prompt.message.ContentPart
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -8,28 +13,28 @@ import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.RECE
 import ee.carlrobert.codegpt.completions.factory.*
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.nextedit.NextEditPromptUtil
-import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
+import ee.carlrobert.codegpt.settings.prompts.addProjectPath
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.EditWindowFormatter.FormatResult
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.GitUtil
 import ee.carlrobert.codegpt.util.file.FileUtil
-import ee.carlrobert.llm.completion.CompletionRequest
+import ee.carlrobert.codegpt.mcp.McpToolPromptFormatter
 
 interface CompletionRequestFactory {
-    fun createChatRequest(params: ChatCompletionParameters): CompletionRequest
-    fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest
-    fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest
-    fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest
-    fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest
-    fun createLookupRequest(params: LookupCompletionParameters): CompletionRequest
+    fun createChatCompletionPrompt(callParameters: ChatCompletionParameters): Prompt
+    fun createInlineEditPrompt(params: InlineEditCompletionParameters): Prompt
+    fun createInlineEditQuestionPrompt(parameters: ChatCompletionParameters): Prompt
+    fun createAutoApplyPrompt(params: AutoApplyParameters): Prompt
+    fun createCommitMessagePrompt(params: CommitMessageCompletionParameters): Prompt
+    fun createLookupPrompt(params: LookupCompletionParameters): Prompt
     fun createNextEditRequest(
         params: NextEditParameters,
         formatResult: FormatResult
@@ -44,7 +49,7 @@ interface CompletionRequestFactory {
         @JvmStatic
         fun getFactory(serviceType: ServiceType): CompletionRequestFactory {
             return when (serviceType) {
-                ServiceType.PROXYAI -> CodeGPTRequestFactory(ClassStructureSerializer)
+                ServiceType.PROXYAI -> CodeGPTRequestFactory()
                 ServiceType.OPENAI -> OpenAIRequestFactory()
                 ServiceType.CUSTOM_OPENAI -> CustomOpenAIRequestFactory()
                 ServiceType.ANTHROPIC -> ClaudeRequestFactory()
@@ -55,24 +60,191 @@ interface CompletionRequestFactory {
                 ServiceType.INCEPTION -> InceptionRequestFactory()
             }
         }
-
-        @JvmStatic
-        fun getFactoryForFeature(featureType: FeatureType): CompletionRequestFactory {
-            val serviceType = ModelSelectionService.getInstance().getServiceForFeature(featureType)
-            return getFactory(serviceType)
-        }
     }
 }
 
 abstract class BaseRequestFactory : CompletionRequestFactory {
 
-    companion object {
-        private const val LOOKUP_MAX_TOKENS = 512
-        private const val AUTO_APPLY_MAX_TOKENS = 8192
-        private const val DEFAULT_MAX_TOKENS = 4096
+    override fun createChatCompletionPrompt(callParameters: ChatCompletionParameters): Prompt {
+        val systemPrompt = buildKoogSystemPrompt(callParameters)
+        val currentMessage = callParameters.message
+
+        return prompt("chat-completion") {
+            if (systemPrompt.isNotBlank()) {
+                system(systemPrompt)
+            }
+
+            val currentMessageId = currentMessage.id
+            callParameters.conversation.messages.forEach { msg ->
+                val isCurrent = msg.id == currentMessageId
+                if (isCurrent && callParameters.retry) {
+                    return@forEach
+                }
+                if (isCurrent) {
+                    return@forEach
+                }
+
+                appendUserPrompt(msg.prompt)
+                appendAssistantAndToolState(msg)
+            }
+
+            when (callParameters.requestType) {
+                RequestType.NORMAL_REQUEST -> {
+                    appendCurrentUserMessage(callParameters)
+                }
+
+                RequestType.TOOL_CALL_REQUEST -> {
+                    appendCurrentUserMessage(callParameters)
+                    appendAssistantAndToolState(currentMessage)
+                }
+
+                RequestType.TOOL_CALL_CONTINUATION -> {
+                    appendCurrentUserMessage(callParameters)
+                    appendAssistantAndToolState(currentMessage, includeToolResults = false)
+                    currentMessage.toolCallResults?.forEach { (callId, result) ->
+                        val toolName = currentMessage.toolCalls
+                            ?.firstOrNull { it.id == callId }
+                            ?.function
+                            ?.name
+                            ?: "unknown-function"
+                        tool { result(callId, toolName, result) }
+                    }
+                    if (!callParameters.retry && !currentMessage.response.isNullOrBlank()) {
+                        assistant(currentMessage.response)
+                    }
+                }
+            }
+        }
     }
 
-    override fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest {
+    private fun PromptBuilder.appendCurrentUserMessage(
+        callParameters: ChatCompletionParameters
+    ) {
+        val promptWithContext = getPromptWithFilesContext(callParameters)
+        val imageDetails = callParameters.imageDetails
+        if (imageDetails != null) {
+            val format = imageDetails.mediaType
+                .substringAfter('/')
+                .substringBefore(';')
+                .ifBlank { "png" }
+            val imagePart = ContentPart.Image(
+                content = AttachmentContent.Binary.Bytes(imageDetails.data),
+                format = format,
+                mimeType = imageDetails.mediaType
+            )
+            val parts = buildList {
+                add(imagePart)
+                if (promptWithContext.isNotBlank()) {
+                    add(ContentPart.Text(promptWithContext))
+                }
+            }
+            user(parts)
+            return
+        }
+
+        appendUserPrompt(promptWithContext)
+    }
+
+    private fun PromptBuilder.appendUserPrompt(prompt: String?) {
+        if (!prompt.isNullOrBlank()) {
+            user(prompt)
+        }
+    }
+
+    private fun PromptBuilder.appendAssistantAndToolState(
+        message: Message,
+        includeToolResults: Boolean = true
+    ) {
+        if (message.hasToolCalls()) {
+            if (!message.response.isNullOrBlank()) {
+                assistant(message.response)
+            }
+            message.toolCalls?.forEach { toolCall ->
+                tool {
+                    call(
+                        toolCall.id,
+                        toolCall.function.name ?: "unknown-function",
+                        toolCall.function.arguments
+                            ?.takeIf { it.isNotBlank() }
+                            ?: "{}"
+                    )
+                }
+            }
+            if (includeToolResults) {
+                message.toolCallResults?.forEach { (callId, result) ->
+                    val toolName = message.toolCalls
+                        ?.firstOrNull { it.id == callId }
+                        ?.function
+                        ?.name
+                        ?: "unknown-function"
+                    tool { result(callId, toolName, result) }
+                }
+            }
+        } else if (!message.response.isNullOrBlank()) {
+            assistant(message.response)
+        }
+    }
+
+    private fun buildKoogSystemPrompt(callParameters: ChatCompletionParameters): String {
+        val promptsSettings = service<PromptsSettings>().state
+        val filteredPrompts = service<FilteredPromptsService>()
+        val systemParts = mutableListOf<String>()
+
+        when (callParameters.conversationType) {
+            ConversationType.DEFAULT -> {
+                val selectedPersona = promptsSettings.personas.selectedPersona
+                if (!selectedPersona.disabled) {
+                    val baseInstructions = callParameters.personaDetails?.instructions?.addProjectPath()
+                        ?: filteredPrompts
+                            .getFilteredPersonaPrompt(callParameters.chatMode)
+                            .addProjectPath()
+                    val clickableInstructions = filteredPrompts.applyClickableLinks(baseInstructions)
+                    if (clickableInstructions.isNotBlank()) {
+                        systemParts.add(clickableInstructions)
+                    }
+                }
+            }
+
+            ConversationType.REVIEW_CHANGES -> {
+                promptsSettings.coreActions.reviewChanges.instructions
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(systemParts::add)
+            }
+
+            ConversationType.FIX_COMPILE_ERRORS -> {
+                promptsSettings.coreActions.fixCompileErrors.instructions
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(systemParts::add)
+            }
+
+            else -> Unit
+        }
+
+        val history = callParameters.history
+            ?.takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n") { ConversationTagProcessor.formatConversation(it) }
+            .orEmpty()
+        if (history.isNotBlank()) {
+            systemParts.add("Conversation history:\n$history")
+        }
+
+        if (!callParameters.mcpTools.isNullOrEmpty() &&
+            callParameters.toolApprovalMode != ToolApprovalMode.BLOCK_ALL
+        ) {
+            val toolsPrompt = McpToolPromptFormatter().formatToolsForSystemPrompt(callParameters.mcpTools!!)
+            if (toolsPrompt.isNotBlank()) {
+                systemParts.add(toolsPrompt)
+            }
+        }
+
+        return systemParts.joinToString("\n\n").trim()
+    }
+
+    override fun createInlineEditQuestionPrompt(parameters: ChatCompletionParameters): Prompt {
+        return createChatCompletionPrompt(buildInlineEditQuestionParams(parameters))
+    }
+
+    private fun buildInlineEditQuestionParams(parameters: ChatCompletionParameters): ChatCompletionParameters {
         val systemPrompt = """
             You are an Inline Edit assistant for a single open file.
             Respond in two parts:
@@ -108,7 +280,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
             .featureType(FeatureType.INLINE_EDIT)
             .build()
 
-        return createChatRequest(newParams)
+        return newParams
     }
 
     protected fun prepareInlineEditSystemPrompt(params: InlineEditCompletionParameters): String {
@@ -142,16 +314,15 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         systemPrompt = systemPrompt.replace("{{CURRENT_FILE_CONTEXT}}", currentFileBlock)
 
         val externalContext = buildString {
-            val currentPath = filePath
             val unique = mutableSetOf<String>()
             val hasRefs = params.referencedFiles
-                ?.filter { it.filePath != currentPath }
+                ?.filter { it.filePath != filePath }
                 ?.any { !it.fileContent.isNullOrBlank() } == true
 
             if (hasRefs) {
                 append("\n\n### Referenced Files")
                 params.referencedFiles
-                    .filter { it.filePath != currentPath }
+                    .filter { it.filePath != filePath }
                     .forEach {
                         if (!it.fileContent.isNullOrBlank() && unique.add(it.filePath)) {
                             append("\n\n```${it.fileExtension}:${it.filePath}\n")
@@ -198,39 +369,38 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         }
     }
 
-    override fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest {
+    override fun createInlineEditPrompt(params: InlineEditCompletionParameters): Prompt {
         val systemPrompt = prepareInlineEditSystemPrompt(params)
-        return createBasicCompletionRequest(
-            systemPrompt,
-            "systemPrompt.userPrompt",
-            AUTO_APPLY_MAX_TOKENS,
-            true,
-            FeatureType.INLINE_EDIT
-        )
+        return prompt("inline-edit-completion") {
+            if (systemPrompt.isNotBlank()) {
+                system(systemPrompt)
+            }
+
+            params.conversation?.messages?.forEach { message ->
+                appendUserPrompt(message.prompt)
+                if (!message.response.isNullOrBlank()) {
+                    assistant(message.response)
+                }
+            }
+
+            user("Implement.")
+        }
     }
 
-    override fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest {
-        return createBasicCompletionRequest(
-            params.systemPrompt,
-            params.gitDiff,
-            512,
-            true,
-            FeatureType.COMMIT_MESSAGE
-        )
+    override fun createCommitMessagePrompt(params: CommitMessageCompletionParameters): Prompt {
+        return createBasicPrompt(params.systemPrompt, params.gitDiff, "commit-message-completion")
     }
 
-    override fun createLookupRequest(params: LookupCompletionParameters): CompletionRequest {
-        return createBasicCompletionRequest(
+    override fun createLookupPrompt(params: LookupCompletionParameters): Prompt {
+        return createBasicPrompt(
             service<PromptsSettings>().state.coreActions.generateNameLookups.instructions
                 ?: CoreActionsState.DEFAULT_GENERATE_NAME_LOOKUPS_PROMPT,
             params.prompt,
-            LOOKUP_MAX_TOKENS,
-            false,
-            FeatureType.LOOKUP
+            "lookup-completion"
         )
     }
 
-    override fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest {
+    override fun createAutoApplyPrompt(params: AutoApplyParameters): Prompt {
         val destination = params.destination
         val language = FileUtil.getFileExtension(destination.path)
 
@@ -249,22 +419,27 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
             .replace("{{changes_to_merge}}", formattedSource)
             .replace("{{destination_file}}", formattedDestination)
 
-        return createBasicCompletionRequest(
+        return createBasicPrompt(
             systemPrompt,
             "Merge the following changes to the destination file.",
-            AUTO_APPLY_MAX_TOKENS,
-            true,
-            FeatureType.AUTO_APPLY
+            "auto-apply-completion"
         )
     }
 
-    abstract fun createBasicCompletionRequest(
+    protected fun createBasicPrompt(
         systemPrompt: String,
         userPrompt: String,
-        maxTokens: Int = DEFAULT_MAX_TOKENS,
-        stream: Boolean = false,
-        featureType: FeatureType
-    ): CompletionRequest
+        name: String = "completion"
+    ): Prompt {
+        return prompt(name) {
+            if (systemPrompt.isNotBlank()) {
+                system(systemPrompt)
+            }
+            if (userPrompt.isNotBlank()) {
+                user(userPrompt)
+            }
+        }
+    }
 
     protected fun getPromptWithFilesContext(callParameters: ChatCompletionParameters): String {
         return callParameters.referencedFiles?.let {

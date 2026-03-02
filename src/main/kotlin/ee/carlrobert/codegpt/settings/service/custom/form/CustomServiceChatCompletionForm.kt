@@ -3,16 +3,15 @@ package ee.carlrobert.codegpt.settings.service.custom.form
 import com.intellij.openapi.ui.MessageType
 import com.intellij.util.ui.FormBuilder
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.completions.CancellableRequest
+import ee.carlrobert.codegpt.completions.CompletionError
+import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
 import ee.carlrobert.codegpt.completions.CompletionRequestService
-import ee.carlrobert.codegpt.completions.factory.CustomOpenAIRequestFactory
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceFormTabbedPane
 import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceChatCompletionSettingsData
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.URLTextField
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
-import ee.carlrobert.llm.completion.CompletionEventListener
-import okhttp3.sse.EventSource
 import java.awt.BorderLayout
 import javax.swing.JButton
 import javax.swing.JPanel
@@ -76,26 +75,34 @@ class CustomServiceChatCompletionForm(
         testConnectionButton.isEnabled = false
         testConnectionButton.text = "Testing..."
 
-        val request = CustomOpenAIRequestFactory.buildCustomOpenAICompletionRequest(
-            "Test",
-            urlField.text,
-            tabbedPane.headers,
-            tabbedPane.body,
-            getApiKey.invoke()
+        val settings = CustomServiceChatCompletionSettingsState().apply {
+            url = urlField.text
+            headers.clear()
+            headers.putAll(tabbedPane.headers)
+            body.clear()
+            body.putAll(tabbedPane.body)
+        }
 
+        val listener = TestConnectionEventListener()
+        val request = CompletionRequestService.testCustomServiceConnectionAsync(
+            settings = settings,
+            apiKey = getApiKey.invoke(),
+            modelId = settings.body["model"]?.toString(),
+            eventListener = listener
         )
-
-        CompletionRequestService.getInstance().getCustomOpenAIChatCompletionAsync(
-            request,
-            TestConnectionEventListener()
-        )
+        listener.attachRequest(request)
     }
 
-    internal inner class TestConnectionEventListener : CompletionEventListener<String?> {
+    internal inner class TestConnectionEventListener : CompletionStreamEventListener {
         private var responseReceived = false
+        private var request: CancellableRequest? = null
 
-        override fun onMessage(value: String?, eventSource: EventSource) {
-            if (!responseReceived) {
+        fun attachRequest(request: CancellableRequest) {
+            this.request = request
+        }
+
+        override fun onMessage(message: String) {
+            if (!responseReceived && message.isNotBlank()) {
                 responseReceived = true
                 testConnectionButton.isEnabled = true
                 testConnectionButton.text =
@@ -105,11 +112,11 @@ class CustomServiceChatCompletionForm(
                     MessageType.INFO,
                     testConnectionButton
                 )
-                eventSource.cancel()
+                request?.cancel()
             }
         }
 
-        override fun onError(error: ErrorDetails, ex: Throwable) {
+        override fun onError(error: CompletionError, ex: Throwable) {
             testConnectionButton.isEnabled = true
             testConnectionButton.text =
                 CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")

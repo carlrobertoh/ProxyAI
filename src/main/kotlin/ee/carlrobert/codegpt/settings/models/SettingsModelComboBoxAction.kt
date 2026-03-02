@@ -19,6 +19,7 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.toolwindow.ui.ModelListPopup
 import java.awt.Color
+import javax.swing.Icon
 import javax.swing.JComponent
 
 class SettingsModelComboBoxAction(
@@ -36,7 +37,7 @@ class SettingsModelComboBoxAction(
     fun updateTemplatePresentation(model: ModelSelection?) {
         templatePresentation.text =
             model?.fullDisplayName ?: CodeGPTBundle.get("settings.models.selectModel")
-        templatePresentation.icon = model?.let { ModelIcons.getIconForModel(it) }
+        templatePresentation.icon = model?.let(::getIconForModel)
     }
 
     fun createCustomComponent(place: String): JComponent {
@@ -90,8 +91,7 @@ class SettingsModelComboBoxAction(
 
                         ServiceType.ANTHROPIC -> {
                             val group = DefaultActionGroup.createPopupGroup { provider.label }
-                            group.templatePresentation.icon =
-                                ModelIcons.getIconForProvider(provider)
+                            group.templatePresentation.icon = getIconForProvider(provider)
                             providerModels.forEach { model ->
                                 group.add(createModelAction(model))
                             }
@@ -100,8 +100,7 @@ class SettingsModelComboBoxAction(
 
                         else -> {
                             val group = DefaultActionGroup.createPopupGroup { provider.label }
-                            group.templatePresentation.icon =
-                                ModelIcons.getIconForProvider(provider)
+                            group.templatePresentation.icon = getIconForProvider(provider)
                             providerModels.forEach { model ->
                                 group.add(createModelAction(model))
                             }
@@ -126,7 +125,7 @@ class SettingsModelComboBoxAction(
                             val llamaAction = object : DumbAwareAction(
                                 llamaDisplayName,
                                 "",
-                                ModelIcons.getIconForProvider(ServiceType.LLAMA_CPP)
+                                getIconForProvider(ServiceType.LLAMA_CPP)
                             ) {
                                 override fun update(e: AnActionEvent) {
                                     e.presentation.isEnabled =
@@ -156,8 +155,7 @@ class SettingsModelComboBoxAction(
 
                         else -> {
                             val group = DefaultActionGroup.createPopupGroup { provider.label }
-                            group.templatePresentation.icon =
-                                ModelIcons.getIconForProvider(provider)
+                            group.templatePresentation.icon = getIconForProvider(provider)
                             providerModels.forEach { model ->
                                 group.add(createModelAction(model))
                             }
@@ -206,7 +204,7 @@ class SettingsModelComboBoxAction(
     }
 
     private fun getModelsForFeature(featureType: FeatureType): List<ModelSelection> {
-        val allModels = ModelRegistry.getInstance().getAllModelsForFeature(featureType)
+        val allModels = service<ModelSettings>().getAvailableModels(featureType)
 
         return if (serviceType != null) {
             allModels.filter { it.provider == serviceType }
@@ -219,7 +217,7 @@ class SettingsModelComboBoxAction(
         model: ModelSelection,
         useFullDisplayName: Boolean = false
     ): AnAction {
-        val icon = ModelIcons.getIconForModel(model)
+        val icon = getIconForModel(model)
         val displayText = if (useFullDisplayName) model.fullDisplayName else model.displayName
 
         return object : DumbAwareAction(displayText, "", icon) {
@@ -240,10 +238,28 @@ class SettingsModelComboBoxAction(
         }
     }
 
+    private fun getIconForModel(model: ModelSelection): Icon? {
+        return model.icon ?: getIconForProvider(model.provider)
+    }
+
     private fun getLlamaDisplayName(): String {
         val llamaSettings = ApplicationManager.getApplication().service<LlamaSettings>().state
         val huggingFaceModel = llamaSettings.huggingFaceModel
         val llamaModel = LlamaModel.findByHuggingFaceModel(huggingFaceModel)
         return "${llamaModel.label} (${huggingFaceModel.parameterSize}B) / Q${huggingFaceModel.quantization}"
+    }
+
+    private fun getIconForProvider(provider: ServiceType): Icon? {
+        return when (provider) {
+            ServiceType.PROXYAI -> Icons.DefaultSmall
+            ServiceType.OPENAI -> Icons.OpenAI
+            ServiceType.ANTHROPIC -> Icons.Anthropic
+            ServiceType.GOOGLE -> Icons.Google
+            ServiceType.MISTRAL -> Icons.Mistral
+            ServiceType.OLLAMA -> Icons.Ollama
+            ServiceType.CUSTOM_OPENAI -> Icons.OpenAI
+            ServiceType.LLAMA_CPP -> Icons.Llama
+            ServiceType.INCEPTION -> Icons.Inception
+        }
     }
 }

@@ -6,7 +6,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAwareAction
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionService
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
@@ -22,7 +22,7 @@ abstract class CodeCompletionFeatureToggleActions(
 
     override fun actionPerformed(e: AnActionEvent) {
         val serviceType =
-            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION)
+            service<ModelSettings>().getServiceForFeature(FeatureType.CODE_COMPLETION)
         when (serviceType) {
             PROXYAI -> {
                 service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled =
@@ -63,7 +63,7 @@ abstract class CodeCompletionFeatureToggleActions(
 
     override fun update(e: AnActionEvent) {
         val selectedService =
-            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION)
+            service<ModelSettings>().getServiceForFeature(FeatureType.CODE_COMPLETION)
         val codeCompletionEnabled =
             service<CodeCompletionService>().isCodeCompletionsEnabled(selectedService) == true
         e.presentation.isVisible = codeCompletionEnabled != enableFeatureAction

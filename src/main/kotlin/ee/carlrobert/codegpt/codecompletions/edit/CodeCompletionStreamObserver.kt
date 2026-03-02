@@ -1,25 +1,20 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
-import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
+import ee.carlrobert.codegpt.completions.CompletionError
+import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
 import ee.carlrobert.codegpt.ui.OverlayUtil
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 import ee.carlrobert.service.PartialCodeCompletionResponse
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
-import kotlinx.coroutines.channels.ProducerScope
-import okhttp3.Request
-import okhttp3.sse.EventSource
 
 class CodeCompletionStreamObserver(
     private val editor: Editor,
-    private val channel: ProducerScope<InlineCompletionElement>,
-    private val eventListener: CodeCompletionEventListener,
+    private val eventListener: CompletionStreamEventListener,
 ) : StreamObserver<PartialCodeCompletionResponse> {
 
     companion object {
@@ -27,19 +22,10 @@ class CodeCompletionStreamObserver(
     }
 
     private val messageBuilder = StringBuilder()
-    private val emptyEventSource = object : EventSource {
-        override fun cancel() {
-        }
-
-        override fun request(): Request {
-            return Request.Builder().build()
-        }
-    }
-
     override fun onNext(value: PartialCodeCompletionResponse) {
         CodeGPTKeys.LAST_COMPLETION_RESPONSE_ID.set(editor, value.id)
         messageBuilder.append(value.partialCompletion)
-        eventListener.onMessage(value.partialCompletion, emptyEventSource)
+        eventListener.onMessage(value.partialCompletion)
     }
 
     override fun onError(t: Throwable?) {
@@ -51,8 +37,7 @@ class CodeCompletionStreamObserver(
             }
 
             if (code == Status.Code.UNAVAILABLE) {
-                eventListener.onError(ErrorDetails("Connection unavailable"), t)
-                channel.close(t)
+                eventListener.onError(CompletionError("Connection unavailable"), t)
                 return
             }
         }
@@ -62,8 +47,10 @@ class CodeCompletionStreamObserver(
             t?.message ?: "Something went wrong",
             NotificationType.ERROR
         )
-        eventListener.onError(ErrorDetails(t?.message ?: "Code completion error"), t ?: Throwable())
-        channel.close(t)
+        eventListener.onError(
+            CompletionError(t?.message ?: "Code completion error"),
+            t ?: Throwable()
+        )
     }
 
     override fun onCompleted() {

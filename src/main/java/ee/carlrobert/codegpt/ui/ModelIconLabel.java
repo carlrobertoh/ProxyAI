@@ -3,8 +3,8 @@ package ee.carlrobert.codegpt.ui;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.util.ui.JBFont;
 import ee.carlrobert.codegpt.Icons;
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel;
-import java.util.NoSuchElementException;
+import ee.carlrobert.codegpt.settings.models.ModelSettings;
+import ee.carlrobert.codegpt.settings.service.ServiceType;
 import javax.swing.SwingConstants;
 
 public class ModelIconLabel extends JBLabel {
@@ -29,8 +29,8 @@ public class ModelIconLabel extends JBLabel {
 
   private String formatModelName(String modelCode) {
     try {
-      return OpenAIChatCompletionModel.findByCode(modelCode).getDescription();
-    } catch (NoSuchElementException e) {
+      return ModelSettings.getInstance().getModelDisplayName(ServiceType.OPENAI, modelCode);
+    } catch (Exception e) {
       return modelCode;
     }
   }

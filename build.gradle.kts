@@ -64,7 +64,6 @@ dependencies {
         bundledPlugin("com.intellij.java")
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("Git4Idea")
-        plugin("PythonCore:251.25410.109")
 
         testFramework(TestFrameworkType.Platform)
         testFramework(TestFrameworkType.JUnit5)
@@ -73,7 +72,6 @@ dependencies {
     implementation(project(":proxyai-telemetry"))
     implementation(project(":proxyai-treesitter"))
 
-    implementation(platform(libs.okhttp.bom))
     implementation(platform(libs.slf4j.bom))
     implementation(platform(libs.jackson.bom))
     implementation(platform(libs.mcp.sdk.bom))
@@ -81,14 +79,18 @@ dependencies {
     implementation(libs.jackson.datatype.jdk8)
     implementation(libs.jackson.datatype.jsr310)
     implementation(libs.jackson.module.kotlin)
+    implementation(libs.kotlin.stdlib)
 
     implementation(libs.flexmark.all) {
         // vulnerable transitive dependency
         exclude(group = "org.jsoup", module = "jsoup")
     }
-    implementation(libs.kotlin.stdlib)
-    implementation(libs.kotlin.reflect)
     implementation(libs.koog.agents) {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-common")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-jdk8")
     }

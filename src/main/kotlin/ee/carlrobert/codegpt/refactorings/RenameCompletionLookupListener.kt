@@ -13,12 +13,12 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.completions.CompletionRequestService
+import ee.carlrobert.codegpt.completions.CompletionService
 import ee.carlrobert.codegpt.completions.LookupCompletionParameters
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import ee.carlrobert.codegpt.ui.OverlayUtil
-import ee.carlrobert.llm.client.codegpt.response.CodeGPTException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,7 +42,7 @@ class RenameCompletionLookupListener : LookupManagerListener {
         val featureEnabled = service<ConfigurationSettings>().state.methodNameGenerationEnabled
         if (isPromptTextFieldDocument
             || !featureEnabled
-            || !CompletionRequestService.isRequestAllowed(FeatureType.CHAT)
+            || !CompletionService.isRequestAllowed(FeatureType.CHAT)
         ) {
             return
         }
@@ -53,13 +53,16 @@ class RenameCompletionLookupListener : LookupManagerListener {
                 val selection = runReadAction { context.text }
                 scope.launch {
                     try {
-                        val lookupCompletion = service<CompletionRequestService>()
+                        val lookupCompletion = service<CompletionService>()
                             .getLookupCompletion(LookupCompletionParameters(selection))
                         if (lookupCompletion.isNotEmpty()) {
                             addCompletionLookupValues(newLookup, lookupCompletion)
                         }
-                    } catch (ex: CodeGPTException) {
-                        OverlayUtil.showNotification(ex.detail, NotificationType.ERROR)
+                    } catch (ex: CodeGPTApiException) {
+                        OverlayUtil.showNotification(
+                            ex.detail ?: ex.message ?: "Request failed",
+                            NotificationType.ERROR
+                        )
                     } catch (ex: Exception) {
                         logger.error(
                             "Something went wrong while requesting completion lookup values.",

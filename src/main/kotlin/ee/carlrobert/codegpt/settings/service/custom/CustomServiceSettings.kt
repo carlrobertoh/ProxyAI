@@ -7,7 +7,7 @@ import com.intellij.util.xmlb.annotations.OptionTag
 import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceChatCompletionTemplate
 import ee.carlrobert.codegpt.settings.service.custom.template.CustomServiceCodeCompletionTemplate
@@ -16,7 +16,7 @@ import ee.carlrobert.codegpt.util.BaseConverter
 import java.util.UUID
 import ee.carlrobert.codegpt.util.MapConverter
 
-private const val DEFAULT_SERVICE_SETTINGS_NANE = "Default"
+private const val DEFAULT_SERVICE_SETTINGS_NAME = "Default"
 
 @Service
 @State(
@@ -118,7 +118,7 @@ class CustomServicesSettings :
     }
 
     fun customServiceStateForFeatureType(featureType: FeatureType): CustomServiceSettingsState {
-        val modelSelection = service<ModelSelectionService>()
+        val modelSelection = service<ModelSettings>()
         val featureSelection = modelSelection.getModelSelectionForFeature(featureType)
 
         if (featureSelection.provider != ServiceType.CUSTOM_OPENAI)
@@ -127,8 +127,8 @@ class CustomServicesSettings :
                         "This function should not be called in this context!"
             )
 
-        return this.state.services.find { it.id == featureSelection.id }
-            ?: throw IllegalStateException("Unable to find custom service with id '${featureSelection.model}'.")
+        return this.state.services.find { it.id == featureSelection.serviceId }
+            ?: throw IllegalStateException("Unable to find custom service with id '${featureSelection.serviceId}'.")
     }
 }
 
@@ -151,7 +151,7 @@ class CustomServicesState(
 @JsonIgnoreProperties(ignoreUnknown = true)
 class CustomServiceSettingsState : BaseState() {
     var id by string(UUID.randomUUID().toString())
-    var name by string(DEFAULT_SERVICE_SETTINGS_NANE)
+    var name by string(DEFAULT_SERVICE_SETTINGS_NAME)
     var template by enum(CustomServiceTemplate.OPENAI)
     var chatCompletionSettings by property(CustomServiceChatCompletionSettingsState())
     var codeCompletionSettings by property(CustomServiceCodeCompletionSettingsState())

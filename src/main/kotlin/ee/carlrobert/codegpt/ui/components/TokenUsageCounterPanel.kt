@@ -13,6 +13,7 @@ import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.agent.AgentService
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.toolwindow.agent.TokenUsageEvent
 import ee.carlrobert.codegpt.toolwindow.agent.TokenUsageListener
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
@@ -37,7 +38,8 @@ class TokenUsageCounterPanel(
         isGroupingUsed = true
     }
     private var messageBusConnection: MessageBusConnection? = null
-    private var currentSessionId: String = sessionId
+    private var lastEstimatedPromptTokens: Long = 0L
+    private var calibrationOffset: Long = 0L
 
     init {
         Disposer.register(ApplicationManager.getApplication(), scope)
@@ -45,6 +47,7 @@ class TokenUsageCounterPanel(
         isOpaque = false
         font = JBFont.small()
         border = JBUI.Borders.empty(5, 7)
+        text = "100% context left"
         setupMessageBusConnection()
     }
 
@@ -56,20 +59,29 @@ class TokenUsageCounterPanel(
                 object : TokenUsageListener {
                     override fun onTokenUsageChanged(event: TokenUsageEvent) {
                         if (event.sessionId == sessionId) {
-                            currentSessionId = event.sessionId
-                            val model = getAgentModelForSession(event.sessionId) ?: return
-                            updateDisplay(event, model)
-                            updateTooltipText(event, model)
+                            val model = getAgentModelForSession(event.sessionId)
+                                ?: getSelectedAgentModel()
+                                ?: return
+                            calibrationOffset = event.totalTokens - lastEstimatedPromptTokens
+                            updateDisplay(event.totalTokens, model)
                         }
                     }
                 })
         }
     }
 
-    private fun updateDisplay(event: TokenUsageEvent, model: LLModel) {
+    fun updateFromTotalTokens(totalTokens: Long) {
+        lastEstimatedPromptTokens = totalTokens
+        val model = getSelectedAgentModel() ?: return
+        val calibratedTotal = (totalTokens + calibrationOffset).coerceAtLeast(0L)
+        updateDisplay(calibratedTotal, model)
+    }
+
+    private fun updateDisplay(totalTokens: Long, model: LLModel) {
         scope.launch {
             withEdt {
-                updateColorAndText(event.totalTokens, model)
+                updateColorAndText(totalTokens, model)
+                updateTooltipText(totalTokens, model)
                 revalidate()
                 repaint()
             }
@@ -93,12 +105,12 @@ class TokenUsageCounterPanel(
         text = "${percentageLeft.toInt()}% context left"
     }
 
-    fun updateTooltipText(event: TokenUsageEvent, model: LLModel) {
+    private fun updateTooltipText(totalTokens: Long, model: LLModel) {
         val budget = computeBudget(model)
         toolTipText = buildString {
             append("<html><body>")
             append("<b>Usage Details</b><br>")
-            append("Input size: ${numberFormat.format(event.totalTokens)} tokens<br>")
+            append("Input size: ${numberFormat.format(totalTokens)} tokens<br>")
             append("Max output size: ${numberFormat.format(budget.reservedOutput)} tokens<br>")
             append("Max context size: ${numberFormat.format(budget.contextLength)} tokens<br>")
             append("</body></html>")
@@ -127,13 +139,17 @@ class TokenUsageCounterPanel(
     )
 
     private fun computeBudget(model: LLModel): Budget {
-        val contextLength = model.contextLength
+        val contextLength = model.contextLength ?: 128_000L
         val configured =
-            (model.maxOutputTokens ?: ConfigurationSettings.getState().maxTokens).toLong()
+            model.maxOutputTokens ?: ConfigurationSettings.getState().maxTokens.toLong()
         val reserved = configured
             .coerceAtLeast(0L)
             .coerceAtMost(contextLength)
         val inputBudget = (contextLength - reserved).coerceAtLeast(1L)
         return Budget(contextLength, reserved, inputBudget)
+    }
+
+    private fun getSelectedAgentModel(): LLModel? {
+        return runCatching { ModelSettings.getInstance().getAgentModel() }.getOrNull()
     }
 }

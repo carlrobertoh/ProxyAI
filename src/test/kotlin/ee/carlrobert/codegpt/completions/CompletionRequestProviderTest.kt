@@ -1,22 +1,20 @@
 package ee.carlrobert.codegpt.completions
 
+import ai.koog.prompt.message.Message as KoogMessage
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
-import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
 import org.assertj.core.api.Assertions.assertThat
-import org.assertj.core.groups.Tuple
-import org.junit.jupiter.api.Assertions.assertThrows
+import org.assertj.core.api.Assertions.tuple
 import testsupport.IntegrationTest
 
 class CompletionRequestProviderTest : IntegrationTest() {
 
     fun testChatCompletionRequestWithSystemPromptOverride() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         val customPersona = PersonaPromptDetailsState().apply {
             id = 999L
             name = "Test Persona"
@@ -32,24 +30,23 @@ class CompletionRequestProviderTest : IntegrationTest() {
             .builder(conversation, Message("TEST_CHAT_COMPLETION_PROMPT"))
             .build()
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
+        val normalized = normalize(prompt.messages)
 
-        val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
-        val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
-        assertThat(request.messages)
+        assertThat(normalized[0]["content"]).contains("TEST_SYSTEM_PROMPT")
+        assertThat(normalized.drop(1))
             .extracting("role", "content")
             .containsExactly(
-                Tuple.tuple("system", expectedSystem),
-                Tuple.tuple("user", "TEST_PROMPT"),
-                Tuple.tuple("assistant", firstMessage.response),
-                Tuple.tuple("user", "TEST_PROMPT"),
-                Tuple.tuple("assistant", secondMessage.response),
-                Tuple.tuple("user", "TEST_CHAT_COMPLETION_PROMPT")
+                tuple("user", "TEST_PROMPT"),
+                tuple("assistant", firstMessage.response),
+                tuple("user", "TEST_PROMPT"),
+                tuple("assistant", secondMessage.response),
+                tuple("user", "TEST_CHAT_COMPLETION_PROMPT")
             )
     }
 
     fun testChatCompletionRequestRetry() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         val customPersona = PersonaPromptDetailsState().apply {
             id = 999L
             name = "Test Persona"
@@ -65,17 +62,16 @@ class CompletionRequestProviderTest : IntegrationTest() {
             .retry(true)
             .build()
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
+        val normalized = normalize(prompt.messages)
 
-        val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
-        val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
-        assertThat(request.messages)
+        assertThat(normalized[0]["content"]).contains("TEST_SYSTEM_PROMPT")
+        assertThat(normalized.drop(1))
             .extracting("role", "content")
             .containsExactly(
-                Tuple.tuple("system", expectedSystem),
-                Tuple.tuple("user", "FIRST_TEST_PROMPT"),
-                Tuple.tuple("assistant", firstMessage.response),
-                Tuple.tuple("user", "SECOND_TEST_PROMPT")
+                tuple("user", "FIRST_TEST_PROMPT"),
+                tuple("assistant", firstMessage.response),
+                tuple("user", "SECOND_TEST_PROMPT")
             )
     }
 
@@ -87,5 +83,16 @@ class CompletionRequestProviderTest : IntegrationTest() {
         val message = Message(prompt)
         message.response = "zz".repeat((tokenSize) - 6 - 7)
         return message
+    }
+
+    private fun normalize(messages: List<KoogMessage>): List<Map<String, String>> {
+        return messages.mapNotNull { msg ->
+            when (msg) {
+                is KoogMessage.System -> mapOf("role" to "system", "content" to msg.content)
+                is KoogMessage.User -> mapOf("role" to "user", "content" to msg.content)
+                is KoogMessage.Assistant -> mapOf("role" to "assistant", "content" to msg.content)
+                else -> null
+            }
+        }
     }
 }

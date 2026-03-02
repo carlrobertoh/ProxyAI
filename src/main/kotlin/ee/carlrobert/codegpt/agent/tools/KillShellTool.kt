@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 
 class KillShellTool(
     workingDirectory: String,
+    sessionId: String,
     hookManager: HookManager,
 ) : BaseTool<KillShellTool.Args, KillShellTool.Result>(
     workingDirectory = workingDirectory,
@@ -25,7 +26,8 @@ class KillShellTool(
 """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId
 ) {
 
     @Serializable

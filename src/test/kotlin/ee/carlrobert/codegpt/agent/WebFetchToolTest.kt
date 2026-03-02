@@ -32,6 +32,7 @@ class WebFetchToolTest : IntegrationTest() {
             val result = runBlocking {
                 WebFetchTool(
                     workingDirectory = project.basePath ?: "",
+                    sessionId = "test-session-id",
                     hookManager = HookManager(project)
                 ).execute(WebFetchTool.Args(url = "$baseUrl/docs"))
             }
@@ -69,6 +70,7 @@ class WebFetchToolTest : IntegrationTest() {
             val result = runBlocking {
                 WebFetchTool(
                     workingDirectory = project.basePath ?: "",
+                    sessionId = "test-session-id",
                     hookManager = HookManager(project)
                 ).execute(
                     WebFetchTool.Args(
@@ -97,6 +99,7 @@ class WebFetchToolTest : IntegrationTest() {
             val result = runBlocking {
                 WebFetchTool(
                     workingDirectory = project.basePath ?: "",
+                    sessionId = "test-session-id",
                     hookManager = HookManager(project)
                 ).execute(WebFetchTool.Args(url = "$baseUrl/api"))
             }
@@ -161,6 +164,7 @@ class WebFetchToolTest : IntegrationTest() {
     private fun createTool(): WebFetchTool {
         return WebFetchTool(
             workingDirectory = project.basePath ?: "",
+            sessionId = "test-session-id",
             hookManager = HookManager(project)
         )
     }

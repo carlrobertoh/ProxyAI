@@ -1,6 +1,0 @@
-<idea-plugin>
-  <extensions defaultExtensionNs="com.intellij">
-    <applicationService
-      serviceImplementation="ee.carlrobert.codegpt.codecompletions.psi.PythonContextFinder"/>
-  </extensions>
-</idea-plugin>

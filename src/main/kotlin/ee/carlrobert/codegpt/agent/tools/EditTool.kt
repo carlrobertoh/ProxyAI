@@ -22,8 +22,8 @@ import java.io.File
 
 class EditTool(
     private val project: Project,
+    private val sessionId: String,
     private val hookManager: HookManager,
-    private val sessionId: String? = null
 ) : BaseTool<EditTool.Args, EditTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
@@ -52,7 +52,8 @@ class EditTool(
     """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     private fun getLineAndColumn(document: Document, offset: Int): Pair<Int, Int> {

@@ -7,8 +7,6 @@ import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import com.intellij.openapi.components.service
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -16,6 +14,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.groups.Tuple.tuple
 import testsupport.IntegrationTest
 import kotlin.io.path.Path
+import kotlin.time.Clock
+import kotlin.time.Instant
 import java.util.UUID
 
 class AgentCheckpointHistoryServiceTest : IntegrationTest() {

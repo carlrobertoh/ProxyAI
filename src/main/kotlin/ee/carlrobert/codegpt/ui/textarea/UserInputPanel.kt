@@ -25,15 +25,15 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
+import ai.koog.prompt.llm.LLMCapability
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.PromptEnhancer
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
-import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
@@ -41,6 +41,7 @@ import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.components.BadgeChip
 import ee.carlrobert.codegpt.ui.components.InlineEditChips
+import ee.carlrobert.codegpt.ui.components.TokenUsageCounterPanel
 import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
@@ -144,6 +145,7 @@ class UserInputPanel @JvmOverloads constructor(
         )
 
     private var footerPanelRef: JPanel? = null
+    private val tokenUsageCounterPanel = agentTokenCounterPanel as? TokenUsageCounterPanel
 
     private val applyChip =
         onApply?.let { BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, it) }
@@ -264,6 +266,7 @@ class UserInputPanel @JvmOverloads constructor(
     init {
         setupDisposables(parentDisposable)
         setupLayout(featureType)
+        bindTokenCounterToInputTokens()
         addSelectedEditorContent()
         if (featureType == FeatureType.INLINE_EDIT) {
             setupTextChangeListener()
@@ -320,13 +323,20 @@ class UserInputPanel @JvmOverloads constructor(
         }
     }
 
+    private fun bindTokenCounterToInputTokens() {
+        val tokenCounter = tokenUsageCounterPanel ?: return
+        totalTokensPanel.addTotalTokensListener { total ->
+            tokenCounter.updateFromTotalTokens(total.toLong())
+        }
+    }
+
     private fun addSelectedEditorContent() {
         runInEdt {
             EditorUtil.getSelectedEditor(project)?.let { editor ->
                 if (EditorUtil.hasSelection(editor)) {
-                    addTag(
-                        EditorSelectionTagDetails(editor.virtualFile, editor.selectionModel)
-                    )
+                    editor.virtualFile?.let { virtualFile ->
+                        addTag(EditorSelectionTagDetails(virtualFile, editor.selectionModel))
+                    }
                 }
             }
         }
@@ -581,11 +591,10 @@ class UserInputPanel @JvmOverloads constructor(
     }
 
     private fun createFooterPanel(featureType: FeatureType): JPanel {
-        val currentService =
-            ModelSelectionService.getInstance().getServiceForFeature(featureType)
-        val availableProviders = ModelRegistry.getInstance().getProvidersForFeature(featureType)
+        val modelSettings = ModelSettings.getInstance()
+        val currentService = modelSettings.getServiceForFeature(featureType)
+        val availableProviders = modelSettings.getAvailableProviders(featureType)
         val modelComboBox = ModelComboBoxAction(
-            project,
             { imageActionSupported.set(isImageActionSupported()) },
             currentService,
             availableProviders,
@@ -653,9 +662,9 @@ class UserInputPanel @JvmOverloads constructor(
     }
 
     private fun isImageActionSupported(): Boolean {
-        val currentModel = ModelSelectionService.getInstance().getModelForFeature(featureType)
+        val currentModel = ModelSettings.getInstance().getModelForFeature(featureType)
         val currentService =
-            ModelSelectionService.getInstance().getServiceForFeature(featureType)
+            ModelSettings.getInstance().getServiceForFeature(featureType)
 
         return when (currentService) {
             ServiceType.CUSTOM_OPENAI,
@@ -670,14 +679,8 @@ class UserInputPanel @JvmOverloads constructor(
     }
 
     private fun isCodeGPTModelSupported(modelCode: String): Boolean {
-        return modelCode in setOf(
-            ModelRegistry.GPT_4_1,
-            ModelRegistry.GPT_4_1_MINI,
-            ModelRegistry.GEMINI_PRO_2_5,
-            ModelRegistry.GEMINI_FLASH_2_5,
-            ModelRegistry.CLAUDE_4_5_SONNET,
-            ModelRegistry.CLAUDE_4_5_SONNET_THINKING
-        )
+        val model = ModelSettings.getInstance().findModel(ServiceType.PROXYAI, modelCode)
+        return model?.llmModel?.capabilities?.any { it is LLMCapability.Vision.Image } == true
     }
 
     private fun updatePreferredSizeFromChildren() {

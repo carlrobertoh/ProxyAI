@@ -24,6 +24,8 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
+import ee.carlrobert.codegpt.completions.CompletionError
+import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
@@ -35,9 +37,6 @@ import ee.carlrobert.codegpt.toolwindow.chat.parser.SseMessageParser
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.components.InlineEditChips
 import ee.carlrobert.codegpt.util.EditorDiffUtil
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
-import ee.carlrobert.llm.completion.CompletionEventListener
-import okhttp3.sse.EventSource
 import java.awt.Color
 import java.awt.Font
 import java.util.*
@@ -56,7 +55,7 @@ class InlineEditSearchReplaceListener(
     private val selectionTextRange: TextRange,
     private val requestId: Long,
     private val conversation: Conversation
-) : CompletionEventListener<String> {
+) : CompletionStreamEventListener {
 
     private val project: Project = editor.project!!
     private val logger = Logger.getInstance(InlineEditSearchReplaceListener::class.java)
@@ -70,10 +69,10 @@ class InlineEditSearchReplaceListener(
 
     private val searchHighlighters = mutableListOf<RangeHighlighter>()
     private var currentSearchPattern: String? = null
-    private val highlightDebounceAlarm = Alarm()
+    private val highlightDebounceAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, project)
     private var hintComponent: JComponent? = null
     private var lastHintMessage: String? = null
-    private val waitingAlarm = Alarm()
+    private val waitingAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, project)
 
     private val searchHighlightColor = JBColor(
         Color(255, 235, 59, 80),
@@ -255,7 +254,7 @@ class InlineEditSearchReplaceListener(
         }
     }
 
-    override fun onMessage(message: String, eventSource: EventSource) {
+    override fun onMessage(message: String) {
         if (!isCurrentRequest()) return
         if (isStopping) return
         hasReceivedMessage = true
@@ -315,7 +314,7 @@ class InlineEditSearchReplaceListener(
         }
     }
 
-    override fun onComplete(completionMessageBuilder: StringBuilder) {
+    override fun onComplete(messageBuilder: StringBuilder) {
         if (!isCurrentRequest()) return
 
         runInEdt {
@@ -377,6 +376,10 @@ class InlineEditSearchReplaceListener(
             }
             stopLoading()
         }
+    }
+
+    override fun onCancelled(messageBuilder: StringBuilder) {
+        stopLoading()
     }
 
     private fun createDiffViewerLink(): ActionLink {
@@ -472,7 +475,7 @@ class InlineEditSearchReplaceListener(
         project.service<ChatToolWindowContentManager>().displayConversation(newConversation)
     }
 
-    override fun onError(error: ErrorDetails, ex: Throwable) {
+    override fun onError(error: CompletionError, ex: Throwable) {
         if (!isCurrentRequest()) return
 
         runInEdt {

@@ -6,8 +6,8 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.ToolPermissionPolicy
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
@@ -17,18 +17,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.charset.StandardCharsets
 
 /**
  * Reads a file from the local filesystem using IntelliJ's Document and VirtualFile APIs.
  */
 class ReadTool(
     private val project: Project,
+    private val sessionId: String,
     private val hookManager: HookManager,
-    private val sessionId: String? = null
 ) : BaseTool<ReadTool.Args, ReadTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),
@@ -53,7 +53,8 @@ class ReadTool(
     """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     companion object {
@@ -143,8 +144,11 @@ class ReadTool(
                     val virtualFile = LocalFileSystem.getInstance().findFileByPath(fileSystemPath)
 
                     val fileType = when {
-                        virtualFile != null -> FileTypeManager.getInstance().getFileTypeByFile(virtualFile)
-                        else -> FileTypeManager.getInstance().getFileTypeByFileName(path.fileName.toString())
+                        virtualFile != null -> FileTypeManager.getInstance()
+                            .getFileTypeByFile(virtualFile)
+
+                        else -> FileTypeManager.getInstance()
+                            .getFileTypeByFileName(path.fileName.toString())
                     }
 
                     when {

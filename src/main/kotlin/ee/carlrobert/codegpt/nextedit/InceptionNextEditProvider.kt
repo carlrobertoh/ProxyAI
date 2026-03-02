@@ -7,11 +7,11 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
-import ee.carlrobert.codegpt.completions.CompletionClientProvider
 import ee.carlrobert.codegpt.completions.NextEditParameters
 import ee.carlrobert.codegpt.completions.factory.InceptionRequestFactory
+import ee.carlrobert.codegpt.nextedit.executors.InceptionNextEditExecutor
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.inception.InceptionSettings
 import ee.carlrobert.codegpt.util.EditWindowFormatter
@@ -29,7 +29,7 @@ class InceptionNextEditProvider : NextEditProvider {
         caretOffset: Int,
         addToQueue: Boolean
     ) {
-        if (service<ModelSelectionService>().getServiceForFeature(FeatureType.NEXT_EDIT) != ServiceType.INCEPTION
+        if (service<ModelSettings>().getServiceForFeature(FeatureType.NEXT_EDIT) != ServiceType.INCEPTION
             || !service<InceptionSettings>().state.nextEditsEnabled
         ) {
             return
@@ -77,7 +77,7 @@ class InceptionNextEditProvider : NextEditProvider {
             EditWindowFormatter.formatWithIndices(fileContent, params.fileName, caretOffset)
         val request =
             InceptionRequestFactory().createNextEditRequest(params, formatResult)
-        val response = CompletionClientProvider.getInceptionClient().getNextEditCompletion(request)
+        val response = InceptionNextEditExecutor.execute(request)
         val text = response.choices?.firstOrNull()?.message?.content ?: return null
         val prefix = fileContent.substring(0, formatResult.editStartIndex)
         val editedContent = NextEditRequestProcessor.extractCodeFromBackticks(text)

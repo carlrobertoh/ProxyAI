@@ -1,12 +1,11 @@
 package ee.carlrobert.codegpt.settings.service.openai;
 
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel;
 import java.util.Objects;
 
 public class OpenAISettingsState {
 
   private String organization = "";
-  private String model = OpenAIChatCompletionModel.GPT_4_1.getCode();
+  private String model = "gpt-4.1";
   private boolean codeCompletionsEnabled = false;
 
   public String getOrganization() {

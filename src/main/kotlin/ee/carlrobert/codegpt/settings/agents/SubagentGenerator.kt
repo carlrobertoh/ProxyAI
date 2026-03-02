@@ -5,7 +5,7 @@ import ai.koog.prompt.message.Message
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.agent.AgentFactory
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -29,7 +29,7 @@ object SubagentGenerator {
 
     suspend fun generate(query: String): GeneratedSubagent {
         return try {
-            val modelService = service<ModelSelectionService>()
+            val modelService = service<ModelSettings>()
             val provider: ServiceType = modelService.getServiceForFeature(FeatureType.AGENT)
             val model = modelService.getAgentModel()
             val executor = AgentFactory.createExecutor(provider)

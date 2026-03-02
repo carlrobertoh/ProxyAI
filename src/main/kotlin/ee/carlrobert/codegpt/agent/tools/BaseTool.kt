@@ -30,7 +30,7 @@ abstract class BaseTool<Args : Any, Result : Any>(
     description: String,
     protected val workingDirectory: String,
     private val hookManager: HookManager,
-    private val sessionId: String? = null,
+    private val sessionId: String,
     private val argsClass: KClass<Args>,
     private val resultClass: KClass<Result>
 ) : Tool<Args, Result>(
@@ -58,7 +58,7 @@ abstract class BaseTool<Args : Any, Result : Any>(
      * @return The result of executing the tool
      */
     final override suspend fun execute(args: Args): Result {
-        val toolId = sessionId?.let { ToolRunContext.getToolId(it) }
+        val toolId = sessionId.let { ToolRunContext.getToolId(it) }
         var effectiveArgs = args
         val beforePayload = mapOf(
             "tool_name" to name,

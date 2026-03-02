@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
+import ee.carlrobert.codegpt.completions.ChatError;
 import ee.carlrobert.codegpt.completions.CompletionResponseEventListener;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationService;
@@ -19,7 +20,6 @@ import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
 import ee.carlrobert.codegpt.toolwindow.ui.UserMessagePanel;
 import ee.carlrobert.codegpt.ui.OverlayUtil;
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel;
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import javax.swing.Timer;
 
@@ -29,7 +29,6 @@ abstract class ToolWindowCompletionResponseEventListener implements
   private static final int UPDATE_INTERVAL_MS = 20;
 
   private final Project project;
-  private final StringBuilder messageBuilder = new StringBuilder();
   private final EncodingManager encodingManager;
   private final ResponseMessagePanel responsePanel;
   private final UserMessagePanel userMessagePanel;
@@ -60,10 +59,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   private ChatMessageResponseBody getResponseContainer() {
     if (responseContainer == null && responsePanel != null) {
-      var content = responsePanel.getResponseComponent();
-      if (content instanceof ChatMessageResponseBody) {
-        responseContainer = (ChatMessageResponseBody) content;
-      }
+      responseContainer = responsePanel.getResponseComponent();
     }
     return responseContainer;
   }
@@ -78,7 +74,6 @@ abstract class ToolWindowCompletionResponseEventListener implements
     streamResponseReceived = true;
 
     try {
-      messageBuilder.append(partialMessage);
       var ongoingTokens = encodingManager.countTokens(partialMessage);
       messageBuffer.offer(partialMessage);
       ApplicationManager.getApplication().invokeLater(() ->
@@ -94,7 +89,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
   }
 
   @Override
-  public void handleError(ErrorDetails error, Throwable ex) {
+  public void handleError(ChatError error, Throwable ex) {
     ApplicationManager.getApplication().invokeLater(() -> {
       try {
         if ("insufficient_quota".equals(error.getCode())) {
@@ -133,23 +128,23 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   @Override
   public void handleCompleted(String fullMessage, ChatCompletionParameters callParameters) {
-    if (fullMessage != null) {
-      ConversationService.getInstance().saveMessage(fullMessage, callParameters);
-    }
-
     ApplicationManager.getApplication().invokeLater(() -> {
-      try {
-        responsePanel.enableAllActions(true);
-        if (!streamResponseReceived && !fullMessage.isEmpty()) {
-          var container = getResponseContainer();
-          if (container != null) {
-            container.withResponse(fullMessage);
+      if (fullMessage != null) {
+        ConversationService.getInstance().saveMessage(fullMessage, callParameters);
+
+        try {
+          responsePanel.enableAllActions(true);
+          if (!streamResponseReceived && !fullMessage.isEmpty()) {
+            var container = getResponseContainer();
+            if (container != null) {
+              container.withResponse(fullMessage);
+            }
           }
+          totalTokensPanel.updateUserPromptTokens(userInputPanel.getText());
+          totalTokensPanel.updateConversationTokens(callParameters.getConversation());
+        } finally {
+          stopStreaming(responseContainer);
         }
-        totalTokensPanel.updateUserPromptTokens(userInputPanel.getText());
-        totalTokensPanel.updateConversationTokens(callParameters.getConversation());
-      } finally {
-        stopStreaming(responseContainer);
       }
     });
   }

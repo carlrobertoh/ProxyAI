@@ -13,6 +13,7 @@ import ai.koog.agents.core.environment.result
 import ai.koog.agents.features.tokenizer.feature.tokenizer
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.model.PromptExecutor
+import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponses
@@ -203,7 +204,7 @@ private suspend fun AIAgentLLMWriteSession.requestResponses(
         val preparedPrompt = config.missingToolsConversionStrategy.convertPrompt(prompt, tools)
         executor.execute(preparedPrompt, model, tools)
     }
-    val appendableResponses = appendableResponses(responses)
+    val appendableResponses = appendableResponses(responses, model.provider)
     appendableResponses.forEach(appendResponse)
     return if (stream) responses else appendableResponses
 }
@@ -222,10 +223,56 @@ private suspend fun AIAgentLLMWriteSession.requestAndPublish(
     return response
 }
 
-private fun appendableResponses(responses: List<Message.Response>): List<Message.Response> {
-    return responses
+internal fun appendableResponses(
+    responses: List<Message.Response>,
+    provider: LLMProvider
+): List<Message.Response> {
+    val sortedResponses = responses
         .sortedBy { if (it is Message.Assistant) 0 else 1 }
-        .filter { it !is Message.Reasoning }
+        .filterNot { response ->
+            response is Message.Assistant &&
+                    response.hasOnlyTextContent() &&
+                    response.content.isBlank()
+        }
+
+    if (provider == LLMProvider.Google) {
+        return if (sortedResponses.any { it is Message.Tool.Call }) {
+            sortedResponses.filterNot { it is Message.Assistant }
+        } else {
+            sortedResponses
+        }
+    }
+
+    val nonReasoningResponses = sortedResponses.filterNot { it is Message.Reasoning }
+    if (nonReasoningResponses.isNotEmpty()) {
+        return nonReasoningResponses
+    }
+
+    // Keep reasoning when it is the only non-empty model output.
+    val reasoningFallback = sortedResponses
+        .filterIsInstance<Message.Reasoning>()
+        .filter { it.content.isNotBlank() }
+    return if (reasoningFallback.isNotEmpty()) reasoningFallback else nonReasoningResponses
+}
+
+internal fun extractAssistantOutput(responses: List<Message.Response>): String {
+    val assistantText = responses
+        .filterIsInstance<Message.Assistant>()
+        .map { it.content.trim() }
+        .filter { it.isNotEmpty() }
+        .joinToString("\n")
+        .trim()
+    if (assistantText.isNotEmpty()) {
+        return assistantText
+    }
+
+    val reasoningText = responses
+        .filterIsInstance<Message.Reasoning>()
+        .map { it.content.trim() }
+        .filter { it.isNotEmpty() }
+        .joinToString("\n")
+        .trim()
+    return if (reasoningText.isNotEmpty()) "<think>$reasoningText</think>" else ""
 }
 
 private fun publishUsageAndCredits(
@@ -236,11 +283,22 @@ private fun publishUsageAndCredits(
     provider: ServiceType,
     responses: List<Message.Response>,
 ) {
-    events.onTokenUsageAvailable(promptTokenCount(prompt, tokenizer).toLong())
+    events.onTokenUsageAvailable(promptTokenCount(prompt, tokenizer, responses).toLong())
     publishCreditsIfAvailable(sessionId, provider, responses, events)
 }
 
-private fun promptTokenCount(prompt: Prompt, tokenizer: PromptTokenizer): Int {
+private fun promptTokenCount(
+    prompt: Prompt,
+    tokenizer: PromptTokenizer,
+    responses: List<Message.Response>
+): Int {
+    val reportedInputCount = responses.firstNotNullOfOrNull { response ->
+        response.metaInfo.inputTokensCount?.takeIf { it > 0 }
+            ?: response.metaInfo.totalTokensCount?.takeIf { it > 0 }
+    }
+    if (reportedInputCount != null) {
+        return reportedInputCount
+    }
     return if (prompt.latestTokenUsage == 0) {
         tokenizer.tokenCountFor(prompt)
     } else {
@@ -305,14 +363,17 @@ private fun publishCreditsIfAvailable(
 
 @EdgeTransformationDslMarker
 private infix fun <IncomingOutput, OutgoingInput> AIAgentEdgeBuilderIntermediate<IncomingOutput, List<Message.Response>, OutgoingInput>.onSingleAssistantResponse(
-    block: suspend (Message.Response) -> Boolean
+    block: suspend (String) -> Boolean
 ): AIAgentEdgeBuilderIntermediate<IncomingOutput, String, OutgoingInput> {
     return onIsInstance(List::class)
         .transformed { response ->
-            response.filter { item -> item is Message.Response && item !is Message.Reasoning }
-                .filterIsInstance<Message.Response>()
+            val modelResponses = response.filterIsInstance<Message.Response>()
+            when {
+                modelResponses.any { it is Message.Tool.Call } -> null
+                else -> extractAssistantOutput(modelResponses)
+            }
         }
-        .onCondition { it.size == 1 && it[0] is Message.Assistant }
-        .onCondition { messages -> block(messages[0]) }
-        .transformed { it[0].content }
+        .onCondition { it != null }
+        .transformed { it!! }
+        .onCondition { message -> block(message) }
 }

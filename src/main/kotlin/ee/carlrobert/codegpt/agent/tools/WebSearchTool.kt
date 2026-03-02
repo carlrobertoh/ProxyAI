@@ -16,6 +16,7 @@ import java.time.format.DateTimeFormatter
 class WebSearchTool(
     workingDirectory: String,
     private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)",
+    sessionId: String,
     hookManager: HookManager,
 ) : BaseTool<WebSearchTool.Args, WebSearchTool.Result>(
     workingDirectory = workingDirectory,
@@ -58,7 +59,8 @@ IMPORTANT - Use the correct year in search queries:
 """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     @Serializable

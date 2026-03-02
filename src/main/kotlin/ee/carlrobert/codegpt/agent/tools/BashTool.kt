@@ -174,7 +174,8 @@ class BashTool(
 """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     @Serializable

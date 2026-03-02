@@ -14,7 +14,7 @@ import com.intellij.ui.components.AnActionLink
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
 import ee.carlrobert.codegpt.util.EditorUtil
 import javax.swing.JComponent

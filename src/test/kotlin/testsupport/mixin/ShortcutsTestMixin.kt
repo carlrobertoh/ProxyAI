@@ -5,14 +5,16 @@ import com.intellij.testFramework.PlatformTestUtil
 import ee.carlrobert.codegpt.completions.HuggingFaceModel
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
+import ee.carlrobert.codegpt.settings.models.ModelCatalog
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
+import ee.carlrobert.codegpt.settings.service.inception.InceptionSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
-import ee.carlrobert.llm.client.google.models.GoogleModel
+import ee.carlrobert.codegpt.settings.service.mistral.MistralSettings
 import java.util.function.BooleanSupplier
 
 interface ShortcutsTestMixin {
@@ -27,20 +29,32 @@ interface ShortcutsTestMixin {
         }
     }
 
-    fun useOpenAIService(chatModel: String? = "gpt-4o", featureType: FeatureType = FeatureType.CHAT) {
+    fun useOpenAIService(
+        chatModel: String? = "gpt-4o",
+        featureType: FeatureType = FeatureType.CHAT
+    ) {
         setCredential(OpenaiApiKey, "TEST_API_KEY")
         val modelSettings = service<ModelSettings>()
-        
+
         when (featureType) {
             FeatureType.CODE_COMPLETION -> {
-                modelSettings.setModel(FeatureType.CODE_COMPLETION, "gpt-3.5-turbo-instruct", ServiceType.OPENAI)
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    ModelCatalog.GPT_3_5_TURBO_INSTRUCT,
+                    ServiceType.OPENAI
+                )
             }
+
             else -> {
                 modelSettings.setModel(featureType, chatModel ?: "gpt-4o", ServiceType.OPENAI)
-                modelSettings.setModel(FeatureType.CODE_COMPLETION, "gpt-3.5-turbo-instruct", ServiceType.OPENAI)
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    ModelCatalog.GPT_3_5_TURBO_INSTRUCT,
+                    ServiceType.OPENAI
+                )
             }
         }
-        
+
         service<OpenAISettings>().state.run {
             isCodeCompletionsEnabled = true
         }
@@ -53,18 +67,36 @@ interface ShortcutsTestMixin {
         LlamaSettings.getCurrentState().serverPort = null
         LlamaSettings.getCurrentState().isCodeCompletionsEnabled = codeCompletionsEnabled
         LlamaSettings.getCurrentState().huggingFaceModel = HuggingFaceModel.CODE_LLAMA_7B_Q4
-        
+
         val modelSettings = service<ModelSettings>()
         when (role) {
             FeatureType.CHAT -> {
-                modelSettings.setModel(FeatureType.CHAT, HuggingFaceModel.CODE_LLAMA_7B_Q4.code, ServiceType.LLAMA_CPP)
+                modelSettings.setModel(
+                    FeatureType.CHAT,
+                    HuggingFaceModel.CODE_LLAMA_7B_Q4.code,
+                    ServiceType.LLAMA_CPP
+                )
             }
+
             FeatureType.CODE_COMPLETION -> {
-                modelSettings.setModel(FeatureType.CODE_COMPLETION, HuggingFaceModel.CODE_LLAMA_7B_Q4.code, ServiceType.LLAMA_CPP)
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    HuggingFaceModel.CODE_LLAMA_7B_Q4.code,
+                    ServiceType.LLAMA_CPP
+                )
             }
+
             else -> {
-                modelSettings.setModel(FeatureType.CHAT, HuggingFaceModel.CODE_LLAMA_7B_Q4.code, ServiceType.LLAMA_CPP)
-                modelSettings.setModel(FeatureType.CODE_COMPLETION, HuggingFaceModel.CODE_LLAMA_7B_Q4.code, ServiceType.LLAMA_CPP)
+                modelSettings.setModel(
+                    FeatureType.CHAT,
+                    HuggingFaceModel.CODE_LLAMA_7B_Q4.code,
+                    ServiceType.LLAMA_CPP
+                )
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    HuggingFaceModel.CODE_LLAMA_7B_Q4.code,
+                    ServiceType.LLAMA_CPP
+                )
             }
         }
     }
@@ -81,25 +113,97 @@ interface ShortcutsTestMixin {
                 HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code
             )
         }
-        
+
         val modelSettings = service<ModelSettings>()
         when (role) {
             FeatureType.CHAT -> {
-                modelSettings.setModel(FeatureType.CHAT, HuggingFaceModel.LLAMA_3_8B_Q6_K.code, ServiceType.OLLAMA)
+                modelSettings.setModel(
+                    FeatureType.CHAT,
+                    HuggingFaceModel.LLAMA_3_8B_Q6_K.code,
+                    ServiceType.OLLAMA
+                )
             }
+
             FeatureType.CODE_COMPLETION -> {
-                modelSettings.setModel(FeatureType.CODE_COMPLETION, HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code, ServiceType.OLLAMA)
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code,
+                    ServiceType.OLLAMA
+                )
             }
+
             else -> {
-                modelSettings.setModel(FeatureType.CHAT, HuggingFaceModel.LLAMA_3_8B_Q6_K.code, ServiceType.OLLAMA)
-                modelSettings.setModel(FeatureType.CODE_COMPLETION, HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code, ServiceType.OLLAMA)
+                modelSettings.setModel(
+                    FeatureType.CHAT,
+                    HuggingFaceModel.LLAMA_3_8B_Q6_K.code,
+                    ServiceType.OLLAMA
+                )
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    HuggingFaceModel.CODE_QWEN_2_5_3B_Q4_K_M.code,
+                    ServiceType.OLLAMA
+                )
+            }
+        }
+    }
+
+    fun useMistralService(role: FeatureType = FeatureType.CHAT) {
+        setCredential(MistralApiKey, "TEST_API_KEY")
+        MistralSettings.getCurrentState().isCodeCompletionsEnabled = true
+
+        val modelSettings = service<ModelSettings>()
+        when (role) {
+            FeatureType.CODE_COMPLETION -> {
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    "codestral-latest",
+                    ServiceType.MISTRAL
+                )
+            }
+
+            else -> {
+                modelSettings.setModel(role, "mistral-medium-latest", ServiceType.MISTRAL)
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    "codestral-latest",
+                    ServiceType.MISTRAL
+                )
+            }
+        }
+    }
+
+    fun useInceptionService(role: FeatureType = FeatureType.CHAT) {
+        setCredential(InceptionApiKey, "TEST_API_KEY")
+        service<InceptionSettings>().state.codeCompletionsEnabled = true
+
+        val modelSettings = service<ModelSettings>()
+        when (role) {
+            FeatureType.CODE_COMPLETION -> {
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    ModelCatalog.MERCURY_CODER,
+                    ServiceType.INCEPTION
+                )
+            }
+
+            else -> {
+                modelSettings.setModel(role, "mercury", ServiceType.INCEPTION)
+                modelSettings.setModel(
+                    FeatureType.CODE_COMPLETION,
+                    ModelCatalog.MERCURY_CODER,
+                    ServiceType.INCEPTION
+                )
             }
         }
     }
 
     fun useGoogleService(role: FeatureType = FeatureType.CHAT) {
         setCredential(GoogleApiKey, "TEST_API_KEY")
-        service<ModelSettings>().setModel(FeatureType.CHAT, GoogleModel.GEMINI_2_0_FLASH.code, ServiceType.GOOGLE)
+        service<ModelSettings>().setModel(
+            FeatureType.CHAT,
+            "gemini-2.5-flash",
+            ServiceType.GOOGLE
+        )
     }
 
     fun waitExpecting(condition: BooleanSupplier?) {

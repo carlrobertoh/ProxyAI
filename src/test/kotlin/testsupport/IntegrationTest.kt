@@ -3,7 +3,7 @@ package testsupport
 import com.intellij.openapi.util.Key
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.llm.client.mixin.ExternalServiceTestMixin
+import testsupport.mixin.ExternalServiceTestMixin
 import testsupport.mixin.ShortcutsTestMixin
 
 open class IntegrationTest : BasePlatformTestCase(), ExternalServiceTestMixin, ShortcutsTestMixin {

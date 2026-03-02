@@ -1,7 +1,7 @@
 package ee.carlrobert.codegpt.settings.service.codegpt
 
 import com.intellij.openapi.components.*
-import ee.carlrobert.codegpt.settings.models.ModelRegistry
+import ee.carlrobert.codegpt.settings.models.ModelCatalog
 
 @Service
 @State(
@@ -18,10 +18,10 @@ class CodeGPTServiceSettingsState : BaseState() {
 }
 
 class CodeGPTServiceChatCompletionSettingsState : BaseState() {
-    var model by string(ModelRegistry.GPT_5_MINI)
+    var model by string(ModelCatalog.GPT_5_MINI)
 }
 
 class CodeGPTServiceCodeCompletionSettingsState : BaseState() {
     var codeCompletionsEnabled by property(true)
-    var model by string(ModelRegistry.MERCURY_CODER)
+    var model by string(ModelCatalog.MERCURY_CODER)
 }

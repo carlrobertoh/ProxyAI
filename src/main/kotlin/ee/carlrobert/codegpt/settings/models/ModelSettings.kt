@@ -1,13 +1,14 @@
 package ee.carlrobert.codegpt.settings.models
 
+import ai.koog.prompt.llm.LLModel
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.*
+import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
-import java.time.Month
 
 @Service
 @State(
@@ -55,8 +56,28 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         return publisherMethods[featureType] ?: error("No publisher method for $featureType")
     }
 
-    private fun getModelsForFeatureType(featureType: FeatureType): List<ModelSelection> {
-        return ModelRegistry.getInstance().getAllModelsForFeature(featureType)
+    fun getAvailableModels(featureType: FeatureType): List<ModelSelection> {
+        return service<ModelCatalog>().getAllModelsForFeature(featureType)
+    }
+
+    fun getAvailableProviders(featureType: FeatureType): List<ServiceType> {
+        return service<ModelCatalog>().getProvidersForFeature(featureType)
+    }
+
+    fun isFeatureSupportedByProvider(featureType: FeatureType, provider: ServiceType): Boolean {
+        return service<ModelCatalog>().isFeatureSupportedByProvider(featureType, provider)
+    }
+
+    fun findModel(provider: ServiceType, modelCode: String): ModelSelection? {
+        return service<ModelCatalog>().findModel(provider, modelCode)
+    }
+
+    fun getDefaultModelSelection(featureType: FeatureType): ModelSelection {
+        return service<ModelCatalog>().getDefaultModelForFeature(featureType)
+    }
+
+    fun getModelDisplayName(provider: ServiceType, modelCode: String?): String {
+        return service<ModelCatalog>().getModelDisplayName(provider, modelCode)
     }
 
     override fun loadState(state: ModelSettingsState) {
@@ -87,17 +108,71 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         val details = getModelDetailsState(featureType)
         return details?.model?.let { model ->
             details.provider?.let { provider ->
-                ModelRegistry.getInstance().findModel(provider, model)
+                findModel(provider, model)
             }
         }
     }
 
-    fun getModelForFeature(featureType: FeatureType): String? {
+    fun getStoredModelForFeature(featureType: FeatureType): String? {
         return getModelDetailsState(featureType)?.model
     }
 
-    fun getProviderForFeature(featureType: FeatureType): ServiceType? {
+    fun getStoredProviderForFeature(featureType: FeatureType): ServiceType? {
         return getModelDetailsState(featureType)?.provider
+    }
+
+    fun getAgentModel(): LLModel {
+        return getModelSelectionForFeature(FeatureType.AGENT).llmModel
+    }
+
+    fun getModelSelectionForFeature(featureType: FeatureType): ModelSelection {
+        val modelDetailsState = state.getModelSelection(featureType)
+        if (modelDetailsState?.model != null && modelDetailsState.provider != null) {
+            val foundModel = findModel(modelDetailsState.provider!!, modelDetailsState.model!!)
+            if (foundModel != null) {
+                return foundModel
+            }
+
+            logger.warn(
+                "Stored model selection not found for feature=$featureType provider=${modelDetailsState.provider} model=${modelDetailsState.model}; using default."
+            )
+        }
+
+        return getDefaultModelSelection(featureType)
+    }
+
+    fun getServiceForFeature(featureType: FeatureType): ServiceType {
+        return getModelSelectionForFeature(featureType).provider
+    }
+
+    fun getModelForFeature(featureType: FeatureType): String {
+        return getModelSelectionForFeature(featureType).model
+    }
+
+    fun syncWithAvailableCustomOpenAIModels(preferredServiceId: String? = null) {
+        FeatureType.entries.forEach { featureType ->
+            if (!isFeatureSupportedByProvider(featureType, ServiceType.CUSTOM_OPENAI)) {
+                return@forEach
+            }
+
+            val current = getModelSelection(featureType)
+            if (current?.provider != ServiceType.CUSTOM_OPENAI) {
+                return@forEach
+            }
+
+            val available = getAvailableModels(featureType)
+                .filter { it.provider == ServiceType.CUSTOM_OPENAI }
+            val isCurrentValid = available.any { it.model == current.model }
+
+            if (!isCurrentValid) {
+                val newId = when {
+                    !preferredServiceId.isNullOrBlank() && available.any { it.model == preferredServiceId } -> preferredServiceId
+                    available.isNotEmpty() -> available.first().model
+                    else -> null
+                }
+                setModelWithProvider(featureType, newId, ServiceType.CUSTOM_OPENAI)
+            }
+        }
     }
 
     private fun notifyModelChange(
@@ -120,7 +195,7 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
             val newModel = getModelFromState(newState, featureType)
 
             if (oldModel != newModel) {
-                val service = getProviderForFeature(featureType) ?: return
+                val service = getStoredProviderForFeature(featureType) ?: return
                 notifyModelChange(featureType, newModel, service)
             }
         }
@@ -153,8 +228,8 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
     private fun migrateProxyAIModels() {
         listOf(FeatureType.AUTO_APPLY, FeatureType.CODE_COMPLETION, FeatureType.NEXT_EDIT).forEach {
             val modelSelection = state.getModelSelection(it)
-            if (modelSelection?.provider == PROXYAI && modelSelection.model != ModelRegistry.MERCURY_CODER) {
-                setModelWithProvider(it, ModelRegistry.MERCURY_CODER, PROXYAI)
+            if (modelSelection?.provider == PROXYAI && modelSelection.model != ModelCatalog.MERCURY_CODER) {
+                setModelWithProvider(it, ModelCatalog.MERCURY_CODER, PROXYAI)
             }
         }
         listOf(
@@ -165,10 +240,10 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         ).forEach {
             val modelSelection = state.getModelSelection(it)
             if (modelSelection?.provider == PROXYAI) {
-                if (modelSelection.model == ModelRegistry.CLAUDE_4_SONNET) {
-                    setModelWithProvider(it, ModelRegistry.CLAUDE_4_5_SONNET, PROXYAI)
-                } else if (modelSelection.model == ModelRegistry.CLAUDE_4_SONNET_THINKING) {
-                    setModelWithProvider(it, ModelRegistry.CLAUDE_4_5_SONNET_THINKING, PROXYAI)
+                if (modelSelection.model == ModelCatalog.CLAUDE_4_SONNET) {
+                    setModelWithProvider(it, ModelCatalog.CLAUDE_4_5_SONNET, PROXYAI)
+                } else if (modelSelection.model == ModelCatalog.CLAUDE_4_SONNET_THINKING) {
+                    setModelWithProvider(it, ModelCatalog.CLAUDE_4_5_SONNET_THINKING, PROXYAI)
                 }
             }
         }
@@ -178,13 +253,12 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
         featureType: FeatureType,
         modelCode: String
     ): ServiceType? {
-        val models = getModelsForFeatureType(featureType)
-        return models.find { it.model == modelCode }?.provider
+        val models = getAvailableModels(featureType)
+        return models.find { it.selectionId == modelCode || it.modelId == modelCode }?.provider
     }
 
     private fun migrateCustomOpenAIModelCodesToIds() {
         val servicesByName: Map<String, List<String>> = try {
-            CustomServicesSettings::class.java
             service<CustomServicesSettings>().state.services
                 .groupBy({ it.name ?: "" }, { it.id ?: "" })
                 .filterKeys { it.isNotEmpty() }
@@ -210,6 +284,9 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
     }
 
     companion object {
+        private val logger = thisLogger()
+
+        @JvmStatic
         fun getInstance(): ModelSettings = service()
     }
 }

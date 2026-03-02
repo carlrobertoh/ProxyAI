@@ -4,9 +4,11 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.util.net.ssl.CertificateManager
 import ee.carlrobert.codegpt.settings.advanced.AdvancedSettings
 import ee.carlrobert.codegpt.settings.advanced.AdvancedSettingsState
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import io.ktor.client.*
 import io.ktor.client.engine.apache5.*
 import io.ktor.client.plugins.*
+import io.ktor.client.plugins.logging.*
 import org.apache.hc.client5.http.auth.AuthScope
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials
 import org.apache.hc.client5.http.impl.async.HttpAsyncClientBuilder
@@ -28,6 +30,7 @@ object HttpClientProvider {
      */
     fun createHttpClient(): HttpClient {
         val advancedSettings = AdvancedSettings.getCurrentState()
+        val debugModeEnabled = ConfigurationSettings.getState().debugModeEnabled
         return HttpClient(Apache5) {
             engine {
                 configureProxy(advancedSettings)
@@ -37,6 +40,23 @@ object HttpClientProvider {
                 connectTimeoutMillis = advancedSettings.connectTimeout.toLong() * 1000
                 requestTimeoutMillis = advancedSettings.readTimeout.toLong() * 1000
                 socketTimeoutMillis = advancedSettings.readTimeout.toLong() * 1000
+            }
+
+            if (debugModeEnabled) {
+                install(Logging) {
+                    logger = object : io.ktor.client.plugins.logging.Logger {
+                        override fun log(message: String) {
+                            HttpClientProvider.logger.info("[KtorHTTP] $message")
+                        }
+                    }
+                    level = LogLevel.ALL
+                    sanitizeHeader { header ->
+                        header.equals("Authorization", ignoreCase = true)
+                            || header.equals("Proxy-Authorization", ignoreCase = true)
+                            || header.equals("X-Api-Key", ignoreCase = true)
+                            || header.equals("Api-Key", ignoreCase = true)
+                    }
+                }
             }
         }
     }

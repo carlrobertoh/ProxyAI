@@ -2,15 +2,14 @@ package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
-import ai.koog.agents.core.tools.ToolParameterDescriptor
-import ai.koog.agents.core.tools.ToolParameterType
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
-import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.AgentMcpContext
 import ee.carlrobert.codegpt.mcp.ConnectionStatus
+import ee.carlrobert.codegpt.mcp.McpToolAliasResolver
 import ee.carlrobert.codegpt.mcp.McpSessionAttachment
 import ee.carlrobert.codegpt.mcp.McpSessionManager
+import ee.carlrobert.codegpt.mcp.ToolSchemaParser
 import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.spec.McpSchema
 import kotlinx.serialization.json.JsonObject
@@ -33,59 +32,23 @@ object McpDynamicToolRegistry {
 
         if (attachments.isEmpty()) return emptyList()
 
-        val namesByTool = attachments
-            .flatMap { attachment -> attachment.availableTools.map { it.name.lowercase() } }
-            .groupingBy { it }
-            .eachCount()
-
-        val usedNames = mutableSetOf<String>()
-        val tools = mutableListOf<Tool<*, *>>()
-        attachments.forEach { attachment ->
-            attachment.availableTools.forEach { tool ->
-                val exposedName = uniqueToolName(
-                    toolName = tool.name,
-                    attachment = attachment,
-                    hasCollisions = (namesByTool[tool.name.lowercase()] ?: 0) > 1,
-                    usedNames = usedNames
-                )
-                tools.add(
-                    SessionBoundMcpTool(
-                        conversationId = conversationId,
-                        serverId = attachment.serverId,
-                        serverName = attachment.serverName,
-                        sourceTool = tool,
-                        exposedName = exposedName,
-                        approve = approve
-                    )
-                )
-            }
+        return McpToolAliasResolver.resolve(
+            items = attachments.flatMap { attachment ->
+                attachment.availableTools.map { tool -> attachment to tool }
+            },
+            toolName = { (_, tool) -> tool.name },
+            scopeName = { (attachment, _) -> attachment.serverName.ifBlank { attachment.serverId } }
+        ).map { (entry, exposedName) ->
+            val (attachment, tool) = entry
+            SessionBoundMcpTool(
+                conversationId = conversationId,
+                serverId = attachment.serverId,
+                serverName = attachment.serverName,
+                sourceTool = tool,
+                exposedName = exposedName,
+                approve = approve
+            )
         }
-        return tools
-    }
-
-    private fun uniqueToolName(
-        toolName: String,
-        attachment: McpSessionAttachment,
-        hasCollisions: Boolean,
-        usedNames: MutableSet<String>
-    ): String {
-        val base = if (hasCollisions) {
-            "${toolName}_${normalizeName(attachment.serverName.ifBlank { attachment.serverId })}"
-        } else {
-            toolName
-        }
-        if (usedNames.add(base)) return base
-        var index = 2
-        while (true) {
-            val candidate = "${base}_$index"
-            if (usedNames.add(candidate)) return candidate
-            index++
-        }
-    }
-
-    private fun normalizeName(value: String): String {
-        val normalized = value.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
-        return normalized.ifBlank { "server" }
     }
 
     private fun ensureConnectedAttachment(
@@ -220,8 +183,8 @@ private fun buildDescriptor(
         append(serverName)
         append(')')
     }
-    val allParameters = parseParameterDescriptors(sourceTool.schema)
-    val requiredNames = parseRequiredNames(sourceTool.schema).toSet()
+    val allParameters = ToolSchemaParser.parseParameterDescriptors(sourceTool.schema)
+    val requiredNames = ToolSchemaParser.parseRequiredNames(sourceTool.schema).toSet()
     val required = allParameters.filter { it.name in requiredNames }
     val optional = allParameters.filterNot { it.name in requiredNames }
     return ToolDescriptor(
@@ -230,80 +193,4 @@ private fun buildDescriptor(
         requiredParameters = required,
         optionalParameters = optional
     )
-}
-
-private fun parseRequiredNames(schema: Map<String, Any?>): List<String> {
-    return (schema["required"] as? List<*>)
-        ?.mapNotNull { it?.toString() }
-        ?: emptyList()
-}
-
-private fun parseParameterDescriptors(schema: Map<String, Any?>): List<ToolParameterDescriptor> {
-    val properties = schema["properties"] as? Map<*, *> ?: emptyMap<Any, Any?>()
-    return properties.mapNotNull { (nameRaw, propertyRaw) ->
-        val name = nameRaw?.toString() ?: return@mapNotNull null
-        val property = propertyRaw as? Map<*, *> ?: emptyMap<Any, Any?>()
-        ToolParameterDescriptor(
-            name = name,
-            description = property["description"]?.toString().orEmpty(),
-            type = parseParameterType(property)
-        )
-    }
-}
-
-private fun parseParameterType(definition: Map<*, *>): ToolParameterType {
-    val enumValues = (definition["enum"] as? List<*>)?.mapNotNull { it?.toString() }.orEmpty()
-    if (enumValues.isNotEmpty()) {
-        return ToolParameterType.Enum(enumValues.toTypedArray())
-    }
-
-    val anyOf = definition["anyOf"] as? List<*>
-    if (!anyOf.isNullOrEmpty()) {
-        val mapped = anyOf.mapNotNull { it as? Map<*, *> }
-        if (mapped.size == 2 && mapped.any { it["type"]?.toString()?.lowercase() == "null" }) {
-            return parseParameterType(mapped.first {
-                it["type"]?.toString()?.lowercase() != "null"
-            })
-        }
-        val types = mapped.map { element ->
-            ToolParameterDescriptor(
-                name = "",
-                description = element["description"]?.toString().orEmpty(),
-                type = parseParameterType(element)
-            )
-        }.toTypedArray()
-        return ToolParameterType.AnyOf(types)
-    }
-
-    return when (definition["type"]?.toString()?.lowercase()) {
-        "string" -> ToolParameterType.String
-        "integer" -> ToolParameterType.Integer
-        "number" -> ToolParameterType.Float
-        "boolean" -> ToolParameterType.Boolean
-        "null" -> ToolParameterType.Null
-        "array" -> {
-            val itemDefinition = definition["items"] as? Map<*, *> ?: emptyMap<Any, Any?>()
-            ToolParameterType.List(parseParameterType(itemDefinition))
-        }
-
-        "object" -> {
-            val properties = parseParameterDescriptors(toStringKeyedMap(definition["properties"]))
-            val required = (definition["required"] as? List<*>)
-                ?.mapNotNull { it?.toString() }
-                ?: emptyList()
-            ToolParameterType.Object(
-                properties = properties,
-                requiredProperties = required
-            )
-        }
-
-        else -> ToolParameterType.String
-    }
-}
-
-private fun toStringKeyedMap(value: Any?): Map<String, Any?> {
-    val map = value as? Map<*, *> ?: return emptyMap()
-    return map.entries.mapNotNull { (key, nestedValue) ->
-        key?.toString()?.let { it to nestedValue }
-    }.toMap()
 }

@@ -24,12 +24,12 @@ import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.completions.CancellableRequest
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderActions
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.HeaderConfig
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
 import ee.carlrobert.codegpt.util.file.FileUtil
-import okhttp3.sse.EventSource
 import java.util.*
 import javax.swing.Icon
 import javax.swing.JButton
@@ -41,7 +41,7 @@ abstract class DiffEditorState(
     override val project: Project,
     val diffViewer: UnifiedDiffViewer?,
     val virtualFile: VirtualFile?,
-    private val eventSource: EventSource? = null
+    private val request: CancellableRequest? = null
 ) : EditorState {
 
     companion object {
@@ -109,7 +109,7 @@ abstract class DiffEditorState(
             ),
             readOnly,
             actions,
-            eventSource
+            request
         )
     }
 

@@ -33,6 +33,7 @@ import java.nio.file.Paths
  */
 class IntelliJSearchTool(
     hookManager: HookManager,
+    sessionId: String,
     private val project: Project,
 ) : BaseTool<IntelliJSearchTool.Args, IntelliJSearchTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
@@ -53,7 +54,8 @@ class IntelliJSearchTool(
     """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     companion object {

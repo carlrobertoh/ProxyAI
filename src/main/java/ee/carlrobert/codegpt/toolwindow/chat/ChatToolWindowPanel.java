@@ -26,7 +26,7 @@ import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.ConversationsState;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
+import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState;
 import ee.carlrobert.codegpt.settings.prompts.PromptsConfigurable;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
@@ -35,7 +35,6 @@ import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ToolWindowFooterNotification;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier;
-import ee.carlrobert.llm.client.codegpt.PricingPlan;
 import java.nio.file.Path;
 import javax.swing.JComponent;
 import org.jetbrains.annotations.NotNull;
@@ -89,8 +88,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
         (ProviderChangeNotifier) provider -> {
           if (provider == ServiceType.PROXYAI) {
             var userDetails = CodeGPTKeys.CODEGPT_USER_DETAILS.get(project);
-            upgradePlanLink.setVisible(
-                userDetails != null && userDetails.getPricingPlan() != PricingPlan.INDIVIDUAL);
+            upgradePlanLink.setVisible(userDetails != null);
           } else {
             upgradePlanLink.setVisible(false);
           }
@@ -98,10 +96,9 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     messageBusConnection.subscribe(CodeGPTUserDetailsNotifier.getCODEGPT_USER_DETAILS_TOPIC(),
         (CodeGPTUserDetailsNotifier) userDetails -> {
           if (userDetails != null) {
-            var provider = ModelSelectionService.getInstance()
+            var provider = ModelSettings.getInstance()
                 .getServiceForFeature(FeatureType.CHAT);
-            upgradePlanLink.setVisible(provider == ServiceType.PROXYAI
-                && userDetails.getPricingPlan() != PricingPlan.INDIVIDUAL);
+            upgradePlanLink.setVisible(provider == ServiceType.PROXYAI);
           }
         });
   }

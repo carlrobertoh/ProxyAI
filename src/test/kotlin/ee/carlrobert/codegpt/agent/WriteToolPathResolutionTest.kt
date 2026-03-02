@@ -13,7 +13,7 @@ class WriteToolPathResolutionTest : IntegrationTest() {
         val target = File(project.basePath, "app/components/NewLanding.tsx")
 
         val result = runBlocking {
-            WriteTool(project, HookManager(project))
+            WriteTool(project, "test-session-id", HookManager(project))
                 .execute(
                     WriteTool.Args(
                         target.absolutePath,
@@ -32,7 +32,7 @@ class WriteToolPathResolutionTest : IntegrationTest() {
         target.parentFile.mkdirs()
 
         val result = runBlocking {
-            WriteTool(project, HookManager(project))
+            WriteTool(project, "test-session-id", HookManager(project))
                 .execute(
                     WriteTool.Args(
                         "/$pseudoRootDir/components/NewLanding.tsx",

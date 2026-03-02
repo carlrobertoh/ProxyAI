@@ -10,22 +10,21 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
 import ee.carlrobert.codegpt.CodeGPTKeys
+import ee.carlrobert.codegpt.completions.CompletionError
+import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
 import ee.carlrobert.codegpt.nextedit.NextEditCoordinator
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.ui.OverlayUtil.showNotification
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
-import ee.carlrobert.llm.completion.CompletionEventListener
 import kotlinx.coroutines.channels.ProducerScope
-import okhttp3.sse.EventSource
 import java.util.concurrent.atomic.AtomicBoolean
 
 class CodeCompletionEventListener(
     private val editor: Editor,
     private val channel: ProducerScope<InlineCompletionElement>,
-) : CompletionEventListener<String> {
+) : CompletionStreamEventListener {
 
     companion object {
         private val logger = thisLogger()
@@ -43,7 +42,7 @@ class CodeCompletionEventListener(
         setLoading(true)
     }
 
-    override fun onMessage(message: String, eventSource: EventSource) {
+    override fun onMessage(message: String) {
         if (cancelled.get()) {
             return
         }
@@ -51,16 +50,16 @@ class CodeCompletionEventListener(
         messageBuilder.append(message)
     }
 
-    override fun onComplete(result: StringBuilder) {
+    override fun onComplete(messageBuilder: StringBuilder) {
         try {
             CodeGPTKeys.REMAINING_CODE_COMPLETION.set(editor, null)
             CodeGPTKeys.REMAINING_NEXT_EDITS.set(editor, null)
 
-            if (cancelled.get() || result.isEmpty()) {
+            if (cancelled.get() || messageBuilder.isEmpty()) {
                 return
             }
 
-            var finalResult = CodeCompletionFormatter(editor).format(result.toString())
+            val finalResult = CodeCompletionFormatter(editor).format(messageBuilder.toString())
             cache?.setCache(prefix, suffix, finalResult)
             runInEdt { channel.trySend(InlineCompletionGrayTextElement(finalResult)) }
         } finally {
@@ -73,9 +72,9 @@ class CodeCompletionEventListener(
         handleCompleted()
     }
 
-    override fun onError(error: ErrorDetails, ex: Throwable) {
+    override fun onError(error: CompletionError, ex: Throwable) {
         val isCodeGPTService =
-            service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI
+            service<ModelSettings>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI
         if (isCodeGPTService && "RATE_LIMIT_EXCEEDED" == error.code) {
             service<CodeGPTServiceSettings>().state
                 .codeCompletionSettings

@@ -18,7 +18,7 @@ import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository
 import ee.carlrobert.codegpt.tokens.TokenComputationService
@@ -46,6 +46,7 @@ class TotalTokensPanel(
     private val encodingManager = EncodingManager.getInstance()
     private val totalTokensDetails = createTokenDetails(conversation, highlightedText)
     private val label = JBLabel(getLabelHtml(totalTokensDetails.total))
+    private val totalTokensListeners = mutableListOf<(Int) -> Unit>()
     private val dispatchers = CoroutineDispatchers()
     private val scope = DisposableCoroutineScope(dispatchers.default())
 
@@ -113,11 +114,19 @@ class TotalTokensPanel(
 
     fun getTokenDetails(): TotalTokensDetails = totalTokensDetails
 
+    fun addTotalTokensListener(listener: (Int) -> Unit) {
+        totalTokensListeners += listener
+        listener(totalTokensDetails.total)
+    }
+
     fun update() = update(totalTokensDetails.total)
 
     fun update(total: Int) {
         scope.launch {
-            withEdt { label.text = getLabelHtml(total) }
+            withEdt {
+                label.text = getLabelHtml(total)
+                totalTokensListeners.forEach { it(total) }
+            }
         }
     }
 
@@ -201,7 +210,7 @@ class TotalTokensPanel(
     }
 
     private fun getIconToolTipText(html: String): String {
-        return if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) != ServiceType.OPENAI) {
+        return if (ModelSettings.getInstance().getServiceForFeature(FeatureType.CHAT) != ServiceType.OPENAI) {
             """
             <html>
             <body style="margin: 0; padding: 0;">

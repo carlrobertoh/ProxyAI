@@ -1,5 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 val libs = versionCatalogs.named("libs")
@@ -34,13 +35,7 @@ dependencies {
     }
   }
 
-  implementation(lib("llm.client"))
   implementation(lib("kotlinx.serialization.json"))
-  constraints {
-    implementation(lib("okio")) {
-      because("llm-client 0.7.0 uses okio 3.2.0: https://avd.aquasec.com/nvd/cve-2023-3635")
-    }
-  }
 
   testImplementation("junit:junit:4.13.2")
   testImplementation(platform(lib("junit.bom")))
@@ -53,12 +48,21 @@ dependencies {
 
 tasks {
   properties("javaVersion").let {
+    java {
+      toolchain {
+        languageVersion.set(JavaLanguageVersion.of(it.toInt()))
+      }
+    }
+    extensions.configure<KotlinJvmProjectExtension>("kotlin") {
+      jvmToolchain(it.toInt())
+    }
     withType<JavaCompile> {
       sourceCompatibility = it
       targetCompatibility = it
     }
     withType<KotlinCompile> {
       compilerOptions.jvmTarget.set(JvmTarget.fromTarget(it))
+      compilerOptions.freeCompilerArgs.add("-opt-in=kotlin.time.ExperimentalTime")
     }
   }
 }

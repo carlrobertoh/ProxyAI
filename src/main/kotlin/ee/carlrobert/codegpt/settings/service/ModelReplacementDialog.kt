@@ -4,8 +4,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
-import ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS
-import ee.carlrobert.codegpt.settings.models.ModelRegistry
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.models.ModelSettingsForm
@@ -66,16 +64,15 @@ class ModelReplacementDialog(
     }
 
     private fun generateInitialModelSelections(serviceType: ServiceType): Map<FeatureType, ModelSelection?> {
-        val registry = ModelRegistry.getInstance()
+        val modelSettings = service<ModelSettings>()
         return FeatureType.entries.associateWith { featureType ->
             when (serviceType) {
                 ServiceType.PROXYAI -> {
-                    val userDetails = project?.let { CODEGPT_USER_DETAILS.get(it) }
-                    registry.getDefaultModelForFeature(featureType, userDetails?.pricingPlan)
+                    modelSettings.getDefaultModelSelection(featureType)
                 }
 
                 ServiceType.CUSTOM_OPENAI -> {
-                    val models = registry.getAllModelsForFeature(featureType)
+                    val models = modelSettings.getAvailableModels(featureType)
                         .filter { it.provider == serviceType }
 
                     if (!preferredCustomServiceId.isNullOrBlank()) {
@@ -87,7 +84,7 @@ class ModelReplacementDialog(
                 }
 
                 else -> {
-                    registry.getAllModelsForFeature(featureType)
+                    modelSettings.getAvailableModels(featureType)
                         .firstOrNull { it.provider == serviceType }
                 }
             }
@@ -130,16 +127,14 @@ class ModelReplacementDialog(
             serviceType: ServiceType,
             preferredCustomServiceId: String? = null
         ): Boolean {
+            val modelSettings = service<ModelSettings>()
             return FeatureType.entries.any { featureType ->
-                val registry = service<ModelRegistry>()
-                if (!registry.isFeatureSupportedByProvider(
-                        featureType,
-                        serviceType
-                    )
-                ) return@any false
+                if (!modelSettings.isFeatureSupportedByProvider(featureType, serviceType)) {
+                    return@any false
+                }
 
-                val currentSelection = service<ModelSettings>().getModelSelection(featureType)
-                val availableModels = registry.getAllModelsForFeature(featureType)
+                val currentSelection = modelSettings.getModelSelection(featureType)
+                val availableModels = modelSettings.getAvailableModels(featureType)
                     .filter { it.provider == serviceType }
 
                 if (availableModels.isEmpty()) return@any false

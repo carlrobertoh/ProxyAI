@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.completions;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.events.CodeGPTEvent;
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import javax.swing.JPanel;
 
 public interface CompletionResponseEventListener {
@@ -11,7 +10,7 @@ public interface CompletionResponseEventListener {
   default void handleMessage(String message) {
   }
 
-  default void handleError(ErrorDetails error, Throwable ex) {
+  default void handleError(ChatError error, Throwable ex) {
   }
 
   default void handleTokensExceeded(Conversation conversation, Message message) {

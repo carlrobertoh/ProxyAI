@@ -18,14 +18,13 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.conversations.Conversation
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
 import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Clock
 import kotlinx.serialization.json.JsonNull
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.groups.Tuple.tuple
@@ -33,6 +32,7 @@ import testsupport.IntegrationTest
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.Path
+import kotlin.time.Clock
 
 class AgentServiceIntegrationTest : IntegrationTest() {
 
@@ -138,7 +138,8 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         val sessionId = createSession("agent-checkpoint-fallback")
         val runtimeAgentId = "runtime-agent-${UUID.randomUUID()}"
         val checkpointId = "checkpoint-${UUID.randomUUID()}"
-        val checkpointStorage = JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
+        val checkpointStorage =
+            JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
         val staleRef = CheckpointRef(agentId = "missing-agent", checkpointId = "missing-checkpoint")
         runBlocking {
             checkpointStorage.saveCheckpoint(
@@ -205,7 +206,7 @@ class AgentServiceIntegrationTest : IntegrationTest() {
     }
 
     private fun agentModel(): LLModel {
-        return project.service<ModelSelectionService>().getAgentModel()
+        return project.service<ModelSettings>().getAgentModel()
     }
 
     private data class SessionSnapshot(

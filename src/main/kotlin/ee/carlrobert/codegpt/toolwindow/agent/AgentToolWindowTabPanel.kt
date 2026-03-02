@@ -25,7 +25,7 @@ import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.conversations.message.QueuedMessage
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentToolWindowLandingPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.RollbackPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.TodoListPanel
@@ -277,7 +277,7 @@ class AgentToolWindowTabPanel(
         disposeLandingPanelIfPresent()
         scrollablePanel.clearLandingViewIfVisible()
         agentSession.serviceType =
-            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AGENT)
+            ModelSettings.getInstance().getServiceForFeature(FeatureType.AGENT)
 
         val agentService = project.service<AgentService>()
 

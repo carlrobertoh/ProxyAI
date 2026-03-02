@@ -10,7 +10,7 @@ import com.intellij.openapi.editor.actionSystem.EditorAction
 import com.intellij.openapi.editor.actionSystem.EditorWriteActionHandler
 import com.intellij.util.application
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -24,7 +24,7 @@ class TriggerNextEditAction : EditorAction(Handler()), HintManagerImpl.ActionToI
     private class Handler : EditorWriteActionHandler() {
 
         override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
-            val nextEditModelProvider = ModelSelectionService.getInstance()
+            val nextEditModelProvider = ModelSettings.getInstance()
                 .getServiceForFeature(FeatureType.NEXT_EDIT)
             if (!listOf(
                     ServiceType.PROXYAI,

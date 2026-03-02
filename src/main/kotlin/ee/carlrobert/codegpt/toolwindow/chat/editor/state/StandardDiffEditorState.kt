@@ -9,6 +9,7 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.application
+import ee.carlrobert.codegpt.completions.CancellableRequest
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffEditorManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
@@ -16,7 +17,6 @@ import ee.carlrobert.codegpt.toolwindow.chat.parser.Code
 import ee.carlrobert.codegpt.toolwindow.chat.parser.ReplaceWaiting
 import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
-import okhttp3.sse.EventSource
 
 class StandardDiffEditorState(
     editor: EditorEx,
@@ -25,9 +25,9 @@ class StandardDiffEditorState(
     diffViewer: UnifiedDiffViewer?,
     virtualFile: VirtualFile?,
     private val diffEditorManager: DiffEditorManager,
-    eventSource: EventSource? = null,
+    request: CancellableRequest? = null,
     private val originalSuggestion: String? = null
-) : DiffEditorState(editor, segment, project, diffViewer, virtualFile, eventSource) {
+) : DiffEditorState(editor, segment, project, diffViewer, virtualFile, request) {
     private var latestSuggestion: String? = when (segment) {
         is SearchReplace -> segment.replace.takeIf { it.isNotBlank() }
         is ReplaceWaiting -> segment.replace.takeIf { it.isNotBlank() }

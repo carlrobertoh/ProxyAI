@@ -29,7 +29,7 @@ class HooksTest : IntegrationTest() {
         val tool = BashTool(
             project,
             { ShellCommandConfirmation.Approved },
-            "test-pretool-deny",
+            "test-session-id",
             HookManager(project)
         )
         ToolRunContext.set("test-pretool-deny", "tool-pretool-deny")
@@ -64,10 +64,10 @@ class HooksTest : IntegrationTest() {
         val tool = BashTool(
             project,
             { ShellCommandConfirmation.Approved },
-            "test",
+            "test-session-id",
             HookManager(project)
         )
-        ToolRunContext.set("test", "tool-1")
+        ToolRunContext.set("test-session-id", "tool-1")
 
         val result = runBlocking {
             tool.execute(BashTool.Args(command = "echo ORIGINAL", description = "test"))
@@ -105,10 +105,10 @@ class HooksTest : IntegrationTest() {
         val tool = BashTool(
             project,
             { ShellCommandConfirmation.Approved },
-            "test",
+            "test-session-id",
             HookManager(project)
         )
-        ToolRunContext.set("test", "tool-1")
+        ToolRunContext.set("test-session-id", "tool-1")
 
         val result = runBlocking {
             tool.execute(BashTool.Args(command = "echo ORIGINAL", description = "test"))
@@ -137,7 +137,7 @@ class HooksTest : IntegrationTest() {
         val tool = BashTool(
             project,
             { ShellCommandConfirmation.Approved },
-            "test",
+            "test-session-id",
             HookManager(project)
         )
         ToolRunContext.set("test", "tool-1")
@@ -168,26 +168,24 @@ class HooksTest : IntegrationTest() {
         val settings =
             """{"beforeShellExecution":[{"command":".proxyai/hooks/${hookScript.name}","matcher":"gradlew"}]}"""
         writeSettings(settings)
-
         val tool = BashTool(
             project,
             { ShellCommandConfirmation.Approved },
-            "test-bash-gradlew",
+            "test-session-id",
             HookManager(project)
         )
-        ToolRunContext.set("test-bash-gradlew", "tool-bash-gradlew")
+        ToolRunContext.set("test-session-id", "tool-bash-gradlew")
 
         val blocked = runBlocking {
             tool.execute(BashTool.Args(command = "bash ./gradlew test", description = "test"))
         }
+
         assertThat(blocked.exitCode).isNull()
         assertThat(blocked.output).isEqualTo("Blocked bash gradlew")
-
         val map = ObjectMapper().registerKotlinModule()
             .readValue(logFile.readText(), Map::class.java)
         assertThat(map["hook_event_name"]).isEqualTo("beforeShellExecution")
         assertThat(map["command"]).isEqualTo("bash ./gradlew test")
-
         val allowed = runBlocking {
             tool.execute(BashTool.Args(command = "echo should_run", description = "test"))
         }
@@ -212,7 +210,7 @@ class HooksTest : IntegrationTest() {
         writeSettings(settings)
 
         val result = runBlocking {
-            EditTool(project, HookManager(project), "test")
+            EditTool(project, "test-session-id", HookManager(project))
                 .execute(
                     EditTool.Args(
                         target.absolutePath,
@@ -243,7 +241,7 @@ class HooksTest : IntegrationTest() {
         writeSettings(settings)
 
         val result = runBlocking {
-            ReadTool(project, HookManager(project), "test")
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(target.absolutePath))
         }
 
@@ -268,7 +266,7 @@ class HooksTest : IntegrationTest() {
         writeSettings(settings)
 
         val result = runBlocking {
-            EditTool(project, HookManager(project), "test")
+            EditTool(project, "test-session-id", HookManager(project))
                 .execute(
                     EditTool.Args(
                         target.absolutePath,

@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
 class BashOutputTool(
     workingDirectory: String,
     hookManager: HookManager,
-    private val sessionId: String = "global",
+    private val sessionId: String,
 ) :
     BaseTool<BashOutputTool.Args, BashOutputTool.Result>(
         workingDirectory = workingDirectory,
@@ -33,6 +33,7 @@ class BashOutputTool(
         argsClass = Args::class,
         resultClass = Result::class,
         hookManager = hookManager,
+        sessionId = sessionId,
     ) {
 
     @Serializable

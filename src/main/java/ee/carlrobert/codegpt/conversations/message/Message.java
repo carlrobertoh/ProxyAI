@@ -3,12 +3,13 @@ package ee.carlrobert.codegpt.conversations.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import ee.carlrobert.llm.client.openai.completion.response.ToolCall;
-import java.util.HashMap;
+import ee.carlrobert.codegpt.completions.ChatToolCall;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.jetbrains.annotations.Nullable;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -22,7 +23,7 @@ public class Message {
   private String imageFilePath;
   private boolean webSearchIncluded;
   private String personaName;
-  private List<ToolCall> toolCalls;
+  private List<ChatToolCall> toolCalls;
   private Map<String, String> toolCallResults;
 
   public Message() {
@@ -101,18 +102,18 @@ public class Message {
   }
 
   @JsonProperty("tool_calls")
-  public @Nullable List<ToolCall> getToolCalls() {
+  public @Nullable List<ChatToolCall> getToolCalls() {
     return toolCalls;
   }
 
   @JsonProperty("tool_calls")
-  public void setToolCalls(@Nullable List<ToolCall> toolCalls) {
-    this.toolCalls = toolCalls;
+  public void setToolCalls(@Nullable List<ChatToolCall> toolCalls) {
+    this.toolCalls = toolCalls == null ? null : new CopyOnWriteArrayList<>(toolCalls);
   }
 
-  public void addToolCall(ToolCall toolCall) {
+  public synchronized void addToolCall(ChatToolCall toolCall) {
     if (toolCalls == null) {
-      toolCalls = new java.util.ArrayList<>();
+      toolCalls = new CopyOnWriteArrayList<>();
     }
     toolCalls.add(toolCall);
   }
@@ -128,12 +129,12 @@ public class Message {
 
   @JsonProperty("tool_call_results")
   public void setToolCallResults(@Nullable Map<String, String> toolCallResults) {
-    this.toolCallResults = toolCallResults;
+    this.toolCallResults = toolCallResults == null ? null : new ConcurrentHashMap<>(toolCallResults);
   }
 
-  public void addToolCallResult(String toolCallId, String executionOutput) {
+  public synchronized void addToolCallResult(String toolCallId, String executionOutput) {
     if (toolCallResults == null) {
-      toolCallResults = new HashMap<>();
+      toolCallResults = new ConcurrentHashMap<>();
     }
     toolCallResults.put(toolCallId, executionOutput);
   }
@@ -151,6 +152,6 @@ public class Message {
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, prompt);
+    return Objects.hash(id);
   }
 }

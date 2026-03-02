@@ -439,7 +439,7 @@ class UserInputHeaderPanel(
     private inner class EditorReleasedListener : EditorNotifier.Released {
         override fun editorReleased(editor: Editor) {
             if (editor.editorKind == EditorKind.MAIN_EDITOR && !editor.isDisposed && editor.virtualFile != null) {
-                tagManager.remove(EditorTagDetails(editor.virtualFile))
+                editor.virtualFile?.let { tagManager.remove(EditorTagDetails(it)) }
             }
         }
     }

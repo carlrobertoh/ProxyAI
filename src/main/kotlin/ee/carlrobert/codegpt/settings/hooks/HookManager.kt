@@ -18,7 +18,7 @@ class HookManager(
         event: HookEventType,
         payload: Map<String, Any?>,
         toolName: String? = null,
-        sessionId: String? = null
+        sessionId: String,
     ): List<HookExecutionResult> {
         val settings = project.service<ProxyAISettingsService>().getSettings()
         val configuration = settings.hooks ?: return emptyList()
@@ -42,7 +42,10 @@ class HookManager(
         for (hook in matchingHooks) {
             try {
                 logger.debug("Executing hook '${hook.command}' for event: ${event.eventName}")
-                val result = executionService.executeHook(hook, event, payload, projectRoot)
+                val adjustedPayload = payload.toMutableMap().apply {
+                    put("session_id", sessionId)
+                }
+                val result = executionService.executeHook(hook, event, adjustedPayload, projectRoot)
                 results.add(result)
                 incrementLoopCount(hook, event, sessionId)
 
@@ -79,8 +82,8 @@ class HookManager(
     suspend fun checkHooksForDenial(
         event: HookEventType,
         payload: Map<String, Any?>,
-        toolName: String? = null,
-        sessionId: String? = null
+        toolName: String,
+        sessionId: String
     ): String? {
         val results = executeHooksForEvent(event, payload, toolName, sessionId)
         results.forEach { result ->
@@ -139,18 +142,18 @@ class HookManager(
     private fun loopAllows(
         hook: HookConfig,
         event: HookEventType,
-        sessionId: String?
+        sessionId: String
     ): Boolean {
         val limit = hook.loopLimit ?: return true
         if (event != HookEventType.STOP && event != HookEventType.SUBAGENT_STOP) return true
-        val key = "${sessionId ?: "global"}:${event.eventName}:${hookIdentity(hook)}"
+        val key = "${sessionId}:${event.eventName}:${hookIdentity(hook)}"
         val counter = loopCounts.computeIfAbsent(key) { AtomicInteger(0) }
         return counter.get() < limit
     }
 
-    private fun incrementLoopCount(hook: HookConfig, event: HookEventType, sessionId: String?) {
+    private fun incrementLoopCount(hook: HookConfig, event: HookEventType, sessionId: String) {
         if (event != HookEventType.STOP && event != HookEventType.SUBAGENT_STOP) return
-        val key = "${sessionId ?: "global"}:${event.eventName}:${hookIdentity(hook)}"
+        val key = "${sessionId}:${event.eventName}:${hookIdentity(hook)}"
         loopCounts.computeIfAbsent(key) { AtomicInteger(0) }.incrementAndGet()
     }
 

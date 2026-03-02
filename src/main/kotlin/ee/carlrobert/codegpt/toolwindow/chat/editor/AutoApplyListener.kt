@@ -4,15 +4,14 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.readText
+import ee.carlrobert.codegpt.completions.CancellableRequest
+import ee.carlrobert.codegpt.completions.CompletionError
+import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.state.EditorStateManager
 import ee.carlrobert.codegpt.toolwindow.chat.parser.*
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
-import ee.carlrobert.llm.completion.CompletionEventListener
-import okhttp3.sse.EventSource
 
 class AutoApplyListener(
     private val project: Project,
@@ -20,35 +19,36 @@ class AutoApplyListener(
     private val virtualFile: VirtualFile,
     private val originalSuggestion: String,
     private val onEditorReplaced: (EditorEx, EditorEx) -> Unit
-) : CompletionEventListener<String> {
+) : CompletionStreamEventListener {
 
     private val logger = logger<AutoApplyListener>()
     private var editorReplaced: Boolean = false
     private val messageParser = SseMessageParser()
-    private var eventSource: EventSource? = null
+    private var request: CancellableRequest? = null
+
+    fun attachRequest(request: CancellableRequest) {
+        this.request = request
+    }
 
     override fun onOpen() {
         CompletionProgressNotifier.update(project, true)
     }
 
-    override fun onMessage(message: String, eventSource: EventSource?) {
-        if (this.eventSource == null && eventSource != null) {
-            this.eventSource = eventSource
-        }
+    override fun onMessage(message: String) {
         processMessageSegments(message)
     }
 
-    override fun onError(error: ErrorDetails?, ex: Throwable?) {
+    override fun onError(error: CompletionError, ex: Throwable) {
         logger.error("Something went wrong while applying the changes", ex)
         ErrorHandler.handleError(error, ex)
         handleComplete()
     }
 
-    override fun onCancelled(messageBuilder: java.lang.StringBuilder?) {
+    override fun onCancelled(messageBuilder: StringBuilder) {
         handleComplete()
     }
 
-    override fun onComplete(messageBuilder: StringBuilder?) {
+    override fun onComplete(messageBuilder: StringBuilder) {
         handleComplete()
     }
 
@@ -89,7 +89,7 @@ class AutoApplyListener(
         val containsText = currentText.contains(segment.search.trim())
 
         val newState = if (containsText) {
-            stateManager.createFromSegment(segment, false, eventSource, originalSuggestion)
+            stateManager.createFromSegment(segment, false, request, originalSuggestion)
         } else {
             stateManager.transitionToFailedDiffState(
                 segment.search,
@@ -105,7 +105,7 @@ class AutoApplyListener(
         val editor = stateManager.getCurrentState()?.editor ?: return
         (editor.permanentHeaderComponent as? DiffHeaderPanel)?.handleDone()
         CompletionProgressNotifier.update(project, false)
-        eventSource = null
+        request = null
     }
 
 }

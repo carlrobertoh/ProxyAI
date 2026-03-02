@@ -44,7 +44,8 @@ NOTE that you should not use this tool if there is only one trivial task to do. 
     """.trimIndent(),
     argsClass = Args::class,
     resultClass = String::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     private val agentTabTitlePublisher =

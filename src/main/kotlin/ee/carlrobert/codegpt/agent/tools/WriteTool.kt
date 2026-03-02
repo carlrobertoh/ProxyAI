@@ -9,8 +9,8 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.hooks.HookManager
@@ -31,6 +31,7 @@ import java.nio.file.Paths
  */
 class WriteTool(
     private val project: Project,
+    sessionId: String,
     hookManager: HookManager,
 ) : BaseTool<WriteTool.Args, WriteTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
@@ -57,7 +58,8 @@ class WriteTool(
     """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     @Serializable

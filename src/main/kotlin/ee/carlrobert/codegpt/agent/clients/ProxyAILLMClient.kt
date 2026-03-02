@@ -18,17 +18,27 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
-import ai.koog.prompt.streaming.StreamFrameFlowBuilder
 import ai.koog.prompt.streaming.buildStreamFrameFlow
+import ee.carlrobert.codegpt.agent.clients.ProxyAIClientSettings.Companion.DEFAULT_AUTO_APPLY_PATH
+import ee.carlrobert.codegpt.agent.clients.ProxyAIClientSettings.Companion.DEFAULT_USER_DETAILS_PATH
+import ee.carlrobert.codegpt.completions.autoapply.AutoApplyRequest
+import ee.carlrobert.codegpt.completions.autoapply.AutoApplyResponse
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetails
+import ee.carlrobert.codegpt.util.JsonMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Clock
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Clock
 
 /**
  * Configuration settings for connecting to the ProxyAI API.
@@ -41,6 +51,8 @@ public class ProxyAIClientSettings(
     public companion object {
         public const val DEFAULT_BASE_URL: String = "https://codegpt-api.carlrobert.ee"
         public const val DEFAULT_CHAT_COMPLETIONS_PATH: String = "/v2/chat/completions"
+        public const val DEFAULT_AUTO_APPLY_PATH: String = "/v1/code/apply"
+        public const val DEFAULT_USER_DETAILS_PATH: String = "/v1/users/details"
     }
 }
 
@@ -48,9 +60,9 @@ public class ProxyAIClientSettings(
  * Implementation of [LLMClient] for ProxyAI API.
  */
 public class ProxyAILLMClient(
-    apiKey: String,
+    private val apiKey: String,
     private val settings: ProxyAIClientSettings = ProxyAIClientSettings(),
-    baseClient: HttpClient = HttpClient(),
+    private val baseClient: HttpClient = HttpClientProvider.createHttpClient(),
     clock: Clock = Clock.System
 ) : AbstractOpenAILLMClient<ProxyAIChatCompletionResponse, ProxyAIChatCompletionStreamResponse>(
     apiKey,
@@ -71,6 +83,50 @@ public class ProxyAILLMClient(
     }
 
     override fun llmProvider(): LLMProvider = ProxyAI
+
+    fun getApplyEditCompletion(request: AutoApplyRequest): AutoApplyResponse {
+        return runBlocking {
+            val response = baseClient.post("${settings.baseUrl}$DEFAULT_AUTO_APPLY_PATH") {
+                contentType(ContentType.Application.Json)
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
+                setBody(JsonMapper.mapper.writeValueAsString(request))
+            }
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) {
+                throw toApiException(response.status.value, body)
+            }
+            JsonMapper.mapper.readValue(body, AutoApplyResponse::class.java)
+        }
+    }
+
+    fun getUserDetails(requestApiKey: String = apiKey): CodeGPTUserDetails {
+        return runBlocking {
+            val response = baseClient.get("${settings.baseUrl}$DEFAULT_USER_DETAILS_PATH") {
+                header(HttpHeaders.Authorization, "Bearer $requestApiKey")
+            }
+            val body = response.bodyAsText()
+            if (!response.status.isSuccess()) {
+                throw toApiException(response.status.value, body)
+            }
+            JsonMapper.mapper.readValue(body, CodeGPTUserDetails::class.java)
+        }
+    }
+
+    private fun toApiException(status: Int, body: String): CodeGPTApiException {
+        return runCatching {
+            JsonMapper.mapper.readValue(body, CodeGPTApiException::class.java).apply {
+                this.status = status
+                if (detail.isNullOrBlank()) {
+                    detail = body
+                }
+            }
+        }.getOrElse {
+            CodeGPTApiException(
+                status = status,
+                detail = body.ifBlank { "Request failed with status $status" }
+            )
+        }
+    }
 
     override fun serializeProviderChatRequest(
         messages: List<OpenAIMessage>,
@@ -111,7 +167,6 @@ public class ProxyAILLMClient(
             throw LLMClientException(clientName, errorMsg)
         }
 
-        // Check for errors in choices
         response.choices.forEach { choice ->
             choice.error?.let { error ->
                 val errorMsg = "ProxyAI API error (code: ${error.code}): ${error.message}"
@@ -139,14 +194,14 @@ public class ProxyAILLMClient(
 
         response.collect { chunk ->
             chunk.choices.firstOrNull()?.let { choice ->
-                choice.delta?.content?.let { emitAppend(it) }
+                choice.delta?.content?.let { emitTextDelta(it) }
 
                 choice.delta?.toolCalls?.forEach { openAIToolCall ->
                     val index = openAIToolCall.index ?: 0
-                    val id = openAIToolCall.id
-                    val functionName = openAIToolCall.function.name
-                    val functionArgs = openAIToolCall.function.arguments
-                    upsertToolCall(index, id, functionName, functionArgs)
+                    val id = openAIToolCall.id.orEmpty()
+                    val functionName = openAIToolCall.function.name.orEmpty()
+                    val functionArgs = openAIToolCall.function.arguments.orEmpty()
+                    emitToolCallDelta(id, functionName, functionArgs, index)
                 }
 
                 choice.finishReason?.let { finishReason = it }
@@ -159,8 +214,7 @@ public class ProxyAILLMClient(
     }
 
     override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult {
-        logger.warn { "Moderation is not supported by ProxyAI API" }
-        throw UnsupportedOperationException("Moderation is not supported by ProxyAI API.")
+        throw UnsupportedOperationException("Moderation not supported.")
     }
 
     @OptIn(ExperimentalEncodingApi::class)

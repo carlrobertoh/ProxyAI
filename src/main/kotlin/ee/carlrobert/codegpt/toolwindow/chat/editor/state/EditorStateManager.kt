@@ -6,6 +6,7 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import ee.carlrobert.codegpt.completions.CancellableRequest
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel.Companion.RESPONSE_EDITOR_STATE_KEY
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel.Companion.RESPONSE_EDITOR_DIFF_VIEWER_KEY
@@ -18,7 +19,6 @@ import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DiffHeaderPanel
 import com.intellij.diff.util.DiffUtil
 import com.intellij.diff.util.Side
 import com.intellij.openapi.util.text.StringUtil
-import okhttp3.sse.EventSource
 
 class EditorStateManager(private val project: Project) {
 
@@ -28,13 +28,13 @@ class EditorStateManager(private val project: Project) {
     fun createFromSegment(
         segment: Segment,
         readOnly: Boolean = false,
-        eventSource: EventSource? = null,
+        request: CancellableRequest? = null,
         originalSuggestion: String? = null,
         compact: Boolean = false
     ): EditorState {
         val editor = EditorFactory.createEditor(project, segment)
         val state = if (editor.editorKind == EditorKind.DIFF) {
-            createDiffState(editor, segment, eventSource, originalSuggestion)
+            createDiffState(editor, segment, request, originalSuggestion)
         } else {
             RegularEditorState(editor, segment, project)
         }
@@ -135,11 +135,13 @@ class EditorStateManager(private val project: Project) {
     private fun createDiffState(
         editor: EditorEx,
         segment: Segment,
-        eventSource: EventSource? = null,
+        request: CancellableRequest? = null,
         originalSuggestion: String? = null
     ): EditorState {
         val virtualFile = getVirtualFile(segment.filePath)
-        val diffViewer = RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor)
+        val diffViewer = requireNotNull(RESPONSE_EDITOR_DIFF_VIEWER_KEY.get(editor)) {
+            "Diff viewer is missing for diff editor state"
+        }
         val diffEditorManager = DiffEditorManager(project, diffViewer)
         this.diffEditorManager = diffEditorManager
 
@@ -150,7 +152,7 @@ class EditorStateManager(private val project: Project) {
             diffViewer,
             virtualFile,
             diffEditorManager,
-            eventSource,
+            request,
             originalSuggestion
         )
         return state

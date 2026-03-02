@@ -23,14 +23,8 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.AutoApplyParameters
-import ee.carlrobert.codegpt.completions.CompletionClientProvider
-import ee.carlrobert.codegpt.completions.CompletionRequestService
-import ee.carlrobert.codegpt.completions.factory.InceptionRequestFactory
-import ee.carlrobert.codegpt.settings.models.ModelSelection
-import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
-import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
-import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
+import ee.carlrobert.codegpt.completions.AutoApplyService
+import ee.carlrobert.codegpt.completions.CompletionService
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffSyncManager
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory
 import ee.carlrobert.codegpt.toolwindow.chat.editor.factory.ComponentFactory.EXPANDED_KEY
@@ -44,9 +38,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.parser.SearchReplace
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Segment
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorUtil
-import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest
-import ee.carlrobert.llm.client.codegpt.response.CodeGPTException
-import java.util.regex.Pattern
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import javax.swing.BorderFactory
 
 class ResponseEditorPanel(
@@ -72,7 +64,8 @@ class ResponseEditorPanel(
     init {
         isOpaque = false
         if (compact) {
-            val visibleBorderColor = JBColor.namedColor("Component.borderColor", JBColor(0xC4C9D0, 0x44484F))
+            val visibleBorderColor =
+                JBColor.namedColor("Component.borderColor", JBColor(0xC4C9D0, 0x44484F))
             border = BorderFactory.createCompoundBorder(
                 JBUI.Borders.customLine(visibleBorderColor, 1),
                 JBUI.Borders.empty(4, 6)
@@ -139,7 +132,6 @@ class ResponseEditorPanel(
     }
 
     fun applyCode(
-        modelSelection: ModelSelection,
         params: AutoApplyParameters,
         headerPanel: DefaultHeaderPanel
     ) {
@@ -147,25 +139,10 @@ class ResponseEditorPanel(
         CompletionProgressNotifier.update(project, true)
 
         application.executeOnPooledThread {
-            val model = service<ModelSelectionService>().getModelForFeature(FeatureType.AUTO_APPLY)
             val originalCode = EditorUtil.getFileContent(params.destination)
             try {
-                val response = if (modelSelection.provider == INCEPTION) {
-                    val request = InceptionRequestFactory().createAutoApplyRequest(params)
-                    val responseContent = CompletionClientProvider.getInceptionClient()
-                        .getApplyEditCompletion(request)
-                        .choices[0]
-                        .message
-                        .content
-                    extractUpdatedCode(responseContent)
-                } else if (modelSelection.provider == PROXYAI) {
-                    val request = AutoApplyRequest(model, originalCode, params.source)
-                    CompletionClientProvider.getCodeGPTClient().applyChanges(request).mergedCode
-                } else {
-                    null
-                }
-
-                if (!response.isNullOrBlank()) {
+                val response = service<AutoApplyService>().applyCode(params, originalCode)
+                if (response.isNotBlank()) {
                     stateManager.transitionToDiffState(
                         originalCode,
                         response,
@@ -174,10 +151,13 @@ class ResponseEditorPanel(
                     )
                 }
             } catch (e: Exception) {
-                logger.error("Failed to apply changes", e)
+                    logger.error("Failed to apply changes", e)
                 ApplicationManager.getApplication().invokeLater {
-                    if (e is CodeGPTException) {
-                        OverlayUtil.showNotification(e.detail, NotificationType.ERROR)
+                    if (e is CodeGPTApiException) {
+                        OverlayUtil.showNotification(
+                            e.detail ?: e.message ?: "Failed to apply code",
+                            NotificationType.ERROR
+                        )
                     }
 
                     if (!project.isDisposed) {
@@ -200,15 +180,18 @@ class ResponseEditorPanel(
         editor: EditorEx,
         headerPanel: DefaultHeaderPanel
     ) {
-        val eventSource = CompletionRequestService.getInstance().autoApplyAsync(
+        val listener = AutoApplyListener(project, stateManager, virtualFile, content) { oldEditor, newEditor ->
+            val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
+                ?: throw IllegalStateException("Expected parent to be ResponseEditorPanel")
+            responseEditorPanel.replaceEditor(oldEditor, newEditor)
+        }
+        val request = service<CompletionService>().autoApply(
             AutoApplyParameters(content, virtualFile),
-            AutoApplyListener(project, stateManager, virtualFile, content) { oldEditor, newEditor ->
-                val responseEditorPanel = editor.component.parent as? ResponseEditorPanel
-                    ?: throw IllegalStateException("Expected parent to be ResponseEditorPanel")
-                responseEditorPanel.replaceEditor(oldEditor, newEditor)
-            })
+            listener
+        )
+        listener.attachRequest(request)
 
-        headerPanel.setLoading(eventSource)
+        headerPanel.setLoading(request)
     }
 
     internal fun createReplaceWaitingSegment(
@@ -253,7 +236,7 @@ class ResponseEditorPanel(
                 stateManager.createFromSegment(
                     finalSegment,
                     readOnly = false,
-                    eventSource = null,
+                    request = null,
                     originalSuggestion = replaceContent
                 )
             } else {
@@ -388,17 +371,6 @@ class ResponseEditorPanel(
                 LogicalPosition(logicalPosition.line, 0),
                 ScrollType.MAKE_VISIBLE
             )
-        }
-    }
-
-    private fun extractUpdatedCode(content: String): String {
-        val pattern =
-            Pattern.compile("<\\|updated_code\\|>(.*?)<\\|/updated_code\\|>", Pattern.DOTALL)
-        val matcher = pattern.matcher(content)
-        return if (matcher.find()) {
-            matcher.group(1).trim()
-        } else {
-            content
         }
     }
 }

@@ -18,12 +18,16 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.OllamaApikey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
+import ee.carlrobert.codegpt.agent.clients.HttpClientProvider
 import ee.carlrobert.codegpt.settings.service.CodeCompletionConfigurationForm
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.ui.URLTextField
-import ee.carlrobert.llm.client.ollama.OllamaClient
+import ee.carlrobert.codegpt.util.JsonMapper
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.awt.Dimension
@@ -154,16 +158,7 @@ class OllamaSettingsForm {
         disableModelComboBoxWithPlaceholder(DefaultComboBoxModel(arrayOf("Loading")))
         ReadAction.nonBlocking<List<String>> {
             try {
-                OllamaClient.Builder()
-                    .setHost(hostField.text)
-                    .setApiKey(getApiKey())
-                    .build()
-                    .modelTags
-                    .models
-                    ?.map { it.name }
-                    ?.sortedWith(compareBy({ it.split(":").first() }, {
-                        if (it.contains("latest")) 1 else 0
-                    }))
+                fetchOllamaModels(hostField.text, getApiKey())
             } catch (t: Throwable) {
                 handleModelLoadingError(t)
                 throw t
@@ -173,6 +168,27 @@ class OllamaSettingsForm {
                 updateModelComboBoxState(models, currentModels)
             }
             .submit(AppExecutorUtil.getAppExecutorService())
+    }
+
+    private fun fetchOllamaModels(host: String, apiKey: String?): List<String> {
+        val normalizedHost = host.trim().trimEnd('/')
+        val endpoint = "$normalizedHost/api/tags"
+        val body = runBlocking {
+            HttpClientProvider.createHttpClient().use { client ->
+                val response = client.get(endpoint) {
+                    if (!apiKey.isNullOrBlank()) {
+                        header("Authorization", "Bearer $apiKey")
+                    }
+                }
+                response.bodyAsText()
+            }
+        }
+        val models = JsonMapper.mapper.readTree(body)
+            .path("models")
+            .mapNotNull { node -> node.path("name").takeIf { !it.isMissingNode }?.asText() }
+        return models.sortedWith(compareBy({ it.split(":").first() }, {
+            if (it.contains("latest")) 1 else 0
+        }))
     }
 
     private fun updateModelComboBoxState(

@@ -21,28 +21,21 @@ import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
 import ai.koog.agents.features.tokenizer.feature.tokenizer
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.LLMClient
-import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
-import ai.koog.prompt.executor.clients.google.GoogleLLMClient
-import ai.koog.prompt.executor.clients.mistralai.MistralAILLMClient
-import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.executor.ollama.client.OllamaClient
+import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.agent.clients.*
+import ee.carlrobert.codegpt.agent.clients.RetryingPromptExecutor
 import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.agent.tools.*
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
-import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.settings.models.LLMClientFactory
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
-import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.settings.skills.SkillPromptFormatter
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
@@ -51,6 +44,8 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.seconds
 
 object AgentFactory {
+
+    private const val MAX_AGENT_ITERATIONS = 250
 
     fun createAgent(
         agentType: AgentType,
@@ -152,8 +147,8 @@ object AgentFactory {
                         """.trimIndent()
                     )
                 },
-                model = service<ModelSelectionService>().getAgentModel(),
-                maxAgentIterations = 100
+                model = service<ModelSettings>().getAgentModel(),
+                maxAgentIterations = MAX_AGENT_ITERATIONS
             ),
             toolRegistry = registry,
             installFeatures = {
@@ -169,72 +164,13 @@ object AgentFactory {
         )
     }
 
-    fun createExecutor(provider: ServiceType, events: AgentEvents? = null): PromptExecutor {
-        val httpClient = HttpClientProvider.createHttpClient()
-        return when (provider) {
-            ServiceType.OPENAI -> {
-                val apiKey = getCredential(CredentialKey.OpenaiApiKey) ?: ""
-                createRetryingExecutor(OpenAILLMClient(apiKey, baseClient = httpClient), events)
-            }
-
-            ServiceType.ANTHROPIC -> {
-                val apiKey = getCredential(CredentialKey.AnthropicApiKey) ?: ""
-                createRetryingExecutor(AnthropicLLMClient(apiKey, baseClient = httpClient), events)
-            }
-
-            ServiceType.GOOGLE -> {
-                val apiKey = getCredential(CredentialKey.GoogleApiKey) ?: ""
-                createRetryingExecutor(GoogleLLMClient(apiKey, baseClient = httpClient), events)
-            }
-
-            ServiceType.OLLAMA -> {
-                createRetryingExecutor(
-                    OllamaClient(
-                        baseUrl = service<OllamaSettings>().state.host ?: "http://localhost:11434",
-                        baseClient = httpClient
-                    ),
-                    events
-                )
-            }
-
-            ServiceType.MISTRAL -> {
-                val apiKey = getCredential(CredentialKey.MistralApiKey) ?: ""
-                createRetryingExecutor(MistralAILLMClient(apiKey, baseClient = httpClient), events)
-            }
-
-            ServiceType.CUSTOM_OPENAI -> {
-                val state = service<CustomServicesSettings>()
-                    .customServiceStateForFeatureType(FeatureType.AGENT)
-                val serviceId = state.id
-                    ?: throw IllegalArgumentException("No custom service configured")
-                val apiKey = getCredential(CredentialKey.CustomServiceApiKeyById(serviceId))
-                    ?: throw IllegalArgumentException("No API key found for custom service: $serviceId")
-
-                createRetryingExecutor(
-                    CustomOpenAILLMClient.fromSettingsState(
-                        apiKey,
-                        state.chatCompletionSettings,
-                        httpClient
-                    ),
-                    events
-                )
-            }
-
-            ServiceType.PROXYAI -> {
-                val apiKey = getCredential(CredentialKey.CodeGptApiKey) ?: ""
-                createRetryingExecutor(ProxyAILLMClient(apiKey, baseClient = httpClient), events)
-            }
-
-            ServiceType.INCEPTION -> {
-                val apiKey = getCredential(CredentialKey.InceptionApiKey) ?: ""
-                createRetryingExecutor(
-                    InceptionAILLMClient(apiKey, baseClient = httpClient),
-                    events
-                )
-            }
-
-            else -> throw UnsupportedOperationException("Provider not supported: $provider")
-        }
+    fun createExecutor(
+        provider: ServiceType,
+        events: AgentEvents? = null,
+        featureType: FeatureType = FeatureType.AGENT
+    ): PromptExecutor {
+        val llmClient = LLMClientFactory.createClient(provider, featureType)
+        return createRetryingExecutor(llmClient, events)
     }
 
     private fun createRetryingExecutor(client: LLMClient, events: AgentEvents?): PromptExecutor {
@@ -304,8 +240,8 @@ object AgentFactory {
                         """.trimIndent()
                     )
                 },
-                model = service<ModelSelectionService>().getAgentModel(),
-                maxAgentIterations = 100
+                model = service<ModelSettings>().getAgentModel(),
+                maxAgentIterations = MAX_AGENT_ITERATIONS
             ),
             toolRegistry = createToolRegistry(
                 project,
@@ -377,8 +313,8 @@ object AgentFactory {
                         """.trimIndent()
                     )
                 },
-                model = service<ModelSelectionService>().getAgentModel(),
-                maxAgentIterations = 100
+                model = service<ModelSettings>().getAgentModel(),
+                maxAgentIterations = MAX_AGENT_ITERATIONS
             ),
             toolRegistry = createToolRegistry(
                 project,
@@ -498,16 +434,36 @@ object AgentFactory {
     ): List<Message.Response> {
         val preparedPrompt = config.missingToolsConversionStrategy.convertPrompt(prompt, tools)
         val responses = executor.execute(preparedPrompt, model, tools)
-        val appendableResponses = appendableResponses(responses)
+        val appendableResponses = appendableResponses(responses, model.provider)
         appendableResponses.forEach(appendResponse)
         tokenCounter?.addAndGet(countResponseTokens(appendableResponses))
         return appendableResponses
     }
 
-    private fun appendableResponses(responses: List<Message.Response>): List<Message.Response> {
-        return responses
+    private fun appendableResponses(
+        responses: List<Message.Response>,
+        provider: LLMProvider
+    ): List<Message.Response> {
+        val sortedResponses = responses
             .sortedBy { if (it is Message.Assistant) 0 else 1 }
-            .filter { it !is Message.Reasoning }
+            .filterNot { response ->
+                when {
+                    response is Message.Assistant &&
+                            response.hasOnlyTextContent() &&
+                            response.content.isBlank() -> true
+
+                    response is Message.Reasoning &&
+                            provider != LLMProvider.Google -> true
+
+                    else -> false
+                }
+            }
+
+        return if (provider == LLMProvider.Google && sortedResponses.any { it is Message.Tool.Call }) {
+            sortedResponses.filterNot { it is Message.Assistant }
+        } else {
+            sortedResponses
+        }
     }
 
     private fun countResponseTokens(responses: List<Message.Response>): Long {
@@ -543,43 +499,52 @@ object AgentFactory {
         val contextService = project.service<AgentMcpContextService>()
         val mcpContext = contextService.get(sessionId)
         return ToolRegistry.Companion {
-            if (SubagentTool.READ in selected) tool(ReadTool(project, hookManager, sessionId))
+            if (SubagentTool.READ in selected) tool(ReadTool(project, sessionId, hookManager))
             if (SubagentTool.EDIT in selected) {
                 tool(
-                    ConfirmingEditTool(EditTool(project, hookManager, sessionId)) { name, details ->
+                    ConfirmingEditTool(EditTool(project, sessionId, hookManager)) { name, details ->
                         approveToolCall?.invoke(name, details) ?: false
                     }
                 )
             }
             if (SubagentTool.WRITE in selected) {
                 tool(
-                    ConfirmingWriteTool(WriteTool(project, hookManager)) { name, details ->
+                    ConfirmingWriteTool(
+                        WriteTool(
+                            project,
+                            sessionId,
+                            hookManager
+                        )
+                    ) { name, details ->
                         approveToolCall?.invoke(name, details) ?: false
                     }
                 )
             }
             if (SubagentTool.TODO_WRITE in selected) tool(
                 TodoWriteTool(
-                    project,
-                    sessionId,
-                    hookManager
+                    project = project,
+                    sessionId = sessionId,
+                    hookManager = hookManager
                 )
             )
             if (SubagentTool.INTELLIJ_SEARCH in selected) tool(
                 IntelliJSearchTool(
                     project = project,
-                    hookManager = hookManager
+                    sessionId = sessionId,
+                    hookManager = hookManager,
                 )
             )
             if (SubagentTool.WEB_SEARCH in selected) tool(
                 WebSearchTool(
                     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
             if (SubagentTool.WEB_FETCH in selected) tool(
                 WebFetchTool(
                     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
@@ -593,18 +558,21 @@ object AgentFactory {
             if (SubagentTool.KILL_SHELL in selected) tool(
                 KillShellTool(
                     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
             if (SubagentTool.RESOLVE_LIBRARY_ID in selected) tool(
                 ResolveLibraryIdTool(
                     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    sessionId = sessionId,
                     hookManager = hookManager,
                 )
             )
             if (SubagentTool.GET_LIBRARY_DOCS in selected) tool(
                 GetLibraryDocsTool(
                     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
+                    sessionId = sessionId,
                     hookManager = hookManager
                 )
             )

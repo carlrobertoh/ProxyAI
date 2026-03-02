@@ -8,10 +8,10 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.runInEdt
 import com.intellij.ui.components.ActionLink
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.completions.CancellableRequest
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffAcceptedPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
-import okhttp3.sse.EventSource
 import java.awt.BorderLayout
 import javax.swing.*
 
@@ -25,16 +25,16 @@ class DiffHeaderPanel(
     config: HeaderConfig,
     retry: Boolean,
     private val actions: DiffHeaderActions,
-    private var eventSource: EventSource? = null
+    private var request: CancellableRequest? = null
 ) : HeaderPanel(config) {
 
     private val loadingPanel = LoadingPanel(
         when {
             retry -> CodeGPTBundle.get("toolwindow.chat.editor.diff.retrying")
-            eventSource != null -> CodeGPTBundle.get("toolwindow.chat.editor.diff.applying")
+            request != null -> CodeGPTBundle.get("toolwindow.chat.editor.diff.applying")
             else -> CodeGPTBundle.get("toolwindow.chat.editor.diff.editing")
         },
-        eventSource
+        request
     ) {
         handleDone()
     }
@@ -60,7 +60,7 @@ class DiffHeaderPanel(
         setupUI()
         runInEdt {
             loadingPanel.isVisible = true
-            loadingPanel.setEventSource(eventSource)
+            loadingPanel.setRequest(request)
         }
     }
 
@@ -74,7 +74,7 @@ class DiffHeaderPanel(
     }
 
     fun handleDone() {
-        eventSource = null
+        request = null
         runInEdt {
             actionLinksPanel.isVisible = true
             loadingPanel.isVisible = false
@@ -84,7 +84,7 @@ class DiffHeaderPanel(
     }
 
     fun handleChangesApplied(before: String, after: String, patches: List<UnifiedDiffChange>) {
-        eventSource = null
+        request = null
         actionLinksPanel.isVisible = false
         loadingPanel.isVisible = false
 
@@ -106,7 +106,7 @@ class DiffHeaderPanel(
         runInEdt {
             loadingPanel.setText(CodeGPTBundle.get("toolwindow.chat.editor.diff.editing"))
             loadingPanel.isVisible = true
-            loadingPanel.showStopButton(eventSource != null)
+            loadingPanel.showStopButton(request != null)
         }
     }
 }

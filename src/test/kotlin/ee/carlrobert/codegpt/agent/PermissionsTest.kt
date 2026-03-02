@@ -20,8 +20,8 @@ class PermissionsTest : IntegrationTest() {
         )
 
         val result = runBlocking {
-            seedToolContext("perm-test")
-            ReadTool(project, HookManager(project), "perm-test")
+            seedToolContext()
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(file.absolutePath))
         }
 
@@ -40,8 +40,8 @@ class PermissionsTest : IntegrationTest() {
         )
 
         val result = runBlocking {
-            seedToolContext("perm-test")
-            ReadTool(project, HookManager(project), "perm-test")
+            seedToolContext()
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(file.absolutePath))
         }
 
@@ -60,8 +60,8 @@ class PermissionsTest : IntegrationTest() {
         )
 
         val result = runBlocking {
-            seedToolContext("perm-test")
-            ReadTool(project, HookManager(project), "perm-test")
+            seedToolContext()
+            ReadTool(project, "test-session-id", HookManager(project))
                 .execute(ReadTool.Args(file.absolutePath))
         }
 
@@ -73,9 +73,9 @@ class PermissionsTest : IntegrationTest() {
             denyEntries = listOf("Bash(git push *)")
         )
 
-        val tool = createBashTool("perm-bash") { ShellCommandConfirmation.Approved }
+        val tool = createBashTool("test-session-id") { ShellCommandConfirmation.Approved }
         val result = runBlocking {
-            seedToolContext("perm-bash")
+            seedToolContext()
             tool.execute(BashTool.Args(command = "git push origin main", description = "push"))
         }
 
@@ -88,11 +88,11 @@ class PermissionsTest : IntegrationTest() {
             allowEntries = listOf("Bash(echo *)")
         )
 
-        val tool = createBashTool("perm-bash-allow") {
+        val tool = createBashTool("test-session-id") {
             ShellCommandConfirmation.Denied("should not be called when allow matches")
         }
         val result = runBlocking {
-            seedToolContext("perm-bash-allow")
+            seedToolContext()
             tool.execute(BashTool.Args(command = "echo OK", description = "echo"))
         }
 
@@ -105,11 +105,11 @@ class PermissionsTest : IntegrationTest() {
             allowEntries = listOf("Bash(echo *)")
         )
 
-        val tool = createBashTool("perm-bash-deny") {
+        val tool = createBashTool("test-session-id") {
             ShellCommandConfirmation.Denied("explicit deny")
         }
         val result = runBlocking {
-            seedToolContext("perm-bash-deny")
+            seedToolContext()
             tool.execute(BashTool.Args(command = "git status", description = "status"))
         }
 
@@ -147,10 +147,10 @@ class PermissionsTest : IntegrationTest() {
         return file
     }
 
-    private fun seedToolContext(sessionId: String) {
+    private fun seedToolContext() {
         ToolRunContext.set(
-            sessionId = sessionId,
-            toolId = "test-tool-$sessionId"
+            sessionId = "test-session-id",
+            toolId = "test-tool-id"
         )
     }
 }

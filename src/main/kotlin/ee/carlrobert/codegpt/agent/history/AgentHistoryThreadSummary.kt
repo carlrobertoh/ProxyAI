@@ -1,6 +1,6 @@
 package ee.carlrobert.codegpt.agent.history
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 enum class ThreadStatus {
     COMPLETED,

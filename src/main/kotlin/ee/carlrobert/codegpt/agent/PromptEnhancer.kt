@@ -4,7 +4,7 @@ import ai.koog.prompt.dsl.prompt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import ee.carlrobert.codegpt.util.GitUtil
@@ -37,7 +37,7 @@ class PromptEnhancer(private val project: Project) {
         val tagsContext = buildTagsContext(tags)
         val historyContext = buildHistoryContext(sessionId)
 
-        val modelService = service<ModelSelectionService>()
+        val modelService = service<ModelSettings>()
         val provider = modelService.getServiceForFeature(FeatureType.AGENT)
         val model = modelService.getAgentModel()
         val executor = AgentFactory.createExecutor(provider)

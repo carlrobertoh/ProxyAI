@@ -17,22 +17,30 @@ import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.buildStreamFrameFlow
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
+import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
+import ee.carlrobert.codegpt.codecompletions.InfillRequest
+import ee.carlrobert.codegpt.settings.Placeholder
+import ee.carlrobert.codegpt.settings.service.custom.CustomServiceCodeCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicePlaceholders
+import ee.carlrobert.codegpt.util.JsonMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
+import io.ktor.http.HttpHeaders
+import org.apache.commons.text.StringEscapeUtils
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Clock
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.elementNames
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonTransformingSerializer
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.*
 import java.net.URI
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Clock
 
 /**
  * Configuration settings for connecting to the CustomOpenAI API.
@@ -55,10 +63,11 @@ class CustomOpenAIClientSettings(
  * @param clock Clock instance used for tracking response metadata timestamps.
  */
 class CustomOpenAILLMClient(
-    apiKey: String,
+    private val apiKey: String,
     private val settings: CustomOpenAIClientSettings,
-    private val state: CustomServiceChatCompletionSettingsState,
-    baseClient: HttpClient = HttpClient(),
+    private val chatState: CustomServiceChatCompletionSettingsState? = null,
+    private val codeCompletionState: CustomServiceCodeCompletionSettingsState? = null,
+    private val baseClient: HttpClient = HttpClient(),
     clock: Clock = Clock.System
 ) : AbstractOpenAILLMClient<CustomOpenAIChatCompletionResponse, CustomOpenAIChatCompletionStreamResponse>(
     apiKey,
@@ -67,7 +76,8 @@ class CustomOpenAILLMClient(
     clock,
     staticLogger,
     OpenAICompatibleToolDescriptorSchemaGenerator()
-) {
+),
+    CodeCompletionCapable {
     data object CustomOpenAI : LLMProvider("custom-openai", "Custom OpenAI")
 
     companion object {
@@ -83,12 +93,8 @@ class CustomOpenAILLMClient(
             baseClient: HttpClient = HttpClient(),
             timeoutConfig: ConnectionTimeoutConfig = ConnectionTimeoutConfig()
         ): CustomOpenAILLMClient {
-            val stateUrl = state.url ?: throw IllegalStateException("Url not set")
-            val uri = URI.create(stateUrl)
-            val authority = uri.authority ?: uri.host
-            val settings = CustomOpenAIClientSettings(
-                baseUrl = "${uri.scheme}://${authority}",
-                chatCompletionsPath = uri.path,
+            val settings = createClientSettings(
+                url = state.url ?: throw IllegalStateException("Url not set"),
                 timeoutConfig = timeoutConfig
             )
             val clientWithCustomHeaders = baseClient.config {
@@ -103,16 +109,73 @@ class CustomOpenAILLMClient(
 
                         header(
                             normalizedKey,
-                            value.replace($$"$CUSTOM_SERVICE_API_KEY", apiKey)
+                            value.replace(CUSTOM_SERVICE_API_KEY_PLACEHOLDER, apiKey)
                         )
                     }
                 }
             }
-            return CustomOpenAILLMClient(apiKey, settings, state, clientWithCustomHeaders)
+            return CustomOpenAILLMClient(
+                apiKey = apiKey,
+                settings = settings,
+                chatState = state,
+                baseClient = clientWithCustomHeaders
+            )
+        }
+
+        fun fromCodeCompletionSettingsState(
+            apiKey: String,
+            state: CustomServiceCodeCompletionSettingsState,
+            baseClient: HttpClient = HttpClient(),
+            timeoutConfig: ConnectionTimeoutConfig = ConnectionTimeoutConfig()
+        ): CustomOpenAILLMClient {
+            return CustomOpenAILLMClient(
+                apiKey = apiKey,
+                settings = createClientSettings(
+                    url = state.url ?: throw IllegalStateException("Url not set"),
+                    timeoutConfig = timeoutConfig
+                ),
+                codeCompletionState = state,
+                baseClient = baseClient
+            )
+        }
+
+        private fun createClientSettings(
+            url: String,
+            timeoutConfig: ConnectionTimeoutConfig
+        ): CustomOpenAIClientSettings {
+            val uri = URI.create(url)
+            val authority = uri.authority ?: uri.host
+            return CustomOpenAIClientSettings(
+                baseUrl = "${uri.scheme}://${authority}",
+                chatCompletionsPath = uri.path,
+                timeoutConfig = timeoutConfig
+            )
         }
     }
 
     override fun llmProvider(): LLMProvider = CustomOpenAI
+
+    override suspend fun getCodeCompletion(infillRequest: InfillRequest): String {
+        val state = requireNotNull(codeCompletionState) {
+            "Custom OpenAI code completion requested on a chat-only client"
+        }
+        val url = requireNotNull(state.url)
+        val payload = postCompletionJson(
+            client = baseClient,
+            url = url,
+            headers = replaceCredentialPlaceholders(state.headers, apiKey),
+            body = buildCodeCompletionRequestBody(state, infillRequest)
+        )
+
+        return if (
+            state.infillTemplate == InfillPromptTemplate.CHAT_COMPLETION ||
+            state.parseResponseAsChatCompletions
+        ) {
+            parseOpenAIChatCompletion(payload)
+        } else {
+            parseOpenAITextCompletion(payload)
+        }
+    }
 
     override fun serializeProviderChatRequest(
         messages: List<OpenAIMessage>,
@@ -122,12 +185,23 @@ class CustomOpenAILLMClient(
         params: LLMParams,
         stream: Boolean
     ): String {
-        val customParams = params.toCustomOpenAIParams(state)
+        val state = requireNotNull(chatState) {
+            "Custom OpenAI chat request requested on a code-completion-only client"
+        }
+        val customParams: CustomOpenAIParams = params.toCustomOpenAIParams(state)
+        val streamRequest = state.shouldStream()
+        val additionalProperties = buildCustomOpenAIAdditionalProperties(
+            body = state.body,
+            messages = messages,
+            streamRequest = streamRequest,
+            credential = apiKey,
+            json = json
+        )
         val responseFormat = createResponseFormat(customParams.schema, model)
         val request = CustomOpenAIChatCompletionRequest(
             messages = messages,
             model = model.id,
-            stream = stream,
+            stream = streamRequest,
             temperature = customParams.temperature,
             tools = tools,
             toolChoice = customParams.toolChoice?.toOpenAIToolChoice(),
@@ -148,10 +222,151 @@ class CustomOpenAILLMClient(
             models = customParams.models,
             route = customParams.route,
             user = customParams.user,
-            additionalProperties = customParams.additionalProperties,
+            additionalProperties = additionalProperties,
         )
 
         return json.encodeToString(CustomOpenAIChatCompletionRequestSerializer, request)
+    }
+
+    private fun buildCodeCompletionRequestBody(
+        state: CustomServiceCodeCompletionSettingsState,
+        infillRequest: InfillRequest
+    ): String {
+        return if (state.infillTemplate == InfillPromptTemplate.CHAT_COMPLETION) {
+            val messages = listOf(
+                mapOf(
+                    "role" to "system",
+                    "content" to (
+                        "You are a code completion assistant. Complete the code between the given prefix and suffix. " +
+                            "Return only the missing code that should be inserted, without any formatting, explanations, or markdown."
+                        )
+                ),
+                mapOf(
+                    "role" to "user",
+                    "content" to (
+                        "<PREFIX>\n${infillRequest.prefix}\n</PREFIX>\n\n" +
+                            "<SUFFIX>\n${infillRequest.suffix}\n</SUFFIX>\n\nComplete:"
+                        )
+                )
+            )
+            val transformedBody = state.body.entries.mapNotNull { (key, value) ->
+                when (key.lowercase()) {
+                    "messages" -> key to messages
+                    "prompt", "suffix" -> null
+                    "stream" -> key to false
+                    else -> key to transformCodeCompletionValue(
+                        value = value,
+                        template = InfillPromptTemplate.CHAT_COMPLETION,
+                        infillRequest = infillRequest
+                    )
+                }
+            }.toMap().toMutableMap()
+
+            if (!transformedBody.containsKey("messages")) {
+                transformedBody["messages"] = messages
+            }
+
+            JsonMapper.mapper.writeValueAsString(transformedBody)
+        } else {
+            JsonMapper.mapper.writeValueAsString(
+                state.body.entries.associate { (key, value) ->
+                    when (key.lowercase()) {
+                        "stop" -> key to transformCodeCompletionStopValue(
+                            value = value,
+                            template = state.infillTemplate,
+                            infillRequest = infillRequest
+                        )
+
+                        "stream" -> key to false
+                        else -> key to transformCodeCompletionValue(
+                            value = value,
+                            template = state.infillTemplate,
+                            infillRequest = infillRequest
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    private fun replaceCredentialPlaceholders(
+        headers: Map<String, String>,
+        credential: String?
+    ): Map<String, String> {
+        return headers.mapValues { (_, value) ->
+            if (credential != null && value.contains(CUSTOM_SERVICE_API_KEY_PLACEHOLDER)) {
+                value.replace(CUSTOM_SERVICE_API_KEY_PLACEHOLDER, credential)
+            } else {
+                value
+            }
+        }
+    }
+
+    private fun transformCodeCompletionStopValue(
+        value: Any,
+        template: InfillPromptTemplate,
+        infillRequest: InfillRequest
+    ): Any {
+        if (value !is String) {
+            return transformCodeCompletionValue(value, template, infillRequest)
+        }
+
+        if (value.isEmpty()) {
+            return value
+        }
+
+        return if (value.startsWith("[") && value.endsWith("]")) {
+            ObjectMapper().readValue(value, object : TypeReference<List<String>>() {})
+        } else {
+            value.split(",").map { StringEscapeUtils.unescapeJava(it.trim()) }
+        }
+    }
+
+    private fun transformCodeCompletionValue(
+        value: Any,
+        template: InfillPromptTemplate,
+        infillRequest: InfillRequest
+    ): Any {
+        if (value !is String) {
+            return when (value) {
+                is Map<*, *> -> value.entries
+                    .filter { it.key != null }
+                    .associate { (nestedKey, nestedValue) ->
+                        nestedKey.toString() to transformCodeCompletionValue(
+                            value = nestedValue ?: "",
+                            template = template,
+                            infillRequest = infillRequest
+                        )
+                    }
+
+                is Iterable<*> -> value.map {
+                    transformCodeCompletionValue(it ?: "", template, infillRequest)
+                }
+
+                is Array<*> -> value.map {
+                    transformCodeCompletionValue(it ?: "", template, infillRequest)
+                }
+
+                else -> value
+            }
+        }
+
+        val replaced = if (value.contains(CUSTOM_SERVICE_API_KEY_PLACEHOLDER)) {
+            value.replace(CUSTOM_SERVICE_API_KEY_PLACEHOLDER, apiKey)
+        } else {
+            value
+        }
+
+        return when (replaced) {
+            Placeholder.FIM_PROMPT.code -> template.buildPrompt(infillRequest)
+            Placeholder.PREFIX.code -> infillRequest.prefix
+            Placeholder.SUFFIX.code -> infillRequest.suffix
+            else -> replaced.takeIf {
+                it.contains(Placeholder.PREFIX.code) || it.contains(Placeholder.SUFFIX.code)
+            }?.replace(Placeholder.PREFIX.code, infillRequest.prefix)
+                ?.replace(Placeholder.SUFFIX.code, infillRequest.suffix)
+                ?: replaced
+        }
     }
 
     override fun processProviderChatResponse(response: CustomOpenAIChatCompletionResponse): List<LLMChoice> {
@@ -175,14 +390,14 @@ class CustomOpenAILLMClient(
 
         response.collect { chunk ->
             chunk.choices.firstOrNull()?.let { choice ->
-                choice.delta.content?.let { emitAppend(it) }
+                choice.delta.content?.let { emitTextDelta(it) }
 
                 choice.delta.toolCalls?.forEach { openAIToolCall ->
                     val index = openAIToolCall.index ?: 0
-                    val id = openAIToolCall.id
-                    val functionName = openAIToolCall.function.name
-                    val functionArgs = openAIToolCall.function.arguments
-                    upsertToolCall(index, id, functionName, functionArgs)
+                    val id = openAIToolCall.id.orEmpty()
+                    val functionName = openAIToolCall.function.name.orEmpty()
+                    val functionArgs = openAIToolCall.function.arguments.orEmpty()
+                    emitToolCallDelta(id, functionName, functionArgs, index)
                 }
 
                 choice.finishReason?.let { finishReason = it }
@@ -195,8 +410,7 @@ class CustomOpenAILLMClient(
     }
 
     override suspend fun moderate(prompt: Prompt, model: LLModel): ModerationResult {
-        logger.warn { "Moderation is not supported by CustomOpenAI API" }
-        throw UnsupportedOperationException("Moderation is not supported by CustomOpenAI API.")
+        throw UnsupportedOperationException("Moderation not supported.")
     }
 
     @OptIn(ExperimentalEncodingApi::class)
@@ -266,6 +480,111 @@ class CustomOpenAILLMClient(
         )
         logger.error(exception) { exception.message }
         throw exception
+    }
+}
+
+internal fun buildCustomOpenAIAdditionalProperties(
+    body: Map<String, Any>,
+    messages: List<OpenAIMessage>,
+    streamRequest: Boolean,
+    credential: String,
+    json: Json
+): Map<String, JsonElement>? = body
+    .filterKeys { it !in CUSTOM_OPENAI_RESERVED_BODY_KEYS }
+    .mapValues { (key, value) ->
+        transformCustomOpenAIBodyValue(
+            key = key,
+            value = value,
+            streamRequest = streamRequest,
+            messages = messages,
+            credential = credential,
+            json = json
+        )
+    }
+    .takeIf { it.isNotEmpty() }
+
+internal fun transformCustomOpenAIBodyValue(
+    key: String?,
+    value: Any?,
+    streamRequest: Boolean,
+    messages: List<OpenAIMessage>,
+    credential: String,
+    json: Json
+): JsonElement {
+    return when (value) {
+        null -> JsonNull
+        is JsonElement -> value
+        is String -> when {
+            !streamRequest && key == "stream" -> JsonPrimitive(false)
+            CustomServicePlaceholders.isMessages(value) -> json.parseToJsonElement(
+                json.encodeToString(ListSerializer(OpenAIMessage.serializer()), messages)
+            )
+
+            CustomServicePlaceholders.isPrompt(value) -> JsonPrimitive(
+                renderCustomOpenAIPrompt(
+                    messages,
+                    json
+                )
+            )
+
+            value.contains($$"$CUSTOM_SERVICE_API_KEY") -> {
+                JsonPrimitive(value.replace($$"$CUSTOM_SERVICE_API_KEY", credential))
+            }
+
+            else -> JsonPrimitive(value)
+        }
+
+        is Number -> JsonPrimitive(value)
+        is Boolean -> JsonPrimitive(value)
+        is Map<*, *> -> JsonObject(
+            value.entries
+                .filter { (nestedKey, _) -> nestedKey != null }
+                .associate { (nestedKey, nestedValue) ->
+                    nestedKey.toString() to transformCustomOpenAIBodyValue(
+                        key = nestedKey.toString(),
+                        value = nestedValue,
+                        streamRequest = streamRequest,
+                        messages = messages,
+                        credential = credential,
+                        json = json
+                    )
+                }
+        )
+
+        is Iterable<*> -> JsonArray(
+            value.map { item ->
+                transformCustomOpenAIBodyValue(
+                    key = null,
+                    value = item,
+                    streamRequest = streamRequest,
+                    messages = messages,
+                    credential = credential,
+                    json = json
+                )
+            }
+        )
+
+        is Array<*> -> JsonArray(
+            value.map { item ->
+                transformCustomOpenAIBodyValue(
+                    key = null,
+                    value = item,
+                    streamRequest = streamRequest,
+                    messages = messages,
+                    credential = credential,
+                    json = json
+                )
+            }
+        )
+
+        else -> JsonPrimitive(value.toString())
+    }
+}
+
+internal fun renderCustomOpenAIPrompt(messages: List<OpenAIMessage>, json: Json): String {
+    return messages.joinToString(separator = "\n\n") { message ->
+        message.content?.text()?.takeIf { it.isNotBlank() }
+            ?: json.encodeToString(OpenAIMessage.serializer(), message)
     }
 }
 

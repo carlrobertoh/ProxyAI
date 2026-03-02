@@ -39,6 +39,7 @@ import javax.swing.Action
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
+import kotlin.time.ExperimentalTime
 import ai.koog.prompt.message.Message as PromptMessage
 
 internal data class AgentTimelineRunState(
@@ -46,6 +47,7 @@ internal data class AgentTimelineRunState(
     val sourceMessage: Message?
 )
 
+@OptIn(ExperimentalTime::class)
 internal class AgentSessionTimelineController(
     private val project: Project,
     private val agentSession: AgentSession,

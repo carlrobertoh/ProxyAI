@@ -19,16 +19,15 @@ import com.intellij.openapi.vcs.changes.Change
 import com.intellij.vcs.commit.CommitWorkflowUi
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
-import ee.carlrobert.codegpt.completions.CompletionRequestService
+import ee.carlrobert.codegpt.completions.CompletionError
+import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
+import ee.carlrobert.codegpt.completions.CompletionService
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.CommitWorkflowChanges
 import ee.carlrobert.codegpt.util.GitUtil.getProjectRepository
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
-import ee.carlrobert.llm.completion.CompletionEventListener
+import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import git4idea.repo.GitRepository
-import okhttp3.sse.EventSource
 import java.io.StringWriter
 import java.nio.file.Path
 
@@ -48,7 +47,7 @@ abstract class BaseCommitWorkflowAction : DumbAwareAction() {
 
     override fun update(event: AnActionEvent) {
         val commitWorkflowUi = event.getData(VcsDataKeys.COMMIT_WORKFLOW_UI) ?: return
-        val requestAllowed = CompletionRequestService.isRequestAllowed(FeatureType.COMMIT_MESSAGE)
+        val requestAllowed = CompletionService.isRequestAllowed(FeatureType.COMMIT_MESSAGE)
         runInEdt {
             event.presentation.isEnabled =
                 requestAllowed && CommitWorkflowChanges(commitWorkflowUi).isFilesSelected
@@ -125,12 +124,12 @@ abstract class BaseCommitWorkflowAction : DumbAwareAction() {
 class CommitMessageEventListener(
     private val project: Project,
     private val commitWorkflowUi: CommitWorkflowUi
-) : CompletionEventListener<String> {
+) : CompletionStreamEventListener {
 
     private val messageBuilder = StringBuilder()
     private val thinkingOutputParser = ThinkingOutputParser()
 
-    override fun onMessage(message: String, eventSource: EventSource) {
+    override fun onMessage(message: String) {
         val processedChunk = thinkingOutputParser.processChunk(message)
         if (processedChunk.isNotEmpty() && thinkingOutputParser.isFinished) {
             messageBuilder.append(message)
@@ -138,14 +137,14 @@ class CommitMessageEventListener(
         }
     }
 
-    override fun onComplete(result: StringBuilder) {
+    override fun onComplete(messageBuilder: StringBuilder) {
         if (messageBuilder.isEmpty()) {
-            updateCommitMessage(result.toString())
+            updateCommitMessage(messageBuilder.toString())
         }
         stopLoading()
     }
 
-    override fun onError(error: ErrorDetails, ex: Throwable) {
+    override fun onError(error: CompletionError, ex: Throwable) {
         Notifications.Bus.notify(
             Notification(
                 "proxyai.notification.group",
@@ -154,6 +153,10 @@ class CommitMessageEventListener(
                 NotificationType.ERROR
             )
         )
+        stopLoading()
+    }
+
+    override fun onCancelled(messageBuilder: StringBuilder) {
         stopLoading()
     }
 

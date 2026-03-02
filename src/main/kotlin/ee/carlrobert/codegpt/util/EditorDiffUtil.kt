@@ -29,7 +29,7 @@ object EditorDiffUtil {
             createTempDiffContent(mainEditor, toolwindowEditor, highlightedText)
         )
         DiffManager.getInstance()
-            .showDiff(project, createDiffRequest(project, tempFile, mainEditor.virtualFile))
+            .showDiff(project, createDiffRequest(project, tempFile, mainEditorFile))
     }
 
     private fun createTempDiffContent(

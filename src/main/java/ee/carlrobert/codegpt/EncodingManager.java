@@ -10,11 +10,7 @@ import com.knuddels.jtokkit.api.EncodingType;
 import com.knuddels.jtokkit.api.IntArrayList;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.message.Message;
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionDetailedMessage;
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage;
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage;
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIMessageTextContent;
-import ee.carlrobert.llm.client.openai.completion.response.ToolCall;
+import ee.carlrobert.codegpt.completions.ChatToolCall;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -55,9 +51,9 @@ public final class EncodingManager {
             int inputTokens = 0;
             int outputTokens = 0;
 
-            List<ToolCall> toolCalls = message.getToolCalls();
+            List<ChatToolCall> toolCalls = message.getToolCalls();
             if (toolCalls != null) {
-              for (ToolCall toolCall : toolCalls) {
+              for (ChatToolCall toolCall : toolCalls) {
                 if (toolCall.getFunction() != null && toolCall.getFunction().getArguments() != null) {
                   inputTokens += countTokens(toolCall.getFunction().getArguments());
                 }
@@ -101,19 +97,6 @@ public final class EncodingManager {
     public int getOutputTokens() {
       return outputTokens;
     }
-  }
-
-  public int countMessageTokens(OpenAIChatCompletionMessage message) {
-    if (message instanceof OpenAIChatCompletionStandardMessage standardMessage) {
-      return countMessageTokens(standardMessage.getRole(), standardMessage.getContent());
-    }
-
-    return ((OpenAIChatCompletionDetailedMessage) message).getContent().stream()
-        .filter(OpenAIMessageTextContent.class::isInstance)
-        .mapToInt(it -> countMessageTokens(
-            ((OpenAIChatCompletionDetailedMessage) message).getRole(),
-            ((OpenAIMessageTextContent) it).getText()))
-        .sum();
   }
 
   public int countMessageTokens(String role, String content) {

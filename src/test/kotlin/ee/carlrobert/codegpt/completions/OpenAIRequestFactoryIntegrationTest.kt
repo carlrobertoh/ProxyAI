@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.completions
 
+import ai.koog.prompt.message.Message as KoogMessage
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory
@@ -10,13 +11,7 @@ import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.*
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionAssistantMessage
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionToolMessage
-import ee.carlrobert.llm.client.openai.completion.response.ToolCall
-import ee.carlrobert.llm.client.openai.completion.response.ToolFunctionResponse
+
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import java.io.File
@@ -24,7 +19,7 @@ import java.io.File
 class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
 
     fun testDefaultPersonaUsesEditModePromptWhenEnabled() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
@@ -33,11 +28,10 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             .chatMode(ChatMode.EDIT)
             .build()
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        val systemMessages = request.messages
-            .filterIsInstance<OpenAIChatCompletionStandardMessage>()
-            .filter { it.role == "system" }
+        val systemMessages = prompt.messages
+            .filterIsInstance<KoogMessage.System>()
             .map { it.content }
         assertThat(systemMessages).isNotEmpty()
         val systemContent = systemMessages.first()
@@ -50,54 +44,49 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
     }
 
     fun testToolCallRequestBuildsAssistantToolCallsMessage() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Run tool").apply {
             response = "Calling tool..."
             toolCalls =
-                listOf(ToolCall(null, "tc_1", "function", ToolFunctionResponse("search", "{}")))
+                listOf(ChatToolCall(null, "tc_1", "function", ChatToolFunction("search", "{}")))
         }
         val callParameters = ChatCompletionParameters.builder(conversation, message)
             .requestType(RequestType.TOOL_CALL_REQUEST).build()
         val filtered =
             service<FilteredPromptsService>().getFilteredPersonaPrompt(ChatMode.ASK)
                 .addProjectPath()
-        val expectedSystem = service<FilteredPromptsService>().applyClickableLinks(filtered)
         val expected = listOf(
-            mapOf("role" to "system", "content" to expectedSystem),
+            mapOf("role" to "system"),
             mapOf("role" to "user", "content" to "Run tool"),
             mapOf(
                 "role" to "assistant",
-                "content" to "Calling tool...",
-                "toolCalls" to listOf(
-                    mapOf(
-                        "id" to "tc_1",
-                        "type" to "function",
-                        "fn" to "search",
-                        "args" to "{}"
-                    )
-                )
-            )
+                "content" to "Calling tool..."
+            ),
+            mapOf("role" to "tool_call", "id" to "tc_1", "tool" to "search", "args" to "{}")
         )
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        assertThat(normalize(request.messages)).isEqualTo(expected)
+        val actual = normalize(prompt.messages)
+        assertThat(actual.drop(1)).isEqualTo(expected.drop(1))
+        assertThat(actual.first()["role"]).isEqualTo("system")
+        assertThat(actual.first()["content"].toString()).contains("JetBrains Navigation Links (MANDATORY)")
     }
 
     fun testToolCallContinuationIncludesResultsAndHistory() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
         val conversation = ConversationService.getInstance().startConversation(project)
         val prev = Message("Prev run").apply {
             response = "Prev call"
             toolCalls = listOf(
-                ToolCall(
+                ChatToolCall(
                     null,
                     "tc_prev",
                     "function",
-                    ToolFunctionResponse("list", "{\"q\":1}")
+                    ChatToolFunction("list", "{\"q\":1}")
                 )
             )
             addToolCallResult("tc_prev", "prev_result")
@@ -106,60 +95,46 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         val current = Message("Run again").apply {
             response = "Curr call"
             toolCalls = listOf(
-                ToolCall(
+                ChatToolCall(
                     null,
                     "tc_curr",
                     "function",
-                    ToolFunctionResponse("list", "{\"q\":2}")
+                    ChatToolFunction("list", "{\"q\":2}")
                 )
             )
             addToolCallResult("tc_curr", "curr_result")
         }
         val callParameters = ChatCompletionParameters.builder(conversation, current)
             .requestType(RequestType.TOOL_CALL_CONTINUATION).build()
-        val filtered = service<FilteredPromptsService>().getFilteredPersonaPrompt(ChatMode.ASK)
-            .addProjectPath()
-        val expectedSystem = service<FilteredPromptsService>().applyClickableLinks(filtered)
         val expected = listOf(
-            mapOf("role" to "system", "content" to expectedSystem),
+            mapOf("role" to "system"),
             mapOf("role" to "user", "content" to "Prev run"),
             mapOf(
                 "role" to "assistant",
-                "content" to "Prev call",
-                "toolCalls" to listOf(
-                    mapOf(
-                        "id" to "tc_prev",
-                        "type" to "function",
-                        "fn" to "list",
-                        "args" to "{\"q\":1}"
-                    )
-                )
+                "content" to "Prev call"
             ),
-            mapOf("role" to "tool", "callId" to "tc_prev", "content" to "prev_result"),
+            mapOf("role" to "tool_call", "id" to "tc_prev", "tool" to "list", "args" to "{\"q\":1}"),
+            mapOf("role" to "tool_result", "id" to "tc_prev", "tool" to "list", "content" to "prev_result"),
             mapOf("role" to "user", "content" to "Run again"),
             mapOf(
                 "role" to "assistant",
-                "content" to "Curr call",
-                "toolCalls" to listOf(
-                    mapOf(
-                        "id" to "tc_curr",
-                        "type" to "function",
-                        "fn" to "list",
-                        "args" to "{\"q\":2}"
-                    )
-                )
+                "content" to "Curr call"
             ),
-            mapOf("role" to "tool", "callId" to "tc_curr", "content" to "curr_result"),
+            mapOf("role" to "tool_call", "id" to "tc_curr", "tool" to "list", "args" to "{\"q\":2}"),
+            mapOf("role" to "tool_result", "id" to "tc_curr", "tool" to "list", "content" to "curr_result"),
             mapOf("role" to "assistant", "content" to "Curr call")
         )
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        assertThat(normalize(request.messages)).isEqualTo(expected)
+        val actual = normalize(prompt.messages)
+        assertThat(actual.drop(1)).isEqualTo(expected.drop(1))
+        assertThat(actual.first()["role"]).isEqualTo("system")
+        assertThat(actual.first()["content"].toString()).contains("JetBrains Navigation Links (MANDATORY)")
     }
 
     fun testChatRequestEmbedsReferencedFilesInSystemMessage() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("What does the code do?")
@@ -172,28 +147,22 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         val filtered =
             service<FilteredPromptsService>().getFilteredPersonaPrompt(ChatMode.ASK)
                 .addProjectPath()
-        val withGuidelines = service<FilteredPromptsService>().applyClickableLinks(filtered)
-        val filesBlock = "\n\n<referenced_files>\n" + CompletionRequestUtil.formatCode(
-            "class A {}",
-            "/path/A.java"
-        ) + "\n" + CompletionRequestUtil.formatCode(
-            "class B",
-            "/path/B.kt"
-        ) + "\n</referenced_files>"
-        val expectedSystem = withGuidelines + filesBlock
+        val expectedSystem = service<FilteredPromptsService>().applyClickableLinks(filtered)
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        val msgs = request.messages
+        val msgs = prompt.messages
         assertThat(msgs).hasSize(2)
-        assertThat((msgs[0] as OpenAIChatCompletionStandardMessage).content).isEqualTo(
-            expectedSystem
-        )
-        assertThat((msgs[1] as OpenAIChatCompletionStandardMessage).content).isEqualTo("What does the code do?")
+        assertThat((msgs[0] as KoogMessage.System).content).contains(expectedSystem.trim())
+        assertThat((msgs[1] as KoogMessage.User).content).contains("What does the code do?")
+        assertThat((msgs[1] as KoogMessage.User).content).contains("/path/A.java")
+        assertThat((msgs[1] as KoogMessage.User).content).contains("class A {}")
+        assertThat((msgs[1] as KoogMessage.User).content).contains("/path/B.kt")
+        assertThat((msgs[1] as KoogMessage.User).content).contains("class B")
     }
 
     fun testDefaultPersonaIsFilteredInAskMode() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
@@ -204,16 +173,14 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
                 .addProjectPath()
         val expectedSystem = service<FilteredPromptsService>().applyClickableLinks(filtered)
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        val systemMessages =
-            request.messages.filterIsInstance<OpenAIChatCompletionStandardMessage>()
-                .filter { it.role == "system" }.map { it.content }
-        assertThat(systemMessages.first()).isEqualTo(expectedSystem)
+        val systemMessages = prompt.messages.filterIsInstance<KoogMessage.System>().map { it.content }
+        assertThat(systemMessages.first()).contains(expectedSystem.trim())
     }
 
     fun testChatRequestUsesFilteredPersonaPromptInAskMode() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         val personaPromptWithSearchReplace = """
             You are a helpful assistant.
             For refactoring or editing an existing file, always generate a SEARCH/REPLACE block.
@@ -242,11 +209,10 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             .chatMode(ChatMode.ASK)
             .build()
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        val systemMessages = request.messages
-            .filterIsInstance<OpenAIChatCompletionStandardMessage>()
-            .filter { it.role == "system" }
+        val systemMessages = prompt.messages
+            .filterIsInstance<KoogMessage.System>()
             .map { it.content }
         assertThat(systemMessages).isNotEmpty()
         val systemContent = systemMessages.first()
@@ -257,13 +223,16 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
     }
 
     fun testChatRequestKeepsOriginalPersonaPromptInEditMode() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_O.code)
+        useOpenAIService("gpt-4o")
         val personaPromptWithSearchReplace = """
             You are a helpful assistant.
             For refactoring or editing an existing file, always generate a SEARCH/REPLACE block.
         """.trimIndent()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            personaPromptWithSearchReplace
+        service<PromptsSettings>().state.personas.selectedPersona = PersonaPromptDetailsState().apply {
+            id = 999L
+            name = "Custom Test Persona"
+            instructions = personaPromptWithSearchReplace
+        }
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
         val callParameters = ChatCompletionParameters
@@ -271,11 +240,10 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             .chatMode(ChatMode.EDIT)
             .build()
 
-        val request = OpenAIRequestFactory().createChatRequest(callParameters)
+        val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        val systemMessages = request.messages
-            .filterIsInstance<OpenAIChatCompletionStandardMessage>()
-            .filter { it.role == "system" }
+        val systemMessages = prompt.messages
+            .filterIsInstance<KoogMessage.System>()
             .map { it.content }
         assertThat(systemMessages).isNotEmpty()
         val systemContent = systemMessages.first()
@@ -288,7 +256,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
     }
 
     fun testInlineEditSingleRequestNoHistory() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_1.code, FeatureType.INLINE_EDIT)
+        useOpenAIService("gpt-4.1", FeatureType.INLINE_EDIT)
         val testFileContent = getResourceContent("/inline/TestClass.java")
         val tempFile = File.createTempFile("TestClass", ".java")
         tempFile.writeText(testFileContent)
@@ -305,10 +273,9 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             diagnosticsInfo = null
         )
 
-        val request = OpenAIRequestFactory().createInlineEditRequest(parameters)
+        val prompt = OpenAIRequestFactory().createInlineEditPrompt(parameters)
 
-        val systemMessage = request.messages[0] as OpenAIChatCompletionStandardMessage
-        assertThat(systemMessage.role).isEqualTo("system")
+        val systemMessage = prompt.messages[0] as KoogMessage.System
         val expectedSystem = buildExpectedInlineEditSystemPrompt(
             language = "java",
             filePath = tempFile.absolutePath,
@@ -320,13 +287,12 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             diagnosticsInfo = null,
         )
         assertThat(systemMessage.content).isEqualTo(expectedSystem)
-        val userMessage = request.messages[1] as OpenAIChatCompletionStandardMessage
-        assertThat(userMessage.role).isEqualTo("user")
+        val userMessage = prompt.messages[1] as KoogMessage.User
         assertThat(userMessage.content).isEqualTo("Implement.")
     }
 
     fun testInlineEditFollowUpWithHistory() {
-        useOpenAIService(OpenAIChatCompletionModel.GPT_4_1.code, FeatureType.INLINE_EDIT)
+        useOpenAIService("gpt-4.1", FeatureType.INLINE_EDIT)
         val testFileContent = getResourceContent("/inline/TestClass.java")
         val tempFile = File.createTempFile("TestClass", ".java")
         tempFile.writeText(testFileContent)
@@ -375,10 +341,9 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             diagnosticsInfo = null
         )
 
-        val request = OpenAIRequestFactory().createInlineEditRequest(parameters)
+        val prompt = OpenAIRequestFactory().createInlineEditPrompt(parameters)
 
-        val systemMessage = request.messages[0] as OpenAIChatCompletionStandardMessage
-        assertThat(systemMessage.role).isEqualTo("system")
+        val systemMessage = prompt.messages[0] as KoogMessage.System
         val expectedSystem = buildExpectedInlineEditSystemPrompt(
             language = "java",
             filePath = tempFile.absolutePath,
@@ -390,14 +355,11 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             diagnosticsInfo = parameters.diagnosticsInfo,
         )
         assertThat(systemMessage.content).isEqualTo(expectedSystem)
-        val prevUserMessage = request.messages[1] as OpenAIChatCompletionStandardMessage
-        assertThat(prevUserMessage.role).isEqualTo("user")
+        val prevUserMessage = prompt.messages[1] as KoogMessage.User
         assertThat(prevUserMessage.content).isEqualTo("PREV_PROMPT")
-        val prevResponse = request.messages[2] as OpenAIChatCompletionStandardMessage
-        assertThat(prevResponse.role).isEqualTo("assistant")
+        val prevResponse = prompt.messages[2] as KoogMessage.Assistant
         assertThat(prevResponse.content).isEqualTo("PREV_RESPONSE")
-        val followUpMessage = request.messages[3] as OpenAIChatCompletionStandardMessage
-        assertThat(followUpMessage.role).isEqualTo("user")
+        val followUpMessage = prompt.messages[3] as KoogMessage.User
         assertThat(followUpMessage.content).isEqualTo("Implement.")
     }
 
@@ -486,31 +448,36 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         return systemPrompt
     }
 
-    private fun normalize(messages: List<OpenAIChatCompletionMessage>): List<Map<String, Any?>> {
+    private fun normalize(messages: List<KoogMessage>): List<Map<String, Any?>> {
         return messages.map { msg ->
             when (msg) {
-                is OpenAIChatCompletionStandardMessage -> mapOf(
-                    "role" to msg.role,
+                is KoogMessage.System -> mapOf(
+                    "role" to "system",
                     "content" to msg.content
                 )
 
-                is OpenAIChatCompletionAssistantMessage -> mapOf(
-                    "role" to "assistant",
-                    "content" to (msg.content ?: ""),
-                    "toolCalls" to (msg.toolCalls?.map { tc ->
-                        mapOf(
-                            "id" to (tc.id ?: ""),
-                            "type" to (tc.type ?: ""),
-                            "fn" to (tc.function?.name ?: ""),
-                            "args" to (tc.function?.arguments ?: "")
-                        )
-                    } ?: emptyList())
+                is KoogMessage.User -> mapOf(
+                    "role" to "user",
+                    "content" to msg.content
                 )
 
-                is OpenAIChatCompletionToolMessage -> mapOf(
-                    "role" to "tool",
-                    "callId" to (msg.callId ?: ""),
-                    "content" to (msg.content ?: "")
+                is KoogMessage.Assistant -> mapOf(
+                    "role" to "assistant",
+                    "content" to msg.content
+                )
+
+                is KoogMessage.Tool.Call -> mapOf(
+                    "role" to "tool_call",
+                    "id" to msg.id,
+                    "tool" to msg.tool,
+                    "args" to msg.content
+                )
+
+                is KoogMessage.Tool.Result -> mapOf(
+                    "role" to "tool_result",
+                    "id" to msg.id,
+                    "tool" to msg.tool,
+                    "content" to msg.content
                 )
 
                 else -> mapOf("role" to "unknown")

@@ -5,9 +5,9 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
+import ee.carlrobert.codegpt.completions.ChatError
 import ee.carlrobert.codegpt.completions.CompletionResponseEventListener
 import ee.carlrobert.codegpt.ui.OverlayUtil
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 
 class InlineAskResponseListener(
     private val project: Project,
@@ -41,11 +41,11 @@ class InlineAskResponseListener(
         }
     }
 
-    override fun handleError(error: ErrorDetails?, ex: Throwable?) {
+    override fun handleError(error: ChatError, ex: Throwable) {
         runInEdt {
             inlay.onCompletionFinished()
             CompletionProgressNotifier.update(project, false)
-            val message = error?.message ?: ex?.message ?: "Something went wrong"
+            val message = error.message.ifBlank { ex.message ?: "Something went wrong" }
             OverlayUtil.showNotification(message)
         }
     }

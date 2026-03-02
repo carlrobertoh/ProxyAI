@@ -1,14 +1,13 @@
 package ee.carlrobert.codegpt.inlineedit.engine
 
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
-import ee.carlrobert.codegpt.completions.CompletionClientProvider
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.completions.AutoApplyParameters
+import ee.carlrobert.codegpt.completions.AutoApplyService
 import ee.carlrobert.codegpt.inlineedit.InlineEditSession
-import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
-import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,10 +21,7 @@ class ProxyAIApplyStrategy : ApplyStrategy {
     override fun apply(ctx: ApplyContext) {
         val blocks = MarkdownUtil.extractCodeBlocks(ctx.lastAssistantResponse)
         if (blocks.isEmpty()) return
-
-        val modelSelection =
-            ModelSelectionService.getInstance().getModelSelectionForFeature(FeatureType.AUTO_APPLY)
-        if (modelSelection?.provider != ServiceType.PROXYAI) return
+        val destination = FileDocumentManager.getInstance().getFile(ctx.editor.document) ?: return
 
         val updateSnippet = blocks.joinToString("\n// ... existing code ...\n\n") { it.trimEnd() }
         val original = ctx.editor.document.text
@@ -36,9 +32,13 @@ class ProxyAIApplyStrategy : ApplyStrategy {
             }
 
             val merged = try {
-                CompletionClientProvider.getCodeGPTClient()
-                    .applyChanges(AutoApplyRequest(modelSelection.model, original, updateSnippet))
-                    .mergedCode
+                service<AutoApplyService>().applyCode(
+                    AutoApplyParameters(
+                        source = updateSnippet,
+                        destination = destination
+                    ),
+                    original
+                )
             } catch (_: Exception) {
                 null
             }

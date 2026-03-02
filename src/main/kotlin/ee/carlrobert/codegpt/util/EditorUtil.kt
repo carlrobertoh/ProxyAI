@@ -24,7 +24,6 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.testFramework.LightVirtualFile
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.llm.client.codegpt.request.prediction.FileDetails
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 

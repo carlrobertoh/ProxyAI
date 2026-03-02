@@ -224,7 +224,7 @@ internal object AgentSessionTimelineDialogBuilder {
             object : CheckboxTree.CheckboxTreeCellRenderer() {
                 override fun customizeRenderer(
                     tree: JTree,
-                    value: Any?,
+                    value: Any,
                     selected: Boolean,
                     expanded: Boolean,
                     leaf: Boolean,

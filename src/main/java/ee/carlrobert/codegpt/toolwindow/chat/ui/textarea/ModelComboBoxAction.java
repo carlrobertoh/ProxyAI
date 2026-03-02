@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.toolwindow.chat.ui.textarea;
 
-import static ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.ANTHROPIC;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.CUSTOM_OPENAI;
 import static ee.carlrobert.codegpt.settings.service.ServiceType.GOOGLE;
@@ -32,7 +31,6 @@ import com.intellij.openapi.ui.popup.ListPopup;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
 import ee.carlrobert.codegpt.settings.models.ModelDetailsState;
-import ee.carlrobert.codegpt.settings.models.ModelRegistry;
 import ee.carlrobert.codegpt.settings.models.ModelSelection;
 import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable;
@@ -40,17 +38,11 @@ import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifierAdapter;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState;
-import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings;
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings;
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings;
 import ee.carlrobert.codegpt.toolwindow.ui.CodeGPTModelsListPopupAction;
 import ee.carlrobert.codegpt.toolwindow.ui.ModelListPopup;
-import ee.carlrobert.llm.client.codegpt.PricingPlan;
-import ee.carlrobert.llm.client.google.models.GoogleModel;
-import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel;
 import java.awt.Color;
-import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.Icon;
@@ -63,37 +55,16 @@ public class ModelComboBoxAction extends ComboBoxAction {
   private static final Logger LOG = Logger.getInstance(ModelComboBoxAction.class);
 
   private final Consumer<ServiceType> onModelChange;
-  private final Project project;
   private final List<ServiceType> availableProviders;
   private final boolean showConfigureModels;
   private final FeatureType featureType;
 
   public ModelComboBoxAction(
-      Project project,
-      Consumer<ServiceType> onModelChange,
-      ServiceType selectedService) {
-    this(project, onModelChange, selectedService, Arrays.asList(ServiceType.values()), true,
-        FeatureType.CHAT);
-  }
-
-  public ModelComboBoxAction(
-      Project project,
-      Consumer<ServiceType> onModelChange,
-      ServiceType selectedProvider,
-      List<ServiceType> availableProviders,
-      boolean showConfigureModels) {
-    this(project, onModelChange, selectedProvider, availableProviders, showConfigureModels,
-        FeatureType.CHAT);
-  }
-
-  public ModelComboBoxAction(
-      Project project,
       Consumer<ServiceType> onModelChange,
       ServiceType selectedProvider,
       List<ServiceType> availableProviders,
       boolean showConfigureModels,
       FeatureType featureType) {
-    this.project = project;
     this.onModelChange = onModelChange;
     this.availableProviders = availableProviders;
     this.showConfigureModels = showConfigureModels;
@@ -149,18 +120,9 @@ public class ModelComboBoxAction extends ComboBoxAction {
     return popup;
   }
 
-  private AnAction[] getCodeGPTModelActions(Project project, Presentation presentation) {
-    var registry = ModelRegistry.getInstance();
-    if (featureType == FeatureType.AGENT) {
-      return registry.getAllModelsForFeature(featureType).stream()
-          .filter(model -> model.getProvider() == PROXYAI)
-          .map(model -> createCodeGPTModelAction(model, presentation))
-          .toArray(AnAction[]::new);
-    }
-
-    var userDetails = CODEGPT_USER_DETAILS.get(project);
-    return registry.getProxyAIChatModelsForPricingPlan(
-            userDetails == null ? null : userDetails.getPricingPlan()).stream()
+  private AnAction[] getProxyAIModelActions(Presentation presentation) {
+    return getAvailableModelsForFeature().stream()
+        .filter(model -> model.getProvider() == PROXYAI)
         .map(model -> createCodeGPTModelAction(model, presentation))
         .toArray(AnAction[]::new);
   }
@@ -175,85 +137,93 @@ public class ModelComboBoxAction extends ComboBoxAction {
     if (availableProviders.contains(PROXYAI)) {
       var proxyAIGroup = DefaultActionGroup.createPopupGroup(() -> "ProxyAI");
       proxyAIGroup.getTemplatePresentation().setIcon(Icons.DefaultSmall);
-      proxyAIGroup.addAll(getCodeGPTModelActions(project, presentation));
+      proxyAIGroup.addAll(getProxyAIModelActions(presentation));
       actionGroup.add(proxyAIGroup);
     }
 
     if (availableProviders.contains(ANTHROPIC)) {
       var anthropicGroup = DefaultActionGroup.createPopupGroup(() -> "Anthropic");
       anthropicGroup.getTemplatePresentation().setIcon(Icons.Anthropic);
-      ModelRegistry.getInstance().getAgentModels(ANTHROPIC).forEach(item ->
-          anthropicGroup.add(createModelAction(
-              ANTHROPIC,
-              item.getName(),
-              Icons.Anthropic,
-              presentation,
-              () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-                  .setModel(featureType, item.getModel().getId(), ANTHROPIC))));
+      getAvailableModelsForFeature().stream()
+          .filter(model -> model.getProvider() == ANTHROPIC)
+          .forEach(item -> {
+            anthropicGroup.add(createModelAction(
+                ANTHROPIC,
+                item.getDisplayName(),
+                Icons.Anthropic,
+                presentation,
+                () -> ApplicationManager.getApplication().getService(ModelSettings.class)
+                    .setModel(featureType, item.getModel(), ANTHROPIC)));
+          });
       actionGroup.add(anthropicGroup);
     }
 
     if (availableProviders.contains(OPENAI)) {
       var openaiGroup = DefaultActionGroup.createPopupGroup(() -> "OpenAI");
       openaiGroup.getTemplatePresentation().setIcon(Icons.OpenAI);
-      if (featureType == FeatureType.AGENT) {
-        addOpenAIGroupForAgent(openaiGroup, presentation);
-      } else {
-        addOpenAIGroupForChat(openaiGroup, presentation);
-      }
+      getAvailableModelsForFeature().stream()
+          .filter(model -> model.getProvider() == OPENAI)
+          .forEach(item -> {
+            openaiGroup.add(createModelAction(
+                OPENAI,
+                item.getDisplayName(),
+                Icons.OpenAI,
+                presentation,
+                () -> ApplicationManager.getApplication().getService(ModelSettings.class)
+                    .setModel(featureType, item.getModel(), OPENAI)));
+          });
       actionGroup.add(openaiGroup);
     }
 
     if (availableProviders.contains(CUSTOM_OPENAI)) {
-      List<CustomServiceSettingsState> services = ApplicationManager.getApplication()
-          .getService(CustomServicesSettings.class)
-          .getState()
-          .getServices();
-
       var customGroup = DefaultActionGroup.createPopupGroup(() -> "Custom OpenAI");
       customGroup.getTemplatePresentation().setIcon(Icons.OpenAI);
-      services.forEach(model ->
-          customGroup.add(createCustomOpenAIModelAction(model, presentation))
-      );
+      getAvailableModelsForFeature().stream()
+          .filter(model -> model.getProvider() == CUSTOM_OPENAI)
+          .forEach(model -> customGroup.add(createModelAction(
+              CUSTOM_OPENAI,
+              model.getDisplayName(),
+              Icons.OpenAI,
+              presentation,
+              () -> ApplicationManager.getApplication().getService(ModelSettings.class)
+                  .setModel(featureType, model.getModel(), CUSTOM_OPENAI))));
       actionGroup.add(customGroup);
     }
 
     if (availableProviders.contains(GOOGLE)) {
       var googleGroup = DefaultActionGroup.createPopupGroup(() -> "Google");
       googleGroup.getTemplatePresentation().setIcon(Icons.Google);
-
-      ModelRegistry.getInstance().getAgentModels(GOOGLE).forEach(item ->
-          googleGroup.add(createModelAction(
+      getAvailableModelsForFeature().stream()
+          .filter(model -> model.getProvider() == GOOGLE)
+          .forEach(item -> googleGroup.add(createModelAction(
               GOOGLE,
-              item.getName(),
+              item.getDisplayName(),
               Icons.Google,
               presentation,
-              () -> {
-                var application = ApplicationManager.getApplication();
-                application.getService(ModelSettings.class)
-                    .setModel(featureType, item.getModel().getId(), GOOGLE);
-              })));
+              () -> ApplicationManager.getApplication().getService(ModelSettings.class)
+                  .setModel(featureType, item.getModel(), GOOGLE))));
       actionGroup.add(googleGroup);
     }
 
     if (availableProviders.contains(MISTRAL)) {
       var mistralGroup = DefaultActionGroup.createPopupGroup(() -> "Mistral");
       mistralGroup.getTemplatePresentation().setIcon(Icons.Mistral);
-      ModelRegistry.getInstance().getAgentModels(MISTRAL).forEach(item ->
-          mistralGroup.add(createModelAction(
+      getAvailableModelsForFeature().stream()
+          .filter(model -> model.getProvider() == MISTRAL)
+          .forEach(item -> mistralGroup.add(createModelAction(
               MISTRAL,
-              item.getName(),
+              item.getDisplayName(),
               Icons.Mistral,
               presentation,
               () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-                  .setModel(featureType, item.getModel().getId(), MISTRAL))));
+                  .setModel(featureType, item.getModel(), MISTRAL))));
       actionGroup.add(mistralGroup);
     }
 
     if (availableProviders.contains(INCEPTION)) {
       var inceptionGroup = DefaultActionGroup.createPopupGroup(() -> "Inception");
       inceptionGroup.getTemplatePresentation().setIcon(Icons.Inception);
-      inceptionGroup.add(createInceptionModelAction(ModelRegistry.MERCURY, presentation));
+      inceptionGroup.add(createInceptionModelAction(presentation));
       actionGroup.add(inceptionGroup);
     }
 
@@ -312,7 +282,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
 
     switch (selectedService) {
       case PROXYAI:
-        var proxyAIModel = ModelRegistry.getInstance().getAllModelsForFeature(featureType).stream()
+        var proxyAIModel = getAvailableModelsForFeature().stream()
             .filter(it -> it.getProvider() == PROXYAI)
             .filter(it -> modelCode != null && it.getModel().equals(modelCode))
             .findFirst();
@@ -323,36 +293,36 @@ public class ModelComboBoxAction extends ComboBoxAction {
         break;
       case OPENAI:
         templatePresentation.setIcon(Icons.OpenAI);
-        var openAIModelName = ModelRegistry.getInstance().getModelDisplayName(OPENAI, modelCode);
+        var openAIModelName = getModelSettings().getModelDisplayName(OPENAI, modelCode);
         templatePresentation.setText(openAIModelName);
         break;
       case CUSTOM_OPENAI:
-        ModelRegistry.getInstance().getCustomOpenAIModels().stream()
-            .filter(it -> {
-              var id = it.getId();
-              return id != null && id.equals(modelCode);
-            })
+        getAvailableModelsForFeature().stream()
+            .filter(it -> it.getProvider() == CUSTOM_OPENAI)
+            .filter(it -> modelCode != null && modelCode.equals(it.getModel()))
             .findFirst()
-            .ifPresent(selection -> {
-              templatePresentation.setIcon(Icons.OpenAI);
-              templatePresentation.setText(selection.getDisplayName());
-            });
+            .ifPresentOrElse(selection -> {
+                  templatePresentation.setIcon(Icons.OpenAI);
+                  templatePresentation.setText(selection.getDisplayName());
+                },
+                () -> {
+                  templatePresentation.setIcon(Icons.OpenAI);
+                  templatePresentation.setText(
+                      getModelSettings().getModelDisplayName(CUSTOM_OPENAI, modelCode));
+                });
         break;
       case ANTHROPIC:
         templatePresentation.setIcon(Icons.Anthropic);
-        var anthropicModelName = ModelRegistry.getInstance()
-            .getModelDisplayName(ANTHROPIC, modelCode);
+        var anthropicModelName = getModelSettings().getModelDisplayName(ANTHROPIC, modelCode);
         templatePresentation.setText(anthropicModelName);
         break;
       case LLAMA_CPP:
-        templatePresentation.setText(getLlamaCppPresentationText());
+        templatePresentation.setText(getModelSettings().getModelDisplayName(LLAMA_CPP, modelCode));
         templatePresentation.setIcon(Icons.Llama);
         break;
       case OLLAMA:
         templatePresentation.setIcon(Icons.Ollama);
-        templatePresentation.setText(application.getService(OllamaSettings.class)
-            .getState()
-            .getModel());
+        templatePresentation.setText(getModelSettings().getModelDisplayName(OLLAMA, modelCode));
         break;
       case GOOGLE:
         templatePresentation.setText(getGooglePresentationText());
@@ -364,8 +334,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         break;
       case INCEPTION:
         templatePresentation.setIcon(Icons.Inception);
-        var inceptionModelName = ModelRegistry.getInstance()
-            .getModelDisplayName(INCEPTION, modelCode);
+        var inceptionModelName = getModelSettings().getModelDisplayName(INCEPTION, modelCode);
         templatePresentation.setText(inceptionModelName);
         break;
       default:
@@ -378,12 +347,16 @@ public class ModelComboBoxAction extends ComboBoxAction {
         .getService(ModelSettings.class)
         .getState()
         .getModelSelection(featureType);
-    return ModelRegistry.getInstance().getModelDisplayName(GOOGLE, getGoogleModelCode(chatModel));
+    return getModelSettings().getModelDisplayName(GOOGLE, getGoogleModelCode(chatModel));
   }
 
   private String getGoogleModelCode(@Nullable ModelDetailsState chatModel) {
     if (chatModel == null || chatModel.getModel() == null || chatModel.getModel().isBlank()) {
-      return ModelRegistry.GEMINI_PRO_2_5;
+      return getAvailableModelsForFeature().stream()
+          .filter(model -> model.getProvider() == GOOGLE)
+          .map(ModelSelection::getModel)
+          .findFirst()
+          .orElse("");
     }
 
     return chatModel.getModel();
@@ -434,36 +407,20 @@ public class ModelComboBoxAction extends ComboBoxAction {
 
   private AnAction createCodeGPTModelAction(ModelSelection model,
       Presentation comboBoxPresentation) {
-    var selected = model.getDisplayName().equals(comboBoxPresentation.getText());
-    var locked = shouldLockModel(model);
-    return new CodeGPTModelsListPopupAction(model.getDisplayName(), model.getModel(),
+    var selected = isModelSelected(PROXYAI, model.getModel());
+    return new CodeGPTModelsListPopupAction(
+        model.getDisplayName(),
+        model.getModel(),
         model.getIcon() != null ? model.getIcon() : Icons.DefaultSmall,
-        model.getPricingPlan() != null ? model.getPricingPlan() : PricingPlan.ANONYMOUS,
-        locked, selected, () -> {
-      var application = ApplicationManager.getApplication();
-      application
+        false,
+        selected,
+        () -> {
+      ApplicationManager.getApplication()
           .getService(ModelSettings.class)
           .setModel(featureType, model.getModel(), PROXYAI);
 
       handleModelChange(PROXYAI);
-    });
-  }
-
-  private boolean shouldLockModel(ModelSelection model) {
-    if (featureType == FeatureType.AGENT) {
-      return false;
-    }
-
-    var userDetails = CODEGPT_USER_DETAILS.get(project);
-    if (userDetails != null) {
-      if (userDetails.getPricingPlan() == PricingPlan.INDIVIDUAL) {
-        return false;
-      }
-      if (userDetails.getPricingPlan() == PricingPlan.FREE) {
-        return model.getPricingPlan() == PricingPlan.INDIVIDUAL;
-      }
-    }
-    return model.getPricingPlan() != PricingPlan.ANONYMOUS;
+        });
   }
 
   private AnAction createOllamaModelAction(String model, Presentation comboBoxPresentation) {
@@ -480,92 +437,6 @@ public class ModelComboBoxAction extends ComboBoxAction {
         });
   }
 
-  private AnAction createOpenAIModelAction(
-      OpenAIChatCompletionModel model,
-      Presentation comboBoxPresentation) {
-    var modelName = ModelRegistry.getInstance().getModelDisplayName(OPENAI, model.getCode());
-    return createModelAction(
-        OPENAI,
-        modelName,
-        Icons.OpenAI,
-        comboBoxPresentation,
-        () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(featureType, model.getCode(), OPENAI));
-  }
-
-  private void addOpenAIGroupForAgent(DefaultActionGroup openaiGroup, Presentation presentation) {
-    ModelRegistry.getInstance().getAgentModels(OPENAI).forEach(item ->
-        openaiGroup.add(createModelAction(
-            OPENAI,
-            item.getName(),
-            Icons.OpenAI,
-            presentation,
-            () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-                .setModel(featureType, item.getModel().getId(), OPENAI))));
-  }
-
-  private void addOpenAIGroupForChat(DefaultActionGroup openaiGroup, Presentation presentation) {
-    List.of(
-            OpenAIChatCompletionModel.GPT_5,
-            OpenAIChatCompletionModel.GPT_5_MINI,
-            OpenAIChatCompletionModel.O_4_MINI,
-            OpenAIChatCompletionModel.O_3,
-            OpenAIChatCompletionModel.O_3_MINI,
-            OpenAIChatCompletionModel.O_1_PREVIEW,
-            OpenAIChatCompletionModel.O_1_MINI,
-            OpenAIChatCompletionModel.GPT_4_1,
-            OpenAIChatCompletionModel.GPT_4_1_MINI,
-            OpenAIChatCompletionModel.GPT_4_1_NANO,
-            OpenAIChatCompletionModel.GPT_4_O,
-            OpenAIChatCompletionModel.GPT_4_O_MINI,
-            OpenAIChatCompletionModel.GPT_4_0125_128k)
-        .forEach(model -> openaiGroup.add(createOpenAIModelAction(model, presentation)));
-  }
-
-  private AnAction createCustomOpenAIModelAction(
-      CustomServiceSettingsState state,
-      Presentation comboBoxPresentation) {
-    var model = state.getChatCompletionSettings().getBody().get("model");
-    var displayName =
-        state.getName()
-            + ((model instanceof String && !((String) model).isEmpty()) ? " (" + model + ")" : "");
-
-    return createModelAction(
-        CUSTOM_OPENAI,
-        displayName,
-        Icons.OpenAI,
-        comboBoxPresentation,
-        () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(featureType, state.getId(), CUSTOM_OPENAI));
-  }
-
-  private AnAction createGoogleModelAction(GoogleModel model, Presentation comboBoxPresentation) {
-    var modelName = ModelRegistry.getInstance().getModelDisplayName(GOOGLE, model.getCode());
-    return createModelAction(
-        GOOGLE,
-        modelName,
-        Icons.Google,
-        comboBoxPresentation,
-        () -> {
-          var application = ApplicationManager.getApplication();
-          application.getService(ModelSettings.class)
-              .setModel(featureType, model.getCode(), GOOGLE);
-        });
-  }
-
-  private AnAction createAnthropicModelAction(
-      String modelCode,
-      Presentation comboBoxPresentation) {
-    var modelName = ModelRegistry.getInstance().getModelDisplayName(ANTHROPIC, modelCode);
-    return createModelAction(
-        ANTHROPIC,
-        modelName,
-        Icons.Anthropic,
-        comboBoxPresentation,
-        () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(featureType, modelCode, ANTHROPIC));
-  }
-
   private AnAction createLlamaModelAction(Presentation comboBoxPresentation) {
     return createModelAction(
         LLAMA_CPP,
@@ -577,19 +448,13 @@ public class ModelComboBoxAction extends ComboBoxAction {
                 LlamaSettings.getCurrentState().getHuggingFaceModel().getCode(), LLAMA_CPP));
   }
 
-  private AnAction createMistralModelAction(String modelCode, Presentation comboBoxPresentation) {
-    var modelName = ModelRegistry.getInstance().getModelDisplayName(MISTRAL, modelCode);
-    return createModelAction(
-        MISTRAL,
-        modelName,
-        Icons.Mistral,
-        comboBoxPresentation,
-        () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(featureType, modelCode, MISTRAL));
-  }
-
-  private AnAction createInceptionModelAction(String modelCode, Presentation comboBoxPresentation) {
-    var modelName = ModelRegistry.getInstance().getModelDisplayName(INCEPTION, modelCode);
+  private AnAction createInceptionModelAction(Presentation comboBoxPresentation) {
+    var modelCode = getAvailableModelsForFeature().stream()
+        .filter(model -> model.getProvider() == INCEPTION)
+        .map(ModelSelection::getModel)
+        .findFirst()
+        .orElse("mercury");
+    var modelName = getModelSettings().getModelDisplayName(INCEPTION, modelCode);
     return createModelAction(
         INCEPTION,
         modelName,
@@ -603,6 +468,22 @@ public class ModelComboBoxAction extends ComboBoxAction {
     var chatModel = ApplicationManager.getApplication().getService(ModelSettings.class).getState()
         .getModelSelection(featureType);
     var modelCode = chatModel != null ? chatModel.getModel() : null;
-    return ModelRegistry.getInstance().getModelDisplayName(MISTRAL, modelCode);
+    return getModelSettings().getModelDisplayName(MISTRAL, modelCode);
+  }
+
+  private ModelSettings getModelSettings() {
+    return ApplicationManager.getApplication().getService(ModelSettings.class);
+  }
+
+  private List<ModelSelection> getAvailableModelsForFeature() {
+    return getModelSettings().getAvailableModels(featureType);
+  }
+
+  private boolean isModelSelected(ServiceType serviceType, @Nullable String modelCode) {
+    var current = getModelSettings().getState().getModelSelection(featureType);
+    if (current == null || current.getProvider() != serviceType || modelCode == null) {
+      return false;
+    }
+    return modelCode.equals(current.getModel());
   }
 }

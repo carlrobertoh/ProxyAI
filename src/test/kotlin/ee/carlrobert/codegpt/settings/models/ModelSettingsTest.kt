@@ -177,27 +177,27 @@ class ModelSettingsTest : IntegrationTest() {
     }
 
     fun `test getModelSelection with valid feature returns model selection`() {
-        modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4o", ServiceType.OPENAI)
+        modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4.1", ServiceType.OPENAI)
 
         val result = modelSettings.getModelSelection(FeatureType.CHAT)
 
         assertThat(result).isNotNull
         assertThat(result?.provider).isEqualTo(ServiceType.OPENAI)
-        assertThat(result?.model).isEqualTo("gpt-4o")
+        assertThat(result?.model).isEqualTo("gpt-4.1")
     }
 
     fun `test getModelForFeature returns stored model`() {
-        modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4o", ServiceType.OPENAI)
+        modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4.1", ServiceType.OPENAI)
 
-        val result = modelSettings.getModelForFeature(FeatureType.CHAT)
+        val result = modelSettings.getStoredModelForFeature(FeatureType.CHAT)
 
-        assertThat(result).isEqualTo("gpt-4o")
+        assertThat(result).isEqualTo("gpt-4.1")
     }
 
     fun `test getProviderForFeature returns stored provider`() {
-        modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4o", ServiceType.OPENAI)
+        modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4.1", ServiceType.OPENAI)
 
-        val result = modelSettings.getProviderForFeature(FeatureType.CHAT)
+        val result = modelSettings.getStoredProviderForFeature(FeatureType.CHAT)
 
         assertThat(result).isEqualTo(ServiceType.OPENAI)
     }
@@ -205,13 +205,13 @@ class ModelSettingsTest : IntegrationTest() {
     fun `test migrateMissingProviderInformation updates missing providers`() {
         val state = ModelSettingsState()
         val detailsState = ModelDetailsState()
-        detailsState.model = "gpt-4o"
+        detailsState.model = "gpt-4.1"
         detailsState.provider = null
         state.modelSelections["CHAT"] = detailsState
 
         modelSettings.loadState(state)
 
-        val result = modelSettings.getProviderForFeature(FeatureType.CHAT)
+        val result = modelSettings.getStoredProviderForFeature(FeatureType.CHAT)
         assertThat(result).isEqualTo(ServiceType.OPENAI)
     }
 
@@ -224,7 +224,7 @@ class ModelSettingsTest : IntegrationTest() {
 
         modelSettings.loadState(state)
 
-        assertThat(modelSettings.getModelForFeature(FeatureType.CHAT)).isEqualTo("unknown-model")
-        assertThat(modelSettings.getProviderForFeature(FeatureType.CHAT)).isNull()
+        assertThat(modelSettings.getStoredModelForFeature(FeatureType.CHAT)).isEqualTo("unknown-model")
+        assertThat(modelSettings.getStoredProviderForFeature(FeatureType.CHAT)).isNull()
     }
 }

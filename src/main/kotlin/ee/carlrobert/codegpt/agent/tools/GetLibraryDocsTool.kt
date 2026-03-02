@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets
  */
 class GetLibraryDocsTool(
     workingDirectory: String,
+    sessionId: String,
     hookManager: HookManager
 ) : BaseTool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Result>(
     workingDirectory = workingDirectory,
@@ -30,7 +31,8 @@ class GetLibraryDocsTool(
     """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     @Serializable

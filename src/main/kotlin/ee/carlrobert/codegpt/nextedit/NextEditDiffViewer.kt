@@ -317,7 +317,7 @@ class NextEditDiffViewer(
 
 fun createSimpleDiffRequest(editor: Editor, nextRevision: String): SimpleDiffRequest {
     val project = editor.project
-    val virtualFile = editor.virtualFile
+    val virtualFile = requireNotNull(editor.virtualFile) { "Editor virtual file is required for diff request." }
     val tempDiffFile = LightVirtualFile(virtualFile.name, nextRevision)
     val diffContentFactory = DiffContentFactory.getInstance()
     return SimpleDiffRequest(

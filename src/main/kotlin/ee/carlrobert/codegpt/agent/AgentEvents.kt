@@ -1,9 +1,7 @@
 package ee.carlrobert.codegpt.agent
 
-import ai.koog.prompt.executor.clients.LLMClientException
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.tools.AskUserQuestionTool
-import ee.carlrobert.codegpt.conversations.message.TokenUsage
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
@@ -23,12 +21,12 @@ interface AgentEvents {
     ) {
     }
 
-    fun onRetry(attempt: Int, maxAttempts: Int, reason: String? = null) {}
+    fun onRetry(attempt: Int, maxAttempts: Int) {}
     fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {}
     fun onQueuedMessagesResolved()
     fun onTokenUsageAvailable(tokenUsage: Long) {}
     fun onCreditsAvailable(event: AgentCreditsEvent) {}
-    fun onClientException(provider: ServiceType, ex: LLMClientException) {}
+    fun onAgentException(provider: ServiceType, throwable: Throwable) {}
     fun onHistoryCompressionStateChanged(isCompressing: Boolean) {}
 
     suspend fun approveToolCall(request: ToolApprovalRequest): Boolean = false

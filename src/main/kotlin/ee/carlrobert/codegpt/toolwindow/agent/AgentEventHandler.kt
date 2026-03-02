@@ -1,12 +1,13 @@
 package ee.carlrobert.codegpt.toolwindow.agent
 
+import ai.koog.agents.core.agent.exception.AIAgentStuckInTheNodeException
 import ai.koog.http.client.KoogHttpClientException
-import ai.koog.prompt.executor.clients.LLMClientException
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
@@ -16,6 +17,7 @@ import ee.carlrobert.codegpt.agent.*
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.ui.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.*
@@ -48,7 +50,7 @@ class AgentEventHandler(
 ) : AgentEvents, Disposable {
 
     companion object {
-        val logger = thisLogger()
+        val logger: Logger = thisLogger()
     }
 
     private val mainToolCards = ConcurrentHashMap<String, ToolCallCard>()
@@ -182,38 +184,19 @@ class AgentEventHandler(
         handleDone()
     }
 
-    override fun onClientException(provider: ServiceType, ex: LLMClientException) {
-        val cause = ex.cause
-        if (cause is KoogHttpClientException) {
-            if (provider == ServiceType.PROXYAI) {
-                handleProxyAIException(cause)
-            } else {
-                handleException(cause)
-            }
+    override fun onAgentException(provider: ServiceType, throwable: Throwable) {
+        val statusCode = extractStatusCode(throwable)
+        if (statusCode != null) {
+            handleHttpException(provider, statusCode, throwable)
+            return
         }
+
+        currentResponseBody?.displayError(extractDisplayMessage(throwable))
+        handleDone()
     }
 
-    private fun handleException(ex: KoogHttpClientException) {
-        when (ex.statusCode) {
-            401 -> {
-                currentResponseBody?.displayMissingCredential()
-                handleDone()
-            }
-
-            403 -> {
-                currentResponseBody?.displayForbidden()
-                handleDone()
-            }
-
-            else -> {
-                currentResponseBody?.displayError(ex.message)
-                handleDone()
-            }
-        }
-    }
-
-    private fun handleProxyAIException(ex: KoogHttpClientException) {
-        when (ex.statusCode) {
+    private fun handleHttpException(provider: ServiceType, statusCode: Int, throwable: Throwable) {
+        when (statusCode) {
             401 -> {
                 currentResponseBody?.displayMissingCredential()
                 handleDone()
@@ -225,15 +208,52 @@ class AgentEventHandler(
             }
 
             429 -> {
-                currentResponseBody?.displayCreditsExhausted()
+                if (provider == ServiceType.PROXYAI) {
+                    currentResponseBody?.displayCreditsExhausted()
+                } else {
+                    currentResponseBody?.displayError(extractDisplayMessage(throwable))
+                }
                 handleDone()
             }
 
             else -> {
-                currentResponseBody?.displayError("Something went wrong. Please try again.")
+                if (provider == ServiceType.PROXYAI) {
+                    currentResponseBody?.displayError(CodeGPTBundle.get("toolwindow.agent.error.generic"))
+                } else {
+                    currentResponseBody?.displayError(extractDisplayMessage(throwable))
+                }
                 handleDone()
             }
         }
+    }
+
+    private fun extractStatusCode(throwable: Throwable): Int? {
+        return generateSequence(throwable) { it.cause }
+            .take(10)
+            .firstNotNullOfOrNull { cause ->
+                when (cause) {
+                    is KoogHttpClientException -> cause.statusCode
+                    is CodeGPTApiException -> cause.status.takeIf { it > 0 }
+                    else -> null
+                }
+            }
+    }
+
+    private fun extractDisplayMessage(throwable: Throwable): String {
+        val causes = generateSequence(throwable) { it.cause }.take(10).toList()
+        if (causes.any { it is AIAgentStuckInTheNodeException }) {
+            return CodeGPTBundle.get("toolwindow.agent.error.executionFailed")
+        }
+
+        val message = causes.firstNotNullOfOrNull { cause ->
+            when (cause) {
+                is CodeGPTApiException -> cause.detail?.takeIf { it.isNotBlank() } ?: cause.title
+                is KoogHttpClientException -> cause.errorBody?.takeIf { it.isNotBlank() } ?: cause.message
+                else -> cause.message
+            }?.trim()?.takeIf { it.isNotEmpty() }
+        } ?: CodeGPTBundle.get("toolwindow.agent.error.generic")
+
+        return if (message.length > 400) "${message.take(400)}..." else message
     }
 
     private fun handleDone() {
@@ -317,9 +337,7 @@ class AgentEventHandler(
 
     override fun onTextReceived(text: String) {
         runInEdt {
-            val cleanedText =
-                text.replace(Regex("<tool_call>.*?<tool_call>", RegexOption.DOT_MATCHES_ALL), "")
-            currentResponseBody?.updateMessage(cleanedText)
+            currentResponseBody?.updateMessage(text)
             scrollablePanel.update()
             scrollablePanel.scrollToBottom()
         }
@@ -518,14 +536,9 @@ class AgentEventHandler(
             .onCreditsChanged(event)
     }
 
-    override fun onRetry(attempt: Int, maxAttempts: Int, reason: String?) {
-        val suffix = "($attempt/$maxAttempts)"
-        val base = when {
-            reason?.contains("timeout", ignoreCase = true) == true -> "Request timed out, retrying"
-            else -> "Retrying"
-        }
+    override fun onRetry(attempt: Int, maxAttempts: Int) {
         runInEdt {
-            onShowLoading("$base $suffix")
+            onShowLoading(CodeGPTBundle.get("toolwindow.agent.retrying", attempt, maxAttempts))
         }
     }
 

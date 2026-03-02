@@ -39,7 +39,5 @@ class GoogleSettingsForm {
         apiKeyField.text = getCredential(GoogleApiKey)
     }
 
-    fun isModified(): Boolean = service<GoogleSettings>().state.run {
-        getApiKey() != getCredential(GoogleApiKey)
-    }
+    fun isModified(): Boolean = getApiKey() != getCredential(GoogleApiKey)
 }

@@ -62,7 +62,7 @@ class InfillRequest private constructor(
             this.caretOffset = caretOffset
             this.stopTokens = getStopTokens()
             this.editor = editor
-            this.fileDetails = FileDetails(editor.document.text, editor.virtualFile.path)
+            this.fileDetails = FileDetails(editor.document.text, editor.virtualFile?.path ?: "")
         }
 
         fun gitDiff(gitDiff: String) =
@@ -100,8 +100,8 @@ class InfillRequest private constructor(
                 prefix
             }
             return InfillRequest(
-                modifiedPrefix,
-                suffix,
+                modifiedPrefix.truncateText(MAX_PROMPT_TOKENS, false),
+                suffix.truncateText(MAX_PROMPT_TOKENS),
                 caretOffset,
                 editor,
                 fileDetails,

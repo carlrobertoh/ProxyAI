@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
@@ -12,15 +13,15 @@ import com.intellij.openapi.ui.JBPopupMenu
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.completions.AutoApplyParameters
+import ee.carlrobert.codegpt.completions.CancellableRequest
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION
 import ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.*
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.StringUtil
-import okhttp3.sse.EventSource
 import javax.swing.JPanel
 
 class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
@@ -29,7 +30,6 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         private val logger = thisLogger()
     }
 
-    private var currentEventSource: EventSource? = null
     private val loadingPanel = LoadingPanel(
         CodeGPTBundle.get("toolwindow.chat.editor.diff.thinking")
     ) {
@@ -49,12 +49,11 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
     }
 
     fun setLoading(
-        eventSource: EventSource? = null,
+        request: CancellableRequest? = null,
         label: String = CodeGPTBundle.get("toolwindow.chat.editor.diff.applying")
     ) {
-        currentEventSource = eventSource
         loadingPanel.setText(label)
-        loadingPanel.setEventSource(eventSource)
+        loadingPanel.setRequest(request)
 
         runInEdt {
             setRightPanelComponent(loadingPanel)
@@ -63,7 +62,6 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
 
     fun handleDone() {
         runInEdt {
-            currentEventSource = null
             setRightPanelComponent(createHeaderActions().component)
         }
     }
@@ -105,12 +103,11 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
                 return
             }
 
-            val modelSelection =
-                ModelSelectionService.getInstance()
-                    .getModelSelectionForFeature(FeatureType.AUTO_APPLY);
+            val modelSelection = service<ModelSettings>()
+                .getModelSelectionForFeature(FeatureType.AUTO_APPLY)
             val params = AutoApplyParameters(editor.document.text, file)
             if (listOf(PROXYAI, INCEPTION).any { it == modelSelection.provider }) {
-                responseEditorPanel.applyCode(modelSelection, params, this)
+                responseEditorPanel.applyCode(params, this)
             } else {
                 responseEditorPanel.applyCodeAsync(editor.document.text, file, editor, this)
             }

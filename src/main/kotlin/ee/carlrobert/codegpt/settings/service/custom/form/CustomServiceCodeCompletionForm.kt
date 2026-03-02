@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.settings.service.custom.form
 
 import com.intellij.icons.AllIcons.General
 import com.intellij.ide.HelpTooltip
+import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.MessageType
 import com.intellij.openapi.ui.panel.ComponentPanelBuilder
@@ -10,19 +11,18 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.FormBuilder
 import ee.carlrobert.codegpt.CodeGPTBundle
-import ee.carlrobert.codegpt.codecompletions.CodeCompletionRequestFactory
+import ee.carlrobert.codegpt.codecompletions.CodeCompletionService
 import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
 import ee.carlrobert.codegpt.codecompletions.InfillRequest
-import ee.carlrobert.codegpt.completions.CompletionRequestService
+import ee.carlrobert.codegpt.completions.CancellableRequest
+import ee.carlrobert.codegpt.completions.CompletionError
+import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
 import ee.carlrobert.codegpt.settings.Placeholder
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceCodeCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceFormTabbedPane
 import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceCodeCompletionSettingsData
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.URLTextField
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
-import ee.carlrobert.llm.completion.CompletionEventListener
-import okhttp3.sse.EventSource
 import org.apache.commons.text.StringEscapeUtils
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -164,43 +164,37 @@ class CustomServiceCodeCompletionForm(
         testConnectionButton.isEnabled = false
         testConnectionButton.text = "Testing..."
 
-        val selectedTemplate = promptTemplateComboBox.selectedItem as InfillPromptTemplate
-        val testRequest = InfillRequest.Builder("Hello", "!", 0).build()
-        
-        if (selectedTemplate == InfillPromptTemplate.CHAT_COMPLETION) {
-            // Use chat completion endpoint for testing
-            CompletionRequestService.getInstance().getCustomOpenAIChatCompletionAsync(
-                CodeCompletionRequestFactory.buildChatBasedFIMHttpRequest(
-                    testRequest,
-                    urlField.text,
-                    tabbedPane.headers,
-                    tabbedPane.body,
-                    getApiKey.invoke()
-                ),
-                TestConnectionEventListener()
-            )
-        } else {
-            // Use traditional completion endpoint for testing
-            CompletionRequestService.getInstance().getCustomOpenAICompletionAsync(
-                CodeCompletionRequestFactory.buildCustomRequest(
-                    testRequest,
-                    urlField.text,
-                    tabbedPane.headers,
-                    tabbedPane.body,
-                    selectedTemplate,
-                    getApiKey.invoke()
-                ),
-                TestConnectionEventListener()
-            )
+        val settings = CustomServiceCodeCompletionSettingsState().apply {
+            codeCompletionsEnabled = true
+            parseResponseAsChatCompletions = this@CustomServiceCodeCompletionForm.parseResponseAsChatCompletions
+            infillTemplate = this@CustomServiceCodeCompletionForm.infillTemplate
+            url = urlField.text
+            headers.clear()
+            headers.putAll(tabbedPane.headers)
+            body.clear()
+            body.putAll(tabbedPane.body)
         }
+
+        val listener = TestConnectionEventListener()
+        val request = service<CodeCompletionService>().testCustomOpenAIConnectionAsync(
+            settings = settings,
+            apiKey = getApiKey.invoke(),
+            eventListener = listener
+        )
+        listener.attachRequest(request)
     }
 
 
-    internal inner class TestConnectionEventListener : CompletionEventListener<String?> {
+    internal inner class TestConnectionEventListener : CompletionStreamEventListener {
         private var responseReceived = false
+        private var request: CancellableRequest? = null
 
-        override fun onMessage(value: String?, eventSource: EventSource) {
-            if (!responseReceived) {
+        fun attachRequest(request: CancellableRequest) {
+            this.request = request
+        }
+
+        override fun onMessage(message: String) {
+            if (!responseReceived && message.isNotBlank()) {
                 responseReceived = true
                 testConnectionButton.isEnabled = true
                 testConnectionButton.text =
@@ -210,11 +204,11 @@ class CustomServiceCodeCompletionForm(
                     MessageType.INFO,
                     testConnectionButton
                 )
-                eventSource.cancel()
+                request?.cancel()
             }
         }
 
-        override fun onError(error: ErrorDetails, ex: Throwable) {
+        override fun onError(error: CompletionError, ex: Throwable) {
             testConnectionButton.isEnabled = true
             testConnectionButton.text =
                 CodeGPTBundle.get("settingsConfigurable.service.custom.openai.testConnection.label")

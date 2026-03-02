@@ -3,18 +3,19 @@ package ee.carlrobert.codegpt.settings.migration
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.models.ModelRegistry
+import ee.carlrobert.codegpt.settings.models.Devstral2
+import ee.carlrobert.codegpt.settings.models.ModelCatalog
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.models.ModelSettingsState
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceSettings
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
-import ee.carlrobert.codegpt.settings.service.google.GoogleSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
-import ee.carlrobert.llm.client.google.models.GoogleModel
+import ai.koog.prompt.executor.clients.google.GoogleModels
 
 object LegacySettingsMigration {
 
@@ -38,9 +39,18 @@ object LegacySettingsMigration {
     }
 
     private fun createMigratedState(selectedService: ServiceType): ModelSettingsState {
+        val modelSettings = service<ModelSettings>()
         return ModelSettingsState().apply {
             val chatModel = getLegacyChatModelForService(selectedService)
-            val agentModel = getLegacyAgentModelForService(selectedService, chatModel)
+            val agentModel = if (modelSettings.isFeatureSupportedByProvider(
+                    FeatureType.AGENT,
+                    selectedService
+                )
+            ) {
+                getLegacyAgentModelForService(selectedService, chatModel)
+            } else {
+                null
+            }
 
             setModelSelection(FeatureType.AGENT, agentModel, selectedService)
             setModelSelection(FeatureType.CHAT, chatModel, selectedService)
@@ -52,11 +62,15 @@ object LegacySettingsMigration {
             val codeModel = getLegacyCodeModelForService(selectedService)
             setModelSelection(FeatureType.CODE_COMPLETION, codeModel, selectedService)
 
-            if (selectedService == ServiceType.PROXYAI) {
-                setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.MERCURY_CODER, ServiceType.PROXYAI)
+            val nextEditModel = if (selectedService == ServiceType.PROXYAI) {
+                ModelCatalog.MERCURY_CODER
             } else {
-                setModelSelection(FeatureType.NEXT_EDIT, null, selectedService)
+                resolveAvailableModel(
+                    serviceType = selectedService,
+                    featureType = FeatureType.NEXT_EDIT
+                )
             }
+            setModelSelection(FeatureType.NEXT_EDIT, nextEditModel, selectedService)
         }
     }
 
@@ -65,26 +79,46 @@ object LegacySettingsMigration {
             when (serviceType) {
                 ServiceType.PROXYAI -> {
                     val settings = service<CodeGPTServiceSettings>()
-                    settings.state.chatCompletionSettings.model ?: ModelRegistry.GEMINI_FLASH_2_5
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CHAT,
+                        preferredModel = settings.state.chatCompletionSettings.model,
+                        fallbackModel = ModelCatalog.GEMINI_FLASH_2_5
+                    )
                 }
 
                 ServiceType.OPENAI -> {
-                    OpenAISettings.getCurrentState().model ?: ModelRegistry.GPT_5
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CHAT,
+                        preferredModel = OpenAISettings.getCurrentState().model
+                    )
                 }
 
                 ServiceType.ANTHROPIC -> {
-                    AnthropicSettings.getCurrentState().model
-                        ?: ModelRegistry.CLAUDE_SONNET_4_20250514
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CHAT,
+                        preferredModel = AnthropicSettings.getCurrentState().model
+                    )
                 }
 
                 ServiceType.GOOGLE -> {
-                    val settings = service<GoogleSettings>()
-                    settings.state.model ?: GoogleModel.GEMINI_2_5_PRO.code
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CHAT,
+                        fallbackModel = GoogleModels.Gemini2_5Pro.id
+                    )
                 }
 
                 ServiceType.OLLAMA -> {
                     val settings = service<OllamaSettings>()
-                    settings.state.model ?: ModelRegistry.LLAMA_3_2
+                    settings.state.model
+                        ?: resolveAvailableModel(
+                            serviceType = serviceType,
+                            featureType = FeatureType.CHAT,
+                            fallbackModel = ModelCatalog.LLAMA_3_2
+                        )
                 }
 
                 ServiceType.LLAMA_CPP -> {
@@ -97,20 +131,32 @@ object LegacySettingsMigration {
                 }
 
                 ServiceType.CUSTOM_OPENAI -> {
-                    service<CustomServicesSettings>().state.services
-                        .map { it.name }
+                    val preferredServiceId = service<CustomServicesSettings>().state.services
                         .lastOrNull()
-                        ?.takeIf { it.isNotBlank() } ?: "Default"
+                        ?.id
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CHAT,
+                        preferredModel = preferredServiceId
+                    )
                 }
 
                 ServiceType.MISTRAL -> {
-                    ModelRegistry.DEVSTRAL_MEDIUM_2507
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CHAT,
+                        fallbackModel = Devstral2.id
+                    )
                 }
 
                 ServiceType.INCEPTION -> {
-                    ModelRegistry.MERCURY_CODER
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CHAT,
+                        fallbackModel = ModelCatalog.MERCURY_CODER
+                    )
                 }
-            }
+            } ?: error("Could not resolve legacy chat model for $serviceType")
         } catch (e: Exception) {
             logger.warn("Failed to get legacy chat model for $serviceType", e)
             throw e
@@ -121,27 +167,39 @@ object LegacySettingsMigration {
         serviceType: ServiceType,
         fallbackModel: String
     ): String {
-        val registry = ModelRegistry.getInstance()
-        if (!registry.isFeatureSupportedByProvider(FeatureType.AGENT, serviceType)) {
+        val modelSettings = service<ModelSettings>()
+        if (!modelSettings.isFeatureSupportedByProvider(FeatureType.AGENT, serviceType)) {
             return fallbackModel
         }
 
         if (serviceType == ServiceType.PROXYAI) {
-            return ModelRegistry.PROXYAI_AUTO
+            return ModelCatalog.PROXYAI_AUTO
         }
 
-        return registry.getAgentModels(serviceType).firstOrNull()?.model?.id ?: fallbackModel
+        return modelSettings.getAvailableModels(FeatureType.AGENT)
+            .firstOrNull { it.provider == serviceType }
+            ?.model
+            ?: fallbackModel
     }
 
     private fun getLegacyCodeModelForService(serviceType: ServiceType): String? {
         return try {
             when (serviceType) {
                 ServiceType.PROXYAI -> {
-                    service<CodeGPTServiceSettings>().state.codeCompletionSettings.model
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CODE_COMPLETION,
+                        preferredModel = service<CodeGPTServiceSettings>().state.codeCompletionSettings.model,
+                        fallbackModel = ModelCatalog.MERCURY_CODER
+                    )
                 }
 
                 ServiceType.OPENAI -> {
-                    ModelRegistry.GPT_3_5_TURBO_INSTRUCT
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CODE_COMPLETION,
+                        fallbackModel = ModelCatalog.GPT_3_5_TURBO_INSTRUCT
+                    )
                 }
 
                 ServiceType.ANTHROPIC -> {
@@ -166,22 +224,58 @@ object LegacySettingsMigration {
                 }
 
                 ServiceType.CUSTOM_OPENAI -> {
-                    service<CustomServicesSettings>().state.services
-                        .map { it.name }
-                        .lastOrNull() ?: ""
+                    val preferredServiceId = service<CustomServicesSettings>().state.services
+                        .lastOrNull()
+                        ?.id
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CODE_COMPLETION,
+                        preferredModel = preferredServiceId
+                    )
                 }
 
                 ServiceType.MISTRAL -> {
-                    ModelRegistry.CODESTRAL_LATEST
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CODE_COMPLETION,
+                        fallbackModel = ModelCatalog.CODESTRAL_LATEST
+                    )
                 }
 
                 ServiceType.INCEPTION -> {
-                    ModelRegistry.MERCURY_CODER
+                    resolveAvailableModel(
+                        serviceType = serviceType,
+                        featureType = FeatureType.CODE_COMPLETION,
+                        fallbackModel = ModelCatalog.MERCURY_CODER
+                    )
                 }
             }
         } catch (e: Exception) {
             logger.warn("Failed to get legacy code model for $serviceType", e)
             null
         }
+    }
+
+    private fun resolveAvailableModel(
+        serviceType: ServiceType,
+        featureType: FeatureType,
+        preferredModel: String? = null,
+        fallbackModel: String? = null
+    ): String? {
+        val modelSettings = service<ModelSettings>()
+        if (!modelSettings.isFeatureSupportedByProvider(featureType, serviceType)) {
+            return null
+        }
+
+        if (!preferredModel.isNullOrBlank() &&
+            modelSettings.findModel(serviceType, preferredModel) != null
+        ) {
+            return preferredModel
+        }
+
+        return modelSettings.getAvailableModels(featureType)
+            .firstOrNull { it.provider == serviceType }
+            ?.model
+            ?: fallbackModel
     }
 }

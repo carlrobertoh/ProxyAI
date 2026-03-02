@@ -1,11 +1,11 @@
 package ee.carlrobert.codegpt.agent.history
 
 import ai.koog.agents.snapshot.feature.AgentCheckpointData
+import ee.carlrobert.codegpt.completions.ChatToolCall
+import ee.carlrobert.codegpt.completions.ChatToolFunction
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.util.StringUtil.stripThinkingBlocks
-import ee.carlrobert.llm.client.openai.completion.response.ToolCall
-import ee.carlrobert.llm.client.openai.completion.response.ToolFunctionResponse
 
 object AgentCheckpointConversationMapper {
 
@@ -16,12 +16,13 @@ object AgentCheckpointConversationMapper {
         val conversation = Conversation()
         val turns = AgentCheckpointTurnSequencer.toVisibleTurns(
             history = checkpoint.messageHistory,
-            projectInstructions = projectInstructions
+            projectInstructions = projectInstructions,
+            preserveSyntheticContinuation = true
         )
 
         turns.forEach { turn ->
             val response = StringBuilder()
-            val toolCalls = mutableListOf<ToolCall>()
+            val toolCalls = mutableListOf<ChatToolCall>()
             val toolResults = LinkedHashMap<String, String>()
             var syntheticToolIdIndex = 0
 
@@ -39,11 +40,11 @@ object AgentCheckpointConversationMapper {
                         val callId = event.id?.takeIf { it.isNotBlank() }
                             ?: "tool-call-${++syntheticToolIdIndex}"
                         toolCalls.add(
-                            ToolCall(
+                            ChatToolCall(
                                 null,
                                 callId,
                                 "function",
-                                ToolFunctionResponse(event.tool, event.content.trim())
+                                ChatToolFunction(event.tool, event.content.trim())
                             )
                         )
                     }

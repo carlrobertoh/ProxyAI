@@ -5,14 +5,14 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.ui.*
 import com.intellij.ui.components.JBLabel
+import ee.carlrobert.codegpt.completions.CancellableRequest
 import ee.carlrobert.codegpt.ui.IconActionButton
-import okhttp3.sse.EventSource
 import javax.swing.BoxLayout
 import javax.swing.JPanel
 
 class LoadingPanel(
     initialText: String,
-    private var eventSource: EventSource? = null,
+    private var request: CancellableRequest? = null,
     private val onCancel: (() -> Unit)? = null
 ) : JPanel() {
 
@@ -21,13 +21,13 @@ class LoadingPanel(
     private val stopButton = IconActionButton(
         object : AnAction("Stop", "Stop the current operation", AllIcons.Actions.Suspend) {
             override fun actionPerformed(e: AnActionEvent) {
-                eventSource?.cancel()
+                request?.cancel()
                 onCancel?.invoke()
             }
         },
         "stop-operation"
     ).apply {
-        isVisible = eventSource != null
+        isVisible = request != null
     }
     
     init {
@@ -47,14 +47,14 @@ class LoadingPanel(
         loadingLabel.text = text
     }
     
-    fun setEventSource(source: EventSource?) {
-        eventSource = source
-        stopButton.isVisible = source != null
+    fun setRequest(request: CancellableRequest?) {
+        this.request = request
+        stopButton.isVisible = request != null
         revalidate()
         repaint()
     }
     
     fun showStopButton(show: Boolean) {
-        stopButton.isVisible = show && eventSource != null
+        stopButton.isVisible = show && request != null
     }
 }

@@ -40,6 +40,7 @@ class TaskTool(
     argsClass = Args::class,
     resultClass = Result::class,
     hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     @Serializable

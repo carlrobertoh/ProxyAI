@@ -5,7 +5,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS
-import ee.carlrobert.codegpt.completions.CompletionClientProvider
+import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.credentials.CredentialsStore.getCredential
 import ee.carlrobert.codegpt.settings.GeneralSettings
@@ -34,9 +34,9 @@ class CodeGPTService private constructor(val project: Project) {
             try {
                 val userDetails = withContext(Dispatchers.IO) {
                     if (apiKey.isNullOrEmpty()) null
-                    else CompletionClientProvider.getCodeGPTClient().getUserDetails(apiKey)
+                    else ProxyAILLMClient(apiKey).use { client -> client.getUserDetails() }
                 }
-                if (userDetails != null && userDetails.pricingPlan != null) {
+                if (userDetails != null) {
                     if (!userDetails.fullName.isNullOrEmpty()) {
                         service<GeneralSettings>().state.run {
                             displayName = userDetails.fullName
@@ -48,7 +48,7 @@ class CodeGPTService private constructor(val project: Project) {
                 CODEGPT_USER_DETAILS.set(project, userDetails)
 
                 if (showDialog) {
-                    val modality = modalityState ?: ModalityState.NON_MODAL
+                    val modality = modalityState ?: ModalityState.defaultModalityState()
                     ApplicationManager.getApplication().invokeLater({
                         ModelReplacementDialog.showDialog(ServiceType.PROXYAI)
                     }, modality)

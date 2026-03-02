@@ -11,8 +11,6 @@ import com.intellij.ui.popup.list.PopupListElementRenderer
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTModel
-import ee.carlrobert.llm.client.codegpt.PricingPlan
 import javax.swing.Box
 import javax.swing.Icon
 import javax.swing.JComponent
@@ -60,34 +58,21 @@ class ModelListPopup(
 }
 
 class CodeGPTModelsListPopupAction : DumbAwareAction {
-    
-    val model: CodeGPTModel?
+
+    val modelCode: String
     private val locked: Boolean
     private val selected: Boolean
     private val onModelChanged: Runnable?
-    
-    constructor(
-        model: CodeGPTModel,
-        locked: Boolean = false,
-        selected: Boolean = false,
-        onModelChanged: Runnable?
-    ) : super(model.name, "", if (locked) Icons.Locked else model.icon) {
-        this.model = model
-        this.locked = locked
-        this.selected = selected
-        this.onModelChanged = onModelChanged
-    }
-    
+
     constructor(
         name: String,
         code: String,
         icon: Icon,
-        pricingPlan: PricingPlan,
         locked: Boolean = false,
         selected: Boolean = false,
         onModelChanged: Runnable?
     ) : super(name, "", if (locked) Icons.Locked else icon) {
-        this.model = CodeGPTModel(name, code, icon, pricingPlan)
+        this.modelCode = code
         this.locked = locked
         this.selected = selected
         this.onModelChanged = onModelChanged

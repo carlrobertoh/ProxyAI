@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 
 class AskUserQuestionTool(
     workingDirectory: String,
+    sessionId: String,
     hookManager: HookManager,
     private val events: AgentEvents,
 ) : BaseTool<AskUserQuestionTool.Args, AskUserQuestionTool.Result>(
@@ -29,6 +30,7 @@ class AskUserQuestionTool(
     argsClass = Args::class,
     resultClass = Result::class,
     hookManager = hookManager,
+    sessionId = sessionId
 ) {
 
     @Serializable

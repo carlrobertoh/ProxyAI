@@ -8,12 +8,13 @@ import com.intellij.util.messages.MessageBusConnection
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTKeys
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.*
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTService
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetails
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsListener
-import ee.carlrobert.llm.client.codegpt.CodeGPTUserDetails
 import java.text.NumberFormat
 import java.util.*
 
@@ -69,7 +70,7 @@ class AgentCreditsToolbarLabel(
 
     private fun updateDisplay() {
         ApplicationManager.getApplication().invokeLater {
-            val provider = ModelSelectionService.getInstance()
+            val provider = ModelSettings.getInstance()
                 .getServiceForFeature(FeatureType.AGENT)
             if (provider != ServiceType.PROXYAI) {
                 isVisible = false

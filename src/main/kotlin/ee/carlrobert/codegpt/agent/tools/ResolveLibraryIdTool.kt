@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets
  */
 class ResolveLibraryIdTool(
     workingDirectory: String,
+    sessionId: String,
     hookManager: HookManager,
 ) : BaseTool<ResolveLibraryIdTool.Args, ResolveLibraryIdTool.Result>(
     workingDirectory = workingDirectory,
@@ -28,7 +29,8 @@ class ResolveLibraryIdTool(
     """.trimIndent(),
     argsClass = Args::class,
     resultClass = Result::class,
-    hookManager = hookManager
+    hookManager = hookManager,
+    sessionId = sessionId,
 ) {
 
     @Serializable

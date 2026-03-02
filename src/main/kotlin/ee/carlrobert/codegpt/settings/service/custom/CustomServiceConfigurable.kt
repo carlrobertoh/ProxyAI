@@ -2,7 +2,7 @@ package ee.carlrobert.codegpt.settings.service.custom
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.custom.form.CustomServiceForm
 import ee.carlrobert.codegpt.util.coroutines.EdtDispatchers
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +28,7 @@ class CustomServiceConfigurable : Configurable {
 
     override fun apply() {
         component.applyChanges()
-        ModelSelectionService.getInstance()
+        ModelSettings.getInstance()
             .syncWithAvailableCustomOpenAIModels(component.getSelectedServiceId())
     }
 

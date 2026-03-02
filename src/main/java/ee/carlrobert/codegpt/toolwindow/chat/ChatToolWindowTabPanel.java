@@ -22,8 +22,9 @@ import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.actions.ActionType;
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
-import ee.carlrobert.codegpt.completions.CompletionRequestService;
+import ee.carlrobert.codegpt.completions.ChatError;
 import ee.carlrobert.codegpt.completions.CompletionRequestUtil;
+import ee.carlrobert.codegpt.completions.CompletionService;
 import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.completions.ToolApprovalMode;
 import ee.carlrobert.codegpt.completions.ToolwindowChatCompletionRequestHandler;
@@ -61,7 +62,6 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -526,7 +526,7 @@ public class ChatToolWindowTabPanel implements Disposable {
       return;
     }
 
-    if (!CompletionRequestService.isRequestAllowed(FeatureType.CHAT)) {
+    if (!CompletionService.isRequestAllowed(FeatureType.CHAT)) {
       responseContent.displayMissingCredential();
       return;
     }
@@ -560,7 +560,7 @@ public class ChatToolWindowTabPanel implements Disposable {
           }
 
           @Override
-          public void handleError(ErrorDetails error, Throwable ex) {
+          public void handleError(ChatError error, Throwable ex) {
             try {
               super.handleError(error, ex);
             } finally {
@@ -575,7 +575,6 @@ public class ChatToolWindowTabPanel implements Disposable {
         },
         this);
 
-    requestHandler.setResponseMessagePanel(responseMessagePanel);
     showInputLoading(CodeGPTBundle.get("toolwindow.chat.loading"));
     requestHandler.call(callParameters);
   }

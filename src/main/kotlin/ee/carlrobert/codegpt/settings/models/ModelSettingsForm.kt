@@ -194,7 +194,7 @@ class ModelSettingsForm(
             }
 
             else -> {
-                ModelRegistry.getInstance().getDefaultModelForFeature(featureType)
+                settings.getDefaultModelSelection(featureType)
             }
         }
 
@@ -292,7 +292,7 @@ class ModelSettingsForm(
     }
 
     private fun getModelsForFeature(featureType: FeatureType): List<ModelSelection> {
-        return ModelRegistry.getInstance().getAllModelsForFeature(featureType)
+        return settings.getAvailableModels(featureType)
     }
 
     private fun addPreviousModelRow(

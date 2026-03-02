@@ -2,29 +2,22 @@ package ee.carlrobert.codegpt.completions;
 
 import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
-import ee.carlrobert.codegpt.mcp.McpToolCallEventListener;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
+import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowTabPanel;
-import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
-import ee.carlrobert.codegpt.toolwindow.ui.mcp.McpApprovalPanel;
-import ee.carlrobert.codegpt.toolwindow.ui.mcp.ToolGroupPanel;
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
-import ee.carlrobert.llm.completion.CompletionEventListener;
+import ee.carlrobert.codegpt.toolwindow.agent.ui.SimpleAgentApprovalPanel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import okhttp3.sse.EventSource;
 
 public class ToolwindowChatCompletionRequestHandler {
 
   private final Project project;
   private final CompletionResponseEventListener completionResponseEventListener;
   private final ChatToolWindowTabPanel tabPanel;
-  private final List<EventSource> activeEventSources = new ArrayList<>();
+  private final List<CancellableRequest> activeRequests = new ArrayList<>();
   private final AtomicBoolean isCancelled = new AtomicBoolean(false);
-  private ResponseMessagePanel responseMessagePanel;
 
   public ToolwindowChatCompletionRequestHandler(
       Project project,
@@ -35,21 +28,17 @@ public class ToolwindowChatCompletionRequestHandler {
     this.tabPanel = tabPanel;
   }
 
-  public void setResponseMessagePanel(ResponseMessagePanel panel) {
-    this.responseMessagePanel = panel;
-  }
-
   public void call(ChatCompletionParameters callParameters) {
     isCancelled.set(false);
-    synchronized (activeEventSources) {
-      activeEventSources.clear();
+    synchronized (activeRequests) {
+      activeRequests.clear();
     }
 
     try {
-      EventSource eventSource = startCall(callParameters);
-      if (eventSource != null) {
-        synchronized (activeEventSources) {
-          activeEventSources.add(eventSource);
+      CancellableRequest request = startCall(callParameters);
+      if (request != null) {
+        synchronized (activeRequests) {
+          activeRequests.add(request);
         }
       }
     } catch (TotalUsageExceededException e) {
@@ -64,13 +53,13 @@ public class ToolwindowChatCompletionRequestHandler {
   public void cancel() {
     isCancelled.set(true);
 
-    synchronized (activeEventSources) {
-      for (EventSource source : activeEventSources) {
-        if (source != null) {
-          source.cancel();
+    synchronized (activeRequests) {
+      for (CancellableRequest request : activeRequests) {
+        if (request != null) {
+          request.cancel();
         }
       }
-      activeEventSources.clear();
+      activeRequests.clear();
     }
   }
 
@@ -78,54 +67,36 @@ public class ToolwindowChatCompletionRequestHandler {
     return isCancelled.get();
   }
 
-  public void addEventSource(EventSource eventSource) {
-    if (eventSource != null && !isCancelled.get()) {
-      synchronized (activeEventSources) {
-        activeEventSources.add(eventSource);
-      }
-    }
-  }
-
-  private CompletionEventListener<String> getEventListener(
-      ChatCompletionParameters callParameters) {
-    if (callParameters.getMcpTools() != null && !callParameters.getMcpTools().isEmpty()) {
-      return new McpToolCallEventListener(
-          project,
-          callParameters,
-          completionResponseEventListener,
-          panel -> {
-            if (panel instanceof McpApprovalPanel || panel instanceof ToolGroupPanel) {
-              tabPanel.addToolCallApprovalPanel(panel);
-            } else {
-              tabPanel.addToolCallStatusPanel(panel);
-            }
-            return kotlin.Unit.INSTANCE;
-          },
-          this);
-    }
-
+  private ChatStreamEventListener getEventListener(ChatCompletionParameters callParameters) {
     return new ChatCompletionEventListener(
         project,
         callParameters,
         completionResponseEventListener);
   }
 
-  private EventSource startCall(ChatCompletionParameters callParameters) {
+  private CancellableRequest startCall(ChatCompletionParameters callParameters) {
     try {
       CompletionProgressNotifier.Companion.update(project, true);
       var serviceType =
-          ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT);
-      var eventListener = getEventListener(callParameters);
-      var request = CompletionRequestFactory.getFactory(serviceType)
-          .createChatRequest(callParameters);
-
-      try {
-        return CompletionRequestService.getInstance()
-            .getChatCompletionAsync(request, eventListener);
-      } catch (Exception e) {
-        eventListener.onError(new ErrorDetails("Failed to start request: " + e.getMessage()), e);
-        return null;
-      }
+          ModelSettings.getInstance().getServiceForFeature(FeatureType.CHAT);
+      var modelSelection =
+          ModelSettings.getInstance().getModelSelectionForFeature(FeatureType.CHAT);
+      var factory = CompletionRequestFactory.getFactory(serviceType);
+      var prompt = factory.createChatCompletionPrompt(callParameters);
+      return CompletionRequestService.getChatCompletionAsync(
+          serviceType,
+          prompt,
+          modelSelection,
+          callParameters,
+          getEventListener(callParameters),
+          panel -> {
+            if (panel instanceof SimpleAgentApprovalPanel) {
+              tabPanel.addToolCallApprovalPanel(panel);
+            } else {
+              tabPanel.addToolCallStatusPanel(panel);
+            }
+            return kotlin.Unit.INSTANCE;
+          });
     } catch (Throwable ex) {
       handleCallException(ex);
     }
@@ -139,11 +110,11 @@ public class ToolwindowChatCompletionRequestHandler {
           "The length of the context exceeds the maximum limit that the model can handle. "
               + "Try reducing the input message or maximum completion token size.";
     }
-    completionResponseEventListener.handleError(new ErrorDetails(errorMessage), ex);
+    completionResponseEventListener.handleError(new ChatError(errorMessage), ex);
   }
 
   private void sendInfo(ChatCompletionParameters callParameters) {
-    var service = ModelSelectionService.getInstance()
+    var service = ModelSettings.getInstance()
         .getServiceForFeature(FeatureType.CHAT);
     TelemetryAction.COMPLETION.createActionMessage()
         .property("conversationId", callParameters.getConversation().getId().toString())

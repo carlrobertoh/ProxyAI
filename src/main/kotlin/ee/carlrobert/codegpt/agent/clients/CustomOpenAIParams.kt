@@ -11,7 +11,7 @@ internal fun LLMParams.toCustomOpenAIParams(state: CustomServiceChatCompletionSe
 
     val mergedAdditionalProperties = buildMap {
         body
-            .filterKeys { it !in RESERVED_BODY_KEYS }
+            .filterKeys { it !in CUSTOM_OPENAI_RESERVED_BODY_KEYS }
             .forEach { (key, value) -> put(key, value.toJsonElement()) }
     }.takeIf { it.isNotEmpty() }
 
@@ -33,7 +33,11 @@ internal fun LLMParams.toCustomOpenAIParams(state: CustomServiceChatCompletionSe
     )
 }
 
-private val RESERVED_BODY_KEYS = setOf(
+internal fun CustomServiceChatCompletionSettingsState.shouldStream(): Boolean {
+    return body.findValue("stream").asBoolean() == true
+}
+
+internal val CUSTOM_OPENAI_RESERVED_BODY_KEYS = setOf(
     "frequencyPenalty", "frequency_penalty",
     "maxTokens", "max_tokens",
     "messages",
@@ -41,6 +45,7 @@ private val RESERVED_BODY_KEYS = setOf(
     "presencePenalty", "presence_penalty",
     "repetitionPenalty", "repetition_penalty",
     "stop",
+    "stream",
     "temperature",
     "toolChoice", "tool_choice",
     "tools",
@@ -76,6 +81,17 @@ private fun Any?.asInt(): Int? = when (this) {
     }
 
     is String -> toIntOrNull()
+    else -> null
+}
+
+private fun Any?.asBoolean(): Boolean? = when (this) {
+    is Boolean -> this
+    is String -> when (trim().lowercase()) {
+        "true" -> true
+        "false" -> false
+        else -> null
+    }
+
     else -> null
 }
 
@@ -165,8 +181,6 @@ private fun Any?.toJsonElement(): JsonElement = when (this) {
  * @property schema JSON Schema to constrain model output (validated when supported).
  * @property toolChoice Controls if/which tool must be called (`none`/`auto`/`required`/specific).
  * @property user stable end-user identifier
- * @property includeThoughts Request inclusion of model “thoughts”/reasoning traces (model-dependent).
- * @property thinkingBudget Soft cap on tokens spent on internal reasoning (reasoning models).
  * @property additionalProperties Additional properties that can be used to store custom parameters.
  * @property frequencyPenalty Number in [-2.0, 2.0]—penalizes frequent tokens to reduce repetition.
  * @property presencePenalty Number in [-2.0, 2.0]—encourages introduction of new tokens/topics.
@@ -184,7 +198,6 @@ private fun Any?.toJsonElement(): JsonElement = when (this) {
  *   Use empty list [] for no transformations.
  * @property models List of allowed models for this request.
  * @property route Request routing identifier.
- * @property provider Model provider preferences.
  */
 public open class CustomOpenAIParams(
     temperature: Double? = null,

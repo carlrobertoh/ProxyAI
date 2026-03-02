@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.settings.models
 
 import com.intellij.openapi.components.BaseState
+import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 
@@ -14,7 +15,7 @@ class ModelSettingsState : BaseState() {
     }
 
     private fun initializeDefaults() {
-        val registry = ModelRegistry.getInstance()
+        val registry = service<ModelCatalog>()
         FeatureType.entries.forEach { featureType ->
             val defaultModel = registry.getDefaultModelForFeature(featureType)
             setModelSelection(featureType, defaultModel.model, defaultModel.provider)

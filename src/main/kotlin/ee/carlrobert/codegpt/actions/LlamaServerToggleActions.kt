@@ -12,7 +12,7 @@ import ee.carlrobert.codegpt.completions.llama.LlamaModel.findByHuggingFaceModel
 import ee.carlrobert.codegpt.completions.llama.LlamaServerAgent
 import ee.carlrobert.codegpt.completions.llama.LlamaServerStartupParams
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType.LLAMA_CPP
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.completions.llama.logging.NoOpLoggingStrategy
@@ -50,7 +50,7 @@ abstract class LlamaServerToggleActions(
     var notification: Notification? = null
 
     override fun actionPerformed(e: AnActionEvent) {
-        val modelSelectionService = ModelSelectionService.getInstance()
+        val modelSelectionService = ModelSettings.getInstance()
         val isLlamaUsed =
             (modelSelectionService.getServiceForFeature(FeatureType.CHAT) == LLAMA_CPP ||
                     modelSelectionService.getServiceForFeature(FeatureType.CODE_COMPLETION) == LLAMA_CPP)

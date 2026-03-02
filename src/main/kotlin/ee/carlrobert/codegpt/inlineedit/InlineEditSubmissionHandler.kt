@@ -11,19 +11,18 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.util.text.StringUtil
-import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.completions.*
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.ui.OverlayUtil
-import okhttp3.sse.EventSource
 import java.util.concurrent.atomic.AtomicReference
 
 class InlineEditSubmissionHandler(
@@ -34,7 +33,7 @@ class InlineEditSubmissionHandler(
 
     private val previousSourceRef = AtomicReference<String?>(null)
     private val previousPromptRef = AtomicReference<String?>(null)
-    private val currentEventSourceRef = AtomicReference<EventSource?>(null)
+    private val currentRequestRef = AtomicReference<CancellableRequest?>(null)
     private val logger = Logger.getInstance(InlineEditSubmissionHandler::class.java)
 
     fun getSessionConversation(): Conversation = sessionConversation
@@ -53,7 +52,7 @@ class InlineEditSubmissionHandler(
         val editorEx = editor as? EditorEx ?: return
         val inlay = editorEx.getUserData(InlineEditInlay.INLAY_KEY) ?: return
         val selectedService =
-            ModelSelectionService.getInstance().getServiceForFeature(FeatureType.INLINE_EDIT)
+            ModelSettings.getInstance().getServiceForFeature(FeatureType.INLINE_EDIT)
 
         if (!forceApply && inlay.isQuickQuestionEnabled()) {
             handleAskSubmission(
@@ -138,21 +137,27 @@ class InlineEditSubmissionHandler(
         params: ChatCompletionParameters
     ) {
         try {
-            currentEventSourceRef.getAndSet(null)?.cancel()
+            currentRequestRef.getAndSet(null)?.cancel()
 
             val project = editor.project ?: return
-            val request = CompletionRequestFactory
-                .getFactory(selectedService)
-                .createInlineEditQuestionRequest(params)
+            val prompt = CompletionRequestFactory.getFactory(selectedService)
+                .createInlineEditQuestionPrompt(params)
+            val modelSelection = ModelSettings.getInstance()
+                .getModelSelectionForFeature(FeatureType.INLINE_EDIT)
             val listener = ChatCompletionEventListener(
                 project,
                 params,
                 InlineAskResponseListener(project, inlay)
             )
 
-            val eventSource = service<CompletionRequestService>()
-                .getChatCompletionAsync(request, listener, selectedService, null)
-            currentEventSourceRef.set(eventSource)
+            val request = CompletionRequestService.getChatCompletionAsync(
+                serviceType = selectedService,
+                prompt = prompt,
+                modelSelection = modelSelection,
+                callParameters = params,
+                eventListener = listener
+            )
+            currentRequestRef.set(request)
         } catch (ex: Exception) {
             logger.warn("InlineAsk: request dispatch failed", ex)
             runInEdt {
@@ -223,13 +228,13 @@ class InlineEditSubmissionHandler(
         listener: InlineEditSearchReplaceListener
     ) {
         try {
-            currentEventSourceRef.getAndSet(null)?.cancel()
+            currentRequestRef.getAndSet(null)?.cancel()
 
-            val eventSource = service<CompletionRequestService>().getInlineEditCompletionAsync(
+            val request = service<CompletionService>().getInlineEditCompletion(
                 parameters,
                 listener
             )
-            currentEventSourceRef.set(eventSource)
+            currentRequestRef.set(request)
         } catch (ex: Exception) {
             logger.warn("InlineEdit: request dispatch failed", ex)
             runInEdt {
@@ -266,7 +271,7 @@ class InlineEditSubmissionHandler(
             observableProperties.loading.set(false)
             observableProperties.submitted.set(false)
             editor.project?.let { project ->
-                CompletionProgressNotifier.Companion.update(project, false)
+                CompletionProgressNotifier.update(project, false)
             }
             editorEx.getUserData(InlineEditInlay.INLAY_KEY)?.onCompletionFinished()
         }
@@ -295,7 +300,7 @@ class InlineEditSubmissionHandler(
             observableProperties.loading.set(false)
             observableProperties.submitted.set(false)
             editor.project?.let { project ->
-                CompletionProgressNotifier.Companion.update(project, false)
+                CompletionProgressNotifier.update(project, false)
             }
             editorEx?.getUserData(InlineEditInlay.INLAY_KEY)?.onCompletionFinished()
         }
@@ -306,7 +311,7 @@ class InlineEditSubmissionHandler(
         val newRequestId = System.nanoTime()
         editorEx?.putUserData(InlineEditSearchReplaceListener.REQUEST_ID_KEY, newRequestId)
 
-        currentEventSourceRef.getAndSet(null)?.cancel()
+        currentRequestRef.getAndSet(null)?.cancel()
     }
 
     private fun revertAllChanges(prevSource: String) {

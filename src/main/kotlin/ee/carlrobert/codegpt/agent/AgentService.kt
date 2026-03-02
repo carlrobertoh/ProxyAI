@@ -4,22 +4,21 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.AIAgentService
 import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
-import ai.koog.prompt.executor.clients.LLMClientException
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
 import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.serialization.json.JsonNull
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -111,10 +110,15 @@ class AgentService(private val project: Project) {
             return
         }
 
-        val provider = service<ModelSelectionService>().getServiceForFeature(FeatureType.AGENT)
+        val provider = service<ModelSettings>().getServiceForFeature(FeatureType.AGENT)
         val contentManager = project.service<AgentToolWindowContentManager>()
         val runtimeAgentId = contentManager.getSession(sessionId)?.runtimeAgentId
-        val runtime = ensureSessionRuntime(sessionId, provider, events)
+        val runtime = runCatching {
+            ensureSessionRuntime(sessionId, provider, events)
+        }.onFailure { ex ->
+            logger.warn("Failed to initialize runtime for session=$sessionId", ex)
+            events.onAgentException(provider, ex)
+        }.getOrNull() ?: return
 
         val agent = runCatching {
             runBlocking {
@@ -122,6 +126,7 @@ class AgentService(private val project: Project) {
             }
         }.onFailure { ex ->
             logger.warn("Failed to create managed agent for session=$sessionId", ex)
+            events.onAgentException(provider, ex)
         }.getOrNull() ?: return
 
         contentManager.setRuntimeAgentId(sessionId, agent.id)
@@ -129,12 +134,11 @@ class AgentService(private val project: Project) {
         sessionJobs[sessionId] = CoroutineScope(Dispatchers.IO).launch {
             try {
                 agent.run(message)
-            } catch (ex: LLMClientException) {
-                events.onClientException(provider, ex)
             } catch (_: CancellationException) {
                 return@launch
-            } catch (ex: Exception) {
+            } catch (ex: Throwable) {
                 logger.error(ex)
+                events.onAgentException(provider, ex)
             } finally {
                 val ref = refreshSessionResumeCheckpoint(sessionId, agent.id)
                 events.onRunCheckpointUpdated(message.id, ref)
@@ -179,7 +183,7 @@ class AgentService(private val project: Project) {
     }
 
     fun clearPendingMessages(sessionId: String) {
-        pendingMessages.remove(sessionId)
+        pendingMessages[sessionId]?.clear()
     }
 
     fun getAgentForSession(sessionId: String): AIAgent<MessageWithContext, String>? {
@@ -239,17 +243,8 @@ class AgentService(private val project: Project) {
         sessionId: String,
         agentId: String
     ): CheckpointRef? {
-        val ref = runCatching {
-            historyService.loadLatestResumeCheckpoint(agentId)
-                ?.let { CheckpointRef(agentId, it.checkpointId) }
-        }.onFailure { ex ->
-            logger.warn(
-                "Agent checkpoints: failed to refresh session checkpoint session=$sessionId " +
-                        "agentId=$agentId error=${ex.message}",
-                ex
-            )
-        }.getOrNull()
-
+        val ref = historyService.loadLatestResumeCheckpoint(agentId)
+            ?.let { CheckpointRef(agentId, it.checkpointId) }
         if (ref != null) {
             project.service<AgentToolWindowContentManager>().setResumeCheckpointRef(sessionId, ref)
         }
@@ -261,11 +256,10 @@ class AgentService(private val project: Project) {
         provider: ServiceType,
         events: AgentEvents
     ): SessionRuntime {
-        val modelId = service<ModelSelectionService>().getAgentModel().id
+        val modelId = service<ModelSettings>().getAgentModel().id
         val selectedServerIds = project.service<AgentMcpContextService>()
             .get(sessionId)
-            ?.selectedServerIds
-            ?: emptySet()
+            ?.selectedServerIds ?: emptySet()
         val existing = sessionRuntimes[sessionId]
         if (existing != null &&
             existing.provider == provider &&
@@ -302,9 +296,8 @@ class AgentService(private val project: Project) {
     }
 
     private fun logCheckpointLoadFailure(sessionId: String, agentId: String, ex: Throwable) {
-        val sessionInfo = sessionId.let { " session=$it" }
         logger.error(
-            "Agent checkpoints: failed to load for$sessionInfo agentId=$agentId error=${ex.message}",
+            "Agent checkpoints: failed to load for sessionId=$sessionId agentId=$agentId error=${ex.message}",
             ex
         )
     }

@@ -7,7 +7,7 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.settings.mcp.McpSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
-import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType.CUSTOM_OPENAI
 import ee.carlrobert.codegpt.settings.service.ServiceType.OPENAI
 import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
@@ -30,7 +30,7 @@ class MCPGroupItem(
         if (featureType == FeatureType.AGENT) {
             return true
         }
-        val serviceType = service<ModelSelectionService>().getServiceForFeature(featureType)
+        val serviceType = service<ModelSettings>().getServiceForFeature(featureType)
         return serviceType == OPENAI || serviceType == CUSTOM_OPENAI
     }
 

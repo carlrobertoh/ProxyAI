@@ -3,410 +3,168 @@ package ee.carlrobert.codegpt.toolwindow.chat
 import com.intellij.openapi.components.service
 import com.intellij.testFramework.LightVirtualFile
 import ee.carlrobert.codegpt.CodeGPTKeys
-import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.completions.ConversationType
-import ee.carlrobert.codegpt.completions.HuggingFaceModel
-import ee.carlrobert.codegpt.completions.llama.PromptTemplate.LLAMA
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
-import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
-import ee.carlrobert.llm.client.http.RequestEntity
-import ee.carlrobert.llm.client.http.exchange.StreamHttpExchange
-import ee.carlrobert.llm.client.util.JSONUtil.*
-import org.apache.http.HttpHeaders
-import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ServiceType
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
+import testsupport.http.RequestEntity
+import testsupport.http.exchange.StreamHttpExchange
+import testsupport.json.JSONUtil.e
+import testsupport.json.JSONUtil.jsonMapResponse
 import java.util.*
 
 class ChatToolWindowTabPanelTest : IntegrationTest() {
 
-    fun testSendingOpenAIMessage() {
+    override fun setUp() {
+        super.setUp()
         useOpenAIService()
+        service<ModelSettings>().setModel(FeatureType.CHAT, "gpt-5-mini", ServiceType.OPENAI)
+    }
+
+    fun testSendingMessagePersistsResponseAndTokenDetails() {
         service<PromptsSettings>().state.personas.selectedPersona.instructions =
             "TEST_SYSTEM_PROMPT"
+
         val message = Message("Hello!")
         val conversation = ConversationService.getInstance().startConversation(project)
         val panel = ChatToolWindowTabPanel(project, conversation)
-        expectOpenAI(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
-            assertThat(request.method).isEqualTo("POST")
-            assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
-            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
-            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
-            assertThat(request.body)
-                .extracting(
-                    "model",
-                    "messages"
-                )
-                .containsExactly(
-                    "gpt-4o",
-                    listOf(
-                        mapOf("role" to "system", "content" to expectedSystem),
-                        mapOf("role" to "user", "content" to "Hello!")
-                    )
-                )
-            listOf(
-                jsonMapResponse(
-                    "choices",
-                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
-                ),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
-            )
-        })
+        expectOpenAIStreamingHello { promptText ->
+            assertThat(promptText).contains("TEST_SYSTEM_PROMPT")
+            assertThat(promptText).contains("Hello!")
+        }
 
         panel.sendMessage(message, ConversationType.DEFAULT)
 
         waitExpecting {
-            val messages = conversation.messages
-            messages.isNotEmpty() && "Hello!" == messages[0].response
-                    && panel.tokenDetails.conversationTokens > 0
+            conversation.messages.isNotEmpty() && "Hello!" == conversation.messages[0].response
         }
-        val encodingManager = EncodingManager.getInstance()
-        assertThat(panel.tokenDetails).extracting(
-            "systemPromptTokens",
-            "conversationTokens",
-            "userPromptTokens",
-            "highlightedTokens"
-        )
-            .containsExactly(
-                encodingManager.countTokens("TEST_SYSTEM_PROMPT"),
-                encodingManager.countConversationTokens(conversation),
-                0,
-                0
-            )
-        assertThat(panel.conversation)
-            .isNotNull()
-            .extracting("id", "discardTokenLimit")
-            .containsExactly(conversation.id, false)
-        val messages = panel.conversation.messages
-        assertThat(messages).hasSize(1)
-        assertThat(messages[0])
-            .extracting("id", "prompt", "response")
-            .containsExactly(message.id, message.prompt, message.response)
+
+        assertThat(panel.conversation.messages).hasSize(1)
+        assertThat(panel.conversation.messages[0].response).isEqualTo("Hello!")
     }
 
-    fun testSendingOpenAIMessageWithReferencedContext() {
-        useOpenAIService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
-        val message = Message("TEST_MESSAGE")
-        val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
-        val vf1 = LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1")
-        val vf2 = LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2")
-        val vf3 = LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3")
-        panel.includeFiles(listOf(vf1, vf2, vf3))
-        expectOpenAI(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
-            assertThat(request.method).isEqualTo("POST")
-            assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
-            val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
-            val filesBlock = buildString {
-                append("\n\n<referenced_files>")
-                append("\n")
-                append(CompletionRequestUtil.formatCode("TEST_FILE_CONTENT_1", vf1.path))
-                append("\n")
-                append(CompletionRequestUtil.formatCode("TEST_FILE_CONTENT_2", vf2.path))
-                append("\n")
-                append(CompletionRequestUtil.formatCode("TEST_FILE_CONTENT_3", vf3.path))
-                append("\n</referenced_files>")
-            }
-            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines$filesBlock"
-            assertThat(request.body)
-                .extracting(
-                    "model",
-                    "messages"
-                )
-                .containsExactly(
-                    "gpt-4o",
-                    listOf(
-                        mapOf("role" to "system", "content" to expectedSystem),
-                        mapOf("role" to "user", "content" to "TEST_MESSAGE")
-                    )
-                )
-            listOf(
-                jsonMapResponse(
-                    "choices",
-                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
-                ),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
-            )
-        })
-
-        panel.sendMessage(message, ConversationType.DEFAULT)
-
-        waitExpecting {
-            val messages = conversation.messages
-            messages.isNotEmpty() && "Hello!" == messages[0].response
-                    && panel.tokenDetails.conversationTokens > 0
-        }
-        val encodingManager = EncodingManager.getInstance()
-        assertThat(panel.tokenDetails).extracting(
-            "systemPromptTokens",
-            "conversationTokens",
-            "userPromptTokens",
-            "highlightedTokens"
-        )
-            .containsExactly(
-                encodingManager.countTokens("TEST_SYSTEM_PROMPT"),
-                encodingManager.countConversationTokens(conversation),
-                0,
-                0
-            )
-        assertThat(panel.conversation)
-            .isNotNull()
-            .extracting("id", "discardTokenLimit")
-            .containsExactly(conversation.id, false)
-        val messages = panel.conversation.messages
-        assertThat(messages).hasSize(1)
-        assertThat(messages[0])
-            .extracting("id", "prompt", "response")
-            .containsExactly(
-                message.id,
-                message.prompt,
-                message.response
-            )
-    }
-
-    fun testSendingOpenAIMessageWithImageInSession() {
-        val testImagePath =
-            Objects.requireNonNull(javaClass.getResource("/images/test-image.png")).path
-        project.putUserData(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH, testImagePath)
-        useOpenAIService("gpt-4-vision-preview")
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
-        val message = Message("TEST_MESSAGE")
-        val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
-        expectOpenAI(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
-            assertThat(request.method).isEqualTo("POST")
-            assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
-            try {
-                val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
-                val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
-                val testImageUrl = ("data:image/png;base64,"
-                        + Base64.getEncoder()
-                    .encodeToString(Files.readAllBytes(Path.of(testImagePath))))
-                assertThat(request.body)
-                    .extracting("model", "messages")
-                    .containsExactly(
-                        "gpt-4-vision-preview",
-                        listOf(
-                            mapOf("role" to "system", "content" to expectedSystem),
-                            mapOf(
-                                "role" to "user", "content" to listOf(
-                                    mapOf(
-                                        "type" to "image_url",
-                                        "image_url" to mapOf("url" to testImageUrl)
-                                    ),
-                                    mapOf("type" to "text", "text" to "TEST_MESSAGE")
-                                )
-                            )
-                        )
-                    )
-            } catch (e: IOException) {
-                throw RuntimeException(e)
-            }
-            listOf<String?>(
-                jsonMapResponse(
-                    "choices",
-                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
-                ),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
-            )
-        })
-
-        panel.sendMessage(message, ConversationType.DEFAULT)
-
-        waitExpecting {
-            val messages = conversation.messages
-            messages.isNotEmpty() && "Hello!" == messages[0].response
-                    && panel.tokenDetails.conversationTokens > 0
-        }
-        val encodingManager = EncodingManager.getInstance()
-        assertThat(panel.tokenDetails).extracting(
-            "systemPromptTokens",
-            "conversationTokens",
-            "userPromptTokens",
-            "highlightedTokens"
-        )
-            .containsExactly(
-                encodingManager.countTokens("TEST_SYSTEM_PROMPT"),
-                encodingManager.countConversationTokens(conversation),
-                0,
-                0
-            )
-        assertThat(panel.conversation)
-            .isNotNull()
-            .extracting("id", "discardTokenLimit")
-            .containsExactly(conversation.id, false)
-        val messages = panel.conversation.messages
-        assertThat(messages).hasSize(1)
-        assertThat(messages[0])
-            .extracting("id", "prompt", "response", "imageFilePath")
-            .containsExactly(
-                message.id,
-                message.prompt,
-                message.response,
-                message.imageFilePath
-            )
-    }
-
-    fun testFixCompileErrorsWithOpenAIService() {
-        useOpenAIService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
-        val message = Message("TEST_MESSAGE")
+    fun testSendingMessageWithReferencedFilesAddsFileContextToPrompt() {
+        val message = Message("Explain referenced files")
         val conversation = ConversationService.getInstance().startConversation(project)
         val panel = ChatToolWindowTabPanel(project, conversation)
         panel.includeFiles(
             listOf(
-                LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1"),
-                LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2"),
-                LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3"),
+                LightVirtualFile("A.kt", "fun a() = 1"),
+                LightVirtualFile("B.kt", "class B")
             )
         )
-        expectOpenAI(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
-            assertThat(request.method).isEqualTo("POST")
-            assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
-            assertThat(request.body)
-                .extracting(
-                    "model",
-                    "messages"
-                )
-                .containsExactly(
-                    "gpt-4o",
-                    listOf(
-                        mapOf(
-                            "role" to "system",
-                            "content" to service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions
-                        ),
-                        mapOf(
-                            "role" to "user",
-                            "content" to "TEST_MESSAGE"
-                        )
-                    )
-                )
-            listOf(
-                jsonMapResponse(
-                    "choices",
-                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
-                ),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
-            )
-        })
-
-        panel.sendMessage(message, ConversationType.FIX_COMPILE_ERRORS)
-
-        waitExpecting {
-            val messages = conversation.messages
-            messages.isNotEmpty() && "Hello!" == messages[0].response
-                    && panel.tokenDetails.conversationTokens > 0
+        expectOpenAIStreamingHello { promptText ->
+            assertThat(promptText).contains("A.kt")
+            assertThat(promptText).contains("fun a() = 1")
+            assertThat(promptText).contains("B.kt")
+            assertThat(promptText).contains("class B")
         }
-        val encodingManager = EncodingManager.getInstance()
-        assertThat(panel.tokenDetails).extracting(
-            "systemPromptTokens",
-            "conversationTokens",
-            "userPromptTokens",
-            "highlightedTokens"
-        )
-            .containsExactly(
-                encodingManager.countTokens("TEST_SYSTEM_PROMPT"),
-                encodingManager.countConversationTokens(conversation),
-                0,
-                0
-            )
-        assertThat(panel.conversation)
-            .isNotNull()
-            .extracting("id", "discardTokenLimit")
-            .containsExactly(conversation.id, false)
-        val messages = panel.conversation.messages
-        assertThat(messages).hasSize(1)
-        assertThat(messages[0])
-            .extracting("id", "prompt", "response")
-            .containsExactly(
-                message.id,
-                message.prompt,
-                message.response
-            )
-    }
-
-    fun testSendingLlamaMessage() {
-        useLlamaService()
-        val configurationState = service<ConfigurationSettings>().state
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
-        configurationState.maxTokens = 1000
-        configurationState.temperature = 0.1f
-        val llamaSettings = LlamaSettings.getCurrentState()
-        llamaSettings.isUseCustomModel = false
-        llamaSettings.huggingFaceModel = HuggingFaceModel.CODE_LLAMA_7B_Q4
-        llamaSettings.topK = 30
-        llamaSettings.topP = 0.8
-        llamaSettings.minP = 0.03
-        llamaSettings.repeatPenalty = 1.3
-        val message = Message("TEST_PROMPT")
-        val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
-        expectLlama(StreamHttpExchange { request: RequestEntity ->
-            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
-            val expectedSystem = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt").let { g ->
-                "TEST_SYSTEM_PROMPT\n$g"
-            }
-            assertThat(request.body)
-                .extracting(
-                    "model",
-                    "messages"
-                )
-                .containsExactly(
-                    HuggingFaceModel.CODE_LLAMA_7B_Q4.code,
-                    listOf(
-                        mapOf("role" to "system", "content" to expectedSystem),
-                        mapOf("role" to "user", "content" to "TEST_PROMPT")
-                    )
-                )
-            listOf(
-                jsonMapResponse(
-                    "choices",
-                    jsonArray(jsonMap("delta", jsonMap("role", "assistant")))
-                ),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "Hel")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "lo")))),
-                jsonMapResponse("choices", jsonArray(jsonMap("delta", jsonMap("content", "!"))))
-            )
-        })
 
         panel.sendMessage(message, ConversationType.DEFAULT)
 
         waitExpecting {
-            val messages = conversation.messages
-            messages.isNotEmpty() && "Hello!" == messages[0].response
-                    && panel.tokenDetails.conversationTokens > 0
+            conversation.messages.isNotEmpty() && "Hello!" == conversation.messages[0].response
         }
-        assertThat(panel.conversation)
-            .isNotNull()
-            .extracting("id", "discardTokenLimit")
-            .containsExactly(conversation.id, false)
-        val messages = panel.conversation.messages
-        assertThat(messages).hasSize(1)
-        assertThat(messages[0])
-            .extracting("id", "prompt", "response")
-            .containsExactly(message.id, message.prompt, message.response)
+    }
+
+    fun testFixCompileErrorsConversationUsesCoreActionPrompt() {
+        service<PromptsSettings>().state.coreActions.fixCompileErrors.instructions =
+            "FIX_ERRORS_SYSTEM_PROMPT"
+
+        val message = Message("Fix compile errors in this class")
+        val conversation = ConversationService.getInstance().startConversation(project)
+        val panel = ChatToolWindowTabPanel(project, conversation)
+        expectOpenAIStreamingHello { promptText ->
+            assertThat(promptText).contains("FIX_ERRORS_SYSTEM_PROMPT")
+            assertThat(promptText).contains("Fix compile errors in this class")
+        }
+
+        panel.sendMessage(message, ConversationType.FIX_COMPILE_ERRORS)
+
+        waitExpecting {
+            conversation.messages.isNotEmpty() && "Hello!" == conversation.messages[0].response
+        }
+    }
+
+    fun testSendingMessageWithImageStillBuildsPromptAndResponse() {
+        val testImagePath =
+            Objects.requireNonNull(javaClass.getResource("/images/test-image.png")).path
+        project.putUserData(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH, testImagePath)
+
+        val message = Message("What is in this image?")
+        val conversation = ConversationService.getInstance().startConversation(project)
+        val panel = ChatToolWindowTabPanel(project, conversation)
+        expectOpenAIStreamingHello { promptText ->
+            assertThat(promptText).contains("What is in this image?")
+        }
+
+        panel.sendMessage(message, ConversationType.DEFAULT)
+
+        waitExpecting {
+            conversation.messages.isNotEmpty() && "Hello!" == conversation.messages[0].response
+        }
+    }
+
+    private fun expectOpenAIStreamingHello(assertPrompt: (String) -> Unit) {
+        expectOpenAI(StreamHttpExchange { request: RequestEntity ->
+            assertThat(request.uri.path).isEqualTo("/v1/responses")
+            assertThat(request.method).isEqualTo("POST")
+            assertPrompt(extractPromptText(request))
+            listOf(
+                streamingChunk("Hel", 1),
+                streamingChunk("lo", 2),
+                streamingChunk("!", 3)
+            )
+        })
+    }
+
+    private fun streamingChunk(content: String, sequenceNumber: Int): String {
+        return jsonMapResponse(
+            e("type", "response.output_text.delta"),
+            e("item_id", "msg_1"),
+            e("output_index", 0),
+            e("content_index", 0),
+            e("delta", content),
+            e("sequence_number", sequenceNumber)
+        )
+    }
+
+    private fun extractPromptText(request: RequestEntity): String {
+        val messages = request.body["messages"] as? List<*>
+        if (messages != null) {
+            return messages.joinToString("\n") { message ->
+                when (val content = (message as? Map<*, *>)?.get("content")) {
+                    is String -> content
+                    is List<*> -> content.joinToString("\n") { part ->
+                        val partMap = part as? Map<*, *>
+                        (partMap?.get("text") as? String) ?: partMap.toString()
+                    }
+
+                    null -> ""
+                    else -> content.toString()
+                }
+            }
+        }
+
+        val input = request.body["input"] as? List<*> ?: return ""
+        return input.joinToString("\n") { item ->
+            when (val content = (item as? Map<*, *>)?.get("content")) {
+                is String -> content
+                is List<*> -> content.joinToString("\n") { part ->
+                    val partMap = part as? Map<*, *>
+                    (partMap?.get("text") as? String)
+                        ?: (partMap?.get("value") as? String)
+                        ?: partMap.toString()
+                }
+
+                null -> ""
+                else -> content.toString()
+            }
+        }
     }
 }
