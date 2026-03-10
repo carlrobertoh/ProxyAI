@@ -42,6 +42,8 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     )
 
     private var isTabActive = true
+    private var onTabsOpened: () -> Unit = {}
+    private var onAllTabsClosed: () -> Unit = {}
 
     init {
         tabComponentInsets = null
@@ -62,6 +64,11 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     )
 
     private val sessionStates = mutableMapOf<String, TabState>()
+
+    fun setTabLifecycleCallbacks(onTabsOpened: () -> Unit, onAllTabsClosed: () -> Unit) {
+        this.onTabsOpened = onTabsOpened
+        this.onAllTabsClosed = onAllTabsClosed
+    }
 
     fun updateStatusForSession(sessionId: String, status: TabStatus) {
         val state = sessionStates.getOrPut(sessionId) { TabState() }
@@ -129,6 +136,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     }
 
     fun addNewTab(toolWindowPanel: AgentToolWindowTabPanel, select: Boolean) {
+        val wasEmpty = activeTabMapping.isEmpty()
         val tabIndices = activeTabMapping.keys.toTypedArray()
         var nextIndex = 0
 
@@ -156,8 +164,12 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
 
         sessionStates[sessionId] = TabState(status = TabStatus.STOPPED, unseen = false)
 
-        setTabComponentAt(nextIndex, createTabButtonPanel(title, nextIndex > 0, TabStatus.STOPPED))
+        setTabComponentAt(nextIndex, createTabButtonPanel(title, TabStatus.STOPPED))
         toolWindowPanel.requestFocusForTextArea()
+
+        if (wasEmpty) {
+            onTabsOpened()
+        }
 
         Disposer.register(this, toolWindowPanel)
     }
@@ -190,8 +202,17 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     }
 
     fun clearAll() {
+        if (activeTabMapping.isEmpty()) {
+            return
+        }
+        activeTabMapping.values.forEach {
+            project.service<AgentToolWindowContentManager>().removeSession(it.getSessionId())
+            Disposer.dispose(it)
+        }
+        sessionStates.clear()
         removeAll()
         activeTabMapping.clear()
+        onAllTabsClosed()
     }
 
     fun renameTab(tabIndex: Int, newName: String) {
@@ -213,7 +234,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
             TabStatus.STOPPED
         }
 
-        setTabComponentAt(tabIndex, createTabButtonPanel(uniqueName, tabIndex > 0, currentStatus))
+        setTabComponentAt(tabIndex, createTabButtonPanel(uniqueName, currentStatus))
 
         activeTabMapping.remove(oldTitle)
         activeTabMapping[uniqueName] = panel
@@ -271,7 +292,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     }
 
     private fun renameAgentSession(tabIndex: Int) {
-        if (tabIndex <= 0) {
+        if (tabIndex < 0) {
             return
         }
 
@@ -309,14 +330,8 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
 
     fun resetCurrentlyActiveTabPanel() {
         tryFindActiveTabPanel().ifPresent { tabPanel ->
-            val oldSessionId = tabPanel.getSessionId()
             val oldDisplayName = tabPanel.getAgentSession().displayName
-            Disposer.dispose(tabPanel)
-            activeTabMapping.remove(getTitleAt(selectedIndex))
-            removeTabAt(selectedIndex)
-            sessionStates.remove(oldSessionId)
-
-            project.service<AgentToolWindowContentManager>().removeSession(oldSessionId)
+            closeTabAt(selectedIndex)
             val newSession = AgentSession(
                 UUID.randomUUID().toString(),
                 Conversation(),
@@ -330,7 +345,6 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
 
     private fun createTabButtonPanel(
         title: String,
-        closeable: Boolean,
         status: TabStatus = TabStatus.STOPPED
     ): JPanel {
         val titleLabel = JBLabel(title).apply {
@@ -341,18 +355,16 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         val panel = JBUI.Panels.simplePanel(4, 0)
             .addToLeft(titleLabel)
 
-        if (closeable) {
-            val closeIcon = AllIcons.Actions.Close
-            val button = JButton(closeIcon).apply {
-                addActionListener(CloseActionListener(title))
-                preferredSize = Dimension(closeIcon.iconWidth, closeIcon.iconHeight)
-                border = BorderFactory.createEmptyBorder()
-                isContentAreaFilled = false
-                toolTipText = "Close Agent"
-                rolloverIcon = AllIcons.Actions.CloseHovered
-            }
-            panel.addToRight(button)
+        val closeIcon = AllIcons.Actions.Close
+        val button = JButton(closeIcon).apply {
+            addActionListener(CloseActionListener(title))
+            preferredSize = Dimension(closeIcon.iconWidth, closeIcon.iconHeight)
+            border = BorderFactory.createEmptyBorder()
+            isContentAreaFilled = false
+            toolTipText = "Close Agent"
+            rolloverIcon = AllIcons.Actions.CloseHovered
         }
+        panel.addToRight(button)
 
         return panel.andTransparent()
     }
@@ -375,13 +387,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         override fun actionPerformed(evt: ActionEvent) {
             val tabIndex = indexOfTab(title)
             if (tabIndex >= 0) {
-                activeTabMapping[title]?.let { panel ->
-                    sessionStates.remove(panel.getSessionId())
-                    project.service<AgentToolWindowContentManager>().removeSession(panel.getSessionId())
-                    Disposer.dispose(panel)
-                }
-                removeTabAt(tabIndex)
-                activeTabMapping.remove(title)
+                closeTabAt(tabIndex)
             }
         }
     }
@@ -391,44 +397,46 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
 
         init {
             add(createPopupMenuItem("Rename Title") {
-                if (selectedPopupTabIndex > 0) {
+                if (selectedPopupTabIndex >= 0) {
                     renameAgentSession(selectedPopupTabIndex)
                 }
             })
             addSeparator()
             add(createPopupMenuItem("Close") {
-                if (selectedPopupTabIndex > 0) {
-                    val title = getTitleAt(selectedPopupTabIndex)
-                    activeTabMapping[title]?.let { panel ->
-                        sessionStates.remove(panel.getSessionId())
-                        project.service<AgentToolWindowContentManager>().removeSession(panel.getSessionId())
-                        Disposer.dispose(panel)
-                    }
-                    removeTabAt(selectedPopupTabIndex)
-                    activeTabMapping.remove(title)
+                if (selectedPopupTabIndex >= 0) {
+                    closeTabAt(selectedPopupTabIndex)
                 }
             })
             add(createPopupMenuItem("Close Other Tabs") {
+                if (selectedPopupTabIndex < 0) {
+                    return@createPopupMenuItem
+                }
                 val selectedPopupTabTitle = getTitleAt(selectedPopupTabIndex)
                 val tabPanel = activeTabMapping[selectedPopupTabTitle]
-                val keepSessionId = tabPanel?.getSessionId()
-                sessionStates.keys
+                if (tabPanel == null) {
+                    return@createPopupMenuItem
+                }
+                val keepSessionId = tabPanel.getSessionId()
+                sessionStates.keys.toList()
                     .filter { it != keepSessionId }
                     .forEach { sessionStates.remove(it) }
-                activeTabMapping.values
-                    .map { it.getSessionId() }
-                    .filter { it != keepSessionId }
-                    .forEach { project.service<AgentToolWindowContentManager>().removeSession(it) }
+                activeTabMapping.entries
+                    .filter { it.key != selectedPopupTabTitle }
+                    .forEach { entry ->
+                        project.service<AgentToolWindowContentManager>().removeSession(entry.value.getSessionId())
+                        Disposer.dispose(entry.value)
+                    }
 
-                clearAll()
-                tabPanel?.let { addNewTab(it) }
+                removeAll()
+                activeTabMapping.clear()
+                addNewTab(tabPanel)
             })
         }
 
         override fun show(invoker: Component, x: Int, y: Int) {
             selectedPopupTabIndex = this@AgentToolWindowTabbedPane.getUI()
                 .tabForCoordinate(this@AgentToolWindowTabbedPane, x, y)
-            if (selectedPopupTabIndex > 0) {
+            if (selectedPopupTabIndex >= 0) {
                 super.show(invoker, x, y)
             }
         }
@@ -442,5 +450,24 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
 
     override fun dispose() {
         clearAll()
+    }
+
+    private fun closeTabAt(tabIndex: Int) {
+        if (tabIndex !in 0 until tabCount) {
+            return
+        }
+
+        val title = getTitleAt(tabIndex)
+        val panel = activeTabMapping.remove(title)
+        if (panel != null) {
+            sessionStates.remove(panel.getSessionId())
+            project.service<AgentToolWindowContentManager>().removeSession(panel.getSessionId())
+            Disposer.dispose(panel)
+        }
+
+        removeTabAt(tabIndex)
+        if (activeTabMapping.isEmpty()) {
+            onAllTabsClosed()
+        }
     }
 }

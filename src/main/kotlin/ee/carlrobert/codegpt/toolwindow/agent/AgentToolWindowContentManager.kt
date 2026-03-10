@@ -28,8 +28,6 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
                 }
             })
 
-        createNewAgentTab()
-
         return tabbedPane
     }
 

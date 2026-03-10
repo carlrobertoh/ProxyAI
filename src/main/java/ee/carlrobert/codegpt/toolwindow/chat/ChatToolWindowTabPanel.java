@@ -99,13 +99,23 @@ public class ChatToolWindowTabPanel implements Disposable {
   private final PsiStructureRepository psiStructureRepository;
   private final TagManager tagManager;
   private final JPanel mcpApprovalContainer;
+  private final DraftSubmitHandler draftSubmitHandler;
   private @Nullable ToolwindowChatCompletionRequestHandler requestHandler;
   private final JBLabel loadingLabel;
   private final JPanel queuedMessageContainer;
 
   public ChatToolWindowTabPanel(@NotNull Project project, @NotNull Conversation conversation) {
+    this(project, conversation, null);
+  }
+
+  public ChatToolWindowTabPanel(
+      @NotNull Project project,
+      @NotNull Conversation conversation,
+      @Nullable DraftSubmitHandler draftSubmitHandler
+  ) {
     this.project = project;
     this.conversation = conversation;
+    this.draftSubmitHandler = draftSubmitHandler;
     this.chatSession = new ChatSession();
     conversationService = ConversationService.getInstance();
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
@@ -614,7 +624,12 @@ public class ChatToolWindowTabPanel implements Disposable {
       }
 
       application.invokeLater(() -> {
-        sendMessage(messageBuilder.build(), ConversationType.DEFAULT, psiStructure);
+        var message = messageBuilder.build();
+        if (draftSubmitHandler != null) {
+          draftSubmitHandler.onDraftSubmit(message, psiStructure);
+        } else {
+          sendMessage(message, ConversationType.DEFAULT, psiStructure);
+        }
       });
     });
     return Unit.INSTANCE;
@@ -771,5 +786,11 @@ public class ChatToolWindowTabPanel implements Disposable {
         BorderLayout.CENTER);
     rootPanel.add(createSouthPanel(createUserPromptPanel()), BorderLayout.SOUTH);
     return rootPanel;
+  }
+
+  @FunctionalInterface
+  public interface DraftSubmitHandler {
+
+    void onDraftSubmit(Message message, Set<ClassStructure> psiStructure);
   }
 }

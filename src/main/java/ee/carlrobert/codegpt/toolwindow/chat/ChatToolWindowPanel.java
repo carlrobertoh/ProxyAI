@@ -22,9 +22,11 @@ import ee.carlrobert.codegpt.CodeGPTKeys;
 import ee.carlrobert.codegpt.actions.toolwindow.ClearChatWindowAction;
 import ee.carlrobert.codegpt.actions.toolwindow.CreateNewConversationAction;
 import ee.carlrobert.codegpt.actions.toolwindow.OpenInEditorAction;
+import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationService;
-import ee.carlrobert.codegpt.conversations.ConversationsState;
+import ee.carlrobert.codegpt.conversations.message.Message;
+import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState;
@@ -35,16 +37,25 @@ import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ToolWindowFooterNotification;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier;
+import java.awt.CardLayout;
 import java.nio.file.Path;
+import java.util.Set;
 import javax.swing.JComponent;
+import javax.swing.JPanel;
 import org.jetbrains.annotations.NotNull;
 
 public class ChatToolWindowPanel extends SimpleToolWindowPanel {
 
+  private static final String LANDING_CARD = "LANDING";
+  private static final String TABS_CARD = "TABS";
+
   private final ToolWindowFooterNotification imageFileAttachmentNotification;
   private final ActionLink upgradePlanLink;
   private final ChatToolWindowTabbedPane tabbedPane;
+  private final JPanel centerPanel;
+  private final CardLayout centerLayout;
   private final Project project;
+  private ChatToolWindowTabPanel landingPanel;
 
   public ChatToolWindowPanel(
       @NotNull Project project,
@@ -60,22 +71,16 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     upgradePlanLink.setExternalLinkIcon();
     upgradePlanLink.setVisible(false);
 
-    var tabPanel = new ChatToolWindowTabPanel(project, getConversation());
     tabbedPane = new ChatToolWindowTabbedPane(parentDisposable);
-    tabbedPane.addNewTab(tabPanel);
+    tabbedPane.setTabLifecycleCallbacks(this::showTabsView, this::showLandingView);
+    centerLayout = new CardLayout();
+    centerPanel = new JPanel(centerLayout);
+    centerPanel.add(tabbedPane, TABS_CARD);
 
     initToolWindowPanel(project);
     initializeEventListeners(project);
-
-    Disposer.register(parentDisposable, tabPanel);
-  }
-
-  private Conversation getConversation() {
-    var conversation = ConversationsState.getCurrentConversation();
-    if (conversation == null) {
-      return ConversationService.getInstance().startConversation(project);
-    }
-    return conversation;
+    showLandingView();
+    Disposer.register(parentDisposable, this::disposeLandingPanel);
   }
 
   private void initializeEventListeners(Project project) {
@@ -107,6 +112,63 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     return tabbedPane;
   }
 
+  public ChatToolWindowTabPanel createAndSelectNewTabPanel() {
+    return createAndSelectConversationTab(ConversationService.getInstance().startConversation(project));
+  }
+
+  public ChatToolWindowTabPanel createAndSelectConversationTab(Conversation conversation) {
+    var panel = new ChatToolWindowTabPanel(project, conversation);
+    tabbedPane.addNewTab(panel);
+    showTabsView();
+    return panel;
+  }
+
+  public void showTabsView() {
+    centerLayout.show(centerPanel, TABS_CARD);
+  }
+
+  public void requestFocusForInput() {
+    tabbedPane.tryFindActiveTabPanel()
+        .ifPresentOrElse(
+            ChatToolWindowTabPanel::requestFocusForTextArea,
+            () -> {
+              if (landingPanel != null) {
+                landingPanel.requestFocusForTextArea();
+              }
+            });
+  }
+
+  public void showLandingView() {
+    disposeLandingPanel();
+    landingPanel = createLandingPanel();
+    centerPanel.add(landingPanel.getContent(), LANDING_CARD);
+    centerLayout.show(centerPanel, LANDING_CARD);
+    landingPanel.requestFocusForTextArea();
+    centerPanel.revalidate();
+    centerPanel.repaint();
+  }
+
+  private ChatToolWindowTabPanel createLandingPanel() {
+    var conversation = ConversationService.getInstance().createConversation();
+    conversation.setProjectPath(project.getBasePath());
+    return new ChatToolWindowTabPanel(project, conversation, this::promoteLandingDraftToTab);
+  }
+
+  private void promoteLandingDraftToTab(Message message, Set<ClassStructure> psiStructure) {
+    var tabPanel = createAndSelectNewTabPanel();
+    tabPanel.sendMessage(message, ConversationType.DEFAULT, psiStructure);
+  }
+
+  private void disposeLandingPanel() {
+    if (landingPanel == null) {
+      return;
+    }
+
+    centerPanel.remove(landingPanel.getContent());
+    Disposer.dispose(landingPanel);
+    landingPanel = null;
+  }
+
   public void clearImageNotifications(Project project) {
     imageFileAttachmentNotification.hideNotification();
 
@@ -115,9 +177,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
 
   private void initToolWindowPanel(Project project) {
     Runnable onAddNewTab = () -> {
-      tabbedPane.addNewTab(new ChatToolWindowTabPanel(
-          project,
-          ConversationService.getInstance().startConversation(project)));
+      createAndSelectNewTabPanel();
       repaint();
       revalidate();
     };
@@ -127,7 +187,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
           .addToLeft(createActionToolbar(project, tabbedPane, onAddNewTab).getComponent())
           .addToRight(upgradePlanLink));
       setContent(new BorderLayoutPanel()
-          .addToCenter(tabbedPane)
+          .addToCenter(centerPanel)
           .addToBottom(imageFileAttachmentNotification));
     });
   }

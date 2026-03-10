@@ -47,6 +47,10 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
         return o1.compareToIgnoreCase(o2);
       });
   private final Disposable parentDisposable;
+  private Runnable onTabsOpened = () -> {
+  };
+  private Runnable onAllTabsClosed = () -> {
+  };
 
   public ChatToolWindowTabbedPane(Disposable parentDisposable) {
     this.parentDisposable = parentDisposable;
@@ -59,7 +63,13 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     return activeTabMapping;
   }
 
+  public void setTabLifecycleCallbacks(Runnable onTabsOpened, Runnable onAllTabsClosed) {
+    this.onTabsOpened = onTabsOpened;
+    this.onAllTabsClosed = onAllTabsClosed;
+  }
+
   public void addNewTab(ChatToolWindowTabPanel toolWindowPanel) {
+    var wasEmpty = activeTabMapping.isEmpty();
     var tabIndices = activeTabMapping.keySet().toArray(new String[0]);
     var nextIndex = 0;
     for (String title : tabIndices) {
@@ -79,10 +89,11 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     super.insertTab(title, null, toolWindowPanel.getContent(), null, nextIndex);
     activeTabMapping.put(title, toolWindowPanel);
     super.setSelectedIndex(nextIndex);
+    setTabComponentAt(nextIndex, createCloseableTabButtonPanel(title));
+    toolWindowPanel.requestFocusForTextArea();
 
-    if (nextIndex > 0) {
-      setTabComponentAt(nextIndex, createCloseableTabButtonPanel(title));
-      toolWindowPanel.requestFocusForTextArea();
+    if (wasEmpty) {
+      onTabsOpened.run();
     }
 
     Disposer.register(parentDisposable, toolWindowPanel);
@@ -122,8 +133,14 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
   }
 
   public void clearAll() {
+    if (activeTabMapping.isEmpty()) {
+      return;
+    }
+
+    activeTabMapping.values().forEach(Disposer::dispose);
     removeAll();
     activeTabMapping.clear();
+    onAllTabsClosed.run();
   }
 
   public void renameTab(int tabIndex, String newName) {
@@ -142,9 +159,7 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
 
     setTitleAt(tabIndex, uniqueName);
 
-    if (tabIndex > 0) {
-      setTabComponentAt(tabIndex, createCloseableTabButtonPanel(uniqueName));
-    }
+    setTabComponentAt(tabIndex, createCloseableTabButtonPanel(uniqueName));
 
     activeTabMapping.remove(oldTitle);
     activeTabMapping.put(uniqueName, panel);
@@ -187,9 +202,7 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
 
   public void resetCurrentlyActiveTabPanel(Project project) {
     tryFindActiveTabPanel().ifPresent(tabPanel -> {
-      Disposer.dispose(tabPanel);
-      activeTabMapping.remove(getTitleAt(getSelectedIndex()));
-      removeTabAt(getSelectedIndex());
+      closeTabAt(getSelectedIndex());
       addNewTab(new ChatToolWindowTabPanel(
           project,
           ConversationService.getInstance().startConversation(project)));
@@ -225,9 +238,7 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     public void actionPerformed(ActionEvent evt) {
       var tabIndex = indexOfTab(title);
       if (tabIndex >= 0) {
-        Disposer.dispose(activeTabMapping.get(title));
-        removeTabAt(tabIndex);
-        activeTabMapping.remove(title);
+        closeTabAt(tabIndex);
       }
     }
   }
@@ -238,22 +249,34 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
 
     TabPopupMenu() {
       add(createPopupMenuItem("Rename Title", e -> {
-        if (selectedPopupTabIndex > 0) {
+        if (selectedPopupTabIndex >= 0) {
           RenameSessionAction.renameSession(ChatToolWindowTabbedPane.this, selectedPopupTabIndex);
         }
       }));
       addSeparator();
       add(createPopupMenuItem("Close", e -> {
-        if (selectedPopupTabIndex > 0) {
-          activeTabMapping.remove(getTitleAt(selectedPopupTabIndex));
-          removeTabAt(selectedPopupTabIndex);
+        if (selectedPopupTabIndex >= 0) {
+          closeTabAt(selectedPopupTabIndex);
         }
       }));
       add(createPopupMenuItem("Close Other Tabs", e -> {
+        if (selectedPopupTabIndex < 0) {
+          return;
+        }
+
         var selectedPopupTabTitle = getTitleAt(selectedPopupTabIndex);
         var tabPanel = activeTabMapping.get(selectedPopupTabTitle);
+        if (tabPanel == null) {
+          return;
+        }
 
-        clearAll();
+        activeTabMapping.entrySet().stream()
+            .filter(entry -> !entry.getKey().equals(selectedPopupTabTitle))
+            .map(Map.Entry::getValue)
+            .forEach(Disposer::dispose);
+
+        removeAll();
+        activeTabMapping.clear();
         addNewTab(tabPanel);
       }));
     }
@@ -262,7 +285,7 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     public void show(Component invoker, int x, int y) {
       selectedPopupTabIndex = ChatToolWindowTabbedPane.this.getUI()
           .tabForCoordinate(ChatToolWindowTabbedPane.this, x, y);
-      if (selectedPopupTabIndex > 0) {
+      if (selectedPopupTabIndex >= 0) {
         super.show(invoker, x, y);
       }
     }
@@ -271,6 +294,24 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
       var menuItem = new JBMenuItem(label);
       menuItem.addActionListener(listener);
       return menuItem;
+    }
+  }
+
+  private void closeTabAt(int tabIndex) {
+    if (tabIndex < 0 || tabIndex >= getTabCount()) {
+      return;
+    }
+
+    var title = getTitleAt(tabIndex);
+    var panel = activeTabMapping.remove(title);
+    if (panel != null) {
+      Disposer.dispose(panel);
+    }
+
+    removeTabAt(tabIndex);
+
+    if (activeTabMapping.isEmpty()) {
+      onAllTabsClosed.run();
     }
   }
 }

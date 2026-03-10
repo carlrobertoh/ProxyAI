@@ -9,7 +9,7 @@ public class RenameSessionAction {
   private static final int MAX_NAME_LENGTH = 50;
 
   public static void renameSession(ChatToolWindowTabbedPane tabbedPane, int tabIndex) {
-    if (tabIndex <= 0) {
+    if (tabIndex < 0) {
       return;
     }
 

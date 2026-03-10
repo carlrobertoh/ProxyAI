@@ -7,20 +7,38 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.Disposer
+import ee.carlrobert.codegpt.conversations.Conversation
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentCreditsToolbarLabel
+import java.awt.CardLayout
+import java.util.UUID
 import javax.swing.JComponent
+import javax.swing.JPanel
 
 class AgentToolWindowPanel(
     private val project: Project
 ) : SimpleToolWindowPanel(true), Disposable {
 
+    companion object {
+        private const val LANDING_CARD = "LANDING"
+        private const val TABS_CARD = "TABS"
+    }
+
     private val contentManager = project.service<AgentToolWindowContentManager>()
     private val tabbedPane = contentManager.initializeTabbedPane()
+    private val centerLayout = CardLayout()
+    private val centerPanel = JPanel(centerLayout)
+    private var landingPanel: AgentToolWindowTabPanel? = null
 
     init {
+        tabbedPane.setTabLifecycleCallbacks(
+            onTabsOpened = { showTabsView() },
+            onAllTabsClosed = { showLandingView() }
+        )
+        centerPanel.add(tabbedPane, TABS_CARD)
         toolbar = createToolbar()
-        setContent(tabbedPane)
+        setContent(centerPanel)
+        showLandingView()
     }
 
     private fun createToolbar(): JComponent {
@@ -66,7 +84,45 @@ class AgentToolWindowPanel(
 
     fun getTabbedPane(): AgentToolWindowTabbedPane = tabbedPane
 
+    private fun showTabsView() {
+        centerLayout.show(centerPanel, TABS_CARD)
+    }
+
+    private fun showLandingView() {
+        disposeLandingPanel()
+        landingPanel = createLandingPanel()
+        centerPanel.add(landingPanel, LANDING_CARD)
+        centerLayout.show(centerPanel, LANDING_CARD)
+        landingPanel?.requestFocusForTextArea()
+        centerPanel.revalidate()
+        centerPanel.repaint()
+    }
+
+    private fun createLandingPanel(): AgentToolWindowTabPanel {
+        val draftSession = AgentSession(
+            sessionId = UUID.randomUUID().toString(),
+            conversation = Conversation()
+        )
+        return AgentToolWindowTabPanel(
+            project = project,
+            agentSession = draftSession,
+            draftSubmitHandler = { message ->
+                val panel = contentManager.createNewAgentTab()
+                panel.submitMessage(message)
+            }
+        )
+    }
+
+    private fun disposeLandingPanel() {
+        val current = landingPanel ?: return
+        centerPanel.remove(current)
+        Disposer.dispose(current)
+        landingPanel = null
+    }
+
     override fun dispose() {
+        tabbedPane.setTabLifecycleCallbacks(onTabsOpened = {}, onAllTabsClosed = {})
+        disposeLandingPanel()
         tabbedPane.dispose()
     }
 }

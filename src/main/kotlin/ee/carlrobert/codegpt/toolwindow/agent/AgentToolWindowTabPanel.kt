@@ -57,7 +57,8 @@ import javax.swing.JPanel
 
 class AgentToolWindowTabPanel(
     private val project: Project,
-    private val agentSession: AgentSession
+    private val agentSession: AgentSession,
+    private val draftSubmitHandler: ((MessageWithContext) -> Unit)? = null
 ) : BorderLayoutPanel(), Disposable {
     companion object {
         private const val RECOVERED_CONVERSATION_RENDER_BATCH_SIZE = 6
@@ -274,6 +275,16 @@ class AgentToolWindowTabPanel(
 
     private fun handleSubmit(text: String) {
         if (text.isBlank()) return
+        val message = MessageWithContext(text, userInputPanel.getSelectedTags())
+        if (draftSubmitHandler != null) {
+            draftSubmitHandler.invoke(message)
+            return
+        }
+        submitMessage(message)
+    }
+
+    fun submitMessage(message: MessageWithContext) {
+        if (message.text.isBlank()) return
         disposeLandingPanelIfPresent()
         scrollablePanel.clearLandingViewIfVisible()
         agentSession.serviceType =
@@ -282,16 +293,12 @@ class AgentToolWindowTabPanel(
         val agentService = project.service<AgentService>()
 
         if (agentService.isSessionRunning(sessionId)) {
-            addQueuedMessage(text)
+            addQueuedMessage(message.text)
             userInputPanel.clearText()
             userInputPanel.setSubmitEnabled(true)
             userInputPanel.setStopEnabled(true)
 
-            agentService.submitMessage(
-                MessageWithContext(text, userInputPanel.getSelectedTags()),
-                eventHandler,
-                sessionId
-            )
+            agentService.submitMessage(message, eventHandler, sessionId)
             return
         }
 
@@ -303,11 +310,10 @@ class AgentToolWindowTabPanel(
         val rollbackRunId = rollbackService.startSession(sessionId)
         rollbackPanel.refreshOperations()
 
-        val message = MessageWithContext(text, userInputPanel.getSelectedTags())
         val messagePanel = scrollablePanel.addMessage(message.id)
         val userPanel = UserMessagePanel(
             project,
-            MessageBuilder(project, text).withTags(userInputPanel.getSelectedTags()).build(),
+            MessageBuilder(project, message.text).withTags(message.tags).build(),
             this
         )
         val responsePanel = ResponseMessagePanel()
@@ -322,7 +328,7 @@ class AgentToolWindowTabPanel(
         )
 
         responsePanel.setResponseContent(responseBody)
-        userPanel.addCopyAction { CopyAction.copyToClipboard(text) }
+        userPanel.addCopyAction { CopyAction.copyToClipboard(message.text) }
         messagePanel.add(userPanel)
         messagePanel.add(responsePanel)
         scrollablePanel.update()
@@ -331,7 +337,7 @@ class AgentToolWindowTabPanel(
             runMessageId = message.id,
             rollbackRunId = rollbackRunId,
             responsePanel = responsePanel,
-            prompt = text
+            prompt = message.text
         )
 
         eventHandler.resetForNewSubmission()

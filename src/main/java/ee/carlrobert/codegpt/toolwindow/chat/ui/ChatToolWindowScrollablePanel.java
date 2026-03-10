@@ -1,21 +1,8 @@
 package ee.carlrobert.codegpt.toolwindow.chat.ui;
 
-import static javax.swing.event.HyperlinkEvent.EventType.ACTIVATED;
-
-import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.roots.ui.componentsList.components.ScrollablePanel;
 import com.intellij.openapi.roots.ui.componentsList.layout.VerticalStackLayout;
-import com.intellij.ui.JBColor;
-import com.intellij.util.ui.JBUI;
-import ee.carlrobert.codegpt.credentials.CredentialsStore;
-import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
-import ee.carlrobert.codegpt.settings.service.FeatureType;
-import ee.carlrobert.codegpt.settings.models.ModelSettings;
-import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
-import ee.carlrobert.codegpt.ui.UIUtil;
-import ee.carlrobert.codegpt.util.ApplicationUtil;
 import java.awt.Rectangle;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,34 +25,6 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
     clearAll();
     add(landingView);
     landingViewVisible = true;
-    if (ModelSettings.getInstance().getServiceForFeature(FeatureType.CHAT)
-        == ServiceType.PROXYAI
-        && !CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.CodeGptApiKey.INSTANCE)) {
-
-      var panel = new ResponseMessagePanel();
-      panel.addContent(UIUtil.createTextPane("""
-              <html>
-              <p style="margin-top: 4px; margin-bottom: 4px;">
-                It looks like you haven't configured your API key yet. Visit <a href="#OPEN_SETTINGS">ProxyAI settings</a> to do so.
-              </p>
-              <p style="margin-top: 4px; margin-bottom: 4px;">
-                Don't have an account? <a href="https://tryproxy.io/signin">Sign up</a> to get started.
-              </p>
-              </html>""",
-          false,
-          event -> {
-            if (ACTIVATED.equals(event.getEventType())
-                && "#OPEN_SETTINGS".equals(event.getDescription())) {
-              ShowSettingsUtil.getInstance().showSettingsDialog(
-                  ApplicationUtil.findCurrentProject(),
-                  CodeGPTServiceConfigurable.class);
-            } else {
-              UIUtil.handleHyperlinkClicked(event);
-            }
-          }));
-      panel.setBorder(JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0));
-      add(panel);
-    }
   }
 
   public ResponseMessagePanel getResponseMessagePanel(UUID messageId) {

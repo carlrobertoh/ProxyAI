@@ -260,7 +260,6 @@ val Opus_4_6: LLModel = LLModel(
     maxOutputTokens = 64_000,
 )
 
-
 private val GPT5_4: LLModel = LLModel(
     provider = LLMProvider.OpenAI,
     id = "gpt-5.4",

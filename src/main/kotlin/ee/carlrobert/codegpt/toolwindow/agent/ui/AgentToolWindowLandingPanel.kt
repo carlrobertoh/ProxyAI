@@ -43,7 +43,6 @@ import ee.carlrobert.codegpt.ui.UIUtil.createTextPane
 import kotlinx.coroutines.Dispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import com.intellij.openapi.Disposable
-import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Desktop
 import java.net.URI
@@ -53,7 +52,7 @@ import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JPanel
 
-class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessagePanel(), Disposable {
+class AgentToolWindowLandingPanel(private val project: Project) : BorderLayoutPanel(), Disposable {
 
     companion object {
         private val logger = thisLogger()
@@ -76,37 +75,51 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
     }
 
     init {
+        isOpaque = false
         historyListPanel.onOpen = { thread -> openCheckpointThread(thread) }
         historyListPanel.onLoadPage = { query, offset, limit, onResult ->
             loadHistoryPage(query, offset, limit, onResult)
         }
-        addContent(buildContent())
+        addToCenter(buildContent())
         loadHistory()
     }
 
     private fun buildContent(): JPanel {
-        return BorderLayoutPanel().apply {
-            border = JBUI.Borders.empty(0)
-            add(topPanel(), BorderLayout.NORTH)
-            add(centerPanel(), BorderLayout.CENTER)
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            add(primaryMessagePanel())
+            apiKeyPanel()?.let { add(it) }
+        }
+    }
+
+    private fun primaryMessagePanel(): ResponseMessagePanel {
+        return ResponseMessagePanel().apply {
+            addContent(
+                BorderLayoutPanel().apply {
+                    border = JBUI.Borders.empty(0)
+                    addToTop(topPanel())
+                    addToCenter(centerPanel())
+                }
+            )
         }
     }
 
     private fun topPanel(): JPanel {
         return BorderLayoutPanel().apply {
             isOpaque = false
-            apiKeyPanel()?.let { addToTop(it) }
             addToCenter(createTextPane(welcomeMessage(), false))
         }
     }
 
-    private fun apiKeyPanel(): JPanel? {
+    private fun apiKeyPanel(): ResponseMessagePanel? {
         val provider = ModelSettings.getInstance().getServiceForFeature(FeatureType.AGENT)
         if (provider != ServiceType.PROXYAI || CredentialsStore.isCredentialSet(CodeGptApiKey)) {
             return null
         }
 
         return ResponseMessagePanel().apply {
+            border = JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0)
             addContent(
                 createTextPane(
                     """
@@ -133,7 +146,6 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
                     }
                 }
             )
-            border = JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0)
         }
     }
 
@@ -304,7 +316,7 @@ class AgentToolWindowLandingPanel(private val project: Project) : ResponseMessag
 
     private fun refresh() {
         removeAll()
-        addContent(buildContent())
+        addToCenter(buildContent())
         loadHistory()
         revalidate()
         repaint()

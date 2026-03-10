@@ -14,10 +14,8 @@ class ChatToolWindowListener : ToolWindowManagerListener {
 
     private fun requestFocusForTextArea(project: Project) {
         val contentManager = project.getService(ChatToolWindowContentManager::class.java)
-        contentManager.tryFindChatTabbedPane().ifPresent { tabbedPane ->
-            tabbedPane.tryFindActiveTabPanel().ifPresent { tabPanel ->
-                tabPanel.requestFocusForTextArea()
-            }
+        contentManager.tryFindChatToolWindowPanel().ifPresent { panel ->
+            panel.requestFocusForInput()
         }
     }
 }

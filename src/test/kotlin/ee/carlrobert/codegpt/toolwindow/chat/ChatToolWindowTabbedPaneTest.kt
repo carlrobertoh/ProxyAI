@@ -5,6 +5,7 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
 import org.assertj.core.api.Assertions.assertThat
+import java.awt.event.ActionEvent
 
 class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
 
@@ -38,6 +39,29 @@ class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
 
     val tabPanel = tabbedPane.activeTabMapping["Chat 1"]
     assertThat(tabPanel!!.conversation.messages).isEmpty()
+  }
+
+  fun testCanCloseFirstTabWhenMultipleTabsExist() {
+    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+    tabbedPane.addNewTab(createNewTabPanel())
+    tabbedPane.addNewTab(createNewTabPanel())
+
+    tabbedPane.CloseActionListener("Chat 1")
+      .actionPerformed(ActionEvent(tabbedPane, ActionEvent.ACTION_PERFORMED, "close"))
+
+    assertThat(tabbedPane.activeTabMapping.keys).containsExactly("Chat 2")
+    assertThat(tabbedPane.tabCount).isEqualTo(1)
+  }
+
+  fun testCanCloseLastRemainingTab() {
+    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+    tabbedPane.addNewTab(createNewTabPanel())
+
+    tabbedPane.CloseActionListener("Chat 1")
+      .actionPerformed(ActionEvent(tabbedPane, ActionEvent.ACTION_PERFORMED, "close"))
+
+    assertThat(tabbedPane.activeTabMapping).isEmpty()
+    assertThat(tabbedPane.tabCount).isZero()
   }
 
   private fun createNewTabPanel(): ChatToolWindowTabPanel {

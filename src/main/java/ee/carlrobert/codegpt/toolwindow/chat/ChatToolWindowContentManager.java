@@ -15,8 +15,6 @@ import ee.carlrobert.codegpt.CodeGPTBundle;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.conversations.Conversation;
-import ee.carlrobert.codegpt.conversations.ConversationService;
-import ee.carlrobert.codegpt.conversations.ConversationsState;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
 import java.util.Arrays;
@@ -48,13 +46,12 @@ public final class ChatToolWindowContentManager {
         .getState()
         .getChatActions()
         .getStartInNewWindow();
-    if (startInNewWindow || ConversationsState.getCurrentConversation() == null) {
+    if (startInNewWindow) {
       createNewTabPanel().sendMessage(message, conversationType);
       return;
     }
 
-    tryFindChatTabbedPane()
-        .map(tabbedPane -> tabbedPane.tryFindActiveTabPanel().orElseGet(this::createNewTabPanel))
+    tryFindActiveChatTabPanel()
         .orElseGet(this::createNewTabPanel)
         .sendMessage(message, conversationType);
   }
@@ -65,23 +62,18 @@ public final class ChatToolWindowContentManager {
 
   public void displayConversation(@NotNull Conversation conversation) {
     displayChatTab();
-    tryFindChatTabbedPane()
-        .ifPresent(tabbedPane -> tabbedPane.tryFindTabTitle(conversation.getId())
-            .ifPresentOrElse(
-                title -> tabbedPane.setSelectedIndex(tabbedPane.indexOfTab(title)),
-                () -> tabbedPane.addNewTab(new ChatToolWindowTabPanel(project, conversation))));
+    tryFindChatToolWindowPanel().ifPresent(chatPanel -> chatPanel.getChatTabbedPane()
+        .tryFindTabTitle(conversation.getId())
+        .ifPresentOrElse(
+            title -> chatPanel.getChatTabbedPane()
+                .setSelectedIndex(chatPanel.getChatTabbedPane().indexOfTab(title)),
+            () -> chatPanel.createAndSelectConversationTab(conversation)));
   }
 
   public ChatToolWindowTabPanel createNewTabPanel() {
     displayChatTab();
-    return tryFindChatTabbedPane()
-        .map(item -> {
-          var panel = new ChatToolWindowTabPanel(
-              project,
-              ConversationService.getInstance().startConversation(project));
-          item.addNewTab(panel);
-          return panel;
-        })
+    return tryFindChatToolWindowPanel()
+        .map(ChatToolWindowPanel::createAndSelectNewTabPanel)
         .orElseThrow();
   }
 
@@ -113,12 +105,7 @@ public final class ChatToolWindowContentManager {
   }
 
   public void resetAll() {
-    tryFindChatTabbedPane().ifPresent(tabbedPane -> {
-      tabbedPane.clearAll();
-      tabbedPane.addNewTab(new ChatToolWindowTabPanel(
-          project,
-          ConversationService.getInstance().startConversation(project)));
-    });
+    tryFindChatTabbedPane().ifPresent(ChatToolWindowTabbedPane::clearAll);
   }
 
   public @NotNull ToolWindow getToolWindow() {
