@@ -185,7 +185,7 @@ private fun defaultModelDisplayName(modelId: String): String {
         MistralAIModels.Chat.Codestral.id -> "Codestral"
 
         // Inception
-        Mercury.id -> "Mercury"
+        Mercury2.id -> "Mercury 2"
         MERCURY_CODER -> "Mercury Coder"
 
         else -> modelId
@@ -332,9 +332,9 @@ val Devstral2: LLModel = LLModel(
     maxOutputTokens = 65_536,
 )
 
-val Mercury: LLModel = LLModel(
+val Mercury2: LLModel = LLModel(
     provider = InceptionAILLMClient.Inception,
-    id = "mercury",
+    id = "mercury-2",
     capabilities = listOf(
         LLMCapability.Temperature,
         LLMCapability.Schema.JSON.Basic,
@@ -614,8 +614,8 @@ private class InceptionModelProvider : ModelProvider {
     private fun inceptionMercury(): ModelSelection {
         return ModelSelection(
             provider = serviceType,
-            llmModel = Mercury,
-            displayName = defaultModelDisplayName(Mercury.id),
+            llmModel = Mercury2,
+            displayName = defaultModelDisplayName(Mercury2.id),
         )
     }
 
