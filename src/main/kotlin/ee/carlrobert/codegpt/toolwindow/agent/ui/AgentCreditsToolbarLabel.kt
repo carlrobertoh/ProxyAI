@@ -7,6 +7,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.messages.MessageBusConnection
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
+import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.*
@@ -73,6 +74,8 @@ class AgentCreditsToolbarLabel(
             val provider = ModelSettings.getInstance()
                 .getServiceForFeature(FeatureType.AGENT)
             if (provider != ServiceType.PROXYAI) {
+                text = null
+                toolTipText = null
                 isVisible = false
                 return@invokeLater
             }
@@ -89,21 +92,25 @@ class AgentCreditsToolbarLabel(
                 (userTotal - userDetails.creditsUsed).coerceAtLeast(0)
             } else null
             val remaining = credits?.remaining ?: userRemaining
+            val labelPrefix = CodeGPTBundle.get("agent.credits.label")
+            val remainingText = remaining?.let {
+                CodeGPTBundle.get("agent.credits.remainingValue", numberFormat.format(it))
+            } ?: "--"
 
-            text = if (remaining != null) {
-                "Credits: ${numberFormat.format(remaining)} left"
-            } else {
-                "Credits: --"
-            }
+            text = "$labelPrefix: $remainingText"
 
             toolTipText = buildString {
                 append("<html><body>")
-                append("<b>Credits</b><br>")
+                append("<b>$labelPrefix</b><br>")
                 if (remaining != null) {
-                    append("Remaining: ${numberFormat.format(remaining)}<br>")
+                    append(
+                        CodeGPTBundle.get("agent.credits.tooltip.remaining", numberFormat.format(remaining))
+                    )
+                    append("<br>")
                 }
                 if (userTotal != null) {
-                    append("Total: ${numberFormat.format(userTotal)}<br>")
+                    append(CodeGPTBundle.get("agent.credits.tooltip.total", numberFormat.format(userTotal)))
+                    append("<br>")
                 }
                 append("</body></html>")
             }
