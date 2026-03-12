@@ -8,6 +8,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jsoup.Jsoup
+import java.net.URI
+import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
@@ -62,7 +64,6 @@ IMPORTANT - Use the correct year in search queries:
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
-
     @Serializable
     data class Args(
         @property:LLMDescription(
@@ -97,37 +98,18 @@ IMPORTANT - Use the correct year in search queries:
 
     override suspend fun doExecute(args: Args): Result = withContext(Dispatchers.IO) {
         try {
-            val searxResults = searchWithSearxNG(args.query)
-            if (searxResults.isNotEmpty()) {
-                val filteredResults =
-                    filterResults(
-                        searxResults,
-                        args.allowedDomains,
-                        args.blockedDomains
-                    )
-                return@withContext Result(
-                    query = args.query,
-                    results = filteredResults.take(10),
-                    sources = filteredResults.take(10).map { "[${it.title}](${it.url})" }
-                )
-            }
-        } catch (_: Exception) {
-            // Fall back to DuckDuckGo
-        }
-
-        try {
             val duckduckgoResults = searchWithDuckDuckGo(args.query)
-            val filteredResults =
-                filterResults(
-                    duckduckgoResults,
-                    args.allowedDomains,
-                    args.blockedDomains
-                )
-            return@withContext Result(
+            val filteredResults = filterResults(
+                duckduckgoResults,
+                args.allowedDomains,
+                args.blockedDomains
+            ).take(10)
+            val result = Result(
                 query = args.query,
-                results = filteredResults.take(10),
-                sources = filteredResults.take(10).map { "[${it.title}](${it.url})" }
+                results = filteredResults,
+                sources = filteredResults.map { "[${it.title}](${it.url})" }
             )
+            return@withContext result
         } catch (_: Exception) {
             return@withContext Result(
                 query = args.query,
@@ -148,34 +130,6 @@ IMPORTANT - Use the correct year in search queries:
         )
     }
 
-    private suspend fun searchWithSearxNG(query: String): List<SearchResult> =
-        withContext(Dispatchers.IO) {
-            val encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8.toString())
-            val url = "https://searx.space/search?q=$encodedQuery&format=json"
-
-            val doc = Jsoup.connect(url)
-                .userAgent(userAgent)
-                .timeout(10000)
-                .ignoreContentType(true)
-                .get()
-
-            val jsonResponse = doc.body().text()
-            if (jsonResponse.isEmpty()) return@withContext emptyList()
-
-            try {
-                val searxResponse = json.decodeFromString<SearxResponse>(jsonResponse)
-                searxResponse.results.map { result ->
-                    SearchResult(
-                        title = result.title,
-                        url = result.url,
-                        content = result.content
-                    )
-                }
-            } catch (_: Exception) {
-                emptyList()
-            }
-        }
-
     private suspend fun searchWithDuckDuckGo(query: String): List<SearchResult> =
         withContext(Dispatchers.IO) {
             val encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8.toString())
@@ -193,10 +147,11 @@ IMPORTANT - Use the correct year in search queries:
                 val snippet = resultDiv.selectFirst("a.result__snippet")
 
                 if (titleLink != null) {
+                    val resolvedUrl = normalizeSearchResultUrl(titleLink.attr("href"))
                     results.add(
                         SearchResult(
                             title = titleLink.text(),
-                            url = titleLink.attr("href"),
+                            url = resolvedUrl,
                             content = snippet?.text() ?: ""
                         )
                     )
@@ -211,18 +166,58 @@ IMPORTANT - Use the correct year in search queries:
         allowedDomains: List<String>?,
         blockedDomains: List<String>?
     ): List<SearchResult> {
+        val effectiveAllowedDomains = normalizeDomains(allowedDomains)
+        val effectiveBlockedDomains = normalizeDomains(blockedDomains)
         return results.filter { result ->
             val urlLower = result.url.lowercase()
 
-            blockedDomains?.any { domain ->
+            effectiveBlockedDomains?.any { domain ->
                 urlLower.contains(domain.lowercase())
             }?.let { if (it) return@filter false }
 
-            allowedDomains?.let { allowed ->
+            effectiveAllowedDomains?.let { allowed ->
                 allowed.any { domain ->
                     urlLower.contains(domain.lowercase())
                 }
             } ?: true
+        }
+    }
+
+    companion object {
+        internal fun normalizeSearchResultUrl(url: String): String {
+            if (url.isBlank()) return url
+
+            val absoluteUrl = if (url.startsWith("//")) {
+                "https:$url"
+            } else {
+                url
+            }
+
+            return runCatching {
+                val uri = URI(absoluteUrl)
+                val host = uri.host?.lowercase()
+                if (host != "duckduckgo.com" && host != "www.duckduckgo.com") {
+                    return absoluteUrl
+                }
+
+                val query = uri.rawQuery ?: return absoluteUrl
+                query.split("&")
+                    .firstNotNullOfOrNull { segment ->
+                        val idx = segment.indexOf('=')
+                        if (idx <= 0) return@firstNotNullOfOrNull null
+                        val key = segment.substring(0, idx)
+                        if (key != "uddg") return@firstNotNullOfOrNull null
+                        URLDecoder.decode(segment.substring(idx + 1), StandardCharsets.UTF_8)
+                    }
+                    ?: absoluteUrl
+            }.getOrDefault(absoluteUrl)
+        }
+
+        internal fun normalizeDomains(domains: List<String>?): List<String>? {
+            return domains
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() }
         }
     }
 
@@ -243,16 +238,4 @@ IMPORTANT - Use the correct year in search queries:
             appendLine()
             appendLine("*Click on any result to view the full content*")
         }.trimEnd().truncateToolResult()
-
-    @Serializable
-    private data class SearxResponse(
-        val results: List<SearxResult>
-    )
-
-    @Serializable
-    private data class SearxResult(
-        val title: String,
-        val url: String,
-        val content: String
-    )
 }
