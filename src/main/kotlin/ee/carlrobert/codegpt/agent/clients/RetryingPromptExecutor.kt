@@ -20,6 +20,8 @@ import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ee.carlrobert.codegpt.agent.AgentEvents
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.io.IOException
+import java.net.SocketTimeoutException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
@@ -65,10 +67,28 @@ class RetryingPromptExecutor(
             }
 
             val causes = generateSequence(error) { it.cause }.take(10).toList()
+            if (causes.any { it.isRetryableTimeout() }) {
+                return true
+            }
+
             val statusCode = causes
                 .filterIsInstance<KoogHttpClientException>()
                 .firstNotNullOfOrNull { it.statusCode }
             return statusCode in RETRYABLE_HTTP_STATUS_CODES
+        }
+
+        private fun Throwable.isRetryableTimeout(): Boolean {
+            if (this is TimeoutCancellationException || this is SocketTimeoutException) {
+                return true
+            }
+
+            return this is IOException && hasTimeoutMessage()
+        }
+
+        private fun Throwable.hasTimeoutMessage(): Boolean {
+            val message = message ?: return false
+            return message.contains("timed out", ignoreCase = true)
+                || message.contains("timeout", ignoreCase = true)
         }
     }
 
