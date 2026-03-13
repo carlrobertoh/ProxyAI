@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.5-241.1] - 2026-03-12
+
+### Added
+
+- Mercury 2 model via the Inception provider
+- Markdown table rendering in chat responses [#1186](https://github.com/carlrobertoh/ProxyAI/issues/1186)
+- `workingDirectory` override support for the Bash tool
+- Support for closing the first tool window tab [#865](https://github.com/carlrobertoh/ProxyAI/issues/865)
+
+### Changed
+
+- Refreshed the built-in model catalog and provider integrations
+
+### Fixed
+
+- Bash tool execution on Linux [#1189](https://github.com/carlrobertoh/ProxyAI/issues/1189)
+- The credits label is now shown only for the ProxyAI provider
+
 ## [3.7.4-241.1] - 2026-02-18
 
 ### Added
@@ -1282,7 +1300,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.4-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.5-241.1...HEAD
+[3.7.5-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.4-241.1...v3.7.5-241.1
 [3.7.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.3-241.1...v3.7.4-241.1
 [3.7.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.2-241.1...v3.7.3-241.1
 [3.7.2-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.1-241.1...v3.7.2-241.1
