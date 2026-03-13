@@ -23,15 +23,13 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.agent.AgentEvents
 import ee.carlrobert.codegpt.agent.MessageWithContext
+import ee.carlrobert.codegpt.agent.normalizeToolArgumentsJson
 import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import java.util.*
 import ee.carlrobert.codegpt.conversations.message.Message as ChatMessage
 
@@ -186,15 +184,11 @@ private suspend fun AIAgentLLMWriteSession.requestResponses(
             .toMessageResponses()
             .map {
                 if (it is Message.Tool.Call) {
-                    try {
-                        // validate json
-                        Json.parseToJsonElement(it.content).jsonObject
+                    val normalizedArgs = normalizeToolArgumentsJson(it.content) ?: "{}"
+                    if (normalizedArgs == it.content) {
                         it
-                    } catch (_: SerializationException) {
-                        // allows agent to retry the request
-                        it.copy(parts = listOf(it.parts[0].copy(text = "{}")))
-                    } catch (e: Exception) {
-                        throw e
+                    } else {
+                        it.copy(parts = listOf(it.parts[0].copy(text = normalizedArgs)))
                     }
                 } else {
                     it

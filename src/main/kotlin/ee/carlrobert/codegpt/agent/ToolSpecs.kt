@@ -201,8 +201,12 @@ object ToolSpecs {
         if (serializer == null || payload.isBlank()) {
             return null
         }
+        val typedSerializer = serializer as KSerializer<Any>
         return runCatching {
-            json.decodeFromString(serializer as KSerializer<Any>, payload)
+            json.decodeFromString(typedSerializer, payload)
+        }.recoverCatching {
+            val normalized = normalizeToolArgumentsJson(payload) ?: throw it
+            json.decodeFromString(typedSerializer, normalized)
         }.getOrNull()
     }
 }

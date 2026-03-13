@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.agent.strategy
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.ResponseMetaInfo
+import ee.carlrobert.codegpt.agent.normalizeToolArgumentsJson
 import org.assertj.core.api.Assertions.assertThat
 import kotlin.test.Test
 
@@ -93,5 +94,12 @@ class SingleRunStrategyProviderTest {
             .containsExactly("Reasoning", "Call")
         assertThat(toolCall.tool).isEqualTo("Read")
         assertThat(toolCall.content).isEqualTo("""{"path":"build.gradle.kts"}""")
+    }
+
+    @Test
+    fun `normalize tool arguments unwraps string encoded json object`() {
+        val actual = normalizeToolArgumentsJson("\"{\\\"file_path\\\":\\\"/tmp/fixture.txt\\\"}\"")
+
+        assertThat(actual).isEqualTo("""{"file_path":"/tmp/fixture.txt"}""")
     }
 }
