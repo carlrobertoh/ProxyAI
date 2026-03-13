@@ -4,6 +4,7 @@ import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
+import ee.carlrobert.codegpt.agent.clients.shouldStreamCustomOpenAI
 import ee.carlrobert.codegpt.settings.models.ModelCatalog
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -174,6 +175,60 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         assertThat(result.events.text.toString()).isEqualTo("Hello from Custom OpenAI")
     }
 
+    fun testCustomOpenAIAgentStreamsWhenStoredSelectionUsesModelId() {
+        val customService = configureCustomOpenAIService(stream = true)
+        service<ModelSettings>().setModel(
+            FeatureType.AGENT,
+            "custom-agent-model",
+            ServiceType.CUSTOM_OPENAI
+        )
+        assertThat(shouldStreamCustomOpenAI(FeatureType.AGENT)).isTrue()
+        expectCustomOpenAI(StreamHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(request.body["stream"]).isEqualTo(true)
+            assertThat(extractPromptText(request)).contains("Say hello from streamed Custom OpenAI")
+            chatCompletionChunks("custom-agent-model", "Hello from streamed Custom OpenAI")
+        })
+
+        val result = runAgent(ServiceType.CUSTOM_OPENAI, "Say hello from streamed Custom OpenAI")
+
+        assertThat(customService.id).isNotBlank()
+        assertThat(result.output).isEqualTo("Hello from streamed Custom OpenAI")
+        assertThat(result.events.text.toString()).isEqualTo("Hello from streamed Custom OpenAI")
+    }
+
+    fun testCustomOpenAIResponsesAgentStreamsWhenStoredSelectionUsesModelId() {
+        val customService = configureCustomOpenAIService(
+            path = "/v1/responses",
+            model = "custom-responses-model",
+            stream = true,
+            useResponsesApiBody = true
+        )
+        service<ModelSettings>().setModel(
+            FeatureType.AGENT,
+            "custom-responses-model",
+            ServiceType.CUSTOM_OPENAI
+        )
+        assertThat(shouldStreamCustomOpenAI(FeatureType.AGENT)).isTrue()
+        expectCustomOpenAI(StreamHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/responses")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(request.body["stream"]).isEqualTo(true)
+            assertThat(extractPromptText(request)).contains("Say hello from Custom OpenAI Responses")
+            openAiResponsesChunks(
+                model = "custom-responses-model",
+                text = "Hello from Custom OpenAI Responses"
+            )
+        })
+
+        val result = runAgent(ServiceType.CUSTOM_OPENAI, "Say hello from Custom OpenAI Responses")
+
+        assertThat(customService.id).isNotBlank()
+        assertThat(result.output).isEqualTo("Hello from Custom OpenAI Responses")
+        assertThat(result.events.text.toString()).isEqualTo("Hello from Custom OpenAI Responses")
+    }
+
     private fun runAgent(
         provider: ServiceType,
         userMessage: String
@@ -246,9 +301,10 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         )
     }
 
-    private fun openAiResponsesChunks(): List<String> {
-        val model = "gpt-4.1-mini"
-        val text = "Hello from OpenAI"
+    private fun openAiResponsesChunks(
+        model: String = "gpt-4.1-mini",
+        text: String = "Hello from OpenAI"
+    ): List<String> {
         val chunks = text.chunked(4)
         return chunks.mapIndexed { index, chunk ->
             jsonMapResponse(
@@ -573,15 +629,24 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         )
     }
 
-    private fun configureCustomOpenAIService(): CustomServiceSettingsState {
+    private fun configureCustomOpenAIService(
+        path: String = "/v1/chat/completions",
+        model: String = "custom-agent-model",
+        stream: Boolean = false,
+        useResponsesApiBody: Boolean = false
+    ): CustomServiceSettingsState {
         val settings = service<CustomServicesSettings>()
         val serviceState = CustomServiceSettingsState().apply {
             name = "Agent Test Custom Service"
             chatCompletionSettings.url =
-                System.getProperty("customOpenAI.baseUrl") + "/v1/chat/completions"
+                System.getProperty("customOpenAI.baseUrl") + path
             chatCompletionSettings.headers.clear()
             chatCompletionSettings.body.clear()
-            chatCompletionSettings.body["model"] = "custom-agent-model"
+            chatCompletionSettings.body["model"] = model
+            chatCompletionSettings.body["stream"] = stream
+            if (useResponsesApiBody) {
+                chatCompletionSettings.body["input"] = "\$OPENAI_MESSAGES"
+            }
         }
         settings.state.services.clear()
         settings.state.services.add(serviceState)

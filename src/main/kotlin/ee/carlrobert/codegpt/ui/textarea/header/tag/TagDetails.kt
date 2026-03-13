@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.JBColor
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.diagnostics.DiagnosticsFilter
 import ee.carlrobert.codegpt.mcp.ConnectionStatus
 import ee.carlrobert.codegpt.mcp.McpResource
 import ee.carlrobert.codegpt.mcp.McpTool
@@ -304,7 +305,9 @@ class CodeAnalyzeTagDetails : TagDetails("Code Analyze", AllIcons.Actions.Depend
     override fun getTooltipText(): String? = null
 }
 
-data class DiagnosticsTagDetails(val virtualFile: VirtualFile) :
-    TagDetails("${virtualFile.name} Problems", AllIcons.General.InspectionsEye) {
-    override fun getTooltipText(): String = virtualFile.path
+data class DiagnosticsTagDetails(
+    val virtualFile: VirtualFile,
+    val filter: DiagnosticsFilter = DiagnosticsFilter.ALL
+) : TagDetails("${virtualFile.name} Problems (${filter.displayName})", AllIcons.General.InspectionsEye) {
+    override fun getTooltipText(): String = "${virtualFile.path} (${filter.displayName})"
 }

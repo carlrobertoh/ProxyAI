@@ -23,6 +23,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.clients.shouldStream
+import ee.carlrobert.codegpt.agent.clients.shouldStreamCustomOpenAI
 import ee.carlrobert.codegpt.agent.strategy.CODE_AGENT_COMPRESSION
 import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
@@ -34,7 +35,6 @@ import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.BashPayload
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
@@ -89,7 +89,7 @@ object ProxyAIAgent {
         val modelSelection =
             service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
         val skills = project.service<SkillDiscoveryService>().listSkills()
-        val stream = shouldStreamAgentToolLoop(project, provider)
+        val stream = shouldStreamAgentToolLoop(provider)
         val projectInstructions = loadProjectInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
@@ -268,18 +268,10 @@ object ProxyAIAgent {
     }
 
     private fun shouldStreamAgentToolLoop(
-        project: Project,
         provider: ServiceType,
     ): Boolean {
         return when (provider) {
-            ServiceType.CUSTOM_OPENAI -> {
-                val selectedServiceId =
-                    project.service<ModelSettings>().getStoredModelForFeature(FeatureType.AGENT)
-                project.service<CustomServicesSettings>().state.services
-                    .firstOrNull { it.id == selectedServiceId }?.chatCompletionSettings?.shouldStream()
-                    ?: false
-            }
-
+            ServiceType.CUSTOM_OPENAI -> shouldStreamCustomOpenAI(FeatureType.AGENT)
             ServiceType.GOOGLE -> false
             else -> true
         }
@@ -318,6 +310,13 @@ object ProxyAIAgent {
             tool(ExitTool)
             tool(
                 IntelliJSearchTool(
+                    project = project,
+                    sessionId = sessionId,
+                    hookManager = hookManager,
+                )
+            )
+            tool(
+                DiagnosticsTool(
                     project = project,
                     sessionId = sessionId,
                     hookManager = hookManager,

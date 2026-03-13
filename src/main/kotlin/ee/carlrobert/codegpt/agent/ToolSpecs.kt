@@ -14,6 +14,7 @@ enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
     BASH_OUTPUT("BashOutput"),
     KILL_SHELL("KillShell"),
     INTELLIJ_SEARCH("IntelliJSearch"),
+    DIAGNOSTICS("Diagnostics"),
     WEB_SEARCH("WebSearch"),
     WEB_FETCH("WebFetch"),
     MCP("MCP"),
@@ -92,6 +93,13 @@ object ToolSpecs {
                 ToolName.INTELLIJ_SEARCH,
                 IntelliJSearchTool.Args.serializer(),
                 IntelliJSearchTool.Result.serializer()
+            )
+        )
+        register(
+            ToolSpec(
+                ToolName.DIAGNOSTICS,
+                DiagnosticsTool.Args.serializer(),
+                DiagnosticsTool.Result.serializer()
             )
         )
         register(

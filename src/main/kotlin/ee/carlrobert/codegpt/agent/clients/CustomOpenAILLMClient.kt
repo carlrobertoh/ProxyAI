@@ -193,7 +193,7 @@ class CustomOpenAILLMClient(
         }
 
         if (isResponsesApi) {
-            return serializeResponsesApiRequest(state, messages, model, tools)
+            return serializeResponsesApiRequest(state, messages, model, tools, toolChoice)
         }
 
         val customParams: CustomOpenAIParams = params.toCustomOpenAIParams(state)
@@ -245,7 +245,8 @@ class CustomOpenAILLMClient(
         state: CustomServiceChatCompletionSettingsState,
         messages: List<OpenAIMessage>,
         model: LLModel,
-        tools: List<OpenAITool>?
+        tools: List<OpenAITool>?,
+        toolChoice: OpenAIToolChoice?
     ): String {
         val streamRequest = state.shouldStream()
 
@@ -264,8 +265,9 @@ class CustomOpenAILLMClient(
             }
             put("model", JsonPrimitive(model.id))
             if (!tools.isNullOrEmpty()) {
-                put("tools", json.encodeToJsonElement(ListSerializer(OpenAITool.serializer()), tools))
+                put("tools", JsonArray(tools.map { it.toResponsesApiToolJson() }))
             }
+            toolChoice?.toResponsesApiToolChoiceJson()?.let { put("tool_choice", it) }
         }.toString()
     }
 
@@ -418,10 +420,17 @@ class CustomOpenAILLMClient(
     }
 
     override fun decodeStreamingResponse(data: String): CustomOpenAIChatCompletionStreamResponse {
+        val payload = normalizeSsePayload(data)
+            ?: return CustomOpenAIChatCompletionStreamResponse(
+                choices = emptyList(),
+                created = 0,
+                id = "",
+                model = ""
+            )
         if (!isResponsesApi) {
-            return json.decodeFromString(data)
+            return json.decodeFromString(payload)
         }
-        return adaptResponsesApiStreamEvent(data)
+        return adaptResponsesApiStreamEvent(payload)
     }
 
     override fun decodeResponse(data: String): CustomOpenAIChatCompletionResponse {
@@ -781,6 +790,36 @@ internal fun renderCustomOpenAIPrompt(messages: List<OpenAIMessage>, json: Json)
     return messages.joinToString(separator = "\n\n") { message ->
         message.content?.text()?.takeIf { it.isNotBlank() }
             ?: json.encodeToString(OpenAIMessage.serializer(), message)
+    }
+}
+
+internal fun OpenAITool.toResponsesApiToolJson(): JsonObject {
+    return buildJsonObject {
+        put("type", JsonPrimitive("function"))
+        put("name", JsonPrimitive(function.name))
+        put(
+            "parameters",
+            function.parameters ?: buildJsonObject {
+                put("type", JsonPrimitive("object"))
+                putJsonObject("properties") {}
+                putJsonArray("required") {}
+            }
+        )
+        function.strict?.let { put("strict", JsonPrimitive(it)) }
+        function.description?.takeIf { it.isNotBlank() }?.let {
+            put("description", JsonPrimitive(it))
+        }
+    }
+}
+
+internal fun OpenAIToolChoice.toResponsesApiToolChoiceJson(): JsonElement {
+    return when (this) {
+        is OpenAIToolChoice.Function -> buildJsonObject {
+            put("type", JsonPrimitive("function"))
+            put("name", JsonPrimitive(function.name))
+        }
+
+        else -> JsonPrimitive(toString())
     }
 }
 
