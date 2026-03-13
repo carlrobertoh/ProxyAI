@@ -327,6 +327,8 @@ class CustomServiceForm(
             .setPreferredSize(Dimension(220, 0))
             .setAddAction { handleAddAction() }
             .setRemoveAction { handleRemoveAction() }
+            .setMoveUpAction { handleMoveAction(-1) }
+            .setMoveDownAction { handleMoveAction(1) }
             .setRemoveActionUpdater {
                 formState.value.services.size > 1
             }
@@ -347,7 +349,6 @@ class CustomServiceForm(
                     handleDuplicateAction()
                 }
             })
-            .disableUpDownActions()
 
     private fun handleRemoveAction() {
         val prevSelectedIndex = customProvidersJBList.selectedIndex
@@ -370,6 +371,35 @@ class CustomServiceForm(
         }
 
         pendingSelectedId = targetNeighborId
+        lastSelectedIndex = -1
+    }
+
+    private fun handleMoveAction(offset: Int) {
+        val selectedIndex = customProvidersJBList.selectedIndex
+        if (selectedIndex == -1) {
+            return
+        }
+
+        val targetIndex = selectedIndex + offset
+        if (targetIndex !in formState.value.services.indices) {
+            return
+        }
+
+        if (lastSelectedIndex != -1 && lastSelectedIndex < formState.value.services.size) {
+            updateStateFromForm(lastSelectedIndex)
+        }
+
+        val movedId = formState.value.services[selectedIndex].id
+        selectedServiceId = movedId
+        pendingSelectedId = movedId
+
+        formState.update { state ->
+            val reordered = state.services.toMutableList()
+            val moved = reordered.removeAt(selectedIndex)
+            reordered.add(targetIndex, moved)
+            state.copy(services = reordered.toImmutableList())
+        }
+
         lastSelectedIndex = -1
     }
 
