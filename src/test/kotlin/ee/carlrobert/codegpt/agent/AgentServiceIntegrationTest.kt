@@ -3,9 +3,11 @@ package ee.carlrobert.codegpt.agent
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.AIAgentService
 import ai.koog.agents.core.agent.config.AIAgentConfig
+import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
+import ai.koog.prompt.dsl.ModerationResult
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
@@ -327,7 +329,7 @@ private object NoopPromptExecutor : PromptExecutor {
     override suspend fun execute(
         prompt: Prompt,
         model: LLModel,
-        tools: List<ai.koog.agents.core.tools.ToolDescriptor>
+        tools: List<ToolDescriptor>
     ): List<Message.Response> {
         throw UnsupportedOperationException("NoopPromptExecutor should not be used in tests")
     }
@@ -335,7 +337,7 @@ private object NoopPromptExecutor : PromptExecutor {
     override fun executeStreaming(
         prompt: Prompt,
         model: LLModel,
-        tools: List<ai.koog.agents.core.tools.ToolDescriptor>
+        tools: List<ToolDescriptor>
     ): Flow<StreamFrame> {
         throw UnsupportedOperationException("NoopPromptExecutor should not be used in tests")
     }
@@ -343,7 +345,7 @@ private object NoopPromptExecutor : PromptExecutor {
     override suspend fun moderate(
         prompt: Prompt,
         model: LLModel
-    ): ai.koog.prompt.dsl.ModerationResult {
+    ): ModerationResult {
         throw UnsupportedOperationException("NoopPromptExecutor should not be used in tests")
     }
 

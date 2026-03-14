@@ -24,6 +24,7 @@ import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
+import java.net.URI
 import javax.swing.Icon
 
 interface ModelProvider {
@@ -703,6 +704,16 @@ private class CustomOpenAIModelProvider : ModelProvider {
         FeatureType.LOOKUP,
     )
 
+    private fun isResponsesApiUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        return try {
+            val path = URI(url.trim()).path?.trimEnd('/') ?: return false
+            path.endsWith("/responses")
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun buildModels(
         modelExtractor: (CustomServiceSettingsState) -> String?
     ): List<ModelSelection> {
@@ -713,13 +724,30 @@ private class CustomOpenAIModelProvider : ModelProvider {
                 val modelName =
                     modelExtractor(svc)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 val displayName = formatCustomModelDisplayName(serviceName, modelName)
+                val additionalOpenAICapability =
+                    if (isResponsesApiUrl(svc.chatCompletionSettings.url)) {
+                        LLMCapability.OpenAIEndpoint.Responses
+                    } else {
+                        LLMCapability.OpenAIEndpoint.Completions
+                    }
 
                 ModelSelection(
                     provider = serviceType,
                     llmModel = virtualModel(
                         CustomOpenAILLMClient.CustomOpenAI,
                         modelName,
-                        OPENAI_CAPABILITIES
+                        listOf(
+                            LLMCapability.Temperature,
+                            LLMCapability.Schema.JSON.Basic,
+                            LLMCapability.Schema.JSON.Standard,
+                            LLMCapability.Speculation,
+                            LLMCapability.Tools,
+                            LLMCapability.ToolChoice,
+                            LLMCapability.Vision.Image,
+                            LLMCapability.Document,
+                            LLMCapability.Completion,
+                            LLMCapability.MultipleChoices,
+                        ) + additionalOpenAICapability
                     ),
                     displayName = displayName,
                     serviceId = serviceId,

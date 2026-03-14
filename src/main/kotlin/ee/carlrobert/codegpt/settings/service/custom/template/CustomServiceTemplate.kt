@@ -6,12 +6,6 @@ enum class CustomServiceTemplate(
     val chatCompletionTemplate: CustomServiceChatCompletionTemplate,
     val codeCompletionTemplate: CustomServiceCodeCompletionTemplate? = null
 ) {
-    ANYSCALE(
-        "Anyscale",
-        "https://docs.endpoints.anyscale.com/",
-        CustomServiceChatCompletionTemplate.ANYSCALE,
-        CustomServiceCodeCompletionTemplate.ANYSCALE,
-    ),
     AZURE(
         "Azure OpenAI",
         "https://learn.microsoft.com/en-us/azure/ai-services/openai/reference",
@@ -26,25 +20,26 @@ enum class CustomServiceTemplate(
     ),
     FIREWORKS(
         "Fireworks",
-        "https://readme.fireworks.ai/reference/createchatcompletion",
+        "https://docs.fireworks.ai/api-reference/post-chatcompletions",
         CustomServiceChatCompletionTemplate.FIREWORKS,
         CustomServiceCodeCompletionTemplate.FIREWORKS
     ),
     GROQ(
         "Groq",
-        "https://docs.api.groq.com/md/openai.oas.html",
+        "https://console.groq.com/docs/openai",
         CustomServiceChatCompletionTemplate.GROQ
     ),
     OPENAI(
-        "OpenAI",
-        "https://platform.openai.com/docs/api-reference/chat",
+        "OpenAI (Chat Completions API)",
+        "https://platform.openai.com/docs/api-reference/chat/create",
         CustomServiceChatCompletionTemplate.OPENAI,
         CustomServiceCodeCompletionTemplate.OPENAI
     ),
-    PERPLEXITY(
-        "Perplexity AI",
-        "https://docs.perplexity.ai/reference/post_chat_completions",
-        CustomServiceChatCompletionTemplate.PERPLEXITY
+    OPENAI_RESPONSES(
+        "OpenAI (Responses API)",
+        "https://platform.openai.com/docs/api-reference/responses/create",
+        CustomServiceChatCompletionTemplate.OPENAI_RESPONSES,
+        CustomServiceCodeCompletionTemplate.OPENAI
     ),
     TOGETHER(
         "Together AI",
@@ -54,29 +49,24 @@ enum class CustomServiceTemplate(
     ),
     OLLAMA(
         "Ollama",
-        "https://github.com/ollama/ollama/blob/main/docs/openai.md",
+        "https://docs.ollama.com/api/openai-compatibility",
         CustomServiceChatCompletionTemplate.OLLAMA
     ),
     LLAMA_CPP(
-        "LLaMA C/C++",
-        "https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md",
+        "llama.cpp Server",
+        "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md",
         CustomServiceChatCompletionTemplate.LLAMA_CPP
     ),
     MISTRAL_AI(
         "Mistral AI",
-        "https://docs.mistral.ai/getting-started/quickstart",
+        "https://docs.mistral.ai/capabilities/completion/usage",
         CustomServiceChatCompletionTemplate.MISTRAL_AI,
         CustomServiceCodeCompletionTemplate.MISTRAL_AI
     ),
     OPEN_ROUTER(
         "OpenRouter",
-        "https://openrouter.ai/docs#quick-start",
-        CustomServiceChatCompletionTemplate.OPEN_ROUTER
-    ),
-    OPENAI_RESPONSES(
-        "OpenAI (Responses API)",
-        "https://platform.openai.com/docs/api-reference/responses",
-        CustomServiceChatCompletionTemplate.OPENAI_RESPONSES
+        "https://openrouter.ai/docs/quickstart",
+        CustomServiceChatCompletionTemplate.OPENROUTER
     );
 
     override fun toString(): String {

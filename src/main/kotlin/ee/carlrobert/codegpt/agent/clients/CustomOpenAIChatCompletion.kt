@@ -7,7 +7,8 @@ import kotlinx.serialization.json.JsonElement
 
 @Serializable
 class CustomOpenAIChatCompletionRequest(
-    val messages: List<OpenAIMessage> = emptyList(),
+    val messages: List<OpenAIMessage>? = null,
+    val input: JsonElement? = null,
     val prompt: String? = null,
     override val model: String? = null,
     override val stream: Boolean? = null,

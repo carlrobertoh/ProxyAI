@@ -17,11 +17,13 @@ class CompleteMessageParser : MessageParser {
             Pattern.compile("<<<<<<< SEARCH\\n(.*?)(?:\\n=======\\n(.*?))?$", Pattern.DOTALL)
 
         private const val THINK_OPEN_TAG = "<think>"
-        private const val THINK_CLOSE_TAG = "</think>\n\n"
+        private const val THINK_CLOSE_TAG = "</think>"
         private const val CODE_HEADER_GROUP_INDEX = 2
         private const val CODE_CONTENT_GROUP_INDEX = 3
         private const val SEARCH_CONTENT_GROUP_INDEX = 1
         private const val REPLACE_CONTENT_GROUP_INDEX = 2
+        private val THINKING_BLOCK_PATTERN =
+            Regex("""^<think>(.*?)</think>\s*""", setOf(RegexOption.DOT_MATCHES_ALL))
 
         private val TOLERANT_SEARCH_START =
             Regex("""^\s*<{3,}(\s*SEARCH.*)?$""", RegexOption.IGNORE_CASE)
@@ -54,15 +56,10 @@ class CompleteMessageParser : MessageParser {
     private fun extractThoughtIfPresent(input: String): String {
         extractedThought = null
 
-        if (!input.startsWith(THINK_OPEN_TAG)) {
-            return input
-        }
-
-        val closeTagIndex = input.indexOf(THINK_CLOSE_TAG)
-        return if (closeTagIndex != -1) {
-            val thoughtStartIndex = THINK_OPEN_TAG.length
-            extractedThought = input.substring(thoughtStartIndex, closeTagIndex).trim()
-            input.substring(closeTagIndex + THINK_CLOSE_TAG.length)
+        val match = THINKING_BLOCK_PATTERN.find(input)
+        return if (match != null) {
+            extractedThought = match.groupValues[1].trim()
+            input.substring(match.range.last + 1)
         } else {
             input
         }

@@ -7,24 +7,24 @@ enum class CustomServiceCodeCompletionTemplate(
     val parseResponseAsChatCompletions: Boolean = false
 ) {
     ANYSCALE(
-        "https://api.endpoints.anyscale.com/v1/completions",
+        "https://{your-service-endpoint}/v1/completions",
         getDefaultHeadersWithAuthentication(),
-        getDefaultBodyParams(mapOf("model" to "codellama/CodeLlama-70b-Instruct-hf"))
+        getDefaultBodyParams(mapOf("model" to "{your-model-id}"))
     ),
     AZURE(
-        "https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/completions?api-version=2023-05-15",
+        "https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/completions?api-version=2024-10-21",
         getDefaultHeaders("api-key", "\$CUSTOM_SERVICE_API_KEY"),
         getDefaultBodyParams(emptyMap())
     ),
     DEEP_INFRA(
-        "https://api.deepinfra.com/v1/inference/codellama/CodeLlama-70b-Instruct-hf",
+        "https://api.deepinfra.com/v1/openai/completions",
         getDefaultHeadersWithAuthentication(),
-        mutableMapOf("input" to "\$FIM_PROMPT")
+        getDefaultBodyParams(mapOf("model" to "deepseek-ai/DeepSeek-V3.2"))
     ),
     FIREWORKS(
         "https://api.fireworks.ai/inference/v1/completions",
         getDefaultHeadersWithAuthentication(),
-        getDefaultBodyParams(mapOf("model" to "accounts/fireworks/models/qwen2p5-coder-32b-instruct"))
+        getDefaultBodyParams(mapOf("model" to "accounts/fireworks/models/kimi-k2-instruct-0905"))
     ),
     OPENAI(
         "https://api.openai.com/v1/completions",
@@ -45,7 +45,7 @@ enum class CustomServiceCodeCompletionTemplate(
             "stream" to true,
             "prompt" to "\$PREFIX",
             "suffix" to "\$SUFFIX",
-            "model" to "codestral-latest",
+            "model" to "codestral-2508",
             "temperature" to 0.7,
             "max_tokens" to 1024
         ),
@@ -54,7 +54,7 @@ enum class CustomServiceCodeCompletionTemplate(
     TOGETHER(
         "https://api.together.xyz/v1/completions",
         getDefaultHeaders("Authorization", "Bearer \$CUSTOM_SERVICE_API_KEY"),
-        getDefaultBodyParams(mapOf("model" to "codellama/CodeLlama-70b-hf"))
+        getDefaultBodyParams(mapOf("model" to "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"))
     )
 }
 
