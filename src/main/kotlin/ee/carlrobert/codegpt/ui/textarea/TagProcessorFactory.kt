@@ -1,24 +1,16 @@
 package ee.carlrobert.codegpt.ui.textarea
 
-import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
-import com.intellij.codeInsight.daemon.impl.HighlightInfo
-import com.intellij.lang.annotation.HighlightSeverity
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiManager
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.diagnostics.ProjectDiagnosticsService
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
@@ -270,118 +262,17 @@ class DiagnosticsTagProcessor(
     private val project: Project,
     private val tagDetails: DiagnosticsTagDetails,
 ) : TagProcessor {
+    private val diagnosticsService = project.service<ProjectDiagnosticsService>()
+
     override fun process(message: Message, promptBuilder: StringBuilder) {
+        val diagnostics = diagnosticsService.collect(tagDetails.virtualFile, tagDetails.filter)
+        if (diagnostics.content.isBlank() && diagnostics.error == null) {
+            return
+        }
+
         promptBuilder
-            .append("\n## Current File Problems\n")
-            .append(getDiagnosticsString(project, tagDetails.virtualFile))
+            .append("\n## ${tagDetails.virtualFile.name} Problems (${tagDetails.filter.displayName})\n")
+            .append(diagnostics.error ?: diagnostics.content)
             .append("\n")
-    }
-
-    private fun getDiagnosticsString(project: Project, virtualFile: VirtualFile): String {
-        return try {
-            var result = ""
-            ApplicationManager.getApplication().invokeAndWait {
-                result = ApplicationManager.getApplication().runWriteAction<String> {
-                    DumbService.getInstance(project).runReadActionInSmartMode<String> {
-                        val document = FileDocumentManager.getInstance().getDocument(virtualFile)
-                            ?: return@runReadActionInSmartMode "No document found for file"
-
-                        PsiDocumentManager.getInstance(project).commitDocument(document)
-
-                        val psiManager = PsiManager.getInstance(project)
-                        val psiFile = psiManager.findFile(virtualFile)
-                            ?: return@runReadActionInSmartMode "No PSI file found for: ${virtualFile.path}"
-
-                        val rangeHighlights =
-                            DaemonCodeAnalyzerImpl.getHighlights(
-                                document,
-                                HighlightSeverity.WEAK_WARNING,
-                                project
-                            )
-                        // TODO: Find a better solution
-                        val fileLevel: List<HighlightInfo> = try {
-                            val method = DaemonCodeAnalyzerImpl::class.java.methods.firstOrNull {
-                                it.name == "getFileLevelHighlights" && it.parameterCount == 2
-                            }
-                            if (method != null) {
-                                @Suppress("UNCHECKED_CAST")
-                                method.invoke(null, project, psiFile) as? List<HighlightInfo>
-                                    ?: emptyList()
-                            } else {
-                                emptyList()
-                            }
-                        } catch (_: Throwable) {
-                            emptyList()
-                        }
-
-                        val highlights = (rangeHighlights.asSequence() + fileLevel.asSequence())
-                            .distinctBy { Triple(it.description, it.startOffset, it.severity) }
-                            .sortedWith(
-                                compareBy<HighlightInfo>(
-                                    { severityOrder(it.severity) },
-                                    { it.startOffset.coerceAtLeast(0) }
-                                )
-                            )
-                            .toList()
-
-                        if (highlights.isEmpty()) {
-                            return@runReadActionInSmartMode ""
-                        }
-
-                        val maxItems = 200
-                        val overflow = (highlights.size - maxItems).coerceAtLeast(0)
-                        val shown = highlights.take(maxItems)
-
-                        buildString {
-                            append("File: ${virtualFile.name}\n")
-                            append("Path: ${virtualFile.path}\n\n")
-
-                            shown.forEach { info ->
-                                val startOffset = info.startOffset.coerceIn(0, document.textLength)
-                                val lineColText =
-                                    if (info.startOffset >= 0 && document.textLength > 0) {
-                                        val line = document.getLineNumber(startOffset) + 1
-                                        val col =
-                                            startOffset - document.getLineStartOffset(line - 1) + 1
-                                        "line $line, col $col"
-                                    } else {
-                                        "file-level"
-                                    }
-
-                                val rawMessage = info.description ?: info.toolTip ?: ""
-                                val message = StringUtil.removeHtmlTags(rawMessage, false).trim()
-
-                                val severityLabel = when (info.severity) {
-                                    HighlightSeverity.ERROR -> "ERROR"
-                                    HighlightSeverity.WARNING -> "WARNING"
-                                    HighlightSeverity.WEAK_WARNING -> "WEAK_WARNING"
-                                    HighlightSeverity.INFORMATION -> "INFO"
-                                    else -> info.severity.toString()
-                                }
-
-                                append("- [$severityLabel] $lineColText: $message\n")
-                            }
-
-                            if (overflow > 0) {
-                                append("... ($overflow more not shown)\n")
-                            }
-                        }
-                    }
-                }
-            }
-            result
-        } catch (e: Exception) {
-            "Error retrieving diagnostics: ${e.message}"
-        }
-    }
-
-    private fun severityOrder(severity: HighlightSeverity): Int {
-        return when (severity) {
-            HighlightSeverity.ERROR -> 0
-            HighlightSeverity.WARNING -> 1
-            HighlightSeverity.WEAK_WARNING -> 2
-            HighlightSeverity.INFORMATION -> 3
-            else -> 4
-        }
     }
 }

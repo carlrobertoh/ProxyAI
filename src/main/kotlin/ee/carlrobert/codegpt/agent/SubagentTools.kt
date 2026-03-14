@@ -4,6 +4,7 @@ enum class SubagentTool(val id: String, val displayName: String, val isWrite: Bo
     READ("read", "Read", false),
     TODO_WRITE("todowrite", "TodoWrite", false),
     INTELLIJ_SEARCH("intellijsearch", "IntelliJSearch", false),
+    DIAGNOSTICS("diagnostics", "Diagnostics", false),
     WEB_SEARCH("websearch", "WebSearch", false),
     WEB_FETCH("webfetch", "WebFetch", false),
     MCP("MCP", "MCP", false),

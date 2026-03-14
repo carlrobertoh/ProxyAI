@@ -8,7 +8,6 @@ import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.DiagnosticsActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
@@ -44,7 +43,7 @@ class SearchManager(
         FoldersGroupItem(project, tagManager),
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
-        DiagnosticsActionItem(tagManager)
+        DiagnosticsGroupItem(tagManager)
     ).filter { it.enabled }
 
     private fun getAgentGroups() = listOfNotNull(
@@ -52,6 +51,7 @@ class SearchManager(
         FoldersGroupItem(project, tagManager),
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         MCPGroupItem(tagManager, FeatureType.AGENT),
+        DiagnosticsGroupItem(tagManager),
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
 
@@ -62,7 +62,7 @@ class SearchManager(
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         MCPGroupItem(tagManager, featureType ?: FeatureType.CHAT),
-        DiagnosticsActionItem(tagManager),
+        DiagnosticsGroupItem(tagManager),
         WebActionItem(tagManager),
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
