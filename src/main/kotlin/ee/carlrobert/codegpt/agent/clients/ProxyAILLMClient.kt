@@ -180,11 +180,8 @@ public class ProxyAILLMClient(
         }
     }
 
-    override fun decodeStreamingResponse(data: String): ProxyAIChatCompletionStreamResponse {
-        val payload = normalizeSsePayload(data)
-            ?: return ProxyAIChatCompletionStreamResponse()
-        return json.decodeFromString(payload)
-    }
+    override fun decodeStreamingResponse(data: String): ProxyAIChatCompletionStreamResponse =
+        json.decodeFromString(data)
 
     override fun decodeResponse(data: String): ProxyAIChatCompletionResponse =
         json.decodeFromString(data)

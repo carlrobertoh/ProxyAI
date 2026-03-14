@@ -130,11 +130,20 @@ public class ChatMessageResponseBody extends JPanel {
 
   public ChatMessageResponseBody withResponse(@NotNull String response) {
     try {
-      for (var item : new CompleteMessageParser().parse(response)) {
+      var parser = new CompleteMessageParser();
+      var segments = parser.parse(response);
+      if (parser.getExtractedThought() != null && !parser.getExtractedThought().isBlank()) {
+        processThinkingOutput(parser.getExtractedThought());
+      }
+      for (var item : segments) {
         processResponse(item, false);
         currentlyProcessedTextPane = null;
         currentlyProcessedEditorPanel = null;
         currentlyProcessedMermaidPanel = null;
+      }
+      var thoughtProcessPanel = getExistingThoughtProcessPanel();
+      if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
+        thoughtProcessPanel.setFinished();
       }
     } catch (Exception e) {
       LOG.error("Something went wrong while processing input", e);

@@ -200,7 +200,7 @@ private suspend fun AIAgentLLMWriteSession.requestResponses(
     }
     val appendableResponses = appendableResponses(responses, model.provider)
     appendableResponses.forEach(appendResponse)
-    return if (stream) responses else appendableResponses
+    return responses
 }
 
 private suspend fun AIAgentLLMWriteSession.requestAndPublish(

@@ -3,19 +3,24 @@ package ee.carlrobert.codegpt.completions
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.model.PromptExecutor
+import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLModel
 import ee.carlrobert.codegpt.agent.AgentFactory
 import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
 import ee.carlrobert.codegpt.agent.clients.HttpClientProvider
-import ee.carlrobert.codegpt.agent.clients.RetryingPromptExecutor
+import ee.carlrobert.codegpt.completions.factory.ResponsesApiUtil
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.swing.JPanel
-import kotlin.time.Duration.Companion.seconds
 
 object CompletionRequestService {
 
@@ -84,34 +89,53 @@ object CompletionRequestService {
         modelId: String?,
         eventListener: CompletionStreamEventListener
     ): CancellableRequest {
-        val client = CustomOpenAILLMClient.fromSettingsState(
-            apiKey.orEmpty(),
-            settings,
-            HttpClientProvider.createHttpClient()
-        )
-        val retryPolicy = RetryingPromptExecutor.RetryPolicy(
-            maxAttempts = 2,
-            initialDelay = 1.seconds,
-            maxDelay = 4.seconds,
-            backoffMultiplier = 2.0,
-            jitterFactor = 0.1
-        )
-        val request = CompletionRunnerRequest.Streaming(
-            executor = RetryingPromptExecutor.fromClient(client, retryPolicy, null),
-            model = LLModel(
-                id = modelId?.takeIf { it.isNotBlank() } ?: "gpt-4.1-mini",
-                provider = CustomOpenAILLMClient.CustomOpenAI,
-                capabilities = emptyList(),
-                contextLength = 128_000,
-                maxOutputTokens = 4_096
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val model = LLModel(
+            id = modelId?.takeIf { it.isNotBlank() } ?: "gpt-4.1-mini",
+            provider = CustomOpenAILLMClient.CustomOpenAI,
+            capabilities = listOf(
+                if (ResponsesApiUtil.isResponsesApiUrl(settings.url)) {
+                    LLMCapability.OpenAIEndpoint.Responses
+                } else {
+                    LLMCapability.OpenAIEndpoint.Completions
+                }
             ),
-            prompt = prompt("custom-service-test-connection") {
-                user("Test connection")
-            },
-            eventListener = eventListener,
-            mode = StreamingMode.SINGLE_RESPONSE,
-            cancellationResultBuilder = { StringBuilder() }
+            contextLength = 128_000,
+            maxOutputTokens = 4_096
         )
-        return CompletionRunnerFactory.create(request).run(request)
+        val testPrompt = prompt("custom-service-test-connection") {
+            user("Test connection")
+        }
+
+        val job = scope.launch {
+            val client = CustomOpenAILLMClient.fromSettingsState(
+                apiKey.orEmpty(),
+                settings,
+                HttpClientProvider.createHttpClient()
+            )
+            val messageBuilder = StringBuilder()
+            eventListener.onOpen()
+            try {
+                val responses = client.execute(testPrompt, model, emptyList())
+                val text = CompletionTextExtractor.extract(responses)
+                if (text.isNotBlank()) {
+                    messageBuilder.append(text)
+                    eventListener.onMessage(text)
+                }
+                eventListener.onComplete(StringBuilder(messageBuilder))
+            } catch (_: CancellationException) {
+                eventListener.onCancelled(StringBuilder(messageBuilder))
+            } catch (exception: Throwable) {
+                eventListener.onError(
+                    CompletionError(exception.message ?: "Failed to complete request"),
+                    exception
+                )
+            } finally {
+                runCatching { client.close() }
+                scope.cancel()
+            }
+        }
+
+        return CancellableRequest { job.cancel() }
     }
 }

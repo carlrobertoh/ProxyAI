@@ -164,18 +164,14 @@ class CustomServiceForm(
                     headers = template.chatCompletionTemplate.headers
                     body = template.chatCompletionTemplate.body
                 }
-                if (template.codeCompletionTemplate != null) {
+                template.codeCompletionTemplate?.let {
                     codeCompletionsForm.run {
-                        url = template.codeCompletionTemplate.url
-                        headers = template.codeCompletionTemplate.headers
-                        body = template.codeCompletionTemplate.body
+                        url = it.url
+                        headers = it.headers
+                        body = it.body
                         parseResponseAsChatCompletions =
-                            template.codeCompletionTemplate.parseResponseAsChatCompletions
+                            it.parseResponseAsChatCompletions
                     }
-                    tabbedPane.setEnabledAt(1, true)
-                } else {
-                    tabbedPane.selectedIndex = 0
-                    tabbedPane.setEnabledAt(1, false)
                 }
             }
         }

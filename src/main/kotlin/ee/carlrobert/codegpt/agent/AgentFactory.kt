@@ -13,21 +13,33 @@ import ai.koog.agents.core.environment.ReceivedToolResult
 import ai.koog.agents.core.environment.result
 import ai.koog.agents.core.feature.handler.tool.ToolCallCompletedContext
 import ai.koog.agents.core.feature.handler.tool.ToolCallStartingContext
+import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.ext.tool.ExitTool
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
 import ai.koog.agents.features.eventHandler.feature.handleEvents
 import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
 import ai.koog.agents.features.tokenizer.feature.tokenizer
+import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
+import ai.koog.prompt.executor.clients.anthropic.models.AnthropicThinking
 import ai.koog.prompt.executor.clients.LLMClient
+import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
+import ai.koog.prompt.executor.clients.openai.models.ReasoningSummary
 import ai.koog.prompt.executor.model.PromptExecutor
+import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
+import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
 import ee.carlrobert.codegpt.agent.clients.RetryingPromptExecutor
 import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.agent.tools.*
@@ -46,6 +58,8 @@ import kotlin.time.Duration.Companion.seconds
 object AgentFactory {
 
     private const val MAX_AGENT_ITERATIONS = 250
+    private const val ANTHROPIC_MIN_THINKING_BUDGET = 512
+    private const val ANTHROPIC_DEFAULT_THINKING_BUDGET = 2_048
 
     fun createAgent(
         agentType: AgentType,
@@ -170,10 +184,6 @@ object AgentFactory {
         featureType: FeatureType = FeatureType.AGENT
     ): PromptExecutor {
         val llmClient = LLMClientFactory.createClient(provider, featureType)
-        return createRetryingExecutor(llmClient, events)
-    }
-
-    private fun createRetryingExecutor(client: LLMClient, events: AgentEvents?): PromptExecutor {
         val policy = RetryingPromptExecutor.RetryPolicy(
             maxAttempts = 5,
             initialDelay = 1.seconds,
@@ -181,7 +191,104 @@ object AgentFactory {
             backoffMultiplier = 2.0,
             jitterFactor = 0.1
         )
-        return RetryingPromptExecutor.fromClient(client, policy, events)
+        return createRetryingExecutor(llmClient, policy, events)
+    }
+
+    internal fun createRetryingExecutor(
+        client: LLMClient,
+        policy: RetryingPromptExecutor.RetryPolicy,
+        events: AgentEvents?
+    ): PromptExecutor {
+        val executor = RetryingPromptExecutor.fromClient(client, policy, events)
+        return object : PromptExecutor {
+            override fun executeStreaming(
+                prompt: Prompt,
+                model: LLModel,
+                tools: List<ToolDescriptor>
+            ) = executor.executeStreaming(prompt.withReasoningParams(model), model, tools)
+
+            override suspend fun execute(
+                prompt: Prompt,
+                model: LLModel,
+                tools: List<ToolDescriptor>
+            ) = executor.execute(prompt.withReasoningParams(model), model, tools)
+
+            override suspend fun moderate(prompt: Prompt, model: LLModel) =
+                executor.moderate(prompt, model)
+
+            override suspend fun models() = executor.models()
+
+            override fun close() = executor.close()
+        }
+    }
+
+    private fun Prompt.withReasoningParams(model: LLModel): Prompt {
+        val params = when (model.provider) {
+            LLMProvider.OpenAI -> params.withOpenAIReasoning()
+            CustomOpenAILLMClient.CustomOpenAI -> {
+                if (model.supports(LLMCapability.OpenAIEndpoint.Responses)) {
+                    params.withOpenAIReasoning()
+                } else {
+                    params
+                }
+            }
+            LLMProvider.Anthropic -> params.withAnthropicReasoning()
+            else -> params
+        }
+        return withParams(params)
+    }
+
+    private fun LLMParams.withOpenAIReasoning(): LLMParams {
+        val base = when (this) {
+            is OpenAIResponsesParams -> this
+            else -> OpenAIResponsesParams(
+                temperature = temperature,
+                maxTokens = maxTokens,
+                numberOfChoices = numberOfChoices,
+                speculation = speculation,
+                schema = schema,
+                toolChoice = toolChoice,
+                user = user,
+                additionalProperties = additionalProperties
+            )
+        }
+        return base.copy(
+            reasoning = base.reasoning ?: ReasoningConfig(
+                effort = ReasoningEffort.MEDIUM,
+                summary = ReasoningSummary.AUTO
+            )
+        )
+    }
+
+    private fun LLMParams.withAnthropicReasoning(): LLMParams {
+        val base = when (this) {
+            is AnthropicParams -> this
+            else -> AnthropicParams(
+                temperature = temperature,
+                maxTokens = maxTokens,
+                numberOfChoices = numberOfChoices,
+                speculation = speculation,
+                schema = schema,
+                toolChoice = toolChoice,
+                user = user,
+                additionalProperties = additionalProperties
+            )
+        }
+
+        if (base.thinking != null) return base
+
+        val thinkingBudget = resolveAnthropicThinkingBudget(base.maxTokens) ?: return base
+        return base.copy(thinking = AnthropicThinking.Enabled(budgetTokens = thinkingBudget))
+    }
+
+    private fun resolveAnthropicThinkingBudget(maxTokens: Int?): Int? {
+        val limit = maxTokens ?: ANTHROPIC_DEFAULT_THINKING_BUDGET
+        if (limit <= ANTHROPIC_MIN_THINKING_BUDGET) {
+            return null
+        }
+        return (limit / 2)
+            .coerceAtLeast(ANTHROPIC_MIN_THINKING_BUDGET)
+            .coerceAtMost(ANTHROPIC_DEFAULT_THINKING_BUDGET)
     }
 
     private fun createGeneralPurposeAgent(

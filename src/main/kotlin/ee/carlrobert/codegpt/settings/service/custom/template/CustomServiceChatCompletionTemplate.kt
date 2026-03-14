@@ -5,127 +5,109 @@ enum class CustomServiceChatCompletionTemplate(
     val headers: MutableMap<String, String>,
     val body: MutableMap<String, Any>
 ) {
-    ANYSCALE(
-        "https://api.endpoints.anyscale.com/v1/chat/completions",
-        getDefaultHeadersWithAuthentication(),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "mistralai/Mixtral-8x7B-Instruct-v0.1",
-                "max_tokens" to 8192
-            )
-        )
-    ),
     AZURE(
-        "https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/chat/completions?api-version=2023-05-15",
-        getDefaultHeaders("api-key", "\$CUSTOM_SERVICE_API_KEY"),
-        getDefaultBodyParams(emptyMap())
+        "https://{your-resource-name}.openai.azure.com/openai/deployments/{deployment-id}/chat/completions?api-version=2024-10-21",
+        getDefaultHeaders("api-key", $$"$CUSTOM_SERVICE_API_KEY"),
+        mutableMapOf(
+            "stream" to true,
+        )
     ),
     DEEP_INFRA(
         "https://api.deepinfra.com/v1/openai/chat/completions",
         getDefaultHeadersWithAuthentication(),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "meta-llama/Llama-2-70b-chat-hf",
-                "max_tokens" to 8192
-            )
+        mutableMapOf(
+            "stream" to true,
+            "model" to "deepseek-ai/DeepSeek-V3.2",
+            "max_tokens" to 32_000
         )
     ),
     FIREWORKS(
         "https://api.fireworks.ai/inference/v1/chat/completions",
         getDefaultHeadersWithAuthentication(),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "accounts/fireworks/models/deepseek-r1-basic",
-                "max_tokens" to 8192
-            )
+        mutableMapOf(
+            "stream" to true,
+            "model" to "accounts/fireworks/models/deepseek-v3p1",
+            "max_tokens" to 32_000
         )
     ),
     GROQ(
         "https://api.groq.com/openai/v1/chat/completions",
         getDefaultHeadersWithAuthentication(),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "codellama-34b",
-                "max_tokens" to 8192
-            )
+        mutableMapOf(
+            "stream" to true,
+            "model" to "openai/gpt-oss-20b",
+            "max_tokens" to 32_000
         )
     ),
     OPENAI(
         "https://api.openai.com/v1/chat/completions",
-        getDefaultHeaders("Authorization", "Bearer \$CUSTOM_SERVICE_API_KEY"),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "gpt-5",
-                "max_tokens" to 8192
-            )
-        )
-    ),
-    PERPLEXITY(
-        "https://api.perplexity.ai/chat/completions",
-        getDefaultHeadersWithAuthentication(),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "codellama",
-                "max_tokens" to 8192
-            )
-        )
-    ),
-    TOGETHER(
-        "https://api.together.xyz/v1/chat/completions",
-        getDefaultHeaders("Authorization", "Bearer \$CUSTOM_SERVICE_API_KEY"),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "deepseek-ai/deepseek-coder-33b-instruct",
-                "max_tokens" to 8192
-            )
-        )
-    ),
-    OLLAMA(
-        "http://localhost:11434/v1/chat/completions",
-        getDefaultHeaders(),
-        getDefaultBodyParams(mapOf("model" to "codellama"))
-    ),
-    LLAMA_CPP(
-        "http://localhost:8080/v1/chat/completions",
-        getDefaultHeaders(),
-        getDefaultBodyParams(emptyMap())
-    ),
-    MISTRAL_AI(
-        "https://api.mistral.ai/v1/chat/completions",
-        getDefaultHeaders("Authorization", "Bearer \$CUSTOM_SERVICE_API_KEY"),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "open-mistral-7b",
-                "max_tokens" to 8192
-            )
-        )
-    ),
-    OPEN_ROUTER(
-        "https://openrouter.ai/api/v1/chat/completions",
-        getDefaultHeaders(
-            mapOf(
-                "Authorization" to "Bearer \$CUSTOM_SERVICE_API_KEY",
-                "HTTP-Referer" to "https://tryproxy.io",
-                "X-Title" to "ProxyAI"
-            )
-        ),
-        getDefaultBodyParams(
-            mapOf(
-                "model" to "meta-llama/llama-3.1-8b-instruct:free",
-                "max_tokens" to 8192
-            )
+        getDefaultHeaders("Authorization", $$"Bearer $CUSTOM_SERVICE_API_KEY"),
+        mutableMapOf(
+            "stream" to true,
+            "model" to "gpt-4.1",
+            "max_tokens" to 8192
         )
     ),
     OPENAI_RESPONSES(
         "https://api.openai.com/v1/responses",
         getDefaultHeaders("Authorization", "Bearer \$CUSTOM_SERVICE_API_KEY"),
-        getResponsesApiDefaultBodyParams(
-            mapOf(
-                "model" to "gpt-4.1",
-                "max_output_tokens" to 8192
-            )
+        mutableMapOf(
+            "stream" to true,
+            "model" to "gpt-5.3-codex",
+            "max_output_tokens" to 32_000
         )
-    );
+    ),
+    TOGETHER(
+        "https://api.together.xyz/v1/chat/completions",
+        getDefaultHeaders("Authorization", $$"Bearer $CUSTOM_SERVICE_API_KEY"),
+        mutableMapOf(
+            "stream" to true,
+            "model" to "zai-org/GLM-5",
+            "max_tokens" to 32_000
+        )
+    ),
+    OLLAMA(
+        "http://localhost:11434/v1/chat/completions",
+        getDefaultHeaders(),
+        mutableMapOf(
+            "stream" to true,
+            "model" to "gpt-oss:20b",
+            "max_tokens" to 32_000
+        )
+    ),
+    LLAMA_CPP(
+        "http://localhost:8080/v1/chat/completions",
+        getDefaultHeaders(),
+        mutableMapOf(
+            "stream" to true,
+            "model" to "gpt-oss:20b",
+            "max_tokens" to 32_000
+        )
+    ),
+    MISTRAL_AI(
+        "https://api.mistral.ai/v1/chat/completions",
+        getDefaultHeaders("Authorization", $$"Bearer $CUSTOM_SERVICE_API_KEY"),
+        mutableMapOf(
+            "stream" to true,
+            "model" to "mistral-large-2512",
+            "max_tokens" to 32_000
+        )
+    ),
+    OPENROUTER(
+        "https://openrouter.ai/api/v1/chat/completions",
+        getDefaultHeaders(
+            mapOf(
+                "Authorization" to $$"Bearer $CUSTOM_SERVICE_API_KEY",
+                "HTTP-Referer" to "https://tryproxy.io",
+                "X-OpenRouter-Title" to "ProxyAI"
+            )
+        ),
+        mutableMapOf(
+            "stream" to true,
+            "model" to "moonshotai/kimi-k2.5",
+            "max_tokens" to 8192
+        )
+    ),
 }
 
 private fun getDefaultHeadersWithAuthentication(): MutableMap<String, String> {
@@ -147,24 +129,4 @@ private fun getDefaultHeaders(additionalHeaders: Map<String, String>): MutableMa
     )
     defaultHeaders.putAll(additionalHeaders)
     return defaultHeaders
-}
-
-private fun getDefaultBodyParams(additionalParams: Map<String, Any>): MutableMap<String, Any> {
-    val defaultParams = mutableMapOf<String, Any>(
-        "stream" to true,
-        "messages" to "\$OPENAI_MESSAGES",
-        "temperature" to 0.1
-    )
-    defaultParams.putAll(additionalParams)
-    return defaultParams
-}
-
-private fun getResponsesApiDefaultBodyParams(additionalParams: Map<String, Any>): MutableMap<String, Any> {
-    val defaultParams = mutableMapOf<String, Any>(
-        "stream" to true,
-        "input" to "\$OPENAI_MESSAGES",
-        "temperature" to 0.1
-    )
-    defaultParams.putAll(additionalParams)
-    return defaultParams
 }

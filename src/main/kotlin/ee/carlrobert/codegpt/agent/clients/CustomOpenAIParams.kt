@@ -1,5 +1,9 @@
 package ee.carlrobert.codegpt.agent.clients
 
+import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
+import ai.koog.prompt.executor.clients.openai.models.ReasoningSummary
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.params.LLMParams.ToolChoice
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
@@ -19,7 +23,6 @@ internal fun LLMParams.toCustomOpenAIParams(state: CustomServiceChatCompletionSe
         additionalProperties = mergedAdditionalProperties,
         temperature = body.findValue("temperature").asDouble() ?: temperature,
         maxTokens = body.findValue("maxTokens", "max_tokens").asInt() ?: maxTokens,
-        speculation = body.findValue("speculation").asString() ?: speculation,
         toolChoice = body.findValue("toolChoice", "tool_choice").asToolChoice() ?: toolChoice,
         frequencyPenalty = body.findValue("frequencyPenalty", "frequency_penalty").asDouble()
             ?: current?.frequencyPenalty,
@@ -30,6 +33,37 @@ internal fun LLMParams.toCustomOpenAIParams(state: CustomServiceChatCompletionSe
         topK = body.findValue("topK", "top_k").asInt() ?: current?.topK,
         repetitionPenalty = body.findValue("repetitionPenalty", "repetition_penalty").asDouble()
             ?: current?.repetitionPenalty,
+    )
+}
+
+internal fun LLMParams.toCustomOpenAIResponsesParams(
+    state: CustomServiceChatCompletionSettingsState
+): OpenAIResponsesParams {
+    val body = state.body
+    val currentReasoning = (this as? OpenAIResponsesParams)?.reasoning
+    val bodyReasoning = body.findValue("reasoning").asReasoningConfig()
+
+    val mergedAdditionalProperties = buildMap {
+        body
+            .filterKeys { it !in CUSTOM_OPENAI_RESPONSES_RESERVED_BODY_KEYS }
+            .forEach { (key, value) -> put(key, value.toJsonElement()) }
+    }.takeIf { it.isNotEmpty() }
+
+    return OpenAIResponsesParams(
+        additionalProperties = mergedAdditionalProperties,
+        temperature = body.findValue("temperature").asDouble() ?: temperature,
+        maxTokens = body.findValue("maxOutputTokens", "max_output_tokens").asInt() ?: maxTokens,
+        numberOfChoices = numberOfChoices,
+        reasoning = when {
+            bodyReasoning == null -> currentReasoning
+            currentReasoning == null -> bodyReasoning
+            else -> ReasoningConfig(
+                effort = bodyReasoning.effort ?: currentReasoning.effort,
+                summary = bodyReasoning.summary ?: currentReasoning.summary
+            )
+        },
+        schema = schema,
+        toolChoice = body.findValue("toolChoice", "tool_choice").asToolChoice() ?: toolChoice,
     )
 }
 
@@ -51,6 +85,18 @@ internal val CUSTOM_OPENAI_RESERVED_BODY_KEYS = setOf(
     "tools",
     "topK", "top_k",
     "topP", "top_p",
+)
+
+internal val CUSTOM_OPENAI_RESPONSES_RESERVED_BODY_KEYS = setOf(
+    "input",
+    "maxOutputTokens", "max_output_tokens",
+    "messages",
+    "model",
+    "reasoning",
+    "stream",
+    "temperature",
+    "toolChoice", "tool_choice",
+    "tools",
 )
 
 private fun Map<String, Any>.findValue(vararg keys: String): Any? {
@@ -95,23 +141,6 @@ private fun Any?.asBoolean(): Boolean? = when (this) {
     else -> null
 }
 
-private fun Any?.asJsonElementMap(): Map<String, JsonElement>? {
-    if (this !is Map<*, *>) return null
-
-    return buildMap {
-        this@asJsonElementMap.forEach { (key, value) ->
-            key?.toString()
-                ?.takeIf { it.isNotBlank() }
-                ?.let { put(it, value.toJsonElement()) }
-        }
-    }
-}
-
-private fun Any?.asString(): String? = when (this) {
-    is String -> this
-    else -> null
-}
-
 private fun Any?.asStopList(): List<String>? = asStringList(allowEmpty = false)
 
 private fun Any?.asStringList(allowEmpty: Boolean = false): List<String>? = when (this) {
@@ -150,6 +179,47 @@ private fun Any?.asToolChoice(): ToolChoice? = when (this) {
                     ?.let { ToolChoice.Named(it) }
             }
         }
+    }
+
+    else -> null
+}
+
+private fun Any?.asReasoningConfig(): ReasoningConfig? {
+    val value = this as? Map<*, *> ?: return null
+    val effort = value["effort"].asReasoningEffort()
+    val summary = value["summary"].asReasoningSummary()
+
+    if (effort == null && summary == null) {
+        return null
+    }
+
+    return ReasoningConfig(
+        effort = effort,
+        summary = summary
+    )
+}
+
+private fun Any?.asReasoningEffort(): ReasoningEffort? = when (this) {
+    is ReasoningEffort -> this
+    is String -> when (trim().lowercase()) {
+        "none" -> ReasoningEffort.NONE
+        "minimal" -> ReasoningEffort.MINIMAL
+        "low" -> ReasoningEffort.LOW
+        "medium" -> ReasoningEffort.MEDIUM
+        "high" -> ReasoningEffort.HIGH
+        else -> null
+    }
+
+    else -> null
+}
+
+private fun Any?.asReasoningSummary(): ReasoningSummary? = when (this) {
+    is ReasoningSummary -> this
+    is String -> when (trim().lowercase()) {
+        "auto" -> ReasoningSummary.AUTO
+        "concise" -> ReasoningSummary.CONCISE
+        "detailed" -> ReasoningSummary.DETAILED
+        else -> null
     }
 
     else -> null

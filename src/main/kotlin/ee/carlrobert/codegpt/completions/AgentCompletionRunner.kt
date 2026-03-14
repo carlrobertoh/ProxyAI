@@ -8,19 +8,21 @@ import ai.koog.agents.features.eventHandler.feature.handleEvents
 import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.tokenizer.Tokenizer
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.AgentEvents
 import ee.carlrobert.codegpt.agent.MessageWithContext
 import ee.carlrobert.codegpt.agent.clients.shouldStream
-import ee.carlrobert.codegpt.agent.clients.shouldStreamCustomOpenAI
 import ee.carlrobert.codegpt.agent.strategy.CODE_AGENT_COMPRESSION
 import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
 import ee.carlrobert.codegpt.mcp.McpTool
 import ee.carlrobert.codegpt.mcp.McpToolAliasResolver
 import ee.carlrobert.codegpt.mcp.McpToolCallHandler
+import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.util.ReasoningFrameTextAdapter
 import kotlinx.coroutines.*
 import java.util.*
@@ -49,7 +51,7 @@ internal object AgentCompletionRunner : CompletionRunner {
         val jobRef = AtomicReference<Job?>()
         val messageBuilder = StringBuilder()
         val project = request.callParameters.project!!
-        val stream = shouldStreamAgentToolLoop(request)
+        val stream = shouldStreamAgentToolLoop(project, request)
         val toolCallHandler = project.let { McpToolCallHandler.getInstance(it) }
         val toolRegistry = createChatToolRegistry(
             callParameters = request.callParameters,
@@ -174,13 +176,23 @@ internal object AgentCompletionRunner : CompletionRunner {
     }
 
     internal fun shouldStreamAgentToolLoop(
+        project: Project,
         request: CompletionRunnerRequest.Chat,
     ): Boolean {
         val provider = request.serviceType
         return when (provider) {
-            ServiceType.CUSTOM_OPENAI -> shouldStreamCustomOpenAI(
-                request.callParameters.featureType
-            )
+            ServiceType.CUSTOM_OPENAI -> {
+                val selectedServiceId = service<ModelSettings>()
+                    .getModelSelectionForFeature(request.callParameters.featureType)
+                    .serviceId
+                service<CustomServicesSettings>()
+                    .state.services
+                    .firstOrNull { it.id == selectedServiceId }
+                    ?.chatCompletionSettings
+                    ?.shouldStream()
+                    ?: false
+            }
+
             ServiceType.GOOGLE -> false
             else -> true
         }

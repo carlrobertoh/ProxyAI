@@ -5,18 +5,10 @@ import ai.koog.http.client.KoogHttpClientException
 import ai.koog.prompt.dsl.ModerationResult
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
-import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
-import ai.koog.prompt.executor.clients.anthropic.models.AnthropicThinking
-import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
-import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
-import ai.koog.prompt.executor.clients.openai.models.ReasoningSummary
 import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
-import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ee.carlrobert.codegpt.agent.AgentEvents
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -27,6 +19,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
+import java.io.IOException
+import java.net.SocketTimeoutException
 import kotlin.math.pow
 import kotlin.random.Random
 import kotlin.time.Duration
@@ -42,8 +36,6 @@ class RetryingPromptExecutor(
 ) : PromptExecutor {
 
     companion object {
-        private const val ANTHROPIC_MIN_THINKING_BUDGET = 1_024
-        private const val ANTHROPIC_DEFAULT_THINKING_BUDGET = 2_048
         private val logger = KotlinLogging.logger { }
         private val RETRYABLE_HTTP_STATUS_CODES = setOf(408, 409, 425, 429, 500, 502, 503, 504)
 
@@ -65,10 +57,28 @@ class RetryingPromptExecutor(
             }
 
             val causes = generateSequence(error) { it.cause }.take(10).toList()
+            if (causes.any { it.isRetryableTimeout() }) {
+                return true
+            }
+
             val statusCode = causes
                 .filterIsInstance<KoogHttpClientException>()
                 .firstNotNullOfOrNull { it.statusCode }
             return statusCode in RETRYABLE_HTTP_STATUS_CODES
+        }
+
+        private fun Throwable.isRetryableTimeout(): Boolean {
+            if (this is TimeoutCancellationException || this is SocketTimeoutException) {
+                return true
+            }
+
+            return this is IOException && hasTimeoutMessage()
+        }
+
+        private fun Throwable.hasTimeoutMessage(): Boolean {
+            val message = message ?: return false
+            return message.contains("timed out", ignoreCase = true)
+                    || message.contains("timeout", ignoreCase = true)
         }
     }
 
@@ -80,13 +90,12 @@ class RetryingPromptExecutor(
         model: LLModel,
         tools: List<ToolDescriptor>
     ): Flow<StreamFrame> {
-        val refinedPrompt = prompt.withReasoningParams(model)
         var hasReceivedData: Boolean
 
         fun createStream(attemptNum: Int): Flow<StreamFrame> {
             hasReceivedData = false
 
-            return delegate.executeStreaming(refinedPrompt, model, tools)
+            return delegate.executeStreaming(prompt, model, tools)
                 .onEach { hasReceivedData = true }
                 .catch { error ->
                     val retryable = isRetryableFailure(error)
@@ -167,14 +176,13 @@ class RetryingPromptExecutor(
         model: LLModel,
         tools: List<ToolDescriptor>
     ): List<Message.Response> {
-        val promptWithReasoning = prompt.withReasoningParams(model)
         var attempt = 1
         var delay = retryPolicy.initialDelay
         var lastError: Throwable? = null
 
         while (attempt <= retryPolicy.maxAttempts) {
             try {
-                return delegate.execute(promptWithReasoning, model, tools)
+                return delegate.execute(prompt, model, tools)
             } catch (t: Throwable) {
                 lastError = t
                 val retryable = isRetryableFailure(t)
@@ -197,67 +205,5 @@ class RetryingPromptExecutor(
 
     override fun close() {
         (delegate as? AutoCloseable)?.close()
-    }
-
-    private fun Prompt.withReasoningParams(model: LLModel): Prompt {
-        val params = when (model.provider) {
-            LLMProvider.OpenAI -> params.withOpenAIReasoning()
-            LLMProvider.Anthropic -> params.withAnthropicReasoning()
-            else -> params
-        }
-        return withParams(params)
-    }
-
-    private fun LLMParams.withOpenAIReasoning(): LLMParams {
-        val base = when (this) {
-            is OpenAIResponsesParams -> this
-            else -> OpenAIResponsesParams(
-                temperature = temperature,
-                maxTokens = maxTokens,
-                numberOfChoices = numberOfChoices,
-                speculation = speculation,
-                schema = schema,
-                toolChoice = toolChoice,
-                user = user,
-                additionalProperties = additionalProperties
-            )
-        }
-
-        val reasoning = base.reasoning ?: ReasoningConfig(
-            effort = ReasoningEffort.MEDIUM,
-            summary = ReasoningSummary.AUTO
-        )
-        return base.copy(reasoning = reasoning)
-    }
-
-    private fun LLMParams.withAnthropicReasoning(): LLMParams {
-        val base = when (this) {
-            is AnthropicParams -> this
-            else -> AnthropicParams(
-                temperature = temperature,
-                maxTokens = maxTokens,
-                numberOfChoices = numberOfChoices,
-                speculation = speculation,
-                schema = schema,
-                toolChoice = toolChoice,
-                user = user,
-                additionalProperties = additionalProperties
-            )
-        }
-
-        if (base.thinking != null) return base
-
-        val thinkingBudget = resolveAnthropicThinkingBudget(base.maxTokens) ?: return base
-        return base.copy(thinking = AnthropicThinking.Enabled(budgetTokens = thinkingBudget))
-    }
-
-    private fun resolveAnthropicThinkingBudget(maxTokens: Int?): Int? {
-        val limit = maxTokens ?: ANTHROPIC_DEFAULT_THINKING_BUDGET
-        if (limit <= ANTHROPIC_MIN_THINKING_BUDGET) {
-            return null
-        }
-        return (limit / 2)
-            .coerceAtLeast(ANTHROPIC_MIN_THINKING_BUDGET)
-            .coerceAtMost(ANTHROPIC_DEFAULT_THINKING_BUDGET)
     }
 }

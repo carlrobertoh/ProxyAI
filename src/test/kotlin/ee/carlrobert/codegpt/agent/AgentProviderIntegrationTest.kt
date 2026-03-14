@@ -466,7 +466,7 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                     "item",
                     jsonMap(
                         e("type", "function_call"),
-                        e("id", "fc_1"),
+                        e("id", callId),
                         e("call_id", callId),
                         e("name", toolName),
                         e("arguments", "")
@@ -477,11 +477,27 @@ class AgentProviderIntegrationTest : IntegrationTest() {
             ),
             jsonMapResponse(
                 e("type", "response.function_call_arguments.delta"),
-                e("item_id", "fc_1"),
+                e("item_id", callId),
                 e("output_index", 0),
                 e("delta", arguments),
                 e("call_id", callId),
                 e("sequence_number", 2)
+            ),
+            jsonMapResponse(
+                e("type", "response.output_item.done"),
+                e(
+                    "item",
+                    jsonMap(
+                        e("type", "function_call"),
+                        e("id", callId),
+                        e("call_id", callId),
+                        e("name", toolName),
+                        e("arguments", arguments),
+                        e("status", "completed")
+                    )
+                ),
+                e("output_index", 0),
+                e("sequence_number", 3)
             ),
             jsonMapResponse(
                 e("type", "response.completed"),
@@ -497,7 +513,7 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                             jsonArray(
                                 jsonMap(
                                     e("type", "function_call"),
-                                    e("id", "fc_1"),
+                                    e("id", callId),
                                     e("call_id", callId),
                                     e("name", toolName),
                                     e("arguments", arguments),
@@ -510,7 +526,7 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                         e("text", jsonMap())
                     )
                 ),
-                e("sequence_number", 3)
+                e("sequence_number", 4)
             )
         )
     }
@@ -826,6 +842,8 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                 jsonArray(
                     jsonMap(
                         e("finishReason", "stop"),
+                        e("finish_reason", "stop"),
+                        e("index", 0),
                         e(
                             "message",
                             jsonMap(

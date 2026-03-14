@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.agent.clients
 import ai.koog.http.client.KoogHttpClientException
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.Test
+import java.io.IOException
 
 class RetryingPromptExecutorRetryabilityTest {
 
@@ -30,6 +31,20 @@ class RetryingPromptExecutorRetryabilityTest {
             "outer",
             KoogHttpClientException("service unavailable", 503, null, null, null)
         )
+        assertThat(RetryingPromptExecutor.isRetryableFailure(nested)).isTrue()
+    }
+
+    @Test
+    fun `should retry when transport timeout is in nested cause chain`() {
+        val timeout = IOException("Operation timed out")
+        val nested = KoogHttpClientException(
+            "Error from client: InceptionAILLMClient\nMessage: Operation timed out",
+            null,
+            null,
+            null,
+            RuntimeException("sse wrapper", timeout)
+        )
+
         assertThat(RetryingPromptExecutor.isRetryableFailure(nested)).isTrue()
     }
 

@@ -23,7 +23,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.clients.shouldStream
-import ee.carlrobert.codegpt.agent.clients.shouldStreamCustomOpenAI
 import ee.carlrobert.codegpt.agent.strategy.CODE_AGENT_COMPRESSION
 import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
@@ -35,6 +34,7 @@ import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.BashPayload
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
@@ -89,7 +89,7 @@ object ProxyAIAgent {
         val modelSelection =
             service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
         val skills = project.service<SkillDiscoveryService>().listSkills()
-        val stream = shouldStreamAgentToolLoop(provider)
+        val stream = shouldStreamAgentToolLoop(project, provider)
         val projectInstructions = loadProjectInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
@@ -163,11 +163,20 @@ object ProxyAIAgent {
                 val toolCallToUiId: MutableMap<String, String> = HashMap()
                 val anonymousToolIds: ArrayDeque<String> = ArrayDeque()
                 val frameAdapter = ReasoningFrameTextAdapter()
+                var streamedReasoningForCurrentNode = false
 
                 onLLMStreamingFrameReceived { ctx ->
                     if (!stream) return@onLLMStreamingFrameReceived
 
-                    frameAdapter.consume(ctx.streamFrame).forEach { chunk ->
+                    val frameType = ctx.streamFrame::class.simpleName
+                        ?: ctx.streamFrame::class.qualifiedName
+                        ?: "unknown"
+                    val chunks = frameAdapter.consume(ctx.streamFrame)
+                    if (frameType.contains("Reasoning") && chunks.isNotEmpty()) {
+                        streamedReasoningForCurrentNode = true
+                    }
+
+                    chunks.forEach { chunk ->
                         if (chunk.isNotEmpty()) {
                             events.onTextReceived(chunk)
                         }
@@ -175,9 +184,22 @@ object ProxyAIAgent {
                 }
 
                 onNodeExecutionCompleted { ctx ->
-                    if (stream) return@onNodeExecutionCompleted
+                    val output = (ctx.output as? List<*>) ?: emptyList<Any?>()
+                    if (stream) {
+                        if (!streamedReasoningForCurrentNode) {
+                            output.forEach { msg ->
+                                (msg as? Message.Reasoning)?.let {
+                                    if (it.content.isNotBlank()) {
+                                        events.onTextReceived("<think>${it.content}</think>")
+                                    }
+                                }
+                            }
+                        }
+                        streamedReasoningForCurrentNode = false
+                        return@onNodeExecutionCompleted
+                    }
 
-                    (ctx.output as? List<*>)?.forEach { msg ->
+                    output.forEach { msg ->
                         (msg as? Message.Assistant)?.let {
                             events.onTextReceived(it.content)
                         }
@@ -268,10 +290,19 @@ object ProxyAIAgent {
     }
 
     private fun shouldStreamAgentToolLoop(
+        project: Project,
         provider: ServiceType,
     ): Boolean {
         return when (provider) {
-            ServiceType.CUSTOM_OPENAI -> shouldStreamCustomOpenAI(FeatureType.AGENT)
+            ServiceType.CUSTOM_OPENAI -> {
+                val selectedModel =
+                    service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
+                val selectedServiceId = selectedModel.serviceId
+                val selectedService = service<CustomServicesSettings>().state.services
+                    .firstOrNull { it.id == selectedServiceId }
+                selectedService?.chatCompletionSettings?.shouldStream() == true
+            }
+
             ServiceType.GOOGLE -> false
             else -> true
         }
