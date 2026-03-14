@@ -534,6 +534,13 @@ object AgentFactory {
                     hookManager = hookManager,
                 )
             )
+            if (SubagentTool.DIAGNOSTICS in selected) tool(
+                DiagnosticsTool(
+                    project = project,
+                    sessionId = sessionId,
+                    hookManager = hookManager,
+                )
+            )
             if (SubagentTool.WEB_SEARCH in selected) tool(
                 WebSearchTool(
                     workingDirectory = project.basePath ?: System.getProperty("user.dir"),

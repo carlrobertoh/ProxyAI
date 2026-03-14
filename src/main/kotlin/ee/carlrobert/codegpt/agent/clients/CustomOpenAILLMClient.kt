@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
 import ee.carlrobert.codegpt.codecompletions.InfillRequest
+import ee.carlrobert.codegpt.agent.normalizeToolArgumentsJson
 import ee.carlrobert.codegpt.settings.Placeholder
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceCodeCompletionSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceChatCompletionSettingsState
@@ -40,6 +41,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.elementNames
 import kotlinx.serialization.json.*
 import java.net.URI
+import java.util.UUID
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Clock
 
@@ -193,7 +195,7 @@ class CustomOpenAILLMClient(
         }
 
         if (isResponsesApi) {
-            return serializeResponsesApiRequest(state, messages, model, tools)
+            return serializeResponsesApiRequest(state, messages, model, tools, toolChoice)
         }
 
         val customParams: CustomOpenAIParams = params.toCustomOpenAIParams(state)
@@ -245,9 +247,12 @@ class CustomOpenAILLMClient(
         state: CustomServiceChatCompletionSettingsState,
         messages: List<OpenAIMessage>,
         model: LLModel,
-        tools: List<OpenAITool>?
+        tools: List<OpenAITool>?,
+        toolChoice: OpenAIToolChoice?
     ): String {
         val streamRequest = state.shouldStream()
+        val inputJson = messages.toResponsesApiItemsJson()
+        val prompt = renderCustomOpenAIPrompt(messages, json)
 
         return buildJsonObject {
             state.body.forEach { (key, value) ->
@@ -256,7 +261,8 @@ class CustomOpenAILLMClient(
                         key = key,
                         value = value,
                         streamRequest = streamRequest,
-                        messages = messages,
+                        messagesJson = inputJson,
+                        prompt = prompt,
                         credential = apiKey,
                         json = json
                     )
@@ -264,8 +270,9 @@ class CustomOpenAILLMClient(
             }
             put("model", JsonPrimitive(model.id))
             if (!tools.isNullOrEmpty()) {
-                put("tools", json.encodeToJsonElement(ListSerializer(OpenAITool.serializer()), tools))
+                put("tools", JsonArray(tools.map { it.toResponsesApiToolJson() }))
             }
+            toolChoice?.toResponsesApiToolChoiceJson()?.let { put("tool_choice", it) }
         }.toString()
     }
 
@@ -418,10 +425,17 @@ class CustomOpenAILLMClient(
     }
 
     override fun decodeStreamingResponse(data: String): CustomOpenAIChatCompletionStreamResponse {
+        val payload = normalizeSsePayload(data)
+            ?: return CustomOpenAIChatCompletionStreamResponse(
+                choices = emptyList(),
+                created = 0,
+                id = "",
+                model = ""
+            )
         if (!isResponsesApi) {
-            return json.decodeFromString(data)
+            return json.decodeFromString(payload)
         }
-        return adaptResponsesApiStreamEvent(data)
+        return adaptResponsesApiStreamEvent(payload)
     }
 
     override fun decodeResponse(data: String): CustomOpenAIChatCompletionResponse {
@@ -448,47 +462,41 @@ class CustomOpenAILLMClient(
                 )
             }
 
-            "response.function_call_arguments.delta" -> {
-                val argsDelta = event["delta"]?.jsonPrimitive?.contentOrNull ?: ""
-                val callId = event["call_id"]?.jsonPrimitive?.contentOrNull ?: ""
-                val index = event["output_index"]?.jsonPrimitive?.intOrNull ?: 0
-                CustomOpenAIStreamChoice(
-                    delta = CustomOpenAIStreamDelta(
-                        toolCalls = listOf(
-                            CustomOpenAIToolCall(
-                                id = callId,
-                                index = index,
-                                function = CustomOpenAIFunction(arguments = argsDelta)
+            "response.function_call_arguments.delta",
+            "response.output_item.added" -> null
+
+            "response.completed" -> {
+                val responseObject = event["response"]?.jsonObject
+                val toolCalls = responseObject?.get("output")
+                    ?.jsonArray
+                    ?.mapIndexedNotNull { index, item ->
+                        val itemObject = item.jsonObject
+                        if (itemObject["type"]?.jsonPrimitive?.contentOrNull != "function_call") {
+                            return@mapIndexedNotNull null
+                        }
+
+                        val rawArguments = when (val arguments = itemObject["arguments"]) {
+                            is JsonPrimitive -> arguments.contentOrNull
+                            is JsonObject -> arguments.toString()
+                            else -> null
+                        }
+                        CustomOpenAIToolCall(
+                            id = itemObject["call_id"]?.jsonPrimitive?.contentOrNull,
+                            index = index,
+                            function = CustomOpenAIFunction(
+                                name = itemObject["name"]?.jsonPrimitive?.contentOrNull,
+                                arguments = normalizeToolArgumentsJson(rawArguments) ?: rawArguments.orEmpty()
                             )
                         )
+                    }
+                    .orEmpty()
+                CustomOpenAIStreamChoice(
+                    finishReason = "stop",
+                    delta = CustomOpenAIStreamDelta(
+                        toolCalls = toolCalls.takeIf { it.isNotEmpty() }
                     )
                 )
             }
-
-            "response.output_item.added" -> {
-                val item = event["item"]?.jsonObject
-                if (item?.get("type")?.jsonPrimitive?.contentOrNull == "function_call") {
-                    val callId = item["call_id"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val name = item["name"]?.jsonPrimitive?.contentOrNull ?: ""
-                    val index = event["output_index"]?.jsonPrimitive?.intOrNull ?: 0
-                    CustomOpenAIStreamChoice(
-                        delta = CustomOpenAIStreamDelta(
-                            toolCalls = listOf(
-                                CustomOpenAIToolCall(
-                                    id = callId,
-                                    index = index,
-                                    function = CustomOpenAIFunction(name = name)
-                                )
-                            )
-                        )
-                    )
-                } else null
-            }
-
-            "response.completed" -> CustomOpenAIStreamChoice(
-                finishReason = "stop",
-                delta = CustomOpenAIStreamDelta()
-            )
 
             else -> null
         }
@@ -526,12 +534,20 @@ class CustomOpenAILLMClient(
                 }
 
                 "function_call" -> {
+                    val rawArguments = when (val arguments = itemObj["arguments"]) {
+                        is JsonPrimitive -> arguments.contentOrNull
+                        is JsonObject -> arguments.toString()
+                        else -> null
+                    }
                     toolCallsJson.add(buildJsonObject {
                         put("id", itemObj["call_id"] ?: JsonPrimitive(""))
                         put("type", JsonPrimitive("function"))
                         putJsonObject("function") {
                             put("name", itemObj["name"] ?: JsonPrimitive(""))
-                            put("arguments", itemObj["arguments"] ?: JsonPrimitive("{}"))
+                            put(
+                                "arguments",
+                                JsonPrimitive(normalizeToolArgumentsJson(rawArguments) ?: rawArguments ?: "{}")
+                            )
                         }
                     })
                 }
@@ -631,12 +647,12 @@ class CustomOpenAILLMClient(
                     }
 
                     assistantToolCalls.forEach { toolCall ->
+                        val arguments = normalizeToolArgumentsJson(toolCall.function.arguments) ?: "{}"
                         add(
                             Message.Tool.Call(
                                 id = toolCall.id,
                                 tool = toolCall.function.name,
-                                content = toolCall.function.arguments.takeIf { it.isNotEmpty() }
-                                    ?: "{}",
+                                content = arguments,
                                 metaInfo = metaInfo
                             )
                         )
@@ -707,21 +723,37 @@ internal fun transformCustomOpenAIBodyValue(
     credential: String,
     json: Json
 ): JsonElement {
+    return transformCustomOpenAIBodyValue(
+        key = key,
+        value = value,
+        streamRequest = streamRequest,
+        messagesJson = json.encodeToJsonElement(
+            ListSerializer(OpenAIMessage.serializer()),
+            messages
+        ),
+        prompt = renderCustomOpenAIPrompt(messages, json),
+        credential = credential,
+        json = json
+    )
+}
+
+private fun transformCustomOpenAIBodyValue(
+    key: String?,
+    value: Any?,
+    streamRequest: Boolean,
+    messagesJson: JsonElement,
+    prompt: String,
+    credential: String,
+    json: Json
+): JsonElement {
     return when (value) {
         null -> JsonNull
         is JsonElement -> value
         is String -> when {
             !streamRequest && key == "stream" -> JsonPrimitive(false)
-            CustomServicePlaceholders.isMessages(value) -> json.parseToJsonElement(
-                json.encodeToString(ListSerializer(OpenAIMessage.serializer()), messages)
-            )
+            CustomServicePlaceholders.isMessages(value) -> messagesJson
 
-            CustomServicePlaceholders.isPrompt(value) -> JsonPrimitive(
-                renderCustomOpenAIPrompt(
-                    messages,
-                    json
-                )
-            )
+            CustomServicePlaceholders.isPrompt(value) -> JsonPrimitive(prompt)
 
             value.contains($$"$CUSTOM_SERVICE_API_KEY") -> {
                 JsonPrimitive(value.replace($$"$CUSTOM_SERVICE_API_KEY", credential))
@@ -740,7 +772,8 @@ internal fun transformCustomOpenAIBodyValue(
                         key = nestedKey.toString(),
                         value = nestedValue,
                         streamRequest = streamRequest,
-                        messages = messages,
+                        messagesJson = messagesJson,
+                        prompt = prompt,
                         credential = credential,
                         json = json
                     )
@@ -753,7 +786,8 @@ internal fun transformCustomOpenAIBodyValue(
                     key = null,
                     value = item,
                     streamRequest = streamRequest,
-                    messages = messages,
+                    messagesJson = messagesJson,
+                    prompt = prompt,
                     credential = credential,
                     json = json
                 )
@@ -766,7 +800,8 @@ internal fun transformCustomOpenAIBodyValue(
                     key = null,
                     value = item,
                     streamRequest = streamRequest,
-                    messages = messages,
+                    messagesJson = messagesJson,
+                    prompt = prompt,
                     credential = credential,
                     json = json
                 )
@@ -781,6 +816,174 @@ internal fun renderCustomOpenAIPrompt(messages: List<OpenAIMessage>, json: Json)
     return messages.joinToString(separator = "\n\n") { message ->
         message.content?.text()?.takeIf { it.isNotBlank() }
             ?: json.encodeToString(OpenAIMessage.serializer(), message)
+    }
+}
+
+private fun List<OpenAIMessage>.toResponsesApiItemsJson(): JsonArray {
+    return JsonArray(
+        buildList {
+            for (message in this@toResponsesApiItemsJson) {
+                addAll(message.toResponsesApiItemsJson())
+            }
+        }
+    )
+}
+
+private fun OpenAIMessage.toResponsesApiItemsJson(): List<JsonObject> {
+    return when (this) {
+        is OpenAIMessage.System, is OpenAIMessage.Developer -> listOf(
+            buildResponsesApiInputMessageItemJson(
+                role = "developer",
+                content = content.toResponsesApiInputContentJson()
+            )
+        )
+
+        is OpenAIMessage.User -> listOf(
+            buildResponsesApiInputMessageItemJson(
+                role = "user",
+                content = content.toResponsesApiInputContentJson()
+            )
+        )
+
+        is OpenAIMessage.Assistant -> buildList {
+            reasoningContent
+                ?.takeIf { it.isNotBlank() }
+                ?.let { reasoning ->
+                    add(
+                        buildJsonObject {
+                            put("type", JsonPrimitive("reasoning"))
+                            put("id", JsonPrimitive(UUID.randomUUID().toString()))
+                            putJsonArray("summary") {
+                                addJsonObject {
+                                    put("type", JsonPrimitive("summary_text"))
+                                    put("text", JsonPrimitive(reasoning))
+                                }
+                            }
+                        }
+                    )
+                }
+
+            content?.text()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { assistantText ->
+                    add(
+                        buildJsonObject {
+                            put("type", JsonPrimitive("message"))
+                            put("role", JsonPrimitive("assistant"))
+                            putJsonArray("content") {
+                                addJsonObject {
+                                    put("type", JsonPrimitive("output_text"))
+                                    put("text", JsonPrimitive(assistantText))
+                                    put("annotations", JsonArray(emptyList()))
+                                }
+                            }
+                        }
+                    )
+                }
+
+            toolCalls.orEmpty().forEach { toolCall ->
+                val arguments = normalizeToolArgumentsJson(toolCall.function.arguments) ?: "{}"
+                add(
+                    buildJsonObject {
+                        put("type", JsonPrimitive("function_call"))
+                        put("arguments", JsonPrimitive(arguments))
+                        put("call_id", JsonPrimitive(toolCall.id))
+                        put("name", JsonPrimitive(toolCall.function.name))
+                    }
+                )
+            }
+        }
+
+        is OpenAIMessage.Tool -> listOf(
+            buildJsonObject {
+                put("type", JsonPrimitive("function_call_output"))
+                put("call_id", JsonPrimitive(toolCallId))
+                put("output", JsonPrimitive(content?.text().orEmpty()))
+            }
+        )
+    }
+}
+
+private fun buildResponsesApiInputMessageItemJson(
+    role: String,
+    content: JsonArray
+): JsonObject {
+    return buildJsonObject {
+        put("type", JsonPrimitive("message"))
+        put("role", JsonPrimitive(role))
+        put("content", content)
+    }
+}
+
+private fun Content?.toResponsesApiInputContentJson(): JsonArray {
+    if (this == null) {
+        return JsonArray(emptyList())
+    }
+
+    return when (this) {
+        is Content.Parts -> JsonArray(value.mapNotNull { it.toResponsesApiInputContentJson() })
+        else -> JsonArray(
+            listOf(
+                buildJsonObject {
+                    put("type", JsonPrimitive("input_text"))
+                    put("text", JsonPrimitive(text()))
+                }
+            )
+        )
+    }
+}
+
+private fun OpenAIContentPart.toResponsesApiInputContentJson(): JsonObject? {
+    return when (this) {
+        is OpenAIContentPart.Text -> buildJsonObject {
+            put("type", JsonPrimitive("input_text"))
+            put("text", JsonPrimitive(text))
+        }
+
+        is OpenAIContentPart.Image -> buildJsonObject {
+            put("type", JsonPrimitive("input_image"))
+            imageUrl.detail?.let { put("detail", JsonPrimitive(it)) }
+            put("imageUrl", JsonPrimitive(imageUrl.url))
+        }
+
+        is OpenAIContentPart.File -> buildJsonObject {
+            put("type", JsonPrimitive("input_file"))
+            file.fileData?.let { put("fileData", JsonPrimitive(it)) }
+            file.fileId?.let { put("fileId", JsonPrimitive(it)) }
+            file.filename?.let { put("filename", JsonPrimitive(it)) }
+        }
+
+        else -> null
+    }
+}
+
+internal fun OpenAITool.toResponsesApiToolJson(): JsonObject {
+    return buildJsonObject {
+        put("type", JsonPrimitive("function"))
+        put("name", JsonPrimitive(function.name))
+        put(
+            "parameters",
+            function.parameters ?: buildJsonObject {
+                put("type", JsonPrimitive("object"))
+                putJsonObject("properties") {}
+                putJsonArray("required") {}
+            }
+        )
+        function.strict?.let { put("strict", JsonPrimitive(it)) }
+        function.description?.takeIf { it.isNotBlank() }?.let {
+            put("description", JsonPrimitive(it))
+        }
+    }
+}
+
+internal fun OpenAIToolChoice.toResponsesApiToolChoiceJson(): JsonElement {
+    return when (this) {
+        is OpenAIToolChoice.Function -> buildJsonObject {
+            put("type", JsonPrimitive("function"))
+            put("name", JsonPrimitive(function.name))
+        }
+
+        is OpenAIToolChoice.Mode -> JsonPrimitive(value)
     }
 }
 

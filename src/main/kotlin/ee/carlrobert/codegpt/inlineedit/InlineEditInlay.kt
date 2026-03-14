@@ -795,13 +795,18 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
 
     private fun collectDiagnosticsInfo(): String? {
         val tags: Set<TagDetails> = tagManager.getTags()
-        val diagnosticsTag =
-            tags.firstOrNull { it.selected && it is DiagnosticsTagDetails } as? DiagnosticsTagDetails
-                ?: return null
+        val diagnosticsTags = tags
+            .filter { it.selected && it is DiagnosticsTagDetails }
+            .filterIsInstance<DiagnosticsTagDetails>()
+        if (diagnosticsTags.isEmpty()) {
+            return null
+        }
 
-        val processor = TagProcessorFactory.getProcessor(project, diagnosticsTag)
         val stringBuilder = StringBuilder()
-        processor.process(Message("", ""), stringBuilder)
+        diagnosticsTags.forEach { diagnosticsTag ->
+            val processor = TagProcessorFactory.getProcessor(project, diagnosticsTag)
+            processor.process(Message("", ""), stringBuilder)
+        }
         return stringBuilder.toString().takeIf { it.isNotBlank() }
     }
 }

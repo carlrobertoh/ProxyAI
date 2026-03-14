@@ -6,6 +6,8 @@ import com.intellij.util.messages.MessageBusConnection
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
+import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import java.util.concurrent.atomic.AtomicReference
@@ -202,6 +204,30 @@ class ModelSettingsTest : IntegrationTest() {
         assertThat(result).isEqualTo(ServiceType.OPENAI)
     }
 
+    fun `test custom openai models keep configured order for chat and agent`() {
+        val customServicesSettings = service<CustomServicesSettings>()
+        val first = createCustomService(name = "First", model = "chat-first")
+        val second = createCustomService(name = "Second", model = "chat-second")
+
+        customServicesSettings.state.services.clear()
+        customServicesSettings.state.services.add(first)
+        customServicesSettings.state.services.add(second)
+
+        assertThat(customModelNames(FeatureType.CHAT))
+            .containsExactly("First (chat-first)", "Second (chat-second)")
+        assertThat(customModelNames(FeatureType.AGENT))
+            .containsExactly("First (chat-first)", "Second (chat-second)")
+
+        customServicesSettings.state.services.clear()
+        customServicesSettings.state.services.add(second)
+        customServicesSettings.state.services.add(first)
+
+        assertThat(customModelNames(FeatureType.CHAT))
+            .containsExactly("Second (chat-second)", "First (chat-first)")
+        assertThat(customModelNames(FeatureType.AGENT))
+            .containsExactly("Second (chat-second)", "First (chat-first)")
+    }
+
     fun `test migrateMissingProviderInformation updates missing providers`() {
         val state = ModelSettingsState()
         val detailsState = ModelDetailsState()
@@ -226,5 +252,19 @@ class ModelSettingsTest : IntegrationTest() {
 
         assertThat(modelSettings.getStoredModelForFeature(FeatureType.CHAT)).isEqualTo("unknown-model")
         assertThat(modelSettings.getStoredProviderForFeature(FeatureType.CHAT)).isNull()
+    }
+
+    private fun customModelNames(featureType: FeatureType): List<String> {
+        return modelSettings.getAvailableModels(featureType)
+            .filter { it.provider == ServiceType.CUSTOM_OPENAI }
+            .map { it.displayName }
+    }
+
+    private fun createCustomService(name: String, model: String): CustomServiceSettingsState {
+        return CustomServiceSettingsState().apply {
+            this.name = name
+            chatCompletionSettings.body.clear()
+            chatCompletionSettings.body["model"] = model
+        }
     }
 }

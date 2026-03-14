@@ -4,6 +4,7 @@ import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
+import ee.carlrobert.codegpt.agent.clients.shouldStreamCustomOpenAI
 import ee.carlrobert.codegpt.settings.models.ModelCatalog
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -174,6 +175,144 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         assertThat(result.events.text.toString()).isEqualTo("Hello from Custom OpenAI")
     }
 
+    fun testCustomOpenAIAgentStreamsWhenStoredSelectionUsesModelId() {
+        val customService = configureCustomOpenAIService(stream = true)
+        service<ModelSettings>().setModel(
+            FeatureType.AGENT,
+            "custom-agent-model",
+            ServiceType.CUSTOM_OPENAI
+        )
+        assertThat(shouldStreamCustomOpenAI(FeatureType.AGENT)).isTrue()
+        expectCustomOpenAI(StreamHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(request.body["stream"]).isEqualTo(true)
+            assertThat(extractPromptText(request)).contains("Say hello from streamed Custom OpenAI")
+            chatCompletionChunks("custom-agent-model", "Hello from streamed Custom OpenAI")
+        })
+
+        val result = runAgent(ServiceType.CUSTOM_OPENAI, "Say hello from streamed Custom OpenAI")
+
+        assertThat(customService.id).isNotBlank()
+        assertThat(result.output).isEqualTo("Hello from streamed Custom OpenAI")
+        assertThat(result.events.text.toString()).isEqualTo("Hello from streamed Custom OpenAI")
+    }
+
+    fun testCustomOpenAIResponsesAgentStreamsWhenStoredSelectionUsesModelId() {
+        val customService = configureCustomOpenAIService(
+            path = "/v1/responses",
+            model = "custom-responses-model",
+            stream = true,
+            useResponsesApiBody = true
+        )
+        service<ModelSettings>().setModel(
+            FeatureType.AGENT,
+            "custom-responses-model",
+            ServiceType.CUSTOM_OPENAI
+        )
+        assertThat(shouldStreamCustomOpenAI(FeatureType.AGENT)).isTrue()
+        expectCustomOpenAI(StreamHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/responses")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(request.body["stream"]).isEqualTo(true)
+            assertThat(extractPromptText(request)).contains("Say hello from Custom OpenAI Responses")
+            openAiResponsesChunks(
+                model = "custom-responses-model",
+                text = "Hello from Custom OpenAI Responses"
+            )
+        })
+
+        val result = runAgent(ServiceType.CUSTOM_OPENAI, "Say hello from Custom OpenAI Responses")
+
+        assertThat(customService.id).isNotBlank()
+        assertThat(result.output).isEqualTo("Hello from Custom OpenAI Responses")
+        assertThat(result.events.text.toString()).isEqualTo("Hello from Custom OpenAI Responses")
+    }
+
+    fun testCustomOpenAIResponsesAgentSerializesToolHistoryAsResponsesInput() {
+        val fixture = createReadFixture("Custom Responses fixture")
+        configureCustomOpenAIService(
+            path = "/v1/responses",
+            model = "custom-responses-model",
+            stream = false,
+            useResponsesApiBody = true
+        )
+        expectCustomOpenAI(BasicHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/responses")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(extractPromptText(request)).contains("Read the fixture and repeat its contents")
+            ResponseEntity(
+                openAiResponsesToolCallResponse(
+                    model = "custom-responses-model",
+                    toolName = "Read",
+                    callId = "call_custom_responses_read",
+                    arguments = """{"file_path":"${fixture.path}"}"""
+                )
+            )
+        })
+        expectCustomOpenAI(BasicHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/responses")
+            assertThat(request.method).isEqualTo("POST")
+            assertThatResponsesToolHistory(
+                request = request,
+                toolName = "Read",
+                callId = "call_custom_responses_read",
+                fixture = fixture
+            )
+            ResponseEntity(
+                openAiResponsesResponse(
+                    model = "custom-responses-model",
+                    text = "Custom Responses read: ${fixture.contents}"
+                )
+            )
+        })
+
+        val result = runAgent(ServiceType.CUSTOM_OPENAI, "Read the fixture and repeat its contents")
+
+        assertThat(result.output).isEqualTo("Custom Responses read: ${fixture.contents}")
+        assertThat(result.events.text.toString()).isEqualTo("Custom Responses read: ${fixture.contents}")
+    }
+
+    fun testCustomOpenAIResponsesStreamingAgentCompletesToolLoop() {
+        val fixture = createReadFixture("Custom Responses streaming fixture")
+        configureCustomOpenAIService(
+            path = "/v1/responses",
+            model = "custom-responses-model",
+            stream = true,
+            useResponsesApiBody = true
+        )
+        expectCustomOpenAI(StreamHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/responses")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(extractPromptText(request)).contains("Read the fixture and repeat its contents")
+            openAiResponsesToolCallChunks(
+                model = "custom-responses-model",
+                toolName = "Read",
+                callId = "call_custom_responses_stream_read",
+                arguments = """{"file_path":"${fixture.path}"}"""
+            )
+        })
+        expectCustomOpenAI(StreamHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/responses")
+            assertThat(request.method).isEqualTo("POST")
+            assertThatResponsesToolHistory(
+                request = request,
+                toolName = "Read",
+                callId = "call_custom_responses_stream_read",
+                fixture = fixture
+            )
+            openAiResponsesChunks(
+                model = "custom-responses-model",
+                text = "Custom Responses streaming read: ${fixture.contents}"
+            )
+        })
+
+        val result = runAgent(ServiceType.CUSTOM_OPENAI, "Read the fixture and repeat its contents")
+
+        assertThat(result.output).isEqualTo("Custom Responses streaming read: ${fixture.contents}")
+        assertThat(result.events.text.toString()).isEqualTo("Custom Responses streaming read: ${fixture.contents}")
+    }
+
     private fun runAgent(
         provider: ServiceType,
         userMessage: String
@@ -246,9 +385,10 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         )
     }
 
-    private fun openAiResponsesChunks(): List<String> {
-        val model = "gpt-4.1-mini"
-        val text = "Hello from OpenAI"
+    private fun openAiResponsesChunks(
+        model: String = "gpt-4.1-mini",
+        text: String = "Hello from OpenAI"
+    ): List<String> {
         val chunks = text.chunked(4)
         return chunks.mapIndexed { index, chunk ->
             jsonMapResponse(
@@ -310,6 +450,154 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                 )
             ),
             e("sequence_number", chunks.size + 2)
+        )
+    }
+
+    private fun openAiResponsesToolCallChunks(
+        model: String,
+        toolName: String,
+        callId: String,
+        arguments: String
+    ): List<String> {
+        return listOf(
+            jsonMapResponse(
+                e("type", "response.output_item.added"),
+                e(
+                    "item",
+                    jsonMap(
+                        e("type", "function_call"),
+                        e("id", "fc_1"),
+                        e("call_id", callId),
+                        e("name", toolName),
+                        e("arguments", "")
+                    )
+                ),
+                e("output_index", 0),
+                e("sequence_number", 1)
+            ),
+            jsonMapResponse(
+                e("type", "response.function_call_arguments.delta"),
+                e("item_id", "fc_1"),
+                e("output_index", 0),
+                e("delta", arguments),
+                e("call_id", callId),
+                e("sequence_number", 2)
+            ),
+            jsonMapResponse(
+                e("type", "response.completed"),
+                e(
+                    "response",
+                    jsonMap(
+                        e("id", "resp-tool-call"),
+                        e("object", "response"),
+                        e("created_at", 1),
+                        e("model", model),
+                        e(
+                            "output",
+                            jsonArray(
+                                jsonMap(
+                                    e("type", "function_call"),
+                                    e("id", "fc_1"),
+                                    e("call_id", callId),
+                                    e("name", toolName),
+                                    e("arguments", arguments),
+                                    e("status", "completed")
+                                )
+                            )
+                        ),
+                        e("parallel_tool_calls", true),
+                        e("status", "completed"),
+                        e("text", jsonMap())
+                    )
+                ),
+                e("sequence_number", 3)
+            )
+        )
+    }
+
+    private fun openAiResponsesToolCallResponse(
+        model: String,
+        toolName: String,
+        callId: String,
+        arguments: String
+    ): String {
+        return jsonMapResponse(
+            e("id", "resp-tool-call"),
+            e("object", "response"),
+            e("created_at", 1),
+            e("model", model),
+            e(
+                "output",
+                jsonArray(
+                    jsonMap(
+                        e("type", "function_call"),
+                        e("id", "fc_1"),
+                        e("call_id", callId),
+                        e("name", toolName),
+                        e("arguments", arguments),
+                        e("status", "completed")
+                    )
+                )
+            ),
+            e("parallel_tool_calls", true),
+            e("status", "completed"),
+            e("text", jsonMap()),
+            e(
+                "usage",
+                jsonMap(
+                    e("input_tokens", 1),
+                    e("input_tokens_details", jsonMap("cached_tokens", 0)),
+                    e("output_tokens", 1),
+                    e("output_tokens_details", jsonMap("reasoning_tokens", 0)),
+                    e("total_tokens", 2)
+                )
+            )
+        )
+    }
+
+    private fun openAiResponsesResponse(
+        model: String,
+        text: String
+    ): String {
+        return jsonMapResponse(
+            e("id", "resp-openai-test"),
+            e("object", "response"),
+            e("created_at", 1),
+            e("model", model),
+            e(
+                "output",
+                jsonArray(
+                    jsonMap(
+                        e("type", "message"),
+                        e("id", "msg_1"),
+                        e("role", "assistant"),
+                        e("status", "completed"),
+                        e(
+                            "content",
+                            jsonArray(
+                                jsonMap(
+                                    e("type", "output_text"),
+                                    e("text", text),
+                                    e("annotations", jsonArray())
+                                )
+                            )
+                        )
+                    )
+                )
+            ),
+            e("parallel_tool_calls", true),
+            e("status", "completed"),
+            e("text", jsonMap()),
+            e(
+                "usage",
+                jsonMap(
+                    e("input_tokens", 1),
+                    e("input_tokens_details", jsonMap("cached_tokens", 0)),
+                    e("output_tokens", 1),
+                    e("output_tokens_details", jsonMap("reasoning_tokens", 0)),
+                    e("total_tokens", 2)
+                )
+            )
         )
     }
 
@@ -573,15 +861,24 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         )
     }
 
-    private fun configureCustomOpenAIService(): CustomServiceSettingsState {
+    private fun configureCustomOpenAIService(
+        path: String = "/v1/chat/completions",
+        model: String = "custom-agent-model",
+        stream: Boolean = false,
+        useResponsesApiBody: Boolean = false
+    ): CustomServiceSettingsState {
         val settings = service<CustomServicesSettings>()
         val serviceState = CustomServiceSettingsState().apply {
             name = "Agent Test Custom Service"
             chatCompletionSettings.url =
-                System.getProperty("customOpenAI.baseUrl") + "/v1/chat/completions"
+                System.getProperty("customOpenAI.baseUrl") + path
             chatCompletionSettings.headers.clear()
             chatCompletionSettings.body.clear()
-            chatCompletionSettings.body["model"] = "custom-agent-model"
+            chatCompletionSettings.body["model"] = model
+            chatCompletionSettings.body["stream"] = stream
+            if (useResponsesApiBody) {
+                chatCompletionSettings.body["input"] = "\$OPENAI_MESSAGES"
+            }
         }
         settings.state.services.clear()
         settings.state.services.add(serviceState)
@@ -614,6 +911,28 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                 else -> content.toString()
             }
         }
+    }
+
+    private fun assertThatResponsesToolHistory(
+        request: RequestEntity,
+        toolName: String,
+        callId: String,
+        fixture: ReadFixture
+    ) {
+        val input = request.body["input"] as? List<*> ?: error("Expected responses input list")
+        val items = input.mapNotNull { it as? Map<*, *> }
+
+        assertThat(items.any { item ->
+            item["type"] == "function_call" &&
+                item["name"] == toolName &&
+                item["call_id"] == callId &&
+                item["arguments"] == """{"file_path":"${fixture.path}"}"""
+        }).isTrue()
+        assertThat(items.any { item ->
+            item["type"] == "function_call_output" &&
+                item["call_id"] == callId &&
+                (item["output"] as? String).orEmpty().contains(fixture.contents)
+        }).isTrue()
     }
 
     private fun extractGooglePromptText(request: RequestEntity): String {
