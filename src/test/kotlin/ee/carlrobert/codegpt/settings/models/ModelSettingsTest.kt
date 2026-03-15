@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.settings.models
 
+import ai.koog.prompt.llm.LLMCapability
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.util.messages.MessageBusConnection
@@ -228,6 +229,47 @@ class ModelSettingsTest : IntegrationTest() {
             .containsExactly("Second (chat-second)", "First (chat-first)")
     }
 
+    fun `test custom openai agent model uses configured token limits`() {
+        val customServicesSettings = service<CustomServicesSettings>()
+        val customService = createCustomService(
+            name = "Custom Agent",
+            model = "custom-agent-model",
+            contextWindowSize = 512_000L,
+            maxOutputTokens = 12_000L
+        )
+
+        customServicesSettings.state.services.clear()
+        customServicesSettings.state.services.add(customService)
+
+        val selection = modelSettings.getAvailableModels(FeatureType.AGENT)
+            .single { it.id == customService.id }
+
+        assertThat(selection.llmModel.contextLength).isEqualTo(512_000L)
+        assertThat(selection.llmModel.maxOutputTokens).isEqualTo(12_000L)
+        assertThat(selection.llmModel.supports(LLMCapability.OpenAIEndpoint.Responses)).isFalse()
+    }
+
+    fun `test custom openai responses agent model uses configured token limits`() {
+        val customServicesSettings = service<CustomServicesSettings>()
+        val customService = createCustomService(
+            name = "Custom Responses",
+            model = "custom-responses-model",
+            contextWindowSize = 1_048_576L,
+            maxOutputTokens = 65_536L,
+            path = "https://example.com/v1/responses"
+        )
+
+        customServicesSettings.state.services.clear()
+        customServicesSettings.state.services.add(customService)
+
+        val selection = modelSettings.getAvailableModels(FeatureType.AGENT)
+            .single { it.id == customService.id }
+
+        assertThat(selection.llmModel.contextLength).isEqualTo(1_048_576L)
+        assertThat(selection.llmModel.maxOutputTokens).isEqualTo(65_536L)
+        assertThat(selection.llmModel.supports(LLMCapability.OpenAIEndpoint.Responses)).isTrue()
+    }
+
     fun `test migrateMissingProviderInformation updates missing providers`() {
         val state = ModelSettingsState()
         val detailsState = ModelDetailsState()
@@ -260,9 +302,18 @@ class ModelSettingsTest : IntegrationTest() {
             .map { it.displayName }
     }
 
-    private fun createCustomService(name: String, model: String): CustomServiceSettingsState {
+    private fun createCustomService(
+        name: String,
+        model: String,
+        contextWindowSize: Long = 200_000L,
+        maxOutputTokens: Long = 32_768L,
+        path: String = "https://example.com/v1/chat/completions"
+    ): CustomServiceSettingsState {
         return CustomServiceSettingsState().apply {
             this.name = name
+            this.contextWindowSize = contextWindowSize
+            this.maxOutputTokens = maxOutputTokens
+            chatCompletionSettings.url = path
             chatCompletionSettings.body.clear()
             chatCompletionSettings.body["model"] = model
         }

@@ -17,6 +17,8 @@ import java.util.UUID
 import ee.carlrobert.codegpt.util.MapConverter
 
 private const val DEFAULT_SERVICE_SETTINGS_NAME = "Default"
+const val DEFAULT_CUSTOM_OPENAI_CONTEXT_WINDOW_SIZE = 200_000L
+const val DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS = 32_768L
 
 @Service
 @State(
@@ -153,6 +155,8 @@ class CustomServiceSettingsState : BaseState() {
     var id by string(UUID.randomUUID().toString())
     var name by string(DEFAULT_SERVICE_SETTINGS_NAME)
     var template by enum(CustomServiceTemplate.OPENAI)
+    var contextWindowSize by property(DEFAULT_CUSTOM_OPENAI_CONTEXT_WINDOW_SIZE)
+    var maxOutputTokens by property(DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS)
     var chatCompletionSettings by property(CustomServiceChatCompletionSettingsState())
     var codeCompletionSettings by property(CustomServiceCodeCompletionSettingsState())
 

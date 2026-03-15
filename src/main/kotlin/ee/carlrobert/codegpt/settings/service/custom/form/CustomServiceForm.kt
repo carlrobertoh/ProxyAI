@@ -22,6 +22,8 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
+import ee.carlrobert.codegpt.settings.service.custom.DEFAULT_CUSTOM_OPENAI_CONTEXT_WINDOW_SIZE
+import ee.carlrobert.codegpt.settings.service.custom.DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceSettingsData
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.ParseException
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
@@ -125,6 +128,10 @@ class CustomServiceForm(
     private val nameField = JBTextField().apply {
         columns = 30
     }
+    private val contextWindowSizeSpinner =
+        createTokenSpinner(DEFAULT_CUSTOM_OPENAI_CONTEXT_WINDOW_SIZE)
+    private val maxOutputTokensSpinner =
+        createTokenSpinner(DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS)
     private val templateHelpText = JBLabel(General.ContextHelp)
     private val templateComboBox = ComboBox(EnumComboBoxModel(CustomServiceTemplate::class.java))
     private val chatCompletionsForm: CustomServiceChatCompletionForm
@@ -217,6 +224,8 @@ class CustomServiceForm(
 
             apiKeyField.text = selectedItem.apiKey ?: ""
             nameField.text = selectedItem.name
+            contextWindowSizeSpinner.value = selectedItem.contextWindowSize
+            maxOutputTokensSpinner.value = selectedItem.maxOutputTokens
             templateComboBox.selectedItem = selectedItem.template
             updateTemplateHelpTextTooltip(selectedItem.template)
         } finally {
@@ -233,6 +242,14 @@ class CustomServiceForm(
                 name = nameField.text,
                 template = templateComboBox.item,
                 apiKey = getApiKey(),
+                contextWindowSize = readSpinnerValue(
+                    contextWindowSizeSpinner,
+                    editedItem.contextWindowSize
+                ),
+                maxOutputTokens = readSpinnerValue(
+                    maxOutputTokensSpinner,
+                    editedItem.maxOutputTokens
+                ),
                 chatCompletionSettings = editedItem.chatCompletionSettings.copy(
                     url = chatCompletionsForm.url,
                     body = chatCompletionsForm.body,
@@ -444,6 +461,14 @@ class CustomServiceForm(
         .addComponentToRightColumn(
             UIUtil.createComment("settingsConfigurable.service.custom.openai.apiKey.comment")
         )
+        .addLabeledComponent(
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.contextWindowSize.label"),
+            contextWindowSizeSpinner
+        )
+        .addLabeledComponent(
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.maxOutputTokens.label"),
+            maxOutputTokensSpinner
+        )
         .addVerticalGap(4)
         .addComponent(tabbedPane)
         .addComponentFillVertically(JPanel(), 0)
@@ -624,6 +649,20 @@ class CustomServiceForm(
                 .installOn(templateHelpText)
         } catch (e: MalformedURLException) {
             throw RuntimeException(e)
+        }
+    }
+
+    private fun createTokenSpinner(initialValue: Long): JSpinner =
+        JSpinner(SpinnerNumberModel(initialValue, 1L, Long.MAX_VALUE, 1L)).apply {
+            (editor as? JSpinner.DefaultEditor)?.textField?.columns = 30
+        }
+
+    private fun readSpinnerValue(spinner: JSpinner, fallback: Long): Long {
+        return try {
+            spinner.commitEdit()
+            (spinner.value as? Number)?.toLong()?.coerceAtLeast(1L) ?: fallback
+        } catch (_: ParseException) {
+            fallback
         }
     }
 }
