@@ -191,7 +191,18 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         contentManager.createNewAgentTab(
             AgentSession(
                 sessionId = sessionId,
-                conversation = Conversation()
+                conversation = Conversation(),
+                displayName = "",
+                serviceType = null,
+                externalAgentId = null,
+                externalAgentSessionId = null,
+                externalAgentConfigOptions = emptyList(),
+                externalAgentConfigLoading = false,
+                runtimeAgentId = null,
+                resumeCheckpointRef = null,
+                referencedFiles = emptyList(),
+                createdAt = System.currentTimeMillis(),
+                lastActiveAt = System.currentTimeMillis()
             ),
             select = false
         )

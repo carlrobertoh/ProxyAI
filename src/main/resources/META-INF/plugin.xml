@@ -1,313 +1,366 @@
 <idea-plugin>
-    <id>ee.carlrobert.chatgpt</id>
-    <name>Proxy AI</name>
-    <vendor email="carlrobertoh@gmail.com" url="https://carlrobert.ee">Carl-Robert Linnupuu</vendor>
-    <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.modules.lang</depends>
-    <depends optional="true" config-file="plugin-kotlin.xml">org.jetbrains.kotlin</depends>
-    <depends optional="true" config-file="plugin-java.xml">com.intellij.modules.java</depends>
-    <depends optional="true" config-file="plugin-javascript.xml">JavaScript</depends>
-    <depends optional="true" config-file="plugin-cpp.xml">com.intellij.modules.cpp</depends>
-    <!--    <depends optional="true" config-file="plugin-go.xml">org.jetbrains.plugins.go</depends>-->
-    <!--    <depends optional="true" config-file="plugin-ruby.xml">com.intellij.modules.ruby</depends>-->
-    <!--    <depends optional="true" config-file="plugin-php.xml">com.jetbrains.php</depends>-->
-    <!--    <depends optional="true" config-file="plugin-swift.xml">com.intellij.swift</depends>-->
-    <depends optional="true" config-file="plugin-git.xml">Git4Idea</depends>
+  <id>ee.carlrobert.chatgpt</id>
+  <name>Proxy AI</name>
+  <vendor email="carlrobertoh@gmail.com" url="https://carlrobert.ee">Carl-Robert Linnupuu</vendor>
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.lang</depends>
+  <depends optional="true" config-file="plugin-kotlin.xml">org.jetbrains.kotlin</depends>
+  <depends optional="true" config-file="plugin-java.xml">com.intellij.modules.java</depends>
+  <depends optional="true" config-file="plugin-javascript.xml">JavaScript</depends>
+  <depends optional="true" config-file="plugin-cpp.xml">com.intellij.modules.cpp</depends>
+  <!--    <depends optional="true" config-file="plugin-go.xml">org.jetbrains.plugins.go</depends>-->
+  <!--    <depends optional="true" config-file="plugin-ruby.xml">com.intellij.modules.ruby</depends>-->
+  <!--    <depends optional="true" config-file="plugin-php.xml">com.jetbrains.php</depends>-->
+  <!--    <depends optional="true" config-file="plugin-swift.xml">com.intellij.swift</depends>-->
+  <depends optional="true" config-file="plugin-git.xml">Git4Idea</depends>
 
-    <projectListeners>
-        <listener topic="com.intellij.codeInsight.lookup.LookupManagerListener"
-                  class="ee.carlrobert.codegpt.refactorings.RenameCompletionLookupListener"/>
-        <listener topic="com.intellij.codeInsight.lookup.LookupManagerListener"
-                  class="ee.carlrobert.codegpt.CodeGPTLookupListener"/>
-        <listener topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"
-                  class="ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowListener"/>
-    </projectListeners>
+  <projectListeners>
+    <listener topic="com.intellij.codeInsight.lookup.LookupManagerListener"
+      class="ee.carlrobert.codegpt.refactorings.RenameCompletionLookupListener"/>
+    <listener topic="com.intellij.codeInsight.lookup.LookupManagerListener"
+      class="ee.carlrobert.codegpt.CodeGPTLookupListener"/>
+    <listener topic="com.intellij.openapi.wm.ex.ToolWindowManagerListener"
+      class="ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowListener"/>
+  </projectListeners>
 
-    <extensions defaultExtensionNs="com.intellij">
-        <postStartupActivity implementation="ee.carlrobert.codegpt.LegacyMigrationActivity"/>
-        <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTProjectActivity"/>
-        <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTUpdateActivity"/>
-        <editorFactoryListener implementation="ee.carlrobert.codegpt.CodeGPTEditorFactoryListener"/>
-        <applicationConfigurable id="settings.codegpt" parentId="tools" displayName="ProxyAI"
-                                 instance="ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable"/>
+  <extensions defaultExtensionNs="com.intellij">
+    <postStartupActivity implementation="ee.carlrobert.codegpt.LegacyMigrationActivity"/>
+    <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTProjectActivity"/>
+    <postStartupActivity implementation="ee.carlrobert.codegpt.CodeGPTUpdateActivity"/>
+    <editorFactoryListener implementation="ee.carlrobert.codegpt.CodeGPTEditorFactoryListener"/>
+    <applicationConfigurable id="settings.codegpt" parentId="tools" displayName="ProxyAI"
+      instance="ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable"/>
 
-        <projectConfigurable id="settings.codegpt.agents" parentId="settings.codegpt" displayName="Agent"
-                             instance="ee.carlrobert.codegpt.settings.agents.AgentConfigurable" groupWeight="35"/>
-        <projectConfigurable id="settings.codegpt.subagents" parentId="settings.codegpt.agents" displayName="Subagents"
-                      instance="ee.carlrobert.codegpt.settings.agents.SubagentsConfigurable"/>
-        <projectConfigurable id="settings.codegpt.skills" parentId="settings.codegpt.agents" displayName="Skills"
-                            instance="ee.carlrobert.codegpt.settings.skills.SkillsConfigurable"/>
-        <projectConfigurable id="settings.codegpt.hooks" parentId="settings.codegpt.agents" displayName="Hooks"
-                            instance="ee.carlrobert.codegpt.settings.hooks.HooksConfigurable"/>
+    <projectConfigurable id="settings.codegpt.agents" parentId="settings.codegpt"
+      displayName="Agent"
+      instance="ee.carlrobert.codegpt.settings.agents.AgentConfigurable" groupWeight="35"/>
+    <projectConfigurable id="settings.codegpt.agents.acp" parentId="settings.codegpt.agents"
+      displayName="ACP"
+      instance="ee.carlrobert.codegpt.settings.agents.acp.AcpAgentConfigurable"/>
+    <projectConfigurable id="settings.codegpt.subagents" parentId="settings.codegpt.agents"
+      displayName="Subagents"
+      instance="ee.carlrobert.codegpt.settings.agents.SubagentsConfigurable"/>
+    <projectConfigurable id="settings.codegpt.skills" parentId="settings.codegpt.agents"
+      displayName="Skills"
+      instance="ee.carlrobert.codegpt.settings.skills.SkillsConfigurable"/>
+    <projectConfigurable id="settings.codegpt.hooks" parentId="settings.codegpt.agents"
+      displayName="Hooks"
+      instance="ee.carlrobert.codegpt.settings.hooks.HooksConfigurable"/>
 
-        <applicationConfigurable id="settings.codegpt.services" parentId="settings.codegpt" displayName="Providers"
-                                  instance="ee.carlrobert.codegpt.settings.service.ServiceConfigurable" groupWeight="30"/>
-        <applicationConfigurable id="settings.codegpt.services.codegpt" parentId="settings.codegpt.services" displayName="ProxyAI"
-                                  instance="ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable" groupWeight="40"/>
-        <applicationConfigurable id="settings.codegpt.services.anthropic" parentId="settings.codegpt.services" displayName="Anthropic"
-                                  instance="ee.carlrobert.codegpt.settings.service.AnthropicServiceConfigurable" groupWeight="35"/>
-        <applicationConfigurable id="settings.codegpt.services.openai" parentId="settings.codegpt.services" displayName="OpenAI"
-                                  instance="ee.carlrobert.codegpt.settings.service.OpenAIServiceConfigurable" groupWeight="30"/>
-        <applicationConfigurable id="settings.codegpt.services.custom" parentId="settings.codegpt.services" displayName="Custom OpenAI"
-                                  instance="ee.carlrobert.codegpt.settings.service.custom.CustomServiceConfigurable" groupWeight="25"/>
-        <applicationConfigurable id="settings.codegpt.services.google" parentId="settings.codegpt.services" displayName="Google"
-                                  instance="ee.carlrobert.codegpt.settings.service.google.GoogleSettingsConfigurable" groupWeight="20"/>
-        <applicationConfigurable id="settings.codegpt.services.mistral" parentId="settings.codegpt.services" displayName="Mistral"
-                                  instance="ee.carlrobert.codegpt.settings.service.MistralServiceConfigurable" groupWeight="15"/>
-        <applicationConfigurable id="settings.codegpt.services.inception" parentId="settings.codegpt.services" displayName="Inception"
-                                  instance="ee.carlrobert.codegpt.settings.service.InceptionServiceConfigurable" groupWeight="10"/>
-        <applicationConfigurable id="settings.codegpt.services.ollama" parentId="settings.codegpt.services" displayName="Ollama (Offline)"
-                                  instance="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettingsConfigurable" groupWeight="5"/>
-        <applicationConfigurable id="settings.codegpt.services.llama_cpp" parentId="settings.codegpt.services" displayName="LLaMA C/C++ (Offline)"
-                                  instance="ee.carlrobert.codegpt.settings.service.LlamaServiceConfigurable" groupWeight="0"/>
+    <applicationConfigurable id="settings.codegpt.services" parentId="settings.codegpt"
+      displayName="Providers"
+      instance="ee.carlrobert.codegpt.settings.service.ServiceConfigurable" groupWeight="30"/>
+    <applicationConfigurable id="settings.codegpt.services.codegpt"
+      parentId="settings.codegpt.services" displayName="ProxyAI"
+      instance="ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTServiceConfigurable"
+      groupWeight="40"/>
+    <applicationConfigurable id="settings.codegpt.services.anthropic"
+      parentId="settings.codegpt.services" displayName="Anthropic"
+      instance="ee.carlrobert.codegpt.settings.service.AnthropicServiceConfigurable"
+      groupWeight="35"/>
+    <applicationConfigurable id="settings.codegpt.services.openai"
+      parentId="settings.codegpt.services" displayName="OpenAI"
+      instance="ee.carlrobert.codegpt.settings.service.OpenAIServiceConfigurable" groupWeight="30"/>
+    <applicationConfigurable id="settings.codegpt.services.custom"
+      parentId="settings.codegpt.services" displayName="Custom OpenAI"
+      instance="ee.carlrobert.codegpt.settings.service.custom.CustomServiceConfigurable"
+      groupWeight="25"/>
+    <applicationConfigurable id="settings.codegpt.services.google"
+      parentId="settings.codegpt.services" displayName="Google"
+      instance="ee.carlrobert.codegpt.settings.service.google.GoogleSettingsConfigurable"
+      groupWeight="20"/>
+    <applicationConfigurable id="settings.codegpt.services.mistral"
+      parentId="settings.codegpt.services" displayName="Mistral"
+      instance="ee.carlrobert.codegpt.settings.service.MistralServiceConfigurable"
+      groupWeight="15"/>
+    <applicationConfigurable id="settings.codegpt.services.inception"
+      parentId="settings.codegpt.services" displayName="Inception"
+      instance="ee.carlrobert.codegpt.settings.service.InceptionServiceConfigurable"
+      groupWeight="10"/>
+    <applicationConfigurable id="settings.codegpt.services.ollama"
+      parentId="settings.codegpt.services" displayName="Ollama (Offline)"
+      instance="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettingsConfigurable"
+      groupWeight="5"/>
+    <applicationConfigurable id="settings.codegpt.services.llama_cpp"
+      parentId="settings.codegpt.services" displayName="LLaMA C/C++ (Offline)"
+      instance="ee.carlrobert.codegpt.settings.service.LlamaServiceConfigurable" groupWeight="0"/>
 
-        <applicationConfigurable id="settings.codegpt.mcp" parentId="settings.codegpt" displayName="MCP"
-                                  instance="ee.carlrobert.codegpt.settings.mcp.McpConfigurable" groupWeight="25"/>
-        <applicationConfigurable id="settings.codegpt.models" parentId="settings.codegpt" bundle="messages.codegpt" key="settings.models.displayName"
-                                        instance="ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable" groupWeight="20"/>
-        <applicationConfigurable id="settings.codegpt.prompts" parentId="settings.codegpt" displayName="Prompts"
-                                  instance="ee.carlrobert.codegpt.settings.prompts.PromptsConfigurable" groupWeight="15"/>
-        <applicationConfigurable id="settings.codegpt.configuration" parentId="settings.codegpt" displayName="Configuration"
-                                  instance="ee.carlrobert.codegpt.settings.configuration.ConfigurationConfigurable" groupWeight="10"/>
-        <applicationConfigurable id="settings.codegpt.advanced" parentId="settings.codegpt" displayName="Advanced Settings"
-                                  instance="ee.carlrobert.codegpt.settings.advanced.AdvancedSettingsConfigurable" groupWeight="5"/>
-        <applicationConfigurable id="tools.preferences.codegpt.telemetry" parentId="settings.codegpt" displayName="Telemetry"
-                                  instance="ee.carlrobert.codegpt.telemetry.ui.preferences.TelemetryConfigurable" groupWeight="0"/>
+    <applicationConfigurable id="settings.codegpt.mcp" parentId="settings.codegpt" displayName="MCP"
+      instance="ee.carlrobert.codegpt.settings.mcp.McpConfigurable" groupWeight="25"/>
+    <applicationConfigurable id="settings.codegpt.models" parentId="settings.codegpt"
+      bundle="messages.codegpt" key="settings.models.displayName"
+      instance="ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable" groupWeight="20"/>
+    <applicationConfigurable id="settings.codegpt.prompts" parentId="settings.codegpt"
+      displayName="Prompts"
+      instance="ee.carlrobert.codegpt.settings.prompts.PromptsConfigurable" groupWeight="15"/>
+    <applicationConfigurable id="settings.codegpt.configuration" parentId="settings.codegpt"
+      displayName="Configuration"
+      instance="ee.carlrobert.codegpt.settings.configuration.ConfigurationConfigurable"
+      groupWeight="10"/>
+    <applicationConfigurable id="settings.codegpt.advanced" parentId="settings.codegpt"
+      displayName="Advanced Settings"
+      instance="ee.carlrobert.codegpt.settings.advanced.AdvancedSettingsConfigurable"
+      groupWeight="5"/>
+    <applicationConfigurable id="tools.preferences.codegpt.telemetry" parentId="settings.codegpt"
+      displayName="Telemetry"
+      instance="ee.carlrobert.codegpt.telemetry.ui.preferences.TelemetryConfigurable"
+      groupWeight="0"/>
 
-        <actionPromoter implementation="ee.carlrobert.codegpt.actions.InlayActionPromoter"/>
-        <applicationService
-                serviceImplementation="ee.carlrobert.codegpt.telemetry.core.service.TelemetryServiceFactory"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.GeneralSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.openai.OpenAISettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.mistral.MistralSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.llama.LlamaSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.inception.InceptionSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.models.ModelSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.IncludedFilesSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.advanced.AdvancedSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.conversations.ConversationsState"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.codecompletions.psi.CompletionContextService"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.mcp.McpSettings"/>
-        <applicationService serviceImplementation="ee.carlrobert.codegpt.services.llama.ServerLogsManager"/>
-        <projectService serviceImplementation="ee.carlrobert.codegpt.services.ExecutableRunnerService"/>
-        <inline.completion.provider
-                id="CodeGPTInlineCompletionProvider"
-                implementation="ee.carlrobert.codegpt.codecompletions.DebouncedCodeCompletionProvider"/>
-        <toolWindow id="ProxyAI" icon="ee.carlrobert.codegpt.Icons.DefaultSmall" anchor="right"
-                    factoryClass="ee.carlrobert.codegpt.toolwindow.ProxyAIToolWindowFactory"/>
-        <notificationGroup id="proxyai.notification.group" displayType="BALLOON" key="notification.group.name"/>
-        <notificationGroup id="proxyai.notification.sticky.group" displayType="STICKY_BALLOON" key="notification.group.sticky.name"/>
-        <notificationGroup id="ProxyAI.MCP.Notifications" displayType="BALLOON" key="notification.group.mcp.name"/>
-        <statusBarWidgetFactory order="first" id="ee.carlrobert.codegpt.statusbar.widget"
-                                implementation="ee.carlrobert.codegpt.statusbar.CodeGPTStatusBarWidgetFactory"/>
-        <nameSuggestionProvider implementation="ee.carlrobert.codegpt.refactorings.DefaultNameSuggestionProvider"/>
-</extensions>
+    <actionPromoter implementation="ee.carlrobert.codegpt.actions.InlayActionPromoter"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.telemetry.core.service.TelemetryServiceFactory"/>
+    <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.GeneralSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.service.anthropic.AnthropicSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.service.openai.OpenAISettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.service.mistral.MistralSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.service.llama.LlamaSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.service.inception.InceptionSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.models.ModelSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.IncludedFilesSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.settings.advanced.AdvancedSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.conversations.ConversationsState"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.codecompletions.psi.CompletionContextService"/>
+    <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.mcp.McpSettings"/>
+    <applicationService
+      serviceImplementation="ee.carlrobert.codegpt.services.llama.ServerLogsManager"/>
+    <projectService serviceImplementation="ee.carlrobert.codegpt.services.ExecutableRunnerService"/>
+    <inline.completion.provider
+      id="CodeGPTInlineCompletionProvider"
+      implementation="ee.carlrobert.codegpt.codecompletions.DebouncedCodeCompletionProvider"/>
+    <toolWindow id="ProxyAI" icon="ee.carlrobert.codegpt.Icons.DefaultSmall" anchor="right"
+      factoryClass="ee.carlrobert.codegpt.toolwindow.ProxyAIToolWindowFactory"/>
+    <notificationGroup id="proxyai.notification.group" displayType="BALLOON"
+      key="notification.group.name"/>
+    <notificationGroup id="proxyai.notification.sticky.group" displayType="STICKY_BALLOON"
+      key="notification.group.sticky.name"/>
+    <notificationGroup id="ProxyAI.MCP.Notifications" displayType="BALLOON"
+      key="notification.group.mcp.name"/>
+    <statusBarWidgetFactory order="first" id="ee.carlrobert.codegpt.statusbar.widget"
+      implementation="ee.carlrobert.codegpt.statusbar.CodeGPTStatusBarWidgetFactory"/>
+    <nameSuggestionProvider
+      implementation="ee.carlrobert.codegpt.refactorings.DefaultNameSuggestionProvider"/>
+  </extensions>
 
 
-    <resource-bundle>messages.codegpt</resource-bundle>
+  <resource-bundle>messages.codegpt</resource-bundle>
 
-    <actions>
+  <actions>
+    <action
+      id="codegpt.acceptNextEdit"
+      text="Accept Next-Edit"
+      class="ee.carlrobert.codegpt.nextedit.AcceptNextEditAction">
+      <keyboard-shortcut first-keystroke="TAB" keymap="$default"/>
+    </action>
+
+    <action
+      id="codegpt.triggerCompletion"
+      text="Trigger Completion Manually"
+      class="ee.carlrobert.codegpt.nextedit.TriggerNextEditAction">
+      <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
+    </action>
+
+    <action
+      id="codegpt.acceptInlineEdit"
+      text="Accept Inline Edit"
+      class="ee.carlrobert.codegpt.actions.editor.AcceptInlineEditAction">
+      <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
+    </action>
+
+    <group id="CodeGPTEditorPopup">
+      <group id="action.editor.group.EditorActionGroup"
+        text="ProxyAI"
+        class="com.intellij.openapi.actionSystem.DefaultActionGroup"
+        popup="true"
+        icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
         <action
-                id="codegpt.acceptNextEdit"
-                text="Accept Next-Edit"
-                class="ee.carlrobert.codegpt.nextedit.AcceptNextEditAction">
-            <keyboard-shortcut first-keystroke="TAB" keymap="$default"/>
+          id="CodeGPT.NewChat"
+          class="ee.carlrobert.codegpt.actions.editor.OpenNewChatAction"
+          text="New Chat"
+          description="Creates a new chat session">
+          <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift N"
+            replace-all="true"/>
         </action>
-
         <action
-                id="codegpt.triggerCompletion"
-                text="Trigger Completion Manually"
-                class="ee.carlrobert.codegpt.nextedit.TriggerNextEditAction">
-            <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
+          id="CodeGPT.ContextMenuInlineEditAction"
+          text="Inline Edit"
+          description="Edit code inline from editor's context menu"
+          class="ee.carlrobert.codegpt.actions.editor.InlineEditContextMenuAction">
+          <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift K" replace-all="true"/>
         </action>
-
         <action
-                id="codegpt.acceptInlineEdit"
-                text="Accept Inline Edit"
-                class="ee.carlrobert.codegpt.actions.editor.AcceptInlineEditAction">
-            <keyboard-shortcut first-keystroke="ctrl ENTER" keymap="$default"/>
+          id="CodeGPT.AskQuestion"
+          text="Ask Question"
+          class="ee.carlrobert.codegpt.actions.editor.AskQuestionAction">
+          <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift Q"
+            replace-all="true"/>
         </action>
-
-        <group id="CodeGPTEditorPopup">
-            <group id="action.editor.group.EditorActionGroup"
-                   text="ProxyAI"
-                   class="com.intellij.openapi.actionSystem.DefaultActionGroup"
-                   popup="true"
-                   icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
-                <action
-                        id="CodeGPT.NewChat"
-                        class="ee.carlrobert.codegpt.actions.editor.OpenNewChatAction"
-                        text="New Chat"
-                        description="Creates a new chat session">
-                    <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift N" replace-all="true"/>
-                </action>
-                <action
-                  id="CodeGPT.ContextMenuInlineEditAction"
-                  text="Inline Edit"
-                  description="Edit code inline from editor's context menu"
-                  class="ee.carlrobert.codegpt.actions.editor.InlineEditContextMenuAction">
-                    <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift K" replace-all="true"/>
-                </action>
-                <action
-                        id="CodeGPT.AskQuestion"
-                        text="Ask Question"
-                        class="ee.carlrobert.codegpt.actions.editor.AskQuestionAction">
-                    <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift Q" replace-all="true"/>
-                </action>
-                <separator/>
-                <group id="CodeGPT.MyEditorActionsGroup"
-                       text="My Actions"
-                       class="com.intellij.openapi.actionSystem.DefaultActionGroup">
-                </group>
-            </group>
-            <add-to-group group-id="EditorPopupMenu1" anchor="first"/>
-            <separator/>
+        <separator/>
+        <group id="CodeGPT.MyEditorActionsGroup"
+          text="My Actions"
+          class="com.intellij.openapi.actionSystem.DefaultActionGroup">
         </group>
-        <action id="CodeGPT.TriggerEditorPopup"
-                class="ee.carlrobert.codegpt.actions.editor.ShowEditorActionGroupAction"
-                text="Show ProxyAI Actions">
-            <keyboard-shortcut first-keystroke="ctrl shift alt m" keymap="$default"/>
-        </action>
-        <group id="CodeGPT.ProjectViewPopupMenuRootGroup">
-            <group id="CodeGPT.ProjectViewPopupMenuGroup"
-                   text="ProxyAI"
-                   class="com.intellij.openapi.actionSystem.DefaultActionGroup"
-                   popup="true"
-                   icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
-                <action
-                        id="CodeGPT.IncludeFilesInContextAction"
-                        text="Include Files In Prompt"
-                        class="ee.carlrobert.codegpt.actions.IncludeFilesInContextAction"/>
-            </group>
-            <add-to-group
-                    group-id="ProjectViewPopupMenu"
-                    relative-to-action="ProjectViewPopupMenuRefactoringGroup"
-                    anchor="before"/>
-            <separator/>
-        </group>
-
-        <group id="CodeGPT.FloatingCodeToolbarMenuRootGroup">
-            <action
-              id="CodeGPT.FloatingMenuInlineEditAction"
-              text="Inline Edit"
-              description="Edit code inline from editor's floating menu"
-              class="ee.carlrobert.codegpt.actions.editor.InlineEditFloatingMenuAction">
-                <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift K" replace-all="true"/>
-            </action>
-            <add-to-group
-                    group-id="Floating.CodeToolbar"
-                    relative-to-action="ProjectViewPopupMenuRefactoringGroup"
-                    anchor="before"/>
-            <separator/>
-        </group>
-
+      </group>
+      <add-to-group group-id="EditorPopupMenu1" anchor="first"/>
+      <separator/>
+    </group>
+    <action id="CodeGPT.TriggerEditorPopup"
+      class="ee.carlrobert.codegpt.actions.editor.ShowEditorActionGroupAction"
+      text="Show ProxyAI Actions">
+      <keyboard-shortcut first-keystroke="ctrl shift alt m" keymap="$default"/>
+    </action>
+    <group id="CodeGPT.ProjectViewPopupMenuRootGroup">
+      <group id="CodeGPT.ProjectViewPopupMenuGroup"
+        text="ProxyAI"
+        class="com.intellij.openapi.actionSystem.DefaultActionGroup"
+        popup="true"
+        icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
         <action
-                id="CodeGPT.AddSelectionToContext"
-                class="ee.carlrobert.codegpt.actions.editor.AddSelectionToContextAction"
-                text="Include Selection in Prompt"
-                description="Adds the selected text to the ProxyAI context">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift I" replace-all="true"/>
+          id="CodeGPT.IncludeFilesInContextAction"
+          text="Include Files In Prompt"
+          class="ee.carlrobert.codegpt.actions.IncludeFilesInContextAction"/>
+      </group>
+      <add-to-group
+        group-id="ProjectViewPopupMenu"
+        relative-to-action="ProjectViewPopupMenuRefactoringGroup"
+        anchor="before"/>
+      <separator/>
+    </group>
 
-            <add-to-group group-id="action.editor.group.EditorActionGroup" anchor="after" relative-to-action="CodeGPT.NewChat"/>
-            <add-to-group group-id="CodeGPT.FloatingCodeToolbarMenuRootGroup" anchor="after" relative-to-action="CodeGPT.FloatingMenuInlineEditAction"/>
-        </action>
+    <group id="CodeGPT.FloatingCodeToolbarMenuRootGroup">
+      <action
+        id="CodeGPT.FloatingMenuInlineEditAction"
+        text="Inline Edit"
+        description="Edit code inline from editor's floating menu"
+        class="ee.carlrobert.codegpt.actions.editor.InlineEditFloatingMenuAction">
+        <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift K" replace-all="true"/>
+      </action>
+      <add-to-group
+        group-id="Floating.CodeToolbar"
+        relative-to-action="ProjectViewPopupMenuRefactoringGroup"
+        anchor="before"/>
+      <separator/>
+    </group>
 
-        <!-- Inline Edit Keyboard Shortcuts -->
-        <action
-          id="CodeGPT.AcceptAllInlineEdit"
-          class="ee.carlrobert.codegpt.inlineedit.AcceptAllInlineEditAction"
-          text="Accept All Inline Edit Changes"
-          description="Accept all changes in the Inline Edit diff view">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift ENTER" replace-all="true"/>
-            <add-to-group group-id="EditorActions" anchor="last"/>
-        </action>
+    <action
+      id="CodeGPT.AddSelectionToContext"
+      class="ee.carlrobert.codegpt.actions.editor.AddSelectionToContextAction"
+      text="Include Selection in Prompt"
+      description="Adds the selected text to the ProxyAI context">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift I" replace-all="true"/>
 
-        <action
-          id="CodeGPT.RejectAllInlineEdit"
-          class="ee.carlrobert.codegpt.inlineedit.RejectAllInlineEditAction"
-          text="Reject All Inline Edit Changes"
-          description="Reject all changes in the Inline Edit diff view">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift BACK_SPACE" replace-all="true"/>
-            <add-to-group group-id="EditorActions" anchor="last"/>
-        </action>
+      <add-to-group group-id="action.editor.group.EditorActionGroup" anchor="after"
+        relative-to-action="CodeGPT.NewChat"/>
+      <add-to-group group-id="CodeGPT.FloatingCodeToolbarMenuRootGroup" anchor="after"
+        relative-to-action="CodeGPT.FloatingMenuInlineEditAction"/>
+    </action>
 
-        <action
-          id="CodeGPT.RejectInlineEdit"
-          class="ee.carlrobert.codegpt.inlineedit.RejectInlineEditAction"
-          text="Reject Inline Edit Changes"
-          description="Reject changes in the Inline Edit diff view">
-            <keyboard-shortcut keymap="$default" first-keystroke="ESCAPE" replace-all="true"/>
-            <add-to-group group-id="EditorActions" anchor="last"/>
-        </action>
+    <!-- Inline Edit Keyboard Shortcuts -->
+    <action
+      id="CodeGPT.AcceptAllInlineEdit"
+      class="ee.carlrobert.codegpt.inlineedit.AcceptAllInlineEditAction"
+      text="Accept All Inline Edit Changes"
+      description="Accept all changes in the Inline Edit diff view">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift ENTER" replace-all="true"/>
+      <add-to-group group-id="EditorActions" anchor="last"/>
+    </action>
 
-        <action
-          id="CodeGPT.AcceptCurrentInlineEdit"
-          class="ee.carlrobert.codegpt.inlineedit.AcceptCurrentInlineEditAction"
-          text="Accept Current Inline Edit Change"
-          description="Accept the current or next pending inline edit change">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl ENTER" replace-all="true"/>
-            <add-to-group group-id="EditorActions" anchor="last"/>
-        </action>
+    <action
+      id="CodeGPT.RejectAllInlineEdit"
+      class="ee.carlrobert.codegpt.inlineedit.RejectAllInlineEditAction"
+      text="Reject All Inline Edit Changes"
+      description="Reject all changes in the Inline Edit diff view">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift BACK_SPACE"
+        replace-all="true"/>
+      <add-to-group group-id="EditorActions" anchor="last"/>
+    </action>
 
-        <action
-          id="CodeGPT.RejectCurrentInlineEdit"
-          class="ee.carlrobert.codegpt.inlineedit.RejectCurrentInlineEditAction"
-          text="Reject Current Inline Edit Change"
-          description="Reject the current or next pending inline edit change">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl BACK_SPACE" replace-all="true"/>
-            <add-to-group group-id="EditorActions" anchor="last"/>
-        </action>
+    <action
+      id="CodeGPT.RejectInlineEdit"
+      class="ee.carlrobert.codegpt.inlineedit.RejectInlineEditAction"
+      text="Reject Inline Edit Changes"
+      description="Reject changes in the Inline Edit diff view">
+      <keyboard-shortcut keymap="$default" first-keystroke="ESCAPE" replace-all="true"/>
+      <add-to-group group-id="EditorActions" anchor="last"/>
+    </action>
 
-        <action
-                id="codegpt.openSettings"
-                text="Open Settings"
-                class="ee.carlrobert.codegpt.actions.OpenSettingsAction">
-            <override-text place="MainMenu" text="Open Settings"/>
-            <override-text place="popup" use-text-of-place="MainMenu"/>
-        </action>
-        <action
-                id="statusbar.enableCompletions"
-                class="ee.carlrobert.codegpt.actions.EnableCompletionsAction">
-            <keyboard-shortcut first-keystroke="ctrl shift alt c" keymap="$default"/>
+    <action
+      id="CodeGPT.AcceptCurrentInlineEdit"
+      class="ee.carlrobert.codegpt.inlineedit.AcceptCurrentInlineEditAction"
+      text="Accept Current Inline Edit Change"
+      description="Accept the current or next pending inline edit change">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl ENTER" replace-all="true"/>
+      <add-to-group group-id="EditorActions" anchor="last"/>
+    </action>
 
-            <override-text place="MainMenu"/>
-            <override-text place="popup" use-text-of-place="MainMenu"/>
-        </action>
-        <action
-                id="statusbar.disableCompletions"
-                class="ee.carlrobert.codegpt.actions.DisableCompletionsAction">
-            <keyboard-shortcut first-keystroke="ctrl shift alt c" keymap="$default"/>
+    <action
+      id="CodeGPT.RejectCurrentInlineEdit"
+      class="ee.carlrobert.codegpt.inlineedit.RejectCurrentInlineEditAction"
+      text="Reject Current Inline Edit Change"
+      description="Reject the current or next pending inline edit change">
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl BACK_SPACE" replace-all="true"/>
+      <add-to-group group-id="EditorActions" anchor="last"/>
+    </action>
 
-            <override-text place="MainMenu"/>
-            <override-text place="popup" use-text-of-place="MainMenu"/>
-        </action>
-        <action
-                id="statusbar.startServer"
-                class="ee.carlrobert.codegpt.actions.StartServerAction">
-            <keyboard-shortcut first-keystroke="ctrl shift alt s" keymap="$default"/>
+    <action
+      id="codegpt.openSettings"
+      text="Open Settings"
+      class="ee.carlrobert.codegpt.actions.OpenSettingsAction">
+      <override-text place="MainMenu" text="Open Settings"/>
+      <override-text place="popup" use-text-of-place="MainMenu"/>
+    </action>
+    <action
+      id="statusbar.enableCompletions"
+      class="ee.carlrobert.codegpt.actions.EnableCompletionsAction">
+      <keyboard-shortcut first-keystroke="ctrl shift alt c" keymap="$default"/>
 
-            <override-text place="MainMenu"/>
-            <override-text place="popup" use-text-of-place="MainMenu"/>
-        </action>
-        <action
-                id="statusbar.stopServer"
-                class="ee.carlrobert.codegpt.actions.StopServerAction">
-            <keyboard-shortcut first-keystroke="ctrl shift alt s" keymap="$default"/>
+      <override-text place="MainMenu"/>
+      <override-text place="popup" use-text-of-place="MainMenu"/>
+    </action>
+    <action
+      id="statusbar.disableCompletions"
+      class="ee.carlrobert.codegpt.actions.DisableCompletionsAction">
+      <keyboard-shortcut first-keystroke="ctrl shift alt c" keymap="$default"/>
 
-            <override-text place="MainMenu"/>
-            <override-text place="popup" use-text-of-place="MainMenu"/>
-        </action>
+      <override-text place="MainMenu"/>
+      <override-text place="popup" use-text-of-place="MainMenu"/>
+    </action>
+    <action
+      id="statusbar.startServer"
+      class="ee.carlrobert.codegpt.actions.StartServerAction">
+      <keyboard-shortcut first-keystroke="ctrl shift alt s" keymap="$default"/>
 
-        <group id="codegpt.statusBarPopup">
-            <reference id="codegpt.openSettings"/>
-            <separator/>
-            <reference id="statusbar.stopServer"/>
-            <reference id="statusbar.startServer"/>
-            <reference id="statusbar.disableCompletions"/>
-            <reference id="statusbar.enableCompletions"/>
-        </group>
+      <override-text place="MainMenu"/>
+      <override-text place="popup" use-text-of-place="MainMenu"/>
+    </action>
+    <action
+      id="statusbar.stopServer"
+      class="ee.carlrobert.codegpt.actions.StopServerAction">
+      <keyboard-shortcut first-keystroke="ctrl shift alt s" keymap="$default"/>
 
-    </actions>
+      <override-text place="MainMenu"/>
+      <override-text place="popup" use-text-of-place="MainMenu"/>
+    </action>
+
+    <group id="codegpt.statusBarPopup">
+      <reference id="codegpt.openSettings"/>
+      <separator/>
+      <reference id="statusbar.stopServer"/>
+      <reference id="statusbar.startServer"/>
+      <reference id="statusbar.disableCompletions"/>
+      <reference id="statusbar.enableCompletions"/>
+    </group>
+
+  </actions>
 </idea-plugin>

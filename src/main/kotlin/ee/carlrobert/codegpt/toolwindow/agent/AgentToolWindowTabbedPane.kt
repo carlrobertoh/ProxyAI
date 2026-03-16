@@ -330,12 +330,15 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
 
     fun resetCurrentlyActiveTabPanel() {
         tryFindActiveTabPanel().ifPresent { tabPanel ->
-            val oldDisplayName = tabPanel.getAgentSession().displayName
+            val oldSession = tabPanel.getAgentSession()
+            val oldDisplayName = oldSession.displayName
             closeTabAt(selectedIndex)
             val newSession = AgentSession(
                 UUID.randomUUID().toString(),
                 Conversation(),
-                displayName = oldDisplayName
+                displayName = oldDisplayName,
+                serviceType = oldSession.serviceType,
+                externalAgentId = oldSession.externalAgentId
             )
             project.service<AgentToolWindowContentManager>().createNewAgentTab(newSession)
             repaint()
@@ -423,7 +426,8 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
                 activeTabMapping.entries
                     .filter { it.key != selectedPopupTabTitle }
                     .forEach { entry ->
-                        project.service<AgentToolWindowContentManager>().removeSession(entry.value.getSessionId())
+                        project.service<AgentToolWindowContentManager>()
+                            .removeSession(entry.value.getSessionId())
                         Disposer.dispose(entry.value)
                     }
 

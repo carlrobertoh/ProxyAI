@@ -8,21 +8,23 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
+import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentService
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
 import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlin.time.Clock
 import kotlinx.serialization.json.JsonNull
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.Path
+import kotlin.time.Clock
 import ai.koog.prompt.message.Message as PromptMessage
 
 internal fun interface AgentRuntimeFactory {
@@ -112,6 +114,12 @@ class AgentService(private val project: Project) {
 
         val provider = service<ModelSettings>().getServiceForFeature(FeatureType.AGENT)
         val contentManager = project.service<AgentToolWindowContentManager>()
+        val session = contentManager.getSession(sessionId) ?: return
+        if (!session.externalAgentId.isNullOrBlank()) {
+            submitExternalMessage(session, message, events, provider)
+            return
+        }
+
         val runtimeAgentId = contentManager.getSession(sessionId)?.runtimeAgentId
         val runtime = runCatching {
             ensureSessionRuntime(sessionId, provider, events)
@@ -156,6 +164,17 @@ class AgentService(private val project: Project) {
     }
 
     fun cancelCurrentRun(sessionId: String) {
+        val session = project.service<AgentToolWindowContentManager>().getSession(sessionId)
+        if (session?.externalAgentId != null) {
+            runCatching {
+                runBlocking {
+                    project.service<ExternalAcpAgentService>()
+                        .cancelSession(sessionId, session.externalAgentSessionId)
+                }
+            }.onFailure { ex ->
+                logger.warn("Failed cancelling external ACP session for session=$sessionId", ex)
+            }
+        }
         sessionJobs[sessionId]?.cancel()
         sessionJobs.remove(sessionId)
     }
@@ -171,6 +190,9 @@ class AgentService(private val project: Project) {
                 logger.warn("Failed closing managed agent service for session=$sessionId", ex)
             }
         }
+        project.service<ExternalAcpAgentService>().closeSession(sessionId)
+        project.service<AgentToolWindowContentManager>()
+            .getSession(sessionId)?.externalAgentSessionId = null
         project.service<AgentMcpContextService>().clear(sessionId)
     }
 
@@ -188,6 +210,40 @@ class AgentService(private val project: Project) {
 
     fun getAgentForSession(sessionId: String): AIAgent<MessageWithContext, String>? {
         return sessionAgents[sessionId]
+    }
+
+    private fun submitExternalMessage(
+        session: AgentSession,
+        message: MessageWithContext,
+        events: AgentEvents,
+        provider: ServiceType
+    ) {
+        val externalAgentService = project.service<ExternalAcpAgentService>()
+        sessionJobs[session.sessionId] = CoroutineScope(Dispatchers.IO).launch {
+            try {
+                externalAgentService.runPromptLoop(
+                    session = session,
+                    firstMessage = message,
+                    events = events,
+                    pollNextQueued = {
+                        val queue = pendingMessages[session.sessionId] ?: return@runPromptLoop null
+                        if (queue.isEmpty()) {
+                            null
+                        } else {
+                            queue.removeFirst()
+                        }
+                    }
+                )
+            } catch (_: CancellationException) {
+                return@launch
+            } catch (ex: Throwable) {
+                logger.error(ex)
+                events.onAgentException(provider, ex)
+            } finally {
+                events.onRunCheckpointUpdated(message.id, null)
+                sessionJobs.remove(session.sessionId)
+            }
+        }
     }
 
     private fun updateMcpContext(sessionId: String, message: MessageWithContext) {

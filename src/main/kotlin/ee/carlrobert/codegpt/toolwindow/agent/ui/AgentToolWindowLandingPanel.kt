@@ -40,6 +40,7 @@ import ee.carlrobert.codegpt.toolwindow.agent.history.AgentHistoryListPanel
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel
 import ee.carlrobert.codegpt.ui.UIUtil
 import ee.carlrobert.codegpt.ui.UIUtil.createTextPane
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import com.intellij.openapi.Disposable
@@ -336,16 +337,19 @@ class AgentToolWindowLandingPanel(private val project: Project) : BorderLayoutPa
         if (disposed || project.isDisposed) return
         val shouldRefresh = offset == 0 && refreshHistory
         backgroundScope.launch {
-            val page = runCatching {
+            val page = try {
                 historyService.listThreadsPage(
                     query = query,
                     offset = offset,
                     limit = limit,
                     refresh = shouldRefresh
                 )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
+                logger.warn("Failed to load checkpoint history", throwable)
+                null
             }
-                .onFailure { logger.warn("Failed to load checkpoint history", it) }
-                .getOrNull()
 
             if (disposed || project.isDisposed) return@launch
             runInEdt {
@@ -361,20 +365,26 @@ class AgentToolWindowLandingPanel(private val project: Project) : BorderLayoutPa
     private fun openCheckpointThread(thread: AgentHistoryThreadSummary) {
         if (disposed || project.isDisposed) return
         backgroundScope.launch {
-            val checkpoint = runCatching {
+            val checkpoint = try {
                 historyService.loadCheckpoint(thread.latest)
-            }.onFailure {
-                logger.warn("Failed to open checkpoint thread ${thread.agentId}", it)
-            }.getOrNull() ?: return@launch
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
+                logger.warn("Failed to open checkpoint thread ${thread.agentId}", throwable)
+                null
+            } ?: return@launch
 
-            val conversation = runCatching {
+            val conversation = try {
                 AgentCheckpointConversationMapper.toConversation(
                     checkpoint = checkpoint,
                     projectInstructions = loadProjectInstructions(project.basePath)
                 )
-            }.onFailure {
-                logger.warn("Failed to open checkpoint thread ${thread.agentId}", it)
-            }.getOrNull() ?: return@launch
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
+                logger.warn("Failed to open checkpoint thread ${thread.agentId}", throwable)
+                null
+            } ?: return@launch
 
             if (disposed || project.isDisposed) return@launch
             runInEdt {

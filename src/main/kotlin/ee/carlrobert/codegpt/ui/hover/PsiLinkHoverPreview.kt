@@ -9,6 +9,7 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
+import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiElement
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.awt.RelativePoint
@@ -18,6 +19,7 @@ import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import ee.carlrobert.codegpt.util.NavigationResolverFactory
+import ee.carlrobert.codegpt.util.EditorUtil
 import java.awt.Dimension
 import java.awt.Image
 import java.awt.MouseInfo
@@ -42,6 +44,8 @@ object PsiLinkHoverPreview {
     private const val FILE_PREFIX = "file://"
     private const val HOVER_DELAY_MS = 250L
     private const val EXIT_CLOSE_DELAY_MS = 120L
+    private const val FILE_PREVIEW_MAX_LINES = 120
+    private const val FILE_PREVIEW_MAX_CHARS = 6000
 
     @JvmStatic
     fun install(project: Project, textPane: JTextPane) {
@@ -202,16 +206,12 @@ object PsiLinkHoverPreview {
 
             val maxW = JBUI.scale(600)
             val maxH = JBUI.scale(400)
-            editor.size = Dimension(maxW, Int.MAX_VALUE)
-            val pref = editor.preferredSize
-            val w = min(pref.width.coerceAtLeast(200), maxW)
-            val h = min(pref.height.coerceAtLeast(50), maxH)
-            scroll.preferredSize = Dimension(w, h)
+            scroll.preferredSize = computeHoverSize(editor, maxW, maxH)
 
             val newPopup = PopupFactoryImpl.getInstance()
                 .createComponentPopupBuilder(scroll, null)
                 .setRequestFocus(false)
-                .setResizable(true)
+                .setResizable(false)
                 .setMovable(false)
                 .setShowShadow(true)
                 .setCancelOnClickOutside(true)
@@ -262,6 +262,9 @@ object PsiLinkHoverPreview {
             text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
         private fun buildPsiHtmlOffEdt(element: Any?): String? {
+            if (element is PsiFile) {
+                return buildFilePreviewHtml(element)
+            }
             if (element !is PsiElement) return null
 
             val provider = DocumentationManager.getProviderFromElement(element)
@@ -270,6 +273,50 @@ object PsiLinkHoverPreview {
             } catch (t: Throwable) {
                 logger.warn("Failed to generate doc for ${element.text}", t)
                 null
+            }
+        }
+
+        private fun buildFilePreviewHtml(file: PsiFile): String? {
+            val virtualFile = file.virtualFile ?: return null
+            val rawContent = EditorUtil.getFileContent(virtualFile)
+            val excerpt = rawContent.lineSequence()
+                .take(FILE_PREVIEW_MAX_LINES)
+                .joinToString("\n")
+                .take(FILE_PREVIEW_MAX_CHARS)
+            val truncated = excerpt.length < rawContent.length ||
+                    rawContent.lineSequence().drop(FILE_PREVIEW_MAX_LINES).any()
+            val renderedContent = buildString {
+                append(escape(excerpt.ifBlank { "<empty file>" }))
+                if (truncated) {
+                    append("\n...")
+                }
+            }
+            return """
+                <html>
+                <body>
+                <div style="font-weight:bold;margin-bottom:4px;">${escape(virtualFile.name)}</div>
+                <div style="color:#808080;margin-bottom:8px;">${escape(virtualFile.path)}</div>
+                <pre style="white-space:pre-wrap;margin:0;font-family:monospace;">$renderedContent</pre>
+                </body>
+                </html>
+            """.trimIndent()
+        }
+
+        private fun computeHoverSize(
+            editor: DocumentationHintEditorPane,
+            maxW: Int,
+            maxH: Int
+        ): Dimension {
+            return runCatching {
+                editor.size = Dimension(maxW, maxH)
+                val preferredSize = editor.preferredSize
+                Dimension(
+                    min(preferredSize.width.coerceAtLeast(200), maxW),
+                    min(preferredSize.height.coerceAtLeast(50), maxH)
+                )
+            }.getOrElse { error ->
+                logger.warn("Failed to measure hover preview; using fallback size", error)
+                Dimension(JBUI.scale(360), JBUI.scale(220))
             }
         }
     }

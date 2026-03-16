@@ -85,6 +85,7 @@ class AgentToolWindowPanel(
     fun getTabbedPane(): AgentToolWindowTabbedPane = tabbedPane
 
     private fun showTabsView() {
+        disposeLandingPanel()
         centerLayout.show(centerPanel, TABS_CARD)
     }
 
@@ -107,7 +108,8 @@ class AgentToolWindowPanel(
             project = project,
             agentSession = draftSession,
             draftSubmitHandler = { message ->
-                val panel = contentManager.createNewAgentTab()
+                disposeLandingPanel()
+                val panel = contentManager.createNewAgentTab(draftSession)
                 panel.submitMessage(message)
             }
         )

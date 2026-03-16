@@ -19,10 +19,14 @@ class McpClientManager {
     fun createClient(serverDetails: McpServerDetailsState): McpSyncClient? {
         return try {
             val command = serverDetails.command ?: "npx"
-            val resolvedCommand = McpCommandValidator.resolveCommand(command)
+            val resolvedCommand = McpCommandValidator.resolveCommand(
+                command = command,
+                extraEnvironment = serverDetails.environmentVariables
+            )
                 ?: throw IllegalStateException(McpCommandValidator.getCommandNotFoundMessage(command))
 
-            val enhancedEnv = McpPathHelper.createEnvironment(serverDetails.environmentVariables)
+            val enhancedEnv =
+                McpPathHelper.createEnvironment(serverDetails.environmentVariables, resolvedCommand)
             val connectionParams = ServerParameters.builder(resolvedCommand)
                 .args(*serverDetails.arguments.toTypedArray())
                 .env(enhancedEnv)
@@ -57,7 +61,10 @@ class McpClientManager {
 
         return try {
             val command = serverDetails.command ?: "npx"
-            val resolvedCommand = McpCommandValidator.resolveCommand(command)
+            val resolvedCommand = McpCommandValidator.resolveCommand(
+                command = command,
+                extraEnvironment = serverDetails.environmentVariables
+            )
             if (resolvedCommand == null) {
                 logger.warn("Command not found for '${serverDetails.name}': $command")
                 return ConnectionTestResult(

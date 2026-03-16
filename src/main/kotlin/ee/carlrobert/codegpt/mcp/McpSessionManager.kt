@@ -37,7 +37,10 @@ class McpSessionManager {
                     ?: throw IllegalArgumentException("Server with ID $serverId not found")
 
                 val command = serverDetails.command ?: "npx"
-                val resolvedCommand = McpCommandValidator.resolveCommand(command)
+                val resolvedCommand = McpCommandValidator.resolveCommand(
+                    command = command,
+                    extraEnvironment = serverDetails.environmentVariables
+                )
                 if (resolvedCommand == null) {
                     val errorMsg = McpCommandValidator.getCommandNotFoundMessage(command)
                     logger.error(
@@ -47,7 +50,7 @@ class McpSessionManager {
                 }
 
                 val mergedEnv =
-                    McpPathHelper.createEnvironment(serverDetails.environmentVariables)
+                    McpPathHelper.createEnvironment(serverDetails.environmentVariables, resolvedCommand)
 
                 val serverParameters = ServerParameters.builder(resolvedCommand)
                     .args(*serverDetails.arguments.toTypedArray())

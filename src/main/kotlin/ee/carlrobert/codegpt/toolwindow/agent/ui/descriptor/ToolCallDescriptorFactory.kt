@@ -93,8 +93,16 @@ object ToolCallDescriptorFactory {
         val mcpArgs = args as? McpTool.Args
         val mcpResult = result as? McpTool.Result
         val resolvedToolName = mcpResult?.toolName ?: mcpArgs?.toolName ?: toolName
-        val server = mcpResult?.serverName ?: mcpResult?.serverId ?: mcpArgs?.serverName ?: mcpArgs?.serverId
+        val server =
+            mcpResult?.serverName ?: mcpResult?.serverId ?: mcpArgs?.serverName ?: mcpArgs?.serverId
         val titleMain = resolvedToolName
+        val summary = mcpArgs?.arguments
+            ?.entries
+            ?.take(2)
+            ?.joinToString(" · ") { (key, value) ->
+                val valueText = value.toString().trim('"')
+                "$key=${truncateQuery(valueText)}"
+            }
 
         val actions = if (mcpResult != null) {
             listOf(
@@ -117,7 +125,8 @@ object ToolCallDescriptorFactory {
             result = result,
             projectId = projectId,
             secondaryBadges = listOfNotNull(serverBadge),
-            actions = actions
+            actions = actions,
+            summary = summary
         )
     }
 
@@ -133,6 +142,7 @@ object ToolCallDescriptorFactory {
                     showTextDialog(result.loadedContent, "Skill Content: ${result.name}")
                 }
             )
+
             else -> emptyList()
         }
         return ToolCallDescriptor(
@@ -474,7 +484,8 @@ object ToolCallDescriptorFactory {
 
     private fun buildSearchBadges(result: Any?): List<Badge> {
         return if (result is IntelliJSearchTool.Result) {
-            listOf(Badge(
+            listOf(
+                Badge(
                 "[${result.totalMatches} matches]",
                 JBColor.BLUE,
                 action = { showTextDialog(result.output, "Search Results") }
@@ -769,10 +780,10 @@ object ToolCallDescriptorFactory {
     ): ToolCallDescriptor {
         return ToolCallDescriptor(
             kind = ToolKind.OTHER,
-            icon = AllIcons.Actions.Help,
-            titlePrefix = "Tool:",
+            icon = AllIcons.Actions.Execute,
+            titlePrefix = "",
             titleMain = toolName,
-            tooltip = "Tool: $toolName",
+            tooltip = toolName,
             args = args,
             result = result,
             projectId = projectId
@@ -817,7 +828,8 @@ object ToolCallDescriptorFactory {
 
     private fun buildDocsBadges(result: Any?): List<Badge> {
         return if (result is GetLibraryDocsTool.Result.Success) {
-            listOf(Badge(
+            listOf(
+                Badge(
                 "[View Results]",
                 JBColor.BLUE,
                 action = {
@@ -836,7 +848,8 @@ object ToolCallDescriptorFactory {
         return when (result) {
             is WebSearchTool.Result -> {
                 val argsObj = args as? WebSearchTool.Args
-                val badges = mutableListOf(Badge(
+                val badges = mutableListOf(
+                    Badge(
                     "[${result.results.size} results]",
                     JBColor.BLUE,
                     action = { showWebResultsDialog(result) }
