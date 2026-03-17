@@ -747,7 +747,9 @@ private class CustomOpenAIModelProvider : ModelProvider {
                             LLMCapability.Document,
                             LLMCapability.Completion,
                             LLMCapability.MultipleChoices,
-                        ) + additionalOpenAICapability
+                        ) + additionalOpenAICapability,
+                        contextLength = svc.contextWindowSize.coerceAtLeast(1L),
+                        maxOutputTokens = svc.maxOutputTokens.coerceAtLeast(1L)
                     ),
                     displayName = displayName,
                     serviceId = serviceId,

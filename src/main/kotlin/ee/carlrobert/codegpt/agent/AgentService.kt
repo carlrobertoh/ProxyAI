@@ -4,6 +4,7 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.AIAgentService
 import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
+import ai.koog.prompt.llm.LLMCapability
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -48,9 +49,17 @@ class AgentService(private val project: Project) {
     private data class SessionRuntime(
         val service: AIAgentService<MessageWithContext, String, out AIAgent<MessageWithContext, String>>,
         val provider: ServiceType,
-        val modelId: String,
+        val modelSignature: ModelRuntimeSignature,
         val selectedServerIds: Set<String>,
         val events: AgentEvents
+    )
+
+    private data class ModelRuntimeSignature(
+        val selectionId: String,
+        val modelId: String,
+        val contextLength: Long?,
+        val maxOutputTokens: Long?,
+        val usesResponsesApi: Boolean,
     )
 
     private val sessionJobs = ConcurrentHashMap<String, Job>()
@@ -312,14 +321,14 @@ class AgentService(private val project: Project) {
         provider: ServiceType,
         events: AgentEvents
     ): SessionRuntime {
-        val modelId = service<ModelSettings>().getAgentModel().id
+        val modelSignature = currentModelSignature()
         val selectedServerIds = project.service<AgentMcpContextService>()
             .get(sessionId)
             ?.selectedServerIds ?: emptySet()
         val existing = sessionRuntimes[sessionId]
         if (existing != null &&
             existing.provider == provider &&
-            existing.modelId == modelId &&
+            existing.modelSignature == modelSignature &&
             existing.selectedServerIds == selectedServerIds &&
             existing.events === events
         ) {
@@ -343,12 +352,24 @@ class AgentService(private val project: Project) {
                 pendingMessages = pendingMessages
             ),
             provider = provider,
-            modelId = modelId,
+            modelSignature = modelSignature,
             selectedServerIds = selectedServerIds,
             events = events
         )
         sessionRuntimes[sessionId] = created
         return created
+    }
+
+    private fun currentModelSignature(): ModelRuntimeSignature {
+        val selection = service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
+        val model = selection.llmModel
+        return ModelRuntimeSignature(
+            selectionId = selection.selectionId,
+            modelId = model.id,
+            contextLength = model.contextLength,
+            maxOutputTokens = model.maxOutputTokens,
+            usesResponsesApi = model.supports(LLMCapability.OpenAIEndpoint.Responses)
+        )
     }
 
     private fun logCheckpointLoadFailure(sessionId: String, agentId: String, ex: Throwable) {
