@@ -338,6 +338,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
                 Conversation(),
                 displayName = oldDisplayName,
                 serviceType = oldSession.serviceType,
+                modelCode = oldSession.modelCode,
                 externalAgentId = oldSession.externalAgentId
             )
             project.service<AgentToolWindowContentManager>().createNewAgentTab(newSession)

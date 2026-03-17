@@ -45,6 +45,7 @@ import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.settings.models.LLMClientFactory
+import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -64,6 +65,7 @@ object AgentFactory {
     fun createAgent(
         agentType: AgentType,
         provider: ServiceType,
+        modelSelection: ModelSelection? = null,
         project: Project,
         sessionId: String,
         approveToolCall: (suspend (name: String, details: String) -> Boolean)? = null,
@@ -84,6 +86,7 @@ object AgentFactory {
             onCreditsAvailable
         )
         val executor = createExecutor(provider, events)
+        val agentModel = modelSelection?.llmModel ?: service<ModelSettings>().getAgentModel()
         return when (agentType) {
             AgentType.GENERAL_PURPOSE -> createGeneralPurposeAgent(
                 project,
@@ -93,6 +96,7 @@ object AgentFactory {
                 extraBehavior,
                 toolOverrides,
                 executor,
+                agentModel,
                 tokenCounter,
                 hookManager
             )
@@ -105,6 +109,7 @@ object AgentFactory {
                 extraBehavior,
                 toolOverrides,
                 executor,
+                agentModel,
                 tokenCounter,
                 hookManager
             )
@@ -113,6 +118,7 @@ object AgentFactory {
 
     fun createManualAgent(
         provider: ServiceType,
+        modelSelection: ModelSelection? = null,
         project: Project,
         sessionId: String,
         title: String,
@@ -133,6 +139,7 @@ object AgentFactory {
             onCreditsAvailable
         )
         val executor = createExecutor(provider)
+        val agentModel = modelSelection?.llmModel ?: service<ModelSettings>().getAgentModel()
 
         val selected = SubagentTool.parse(toolNames)
         val registry = createToolRegistry(
@@ -161,7 +168,7 @@ object AgentFactory {
                         """.trimIndent()
                     )
                 },
-                model = service<ModelSettings>().getAgentModel(),
+                model = agentModel,
                 maxAgentIterations = MAX_AGENT_ITERATIONS
             ),
             toolRegistry = registry,
@@ -299,6 +306,7 @@ object AgentFactory {
         extraBehavior: String? = null,
         toolOverrides: Set<SubagentTool>? = null,
         executor: PromptExecutor,
+        agentModel: LLModel,
         tokenCounter: AtomicLong?,
         hookManager: HookManager,
     ): AIAgent<String, String> {
@@ -347,7 +355,7 @@ object AgentFactory {
                         """.trimIndent()
                     )
                 },
-                model = service<ModelSettings>().getAgentModel(),
+                model = agentModel,
                 maxAgentIterations = MAX_AGENT_ITERATIONS
             ),
             toolRegistry = createToolRegistry(
@@ -379,6 +387,7 @@ object AgentFactory {
         extraBehavior: String? = null,
         toolOverrides: Set<SubagentTool>? = null,
         executor: PromptExecutor,
+        agentModel: LLModel,
         tokenCounter: AtomicLong?,
         hookManager: HookManager
     ): AIAgent<String, String> {
@@ -420,7 +429,7 @@ object AgentFactory {
                         """.trimIndent()
                     )
                 },
-                model = service<ModelSettings>().getAgentModel(),
+                model = agentModel,
                 maxAgentIterations = MAX_AGENT_ITERATIONS
             ),
             toolRegistry = createToolRegistry(

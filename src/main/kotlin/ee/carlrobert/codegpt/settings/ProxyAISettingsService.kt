@@ -8,8 +8,16 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
 import ee.carlrobert.codegpt.settings.hooks.HookConfiguration
+import ee.carlrobert.codegpt.settings.service.ServiceType
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
@@ -26,6 +34,7 @@ class ProxyAISettingsService(private val project: Project) {
     private val json = Json {
         ignoreUnknownKeys = true
         prettyPrint = true
+        explicitNulls = false
     }
     private val logger = thisLogger()
     private val settingsFile: Path by lazy {
@@ -130,7 +139,7 @@ class ProxyAISettingsService(private val project: Project) {
     }
 
     private fun snapshot(): SettingsSnapshot {
-        val settings = store.load() ?: ProxyAISettings.default()
+        val settings = (store.load() ?: ProxyAISettings.default()).normalized()
         val ignoreMatcher = IgnoreMatcher.from(settings.ignore, isWindows)
         return SettingsSnapshot(settings, ignoreMatcher)
     }
@@ -306,6 +315,10 @@ data class ProxyAISettings(
     val subagents: List<ProxyAISubagent> = emptyList(),
     val hooks: HookConfiguration? = null
 ) {
+    fun normalized(): ProxyAISettings {
+        return copy(subagents = subagents.map(ProxyAISubagent::normalized))
+    }
+
     companion object {
         private val DEFAULT_IGNORE_PATTERNS = listOf(
             ".idea/",
@@ -358,9 +371,154 @@ data class ProxyAISettings(
 }
 
 @Serializable
+data class ProxyAISubagentTarget(
+    val native: Native? = null,
+    val external: External? = null,
+) {
+    @Serializable
+    data class Native(
+        @Serializable(with = ServiceTypeCodeSerializer::class)
+        val provider: ServiceType? = null,
+        val model: String? = null,
+    ) {
+        fun normalized(): Native? {
+            val normalizedModel = model?.trim()
+            if (provider == null && normalizedModel.isNullOrBlank()) {
+                return null
+            }
+            return copy(model = normalizedModel)
+        }
+    }
+
+    @Serializable
+    data class External(
+        @SerialName("agent_id")
+        val agentId: String? = null,
+        val options: Map<String, String> = emptyMap(),
+    ) {
+        fun normalized(): External? {
+            val normalizedAgentId = agentId?.trim()
+            val normalizedOptions = options
+                .mapNotNull { (key, value) ->
+                    val optionId = key.trim()
+                    val optionValue = value.trim()
+                    if (optionId.isBlank() || optionValue.isBlank()) {
+                        null
+                    } else {
+                        optionId to optionValue
+                    }
+                }
+                .toMap(linkedMapOf())
+            if (normalizedAgentId.isNullOrBlank() && normalizedOptions.isEmpty()) {
+                return null
+            }
+            return copy(
+                agentId = normalizedAgentId,
+                options = normalizedOptions
+            )
+        }
+    }
+
+    fun normalized(): ProxyAISubagentTarget? {
+        val normalizedNative = native?.normalized()
+        val normalizedExternal = external?.normalized()
+        if (normalizedNative == null && normalizedExternal == null) {
+            return null
+        }
+        return copy(
+            native = normalizedNative,
+            external = normalizedExternal
+        )
+    }
+}
+
+@Serializable
 data class ProxyAISubagent(
     val id: Int,
     val title: String,
     val objective: String,
-    val tools: List<String>
-)
+    val tools: List<String>,
+    val target: ProxyAISubagentTarget? = null,
+    @Serializable(with = ServiceTypeCodeSerializer::class)
+    private val legacyProvider: ServiceType? = null,
+    private val legacyModel: String? = null,
+    @SerialName("external_agent_id")
+    private val legacyExternalAgentId: String? = null,
+) {
+    val provider: ServiceType?
+        get() = resolvedTarget()?.native?.provider
+
+    val model: String?
+        get() = resolvedTarget()?.native?.model
+
+    val externalAgentId: String?
+        get() = resolvedTarget()?.external?.agentId
+
+    val externalAgentOptions: Map<String, String>
+        get() = resolvedTarget()?.external?.options.orEmpty()
+
+    fun runtimeConfigurationError(): String? {
+        val resolvedTarget = resolvedTarget()
+        val nativeTarget = resolvedTarget?.native
+        val externalTarget = resolvedTarget?.external
+        return when {
+            nativeTarget != null && externalTarget != null ->
+                "Choose either a native model or an external agent, not both."
+
+            nativeTarget != null && (nativeTarget.provider == null || nativeTarget.model.isNullOrBlank()) ->
+                "A native model requires both provider and model."
+
+            externalTarget != null && externalTarget.agentId.isNullOrBlank() ->
+                "An external agent requires an agent selection."
+
+            else -> null
+        }
+    }
+
+    fun normalized(): ProxyAISubagent {
+        val normalizedTarget = resolvedTarget()
+        return copy(
+            target = normalizedTarget,
+            legacyProvider = null,
+            legacyModel = null,
+            legacyExternalAgentId = null
+        )
+    }
+
+    private fun resolvedTarget(): ProxyAISubagentTarget? {
+        target?.normalized()?.let { return it }
+
+        val externalTarget = legacyExternalAgentId
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { agentId ->
+                ProxyAISubagentTarget.External(agentId = agentId)
+            }
+        if (externalTarget != null) {
+            return ProxyAISubagentTarget(external = externalTarget)
+        }
+
+        val nativeTarget = ProxyAISubagentTarget.Native(
+            provider = legacyProvider,
+            model = legacyModel
+        ).normalized()
+        return nativeTarget?.let { ProxyAISubagentTarget(native = it) }
+    }
+}
+
+private object ServiceTypeCodeSerializer : KSerializer<ServiceType> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("ServiceType", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: ServiceType) {
+        encoder.encodeString(value.name)
+    }
+
+    override fun deserialize(decoder: Decoder): ServiceType {
+        val raw = decoder.decodeString()
+        return ServiceType.values().firstOrNull { serviceType ->
+            serviceType.name.equals(raw, ignoreCase = true) ||
+                    serviceType.code.equals(raw, ignoreCase = true)
+        } ?: throw IllegalArgumentException("Unknown service type: $raw")
+    }
+}

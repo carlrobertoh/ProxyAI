@@ -192,15 +192,6 @@ class AgentServiceIntegrationTest : IntegrationTest() {
             AgentSession(
                 sessionId = sessionId,
                 conversation = Conversation(),
-                displayName = "",
-                serviceType = null,
-                externalAgentId = null,
-                externalAgentSessionId = null,
-                externalAgentConfigOptions = emptyList(),
-                externalAgentConfigLoading = false,
-                runtimeAgentId = null,
-                resumeCheckpointRef = null,
-                referencedFiles = emptyList(),
                 createdAt = System.currentTimeMillis(),
                 lastActiveAt = System.currentTimeMillis()
             ),

@@ -182,7 +182,13 @@ class AgentRunViewModel {
 
                     existing.copy(
                         result = result as? TaskTool.Result,
-                        summary = TaskSummary(calls, totalTokens)
+                        summary = existing.summary?.copy(
+                            toolCalls = calls,
+                            tokens = totalTokens
+                        ) ?: TaskSummary(
+                            toolCalls = calls,
+                            tokens = totalTokens
+                        )
                     )
                 }
 
@@ -196,4 +202,5 @@ class AgentRunViewModel {
 data class TaskSummary(
     val toolCalls: Int,
     val tokens: Long,
+    val runtimeLabel: String? = null,
 )

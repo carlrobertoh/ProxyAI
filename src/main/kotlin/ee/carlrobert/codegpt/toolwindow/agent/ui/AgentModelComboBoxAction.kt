@@ -16,7 +16,6 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.agent.external.AcpIcons
 import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentPreset
 import ee.carlrobert.codegpt.agent.external.ExternalAcpAgents
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
@@ -258,10 +257,7 @@ class AgentModelComboBoxAction(
         return when (selectedService) {
             PROXYAI -> proxyAITemplateState(modelCode)
             OPENAI -> providerTemplateState(OPENAI, Icons.OpenAI, modelCode)
-            CUSTOM_OPENAI -> TemplateState(
-                Icons.OpenAI,
-                customOpenAIModelDisplayName(modelCode)
-            )
+            CUSTOM_OPENAI -> providerTemplateState(CUSTOM_OPENAI, Icons.OpenAI, modelCode)
             ANTHROPIC -> providerTemplateState(ANTHROPIC, Icons.Anthropic, modelCode)
             LLAMA_CPP -> providerTemplateState(LLAMA_CPP, Icons.Llama, modelCode)
             OLLAMA -> providerTemplateState(OLLAMA, Icons.Ollama, modelCode)
@@ -276,12 +272,12 @@ class AgentModelComboBoxAction(
     }
 
     private fun proxyAITemplateState(modelCode: String?): TemplateState {
-        val proxyAIModel = availableModelsForProvider(PROXYAI)
-            .firstOrNull { it.model == modelCode }
-        return TemplateState(
-            icon = proxyAIModel?.icon ?: Icons.DefaultSmall,
-            text = proxyAIModel?.displayName ?: "Unknown"
+        val state = AgentRuntimeSelectionSupport.compactNativePresentation(
+            availableModels = availableModelsForProvider(PROXYAI),
+            provider = PROXYAI,
+            modelCode = modelCode
         )
+        return TemplateState(state.icon ?: Icons.DefaultSmall, state.text)
     }
 
     private fun providerTemplateState(
@@ -289,14 +285,12 @@ class AgentModelComboBoxAction(
         icon: Icon,
         modelCode: String?
     ): TemplateState {
-        return TemplateState(icon, modelSettings.getModelDisplayName(serviceType, modelCode))
-    }
-
-    private fun customOpenAIModelDisplayName(modelCode: String?): String {
-        return availableModelsForProvider(CUSTOM_OPENAI)
-            .firstOrNull { it.model == modelCode }
-            ?.displayName
-            ?: modelSettings.getModelDisplayName(CUSTOM_OPENAI, modelCode)
+        val state = AgentRuntimeSelectionSupport.compactNativePresentation(
+            availableModels = availableModelsForProvider(serviceType),
+            provider = serviceType,
+            modelCode = modelCode
+        )
+        return TemplateState(state.icon ?: icon, state.text)
     }
 
     private fun selectedAgentModelCode(): String? {
@@ -304,15 +298,9 @@ class AgentModelComboBoxAction(
     }
 
     private fun updateExternalAgentPresentation(externalAgentId: String) {
-        val preset = ExternalAcpAgents.find(externalAgentId)
-        if (preset != null) {
-            templatePresentation.icon = externalAgentIcon(preset.id)
-            templatePresentation.text = preset.displayName
-            return
-        }
-
-        templatePresentation.icon = Icons.DefaultSmall
-        templatePresentation.text = "ACP"
+        val state = AgentRuntimeSelectionSupport.externalPresentation(externalAgentId)
+        templatePresentation.icon = state.icon
+        templatePresentation.text = state.text
     }
 
     private fun createAgentRuntimeAction(preset: ExternalAcpAgentPreset): AnAction {
@@ -481,7 +469,8 @@ class AgentModelComboBoxAction(
     }
 
     private fun externalAgentIcon(externalAgentId: String): Icon {
-        return AcpIcons.iconFor(externalAgentId)
+        return AgentRuntimeSelectionSupport.externalPresentation(externalAgentId).icon
+            ?: Icons.DefaultSmall
     }
 
     private fun availableModelsForFeature(): List<ModelSelection> {

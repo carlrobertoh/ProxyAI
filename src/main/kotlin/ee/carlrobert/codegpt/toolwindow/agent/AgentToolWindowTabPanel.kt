@@ -300,8 +300,10 @@ class AgentToolWindowTabPanel(
         if (message.text.isBlank()) return
         disposeLandingPanelIfPresent()
         scrollablePanel.clearLandingViewIfVisible()
-        agentSession.serviceType =
-            ModelSettings.getInstance().getServiceForFeature(FeatureType.AGENT)
+        val modelSettings = ModelSettings.getInstance()
+        val agentModelSelection = modelSettings.getModelSelectionForFeature(FeatureType.AGENT)
+        agentSession.serviceType = agentModelSelection.provider
+        agentSession.modelCode = agentModelSelection.selectionId
 
         val agentService = project.service<AgentService>()
 
@@ -408,6 +410,7 @@ class AgentToolWindowTabPanel(
                 agentSession.externalAgentId = externalAgentId
                 agentSession.externalAgentSessionId = null
                 agentSession.externalAgentConfigOptions = emptyList()
+                agentSession.externalAgentConfigSelections = emptyMap()
                 agentSession.externalAgentErrorMessage = null
                 agentSession.externalAgentConfigLoading = !externalAgentId.isNullOrBlank()
                 if (!externalAgentId.isNullOrBlank()) {
@@ -437,23 +440,18 @@ class AgentToolWindowTabPanel(
     }
 
     private fun displayExternalAgentName(externalAgentId: String): String {
-        return ExternalAcpAgents.find(externalAgentId)?.displayName ?: externalAgentId
+        return ExternalAcpAgents.displayName(externalAgentId)
     }
 
     private fun buildExternalAgentFailureMessage(
         externalAgentId: String,
         throwable: Throwable
     ): String {
-        val command = ExternalAcpAgents.find(externalAgentId)?.command ?: externalAgentId
-        val message = throwable.message.orEmpty()
-        return when {
-            message.contains("Cannot run program", ignoreCase = true) &&
-                    message.contains("No such file or directory", ignoreCase = true) ->
-                "Command not found: $command"
-
-            message.isNotBlank() -> message
-            else -> "Failed to start ${displayExternalAgentName(externalAgentId)}"
-        }
+        return ExternalAcpAgents.buildFailureMessage(
+            id = externalAgentId,
+            throwable = throwable,
+            fallbackMessage = "Failed to start ${displayExternalAgentName(externalAgentId)}"
+        )
     }
 
     private fun buildExternalAgentConfigFailureMessage(throwable: Throwable): String {

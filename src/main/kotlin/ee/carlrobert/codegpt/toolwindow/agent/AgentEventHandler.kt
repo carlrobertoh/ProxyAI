@@ -17,6 +17,7 @@ import ee.carlrobert.codegpt.agent.*
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
+import ee.carlrobert.codegpt.settings.agents.SubagentRuntimeResolver
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.ui.*
@@ -362,7 +363,7 @@ class AgentEventHandler(
             is TaskTool.Args -> {
                 runInEdt {
                     val host = ensureRunViewForSubagent(id)
-                    host.addEntry(RunEntry.TaskEntry(id, null, args, null))
+                    host.addEntry(createTaskEntry(id, null, args))
                     host.refresh()
                     scrollablePanel.update()
                     scrollablePanel.scrollToBottom()
@@ -473,7 +474,7 @@ class AgentEventHandler(
                     RunEntry.EditEntry(cid, parentId, args, null)
                 }
 
-                is TaskTool.Args -> RunEntry.TaskEntry(cid, parentId, args, null)
+                is TaskTool.Args -> createTaskEntry(cid, parentId, args)
                 is McpTool.Args -> RunEntry.McpEntry(cid, parentId, args, null)
 
                 else -> RunEntry.OtherEntry(cid, parentId, toolName)
@@ -548,6 +549,32 @@ class AgentEventHandler(
         runInEdt {
             onShowLoading(CodeGPTBundle.get(key))
         }
+    }
+
+    private fun createTaskEntry(
+        id: String,
+        parentId: String?,
+        args: TaskTool.Args
+    ): RunEntry.TaskEntry {
+        val session = project.service<AgentToolWindowContentManager>().getSession(sessionId)
+        val runtimeLabel = SubagentRuntimeResolver.resolveForSession(
+            project = project,
+            subagentType = args.subagentType,
+            parentProvider = session?.serviceType,
+            parentModelCode = session?.modelCode,
+            taskModelOverride = args.model
+        )?.displayLabel
+        return RunEntry.TaskEntry(
+            id = id,
+            parentId = parentId,
+            args = args,
+            result = null,
+            summary = TaskSummary(
+                toolCalls = 0,
+                tokens = 0,
+                runtimeLabel = runtimeLabel
+            )
+        )
     }
 
     private fun maybeShowNextApproval() {

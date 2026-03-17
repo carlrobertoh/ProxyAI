@@ -13,7 +13,9 @@ import ee.carlrobert.codegpt.agent.ToolSpecs
 import ee.carlrobert.codegpt.agent.tools.BashTool
 import ee.carlrobert.codegpt.agent.tools.EditTool
 import ee.carlrobert.codegpt.agent.tools.WriteTool
+import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.settings.mcp.McpSettings
+import ee.carlrobert.codegpt.toolwindow.agent.AcpConfigOption
 import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.*
@@ -27,6 +29,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 import kotlin.io.path.createDirectories
 import kotlin.io.path.notExists
 
@@ -111,6 +114,20 @@ class ExternalAcpAgentService(private val project: Project) {
         ensureSessionReady(session, preset, NO_OP_EVENTS)
     }
 
+    suspend fun loadConfigOptions(externalAgentId: String): List<AcpConfigOption> {
+        val session = AgentSession(
+            sessionId = "subagent-settings:$externalAgentId:${UUID.randomUUID()}",
+            conversation = Conversation(),
+            externalAgentId = externalAgentId
+        )
+        return try {
+            warmUpSession(session)
+            session.externalAgentConfigOptions
+        } finally {
+            closeSession(session.sessionId)
+        }
+    }
+
     suspend fun setSessionConfigOption(
         session: AgentSession,
         optionId: String,
@@ -138,6 +155,8 @@ class ExternalAcpAgentService(private val project: Project) {
 
             is AcpConfigUpdateResult.Applied -> {
                 state.configUpdateSupport = result.support
+                session.externalAgentConfigSelections =
+                    session.externalAgentConfigSelections + (optionId to value)
                 updateSessionConfigOptions(session, result.response)
             }
         }
@@ -254,8 +273,10 @@ class ExternalAcpAgentService(private val project: Project) {
                 }
             }.getOrThrow()
             updateSessionConfigOptions(session, response)
-            response["sessionId"]?.jsonPrimitive?.content
+            val externalSessionId = response["sessionId"]?.jsonPrimitive?.content
                 ?: error("ACP agent did not return a sessionId")
+            applyConfiguredSelections(state, session, externalSessionId)
+            externalSessionId
         } finally {
             session.externalAgentConfigLoading = false
         }
@@ -276,6 +297,77 @@ class ExternalAcpAgentService(private val project: Project) {
             response = response
         )
         session.externalAgentConfigLoading = false
+    }
+
+    private suspend fun applyConfiguredSelections(
+        state: AcpProcessState,
+        session: AgentSession,
+        externalSessionId: String
+    ) {
+        val requestedSelections = session.externalAgentConfigSelections
+            .mapNotNull { (optionId, value) ->
+                val normalizedOptionId = optionId.trim()
+                val normalizedValue = value.trim()
+                if (normalizedOptionId.isBlank() || normalizedValue.isBlank()) {
+                    null
+                } else {
+                    normalizedOptionId to normalizedValue
+                }
+            }
+            .toMap(linkedMapOf())
+        if (requestedSelections.isEmpty()) {
+            return
+        }
+
+        val orderedSelections = buildList {
+            val remaining = requestedSelections.toMutableMap()
+            session.externalAgentConfigOptions.forEach { option ->
+                remaining.remove(option.id)?.let { selectedValue ->
+                    add(option.id to selectedValue)
+                }
+            }
+            addAll(remaining.entries.map { it.key to it.value })
+        }
+
+        for ((optionId, value) in orderedSelections) {
+            val option = session.externalAgentConfigOptions.firstOrNull { it.id == optionId } ?: continue
+            if (option.currentValue == value) {
+                continue
+            }
+            if (option.options.isNotEmpty() && option.options.none { it.value == value }) {
+                logger.warn("Skipping unsupported ACP subagent option $optionId=$value for ${session.externalAgentId}")
+                continue
+            }
+
+            when (val result = runCatching {
+                sessionConfigAdapter.updateOption(
+                    request = AcpConfigUpdateRequest(
+                        sessionId = externalSessionId,
+                        optionId = optionId,
+                        value = value
+                    ),
+                    support = state.configUpdateSupport,
+                    sendRequest = state::sendRequest
+                )
+            }.getOrElse { error ->
+                logger.warn(
+                    "Failed to apply ACP subagent option $optionId=$value for ${session.externalAgentId}",
+                    error
+                )
+                continue
+            }) {
+                AcpConfigUpdateResult.Unsupported -> {
+                    state.configUpdateSupport = AcpConfigUpdateSupport.Unsupported
+                    logger.warn("ACP agent ${session.externalAgentId} does not support runtime option changes")
+                    return
+                }
+
+                is AcpConfigUpdateResult.Applied -> {
+                    state.configUpdateSupport = result.support
+                    updateSessionConfigOptions(session, result.response)
+                }
+            }
+        }
     }
 
     private suspend fun sendPrompt(
@@ -521,8 +613,7 @@ class ExternalAcpAgentService(private val project: Project) {
             val effectiveArgs = updatedToolCall?.args ?: currentToolCall?.args
 
             if (updatedToolCall != null) {
-                toolCallsById[update.toolCallId] =
-                    ExternalToolCall(effectiveToolName, effectiveArgs)
+                toolCallsById[update.toolCallId] = ExternalToolCall(effectiveToolName, effectiveArgs)
             }
 
             if (currentToolCall?.args == null && effectiveArgs != null) {
@@ -566,7 +657,9 @@ class ExternalAcpAgentService(private val project: Project) {
             args: Any?,
             status: AcpToolCallStatus?
         ): Boolean {
-            return toolName == "WebFetch" && args == null && status?.isTerminal != true
+            return toolName in setOf("WebSearch", "WebFetch") &&
+                args == null &&
+                status?.isTerminal != true
         }
 
         private fun handleConfigOptionUpdate(update: JsonObject) {

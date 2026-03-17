@@ -261,4 +261,26 @@ object ExternalAcpAgents {
 
     fun enabledByDefaultIds(): List<String> =
         presets.filter { it.enabledByDefault }.map { it.id }
+
+    fun displayName(id: String?): String {
+        val safeId = id?.takeIf(String::isNotBlank)
+        return safeId?.let(::find)?.displayName ?: safeId ?: "agent"
+    }
+
+    fun buildFailureMessage(
+        id: String,
+        throwable: Throwable,
+        fallbackMessage: String
+    ): String {
+        val command = find(id)?.command ?: id
+        val message = throwable.message.orEmpty()
+        return when {
+            message.contains("Cannot run program", ignoreCase = true) &&
+                message.contains("No such file or directory", ignoreCase = true) ->
+                "Command not found: $command"
+
+            message.isNotBlank() -> message
+            else -> fallbackMessage
+        }
+    }
 }

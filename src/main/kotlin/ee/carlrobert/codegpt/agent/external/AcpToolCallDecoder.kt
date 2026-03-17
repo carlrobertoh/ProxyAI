@@ -159,15 +159,22 @@ internal class AcpToolCallDecoder(
     ): String {
         val normalizedKind = kind?.lowercase().orEmpty()
         val rawInputObject = rawInput.asJsonObjectOrNull(json)
+        val actionType = (rawInputObject?.get("action") as? JsonObject)?.string("type")?.lowercase()
+        val titleLower = rawTitle.lowercase()
 
         return when {
             looksLikeMcpToolName(rawTitle) -> "MCP"
             rawInputObject?.get("command") != null || rawInputObject?.get("cmd") != null -> "Bash"
             normalizedKind == "execute" || normalizedKind == "terminal" || normalizedKind == "bash" -> "Bash"
+            actionType == "search" -> "WebSearch"
+            actionType == "open_page" || actionType == "fetch" || actionType == "open" -> "WebFetch"
             normalizedKind == "edit" -> "Edit"
             normalizedKind == "read" -> "Read"
             normalizedKind == "search" -> "IntelliJSearch"
-            normalizedKind == "fetch" -> "WebFetch"
+            normalizedKind == "fetch" && (
+                titleLower == "searching the web" || titleLower.startsWith("searching for:")
+                ) -> "WebSearch"
+            normalizedKind == "fetch" || titleLower.startsWith("opening:") -> "WebFetch"
             else -> rawTitle.ifBlank { kind ?: "Tool" }
         }
     }
@@ -180,6 +187,8 @@ internal class AcpToolCallDecoder(
             is ReadTool.Args -> "Read"
             is IntelliJSearchTool.Args -> "IntelliJSearch"
             is BashTool.Args -> "Bash"
+            is WebSearchTool.Args -> "WebSearch"
+            is WebFetchTool.Args -> "WebFetch"
             else -> initialToolName
         }
     }
@@ -199,6 +208,7 @@ internal class AcpToolCallDecoder(
             "Read" -> decodeReadArgs(obj, metadata) ?: payload.ifBlank { null }
             "IntelliJSearch" -> decodeSearchArgs(obj) ?: payload.ifBlank { null }
             "Bash" -> decodeBashArgs(obj) ?: payload.ifBlank { null }
+            "WebSearch" -> decodeWebSearchArgs(obj, metadata) ?: payload.ifBlank { null }
             "WebFetch" -> decodeWebFetchArgs(obj, rawInput, metadata) ?: payload.ifBlank { null }
             else -> payload.ifBlank { null }
         }
@@ -292,13 +302,27 @@ internal class AcpToolCallDecoder(
         )
     }
 
+    private fun decodeWebSearchArgs(
+        obj: JsonObject,
+        metadata: JsonObject? = null
+    ): WebSearchTool.Args? {
+        val action = obj["action"] as? JsonObject
+        val query = obj.string("query", "q")
+            ?: action?.string("query")
+            ?: metadata?.string("query", "q")
+            ?: return null
+        return WebSearchTool.Args(query = query)
+    }
+
     private fun decodeWebFetchArgs(
         obj: JsonObject,
         rawInput: JsonElement?,
         metadata: JsonObject? = null
     ): WebFetchTool.Args? {
+        val action = obj["action"] as? JsonObject
         val payload = rawInput.toPayloadString()
         val url = obj.string("url", "uri", "href", "link")
+            ?: action?.string("url", "uri", "href", "link")
             ?: metadata?.string("url", "uri")
             ?: extractFirstUrl(payload)
             ?: metadata?.string("title")?.let(::extractFirstUrl)
@@ -306,10 +330,15 @@ internal class AcpToolCallDecoder(
 
         return WebFetchTool.Args(
             url = url,
-            selector = obj.string("selector", "css_selector", "cssSelector"),
-            timeoutMs = obj.int("timeout_ms", "timeoutMs", "timeout") ?: 10_000,
-            offset = obj.int("offset", "start_line", "startLine"),
+            selector = obj.string("selector", "css_selector", "cssSelector")
+                ?: action?.string("selector", "css_selector", "cssSelector"),
+            timeoutMs = obj.int("timeout_ms", "timeoutMs", "timeout")
+                ?: action?.int("timeout_ms", "timeoutMs", "timeout")
+                ?: 10_000,
+            offset = obj.int("offset", "start_line", "startLine")
+                ?: action?.int("offset", "start_line", "startLine"),
             limit = obj.int("limit", "max_lines", "maxLines", "count")
+                ?: action?.int("limit", "max_lines", "maxLines", "count")
         )
     }
 

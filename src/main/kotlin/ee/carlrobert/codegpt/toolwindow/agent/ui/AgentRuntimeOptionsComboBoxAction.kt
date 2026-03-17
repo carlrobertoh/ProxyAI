@@ -12,6 +12,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.ui.AnimatedIcon
 import ee.carlrobert.codegpt.toolwindow.agent.AcpConfigOption
+import ee.carlrobert.codegpt.toolwindow.agent.AcpConfigOptions
 import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
 import ee.carlrobert.codegpt.toolwindow.ui.ModelListPopups
 import java.awt.Color
@@ -144,38 +145,17 @@ class AgentRuntimeOptionsComboBoxAction(
             ?.let { return it }
 
         val parts = listOfNotNull(
-            selectedOptionValue("model"),
-            selectedOptionValue("thought_level")
+            AcpConfigOptions.selectedValueName(agentSession.externalAgentConfigOptions, "model"),
+            AcpConfigOptions.selectedValueName(agentSession.externalAgentConfigOptions, "thought_level")
         ).ifEmpty {
-            listOfNotNull(selectedOptionValue("mode"))
+            listOfNotNull(AcpConfigOptions.selectedValueName(agentSession.externalAgentConfigOptions, "mode"))
         }
 
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "Options"
     }
 
-    private fun selectedOptionValue(category: String): String? {
-        val option = selectableOptions.firstOrNull { it.category == category } ?: return null
-        return option.options
-            .firstOrNull { it.value == option.currentValue }
-            ?.name
-            ?: option.currentValue
-    }
-
     private val selectableOptions: List<AcpConfigOption>
-        get() = agentSession.externalAgentConfigOptions
-            .asSequence()
-            .filter { it.type == "select" && it.options.isNotEmpty() }
-            .sortedBy { categoryOrder(it.category) }
-            .toList()
-
-    private fun optionLabel(option: AcpConfigOption): String {
-        return when (option.category.orEmpty()) {
-            "model" -> "Model"
-            "mode" -> "Mode"
-            "thought_level" -> "Reasoning"
-            else -> option.name
-        }
-    }
+        get() = AcpConfigOptions.selectable(agentSession.externalAgentConfigOptions)
 
     private fun createDisabledInfoAction(
         text: String,
@@ -194,12 +174,5 @@ class AgentRuntimeOptionsComboBoxAction(
         }
     }
 
-    private fun categoryOrder(category: String?): Int {
-        return when (category.orEmpty()) {
-            "model" -> 0
-            "mode" -> 1
-            "thought_level" -> 2
-            else -> 3
-        }
-    }
+    private fun optionLabel(option: AcpConfigOption): String = AcpConfigOptions.label(option)
 }

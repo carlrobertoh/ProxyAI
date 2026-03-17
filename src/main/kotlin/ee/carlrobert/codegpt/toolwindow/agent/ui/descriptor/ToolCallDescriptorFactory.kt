@@ -73,6 +73,7 @@ object ToolCallDescriptorFactory {
             toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.KILL_SHELL
             toolName == "WebSearch" || args is WebSearchTool.Args || result is WebSearchTool.Result -> ToolKind.WEB
             toolName == "WebFetch" || args is WebFetchTool.Args || result is WebFetchTool.Result -> ToolKind.WEB
+            looksLikeWebPayload(args) -> ToolKind.WEB
             toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
             toolName == "MCP" || args is McpTool.Args || result is McpTool.Result -> ToolKind.MCP
             toolName == "ResolveLibraryId" || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
@@ -589,6 +590,35 @@ object ToolCallDescriptorFactory {
         }
     }
 
+    private fun looksLikeWebPayload(args: Any): Boolean {
+        return when (args) {
+            is JsonObject -> jsonObjectString(args, "url", "uri", "href", "link", "query", "q") != null
+            is Map<*, *> -> mapString(args, "url", "uri", "href", "link", "query", "q") != null
+            is String -> extractFirstUrl(args) != null
+            else -> false
+        }
+    }
+
+    private fun jsonObjectString(obj: JsonObject, vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            (obj[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        } ?: (obj["action"] as? JsonObject)?.let { action ->
+            keys.firstNotNullOfOrNull { key ->
+                (action[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+            }
+        }
+    }
+
+    private fun mapString(map: Map<*, *>, vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            (map[key] as? String)?.takeIf { it.isNotBlank() }
+        } ?: (map["action"] as? Map<*, *>)?.let { action ->
+            keys.firstNotNullOfOrNull { key ->
+                (action[key] as? String)?.takeIf { it.isNotBlank() }
+            }
+        }
+    }
+
     private fun createTaskDescriptor(
         args: Any,
         result: Any?,
@@ -840,24 +870,6 @@ object ToolCallDescriptorFactory {
         }
     }
 
-    private fun jsonObjectString(obj: JsonObject, vararg keys: String): String? {
-        return keys.firstNotNullOfOrNull { key ->
-            (obj[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
-        }
-    }
-
-    private fun mapString(map: Map<*, *>, vararg keys: String): String? {
-        return keys.firstNotNullOfOrNull { key ->
-            map[key]?.toString()?.takeIf { it.isNotBlank() }
-        }
-    }
-
-    private fun extractFirstUrl(text: String): String? {
-        return URL_REGEX.find(text)?.value
-    }
-
-    private val URL_REGEX = Regex("""https?://[^\s"'<>]+""")
-
     private fun truncateCommand(command: String): String {
         return if (command.length > AgentUiConfig.BASH_CMD_MAX) {
             command.take(AgentUiConfig.BASH_CMD_MAX) + "..."
@@ -1032,4 +1044,10 @@ object ToolCallDescriptorFactory {
         val footerPanel = createDialogFooterPanel(dialog)
         showDialog(dialog, scrollPane, footerPanel)
     }
+
+    private fun extractFirstUrl(text: String): String? {
+        return URL_REGEX.find(text)?.value
+    }
+
+    private val URL_REGEX = Regex("""https?://[^\s"'<>]+""")
 }
