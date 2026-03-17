@@ -14,6 +14,7 @@ internal sealed interface AcpSessionUpdate {
 
     data class ToolCallUpdate(
         val toolCallId: String,
+        val toolCall: AcpDecodedToolCall?,
         val status: AcpToolCallStatus,
         val rawOutput: JsonElement?
     ) : AcpSessionUpdate
@@ -22,12 +23,13 @@ internal sealed interface AcpSessionUpdate {
 }
 
 internal enum class AcpToolCallStatus(val wireValue: String) {
+    IN_PROGRESS("in_progress"),
     COMPLETED("completed"),
     FAILED("failed"),
     CANCELLED("cancelled");
 
     val isTerminal: Boolean
-        get() = true
+        get() = this != IN_PROGRESS
 
     companion object {
         fun fromWireValue(value: String?): AcpToolCallStatus? {
@@ -84,6 +86,7 @@ internal class AcpSessionUpdateParser(
         val status = AcpToolCallStatus.fromWireValue(update.string("status")) ?: return null
         return AcpSessionUpdate.ToolCallUpdate(
             toolCallId = toolCallId,
+            toolCall = toolCallDecoder.decodeToolCall(update),
             status = status,
             rawOutput = update["rawOutput"] ?: update["content"]
         )

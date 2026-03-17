@@ -645,7 +645,10 @@ class CustomServiceForm(
 
     private fun createTokenSpinner(initialValue: Long): JSpinner =
         JSpinner(SpinnerNumberModel(initialValue, 1L, Long.MAX_VALUE, 1L)).apply {
-            (editor as? JSpinner.DefaultEditor)?.textField?.columns = 10
+            (editor as? JSpinner.DefaultEditor)?.textField?.apply {
+                columns = 10
+                font = nameField.font
+            }
         }
 
     private fun readSpinnerValue(spinner: JSpinner, fallback: Long): Long {

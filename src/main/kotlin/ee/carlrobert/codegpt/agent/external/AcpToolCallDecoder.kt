@@ -199,6 +199,7 @@ internal class AcpToolCallDecoder(
             "Read" -> decodeReadArgs(obj, metadata) ?: payload.ifBlank { null }
             "IntelliJSearch" -> decodeSearchArgs(obj) ?: payload.ifBlank { null }
             "Bash" -> decodeBashArgs(obj) ?: payload.ifBlank { null }
+            "WebFetch" -> decodeWebFetchArgs(obj, rawInput, metadata) ?: payload.ifBlank { null }
             else -> payload.ifBlank { null }
         }
     }
@@ -291,6 +292,27 @@ internal class AcpToolCallDecoder(
         )
     }
 
+    private fun decodeWebFetchArgs(
+        obj: JsonObject,
+        rawInput: JsonElement?,
+        metadata: JsonObject? = null
+    ): WebFetchTool.Args? {
+        val payload = rawInput.toPayloadString()
+        val url = obj.string("url", "uri", "href", "link")
+            ?: metadata?.string("url", "uri")
+            ?: extractFirstUrl(payload)
+            ?: metadata?.string("title")?.let(::extractFirstUrl)
+            ?: return null
+
+        return WebFetchTool.Args(
+            url = url,
+            selector = obj.string("selector", "css_selector", "cssSelector"),
+            timeoutMs = obj.int("timeout_ms", "timeoutMs", "timeout") ?: 10_000,
+            offset = obj.int("offset", "start_line", "startLine"),
+            limit = obj.int("limit", "max_lines", "maxLines", "count")
+        )
+    }
+
     private fun decodeMcpArgs(rawTitle: String, rawInput: JsonElement?): McpTool.Args {
         val obj = rawInput.asJsonObjectOrNull(json) ?: JsonObject(emptyMap())
         val callName = rawTitle.ifBlank { obj.string("tool_name", "toolName") ?: "unknown" }
@@ -332,5 +354,13 @@ internal class AcpToolCallDecoder(
         }
         val slashIndex = candidate.indexOf('/')
         return slashIndex > 0 && slashIndex < candidate.length - 1
+    }
+
+    private fun extractFirstUrl(text: String): String? {
+        return URL_REGEX.find(text)?.value
+    }
+
+    private companion object {
+        val URL_REGEX = Regex("""https?://[^\s"'<>]+""")
     }
 }

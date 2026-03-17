@@ -495,7 +495,9 @@ class ExternalAcpAgentService(private val project: Project) {
         private fun handleToolCall(update: AcpSessionUpdate.ToolCall, events: AgentEvents) {
             val toolCall = update.toolCall
             toolCallsById[toolCall.id] = ExternalToolCall(toolCall.toolName, toolCall.args)
-            events.onToolStarting(toolCall.id, toolCall.toolName, toolCall.args)
+            if (!shouldDeferToolStart(toolCall.toolName, toolCall.args, update.status)) {
+                events.onToolStarting(toolCall.id, toolCall.toolName, toolCall.args)
+            }
 
             if (update.status?.isTerminal == true) {
                 completeToolCall(
@@ -513,15 +515,28 @@ class ExternalAcpAgentService(private val project: Project) {
             update: AcpSessionUpdate.ToolCallUpdate,
             events: AgentEvents
         ) {
+            val updatedToolCall = update.toolCall
+            val currentToolCall = toolCallsById[update.toolCallId]
+            val effectiveToolName = updatedToolCall?.toolName ?: currentToolCall?.toolName ?: "Tool"
+            val effectiveArgs = updatedToolCall?.args ?: currentToolCall?.args
+
+            if (updatedToolCall != null) {
+                toolCallsById[update.toolCallId] =
+                    ExternalToolCall(effectiveToolName, effectiveArgs)
+            }
+
+            if (currentToolCall?.args == null && effectiveArgs != null) {
+                events.onToolStarting(update.toolCallId, effectiveToolName, effectiveArgs)
+            }
+
             if (!update.status.isTerminal) {
                 return
             }
 
-            val toolCall = toolCallsById[update.toolCallId]
             completeToolCall(
                 toolCallId = update.toolCallId,
-                toolName = toolCall?.toolName ?: "Tool",
-                args = toolCall?.args,
+                toolName = effectiveToolName,
+                args = effectiveArgs,
                 status = update.status,
                 rawOutput = update.rawOutput,
                 events = events
@@ -544,6 +559,14 @@ class ExternalAcpAgentService(private val project: Project) {
             )
             toolCallsById.remove(toolCallId)
             events.onToolCompleted(toolCallId, toolName, result)
+        }
+
+        private fun shouldDeferToolStart(
+            toolName: String,
+            args: Any?,
+            status: AcpToolCallStatus?
+        ): Boolean {
+            return toolName == "WebFetch" && args == null && status?.isTerminal != true
         }
 
         private fun handleConfigOptionUpdate(update: JsonObject) {

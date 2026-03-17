@@ -528,21 +528,12 @@ object ToolCallDescriptorFactory {
         result: Any?,
         projectId: String?
     ): ToolCallDescriptor {
-        val query = when (args) {
-            is WebSearchTool.Args -> args.query
-            is WebFetchTool.Args -> args.url
-            else -> "Unknown"
-        }
+        val isFetch = isWebFetchArgs(args) || result is WebFetchTool.Result
+        val query = extractWebQuery(args, result)
 
-        val titlePrefix = when (args) {
-            is WebFetchTool.Args -> "Fetch:"
-            else -> "Web:"
-        }
+        val titlePrefix = if (isFetch) "Fetch:" else "Web:"
 
-        val tooltip = when (args) {
-            is WebFetchTool.Args -> "Fetch: $query"
-            else -> "Web search: $query"
-        }
+        val tooltip = if (isFetch) "Fetch: $query" else "Web search: $query"
 
         val truncatedQuery = truncateQuery(query)
 
@@ -557,6 +548,45 @@ object ToolCallDescriptorFactory {
             result = result,
             projectId = projectId
         )
+    }
+
+    private fun extractWebQuery(args: Any, result: Any?): String {
+        return when (args) {
+            is WebSearchTool.Args -> args.query
+            is WebFetchTool.Args -> args.url
+            is JsonObject -> jsonObjectString(
+                args,
+                "url",
+                "uri",
+                "href",
+                "link",
+                "query",
+                "q"
+            ) ?: extractFirstUrl(args.toString()) ?: "Unknown"
+
+            is Map<*, *> -> mapString(
+                args,
+                "url",
+                "uri",
+                "href",
+                "link",
+                "query",
+                "q"
+            ) ?: extractFirstUrl(args.toString()) ?: "Unknown"
+
+            is String -> extractFirstUrl(args) ?: args.takeIf { it.isNotBlank() } ?: "Unknown"
+            else -> (result as? WebFetchTool.Result)?.url ?: "Unknown"
+        }
+    }
+
+    private fun isWebFetchArgs(args: Any): Boolean {
+        return when (args) {
+            is WebFetchTool.Args -> true
+            is JsonObject -> jsonObjectString(args, "url", "uri", "href", "link") != null
+            is Map<*, *> -> mapString(args, "url", "uri", "href", "link") != null
+            is String -> extractFirstUrl(args) != null
+            else -> false
+        }
     }
 
     private fun createTaskDescriptor(
@@ -809,6 +839,24 @@ object ToolCallDescriptorFactory {
             query
         }
     }
+
+    private fun jsonObjectString(obj: JsonObject, vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            (obj[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun mapString(map: Map<*, *>, vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            map[key]?.toString()?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    private fun extractFirstUrl(text: String): String? {
+        return URL_REGEX.find(text)?.value
+    }
+
+    private val URL_REGEX = Regex("""https?://[^\s"'<>]+""")
 
     private fun truncateCommand(command: String): String {
         return if (command.length > AgentUiConfig.BASH_CMD_MAX) {
