@@ -12,7 +12,6 @@ fun CustomServiceSettingsData.mapToState(): CustomServiceSettingsState =
         serviceState.name = name
         serviceState.template = template
         serviceState.contextWindowSize = contextWindowSize
-        serviceState.maxOutputTokens = maxOutputTokens
         serviceState.chatCompletionSettings = chatCompletionSettings.mapToState()
         serviceState.codeCompletionSettings = codeCompletionSettings.mapToState()
     }

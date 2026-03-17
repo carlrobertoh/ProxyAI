@@ -23,7 +23,6 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey
 import ee.carlrobert.codegpt.settings.service.custom.DEFAULT_CUSTOM_OPENAI_CONTEXT_WINDOW_SIZE
-import ee.carlrobert.codegpt.settings.service.custom.DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.custom.form.model.CustomServiceSettingsData
@@ -130,8 +129,6 @@ class CustomServiceForm(
     }
     private val contextWindowSizeSpinner =
         createTokenSpinner(DEFAULT_CUSTOM_OPENAI_CONTEXT_WINDOW_SIZE)
-    private val maxOutputTokensSpinner =
-        createTokenSpinner(DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS)
     private val templateHelpText = JBLabel(General.ContextHelp)
     private val templateComboBox = ComboBox(EnumComboBoxModel(CustomServiceTemplate::class.java))
     private val chatCompletionsForm: CustomServiceChatCompletionForm
@@ -225,7 +222,6 @@ class CustomServiceForm(
             apiKeyField.text = selectedItem.apiKey ?: ""
             nameField.text = selectedItem.name
             contextWindowSizeSpinner.value = selectedItem.contextWindowSize
-            maxOutputTokensSpinner.value = selectedItem.maxOutputTokens
             templateComboBox.selectedItem = selectedItem.template
             updateTemplateHelpTextTooltip(selectedItem.template)
         } finally {
@@ -245,10 +241,6 @@ class CustomServiceForm(
                 contextWindowSize = readSpinnerValue(
                     contextWindowSizeSpinner,
                     editedItem.contextWindowSize
-                ),
-                maxOutputTokens = readSpinnerValue(
-                    maxOutputTokensSpinner,
-                    editedItem.maxOutputTokens
                 ),
                 chatCompletionSettings = editedItem.chatCompletionSettings.copy(
                     url = chatCompletionsForm.url,
@@ -462,12 +454,11 @@ class CustomServiceForm(
             UIUtil.createComment("settingsConfigurable.service.custom.openai.apiKey.comment")
         )
         .addLabeledComponent(
-            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.contextWindowSize.label"),
-            contextWindowSizeSpinner
-        )
-        .addLabeledComponent(
-            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.maxOutputTokens.label"),
-            maxOutputTokensSpinner
+            CodeGPTBundle.get("settingsConfigurable.service.custom.openai.contextLength.label"),
+            JPanel(FlowLayout(FlowLayout.LEADING, 0, 0)).apply {
+                isOpaque = false
+                add(contextWindowSizeSpinner)
+            }
         )
         .addVerticalGap(4)
         .addComponent(tabbedPane)
@@ -654,7 +645,7 @@ class CustomServiceForm(
 
     private fun createTokenSpinner(initialValue: Long): JSpinner =
         JSpinner(SpinnerNumberModel(initialValue, 1L, Long.MAX_VALUE, 1L)).apply {
-            (editor as? JSpinner.DefaultEditor)?.textField?.columns = 30
+            (editor as? JSpinner.DefaultEditor)?.textField?.columns = 10
         }
 
     private fun readSpinnerValue(spinner: JSpinner, fallback: Long): Long {

@@ -32,31 +32,102 @@ class ModelSettingsTest : IntegrationTest() {
         connection = ApplicationManager.getApplication().messageBus.connect()
         connection.subscribe(ModelChangeNotifier.getTopic(), object : ModelChangeNotifier {
             override fun agentModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.AGENT, newModel, serviceType, "agent"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.AGENT,
+                        newModel,
+                        serviceType,
+                        "agent"
+                    )
+                )
             }
+
             override fun chatModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.CHAT, newModel, serviceType, "chat"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.CHAT,
+                        newModel,
+                        serviceType,
+                        "chat"
+                    )
+                )
             }
+
             override fun codeModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.CODE_COMPLETION, newModel, serviceType, "code"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.CODE_COMPLETION,
+                        newModel,
+                        serviceType,
+                        "code"
+                    )
+                )
             }
+
             override fun autoApplyModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.AUTO_APPLY, newModel, serviceType, "autoApply"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.AUTO_APPLY,
+                        newModel,
+                        serviceType,
+                        "autoApply"
+                    )
+                )
             }
+
             override fun commitMessageModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.COMMIT_MESSAGE, newModel, serviceType, "commitMessage"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.COMMIT_MESSAGE,
+                        newModel,
+                        serviceType,
+                        "commitMessage"
+                    )
+                )
             }
+
             override fun inlineEditModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.INLINE_EDIT, newModel, serviceType, "inlineEdit"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.INLINE_EDIT,
+                        newModel,
+                        serviceType,
+                        "inlineEdit"
+                    )
+                )
             }
+
             override fun nextEditModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.NEXT_EDIT, newModel, serviceType, "nextEdit"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.NEXT_EDIT,
+                        newModel,
+                        serviceType,
+                        "nextEdit"
+                    )
+                )
             }
+
             override fun nameLookupModelChanged(newModel: String, serviceType: ServiceType) {
-                lastNotification.set(NotificationData(FeatureType.LOOKUP, newModel, serviceType, "lookup"))
+                lastNotification.set(
+                    NotificationData(
+                        FeatureType.LOOKUP,
+                        newModel,
+                        serviceType,
+                        "lookup"
+                    )
+                )
             }
-            override fun modelChanged(featureType: FeatureType, newModel: String, serviceType: ServiceType) {
-                lastNotification.compareAndSet(null, NotificationData(featureType, newModel, serviceType, "general"))
+
+            override fun modelChanged(
+                featureType: FeatureType,
+                newModel: String,
+                serviceType: ServiceType
+            ) {
+                lastNotification.compareAndSet(
+                    null,
+                    NotificationData(featureType, newModel, serviceType, "general")
+                )
             }
         })
     }
@@ -69,7 +140,7 @@ class ModelSettingsTest : IntegrationTest() {
     fun `test setModelWithProvider with new model triggers change notification`() {
         modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-3.5-turbo", ServiceType.OPENAI)
         lastNotification.set(null)
-        
+
         modelSettings.setModelWithProvider(FeatureType.CHAT, "gpt-4o", ServiceType.OPENAI)
 
         val notification = lastNotification.get()
@@ -90,10 +161,18 @@ class ModelSettingsTest : IntegrationTest() {
     }
 
     fun `test setModelWithProvider with code completion triggers code model notification`() {
-        modelSettings.setModelWithProvider(FeatureType.CODE_COMPLETION, "gpt-3.5-turbo-instruct", ServiceType.OPENAI)
+        modelSettings.setModelWithProvider(
+            FeatureType.CODE_COMPLETION,
+            "gpt-3.5-turbo-instruct",
+            ServiceType.OPENAI
+        )
         lastNotification.set(null)
-        
-        modelSettings.setModelWithProvider(FeatureType.CODE_COMPLETION, "qwen-2.5-32b-code", ServiceType.PROXYAI)
+
+        modelSettings.setModelWithProvider(
+            FeatureType.CODE_COMPLETION,
+            "qwen-2.5-32b-code",
+            ServiceType.PROXYAI
+        )
 
         val notification = lastNotification.get()
         assertThat(notification!!.featureType).isEqualTo(FeatureType.CODE_COMPLETION)
@@ -103,7 +182,7 @@ class ModelSettingsTest : IntegrationTest() {
 
     fun `test setModelWithProvider with auto apply triggers auto apply notification`() {
         lastNotification.set(null)
-        
+
         modelSettings.setModelWithProvider(FeatureType.AUTO_APPLY, "gpt-4.1", ServiceType.PROXYAI)
 
         val notification = lastNotification.get()
@@ -114,8 +193,12 @@ class ModelSettingsTest : IntegrationTest() {
 
     fun `test setModelWithProvider with commit message triggers commit message notification`() {
         lastNotification.set(null)
-        
-        modelSettings.setModelWithProvider(FeatureType.COMMIT_MESSAGE, "deepseek-v3", ServiceType.PROXYAI)
+
+        modelSettings.setModelWithProvider(
+            FeatureType.COMMIT_MESSAGE,
+            "deepseek-v3",
+            ServiceType.PROXYAI
+        )
 
         val notification = lastNotification.get()
         assertThat(notification!!.featureType).isEqualTo(FeatureType.COMMIT_MESSAGE)
@@ -125,8 +208,12 @@ class ModelSettingsTest : IntegrationTest() {
 
     fun `test setModelWithProvider with edit code triggers edit code notification`() {
         lastNotification.set(null)
-        
-        modelSettings.setModelWithProvider(FeatureType.INLINE_EDIT, "claude-4-5-sonnet", ServiceType.PROXYAI)
+
+        modelSettings.setModelWithProvider(
+            FeatureType.INLINE_EDIT,
+            "claude-4-5-sonnet",
+            ServiceType.PROXYAI
+        )
 
         val notification = lastNotification.get()
         assertThat(notification!!.featureType).isEqualTo(FeatureType.INLINE_EDIT)
@@ -137,8 +224,12 @@ class ModelSettingsTest : IntegrationTest() {
     fun `test setModelWithProvider with next edit triggers next edit notification`() {
         modelSettings.state.modelSelections.remove("NEXT_EDIT")
         lastNotification.set(null)
-        
-        modelSettings.setModelWithProvider(FeatureType.NEXT_EDIT, "mercury-coder", ServiceType.PROXYAI)
+
+        modelSettings.setModelWithProvider(
+            FeatureType.NEXT_EDIT,
+            "mercury-coder",
+            ServiceType.PROXYAI
+        )
 
         val notification = lastNotification.get()
         assertThat(notification!!.featureType).isEqualTo(FeatureType.NEXT_EDIT)
@@ -149,7 +240,7 @@ class ModelSettingsTest : IntegrationTest() {
     fun `test setModelWithProvider with lookup triggers lookup notification`() {
         modelSettings.setModelWithProvider(FeatureType.LOOKUP, "deepseek-v3", ServiceType.PROXYAI)
         lastNotification.set(null)
-        
+
         modelSettings.setModelWithProvider(FeatureType.LOOKUP, "gpt-4.1-mini", ServiceType.PROXYAI)
 
         val notification = lastNotification.get()
@@ -160,7 +251,7 @@ class ModelSettingsTest : IntegrationTest() {
 
     fun `test setModel delegates to setModelWithProvider`() {
         lastNotification.set(null)
-        
+
         modelSettings.setModel(FeatureType.CHAT, "gpt-4o", ServiceType.OPENAI)
 
         val notification = lastNotification.get()
@@ -249,7 +340,26 @@ class ModelSettingsTest : IntegrationTest() {
         assertThat(selection.llmModel.supports(LLMCapability.OpenAIEndpoint.Responses)).isFalse()
     }
 
-    fun `test custom openai responses agent model uses configured token limits`() {
+    fun `test custom openai agent model uses max_completion_tokens from request body`() {
+        val customServicesSettings = service<CustomServicesSettings>()
+        val customService = createCustomService(
+            name = "Custom Agent",
+            model = "custom-agent-model",
+            contextWindowSize = 256_000L,
+            maxOutputTokens = 48_000L
+        )
+        customServicesSettings.state.services.clear()
+        customServicesSettings.state.services.add(customService)
+
+        val selection = modelSettings.getAvailableModels(FeatureType.AGENT)
+            .single { it.id == customService.id }
+
+        assertThat(selection.llmModel.contextLength).isEqualTo(256_000L)
+        assertThat(selection.llmModel.maxOutputTokens).isEqualTo(48_000L)
+        assertThat(selection.llmModel.supports(LLMCapability.OpenAIEndpoint.Responses)).isFalse()
+    }
+
+    fun `test custom openai responses agent model uses request body token limits`() {
         val customServicesSettings = service<CustomServicesSettings>()
         val customService = createCustomService(
             name = "Custom Responses",
@@ -312,10 +422,10 @@ class ModelSettingsTest : IntegrationTest() {
         return CustomServiceSettingsState().apply {
             this.name = name
             this.contextWindowSize = contextWindowSize
-            this.maxOutputTokens = maxOutputTokens
             chatCompletionSettings.url = path
             chatCompletionSettings.body.clear()
             chatCompletionSettings.body["model"] = model
+            chatCompletionSettings.body["max_output_tokens"] = maxOutputTokens
         }
     }
 }

@@ -21,6 +21,7 @@ import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.settings.models.ModelCatalog.Companion.MERCURY_CODER
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.custom.DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
@@ -749,7 +750,17 @@ private class CustomOpenAIModelProvider : ModelProvider {
                             LLMCapability.MultipleChoices,
                         ) + additionalOpenAICapability,
                         contextLength = svc.contextWindowSize.coerceAtLeast(1L),
-                        maxOutputTokens = svc.maxOutputTokens.coerceAtLeast(1L)
+                        maxOutputTokens = svc.chatCompletionSettings.body.entries
+                            .firstNotNullOfOrNull { (key, value) ->
+                                when (key) {
+                                    "max_completion_tokens", "max_tokens", "max_output_tokens" ->
+                                        (value as? Number)?.toLong() ?: value.toString()
+                                            .toLongOrNull()
+
+                                    else -> null
+                                }
+                            }
+                            ?: DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS
                     ),
                     displayName = displayName,
                     serviceId = serviceId,
