@@ -31,6 +31,7 @@ import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -94,7 +95,14 @@ object ProxyAIAgent {
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
         val hookManager = HookManager(project)
-        val toolRegistry = createToolRegistry(project, events, sessionId, provider, hookManager)
+        val toolRegistry = createToolRegistry(
+            project = project,
+            events = events,
+            sessionId = sessionId,
+            provider = provider,
+            parentModelSelection = modelSelection,
+            hookManager = hookManager
+        )
         val agentModel = service<ModelSettings>().getAgentModel()
         return AIAgentService<MessageWithContext, String>(
             promptExecutor = executor,
@@ -313,6 +321,7 @@ object ProxyAIAgent {
         events: AgentEvents,
         sessionId: String,
         provider: ServiceType,
+        parentModelSelection: ModelSelection,
         hookManager: HookManager
     ): ToolRegistry {
         val workingDirectory = project.basePath ?: System.getProperty("user.dir")
@@ -433,7 +442,7 @@ object ProxyAIAgent {
                 TaskTool(
                     project,
                     sessionId,
-                    provider,
+                    parentModelSelection,
                     events,
                     hookManager
                 )

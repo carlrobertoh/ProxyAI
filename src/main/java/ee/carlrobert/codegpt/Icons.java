@@ -17,7 +17,6 @@ public final class Icons {
       IconLoader.getIcon("/icons/expandAll.svg", Icons.class);
   public static final Icon Anthropic = IconLoader.getIcon("/icons/anthropic.svg", Icons.class);
   public static final Icon DeepSeek = IconLoader.getIcon("/icons/deepseek.png", Icons.class);
-  public static final Icon Qwen = IconLoader.getIcon("/icons/qwen.png", Icons.class);
   public static final Icon Google = IconLoader.getIcon("/icons/google.svg", Icons.class);
   public static final Icon Llama = IconLoader.getIcon("/icons/llama.svg", Icons.class);
   public static final Icon OpenAI = IconLoader.getIcon("/icons/openai.svg", Icons.class);

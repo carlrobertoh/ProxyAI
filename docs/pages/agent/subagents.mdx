@@ -15,13 +15,14 @@ Each custom subagent has:
 
 - A **title** (this is the value you pass in `subagent_type`)
 - An **objective/behavior** description
+- An optional **runtime override**
 - A **tool allowlist** that controls what it can do
 
 ### Create in the UI
 
 1. Open settings and go to Subagents.
 2. Click **Add** (or **Generate** if you want ProxyAI to draft it from a prompt).
-3. Set the title, objective, and allowed tools.
+3. Set the title, objective, runtime, and allowed tools.
 4. Save.
 
 ### Create via settings.json
@@ -36,6 +37,11 @@ You can also add subagents directly in your project's `.proxyai/settings.json`.
 | `title` | string | Yes | Display name and the value you pass as `subagent_type`. |
 | `objective` | string | Yes | Instructions that shape how the subagent behaves. |
 | `tools` | string[] | Yes | Allowed tools, stored as lowercase tool IDs (for example `read`, `intellijsearch`, `edit`). |
+| `provider` | string | No | Native provider override. Must be paired with `model`. |
+| `model` | string | No | Native model override. Must be paired with `provider`. |
+| `external_agent_id` | string | No | External ACP runtime preset ID (for example `codex`). |
+
+If you omit `provider`, `model`, and `external_agent_id`, the subagent inherits the parent Agent runtime.
 
 Example:
 
@@ -46,6 +52,8 @@ Example:
       "id": 200,
       "title": "Dependency Researcher",
       "objective": "Help choose the best dependency for the user's topic (e.g., auth, logging, HTTP, testing). Compare 2-4 realistic options, call out licensing, maintenance signals, and ecosystem fit. Prefer reading existing repo usage first, then use Context7 for API details, and WebSearch only for release notes/security/official docs. Provide a short recommendation with sources.",
+      "provider": "OPENAI",
+      "model": "gpt-5-mini",
       "tools": [
         "read",
         "intellijsearch",
@@ -86,12 +94,18 @@ When the agent spawns a subagent, it calls the `Task` tool with the inputs below
 | `description` | string | Yes | Short label for the run. |
 | `prompt` | string | Yes | Full instruction for the subagent. |
 | `subagent_type` | string | Yes | Which subagent to run (built-in type or a custom title). |
-| `model` | string | No | Optional model override for that subagent run. |
+| `model` | string | No | Optional native-model override for that subagent run. ProxyAI rejects this when the resolved runtime is external. |
 | `project_path` | string | No | Optional working directory override. |
 
 ## How subagents are surfaced
 
 Subagent tool calls are bridged back to the parent agent run so the UI can display them and approval prompts still work as expected.
+
+The task row also shows the resolved runtime as soon as the subagent starts, for example:
+
+- `OpenAI · GPT-5`
+- `Anthropic · Claude 4.5 Sonnet`
+- `Codex`
 
 ## See also
 

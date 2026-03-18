@@ -12,8 +12,6 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.event.DocumentEvent
-import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -66,43 +64,22 @@ class UserInputPanel @JvmOverloads constructor(
     val tagManager: TagManager,
     private val onSubmit: (String) -> Unit,
     private val onStop: () -> Unit,
+    withRemovableSelectedEditorTag: Boolean = true,
     private val onAcceptAll: (() -> Unit)? = null,
     private val onRejectAll: (() -> Unit)? = null,
     onApply: (() -> Unit)? = null,
     getMarkdownContent: (() -> String)? = null,
-    withRemovableSelectedEditorTag: Boolean = true,
     private val agentTokenCounterPanel: JComponent? = null,
+    private val agentTokenCounterVisibilityProvider: (() -> Boolean)? = null,
     private val sessionIdProvider: (() -> String?)? = null,
     private val conversationIdProvider: (() -> UUID?)? = null,
     private val onStartSessionTimeline: (() -> Unit)? = null,
+    private val modelSelectorComponentFactory: ((UserInputPanel) -> JComponent)? = null,
+    private val secondaryFooterComponentFactory: ((UserInputPanel) -> JComponent)? = null,
+    private val secondaryFooterComponentVisibilityProvider: (() -> Boolean)? = null,
+    private val promptEnhancerVisibilityProvider: (() -> Boolean)? = null,
+    private val sessionTimelineVisibilityProvider: (() -> Boolean)? = null,
 ) : BorderLayoutPanel() {
-
-    constructor(
-        project: Project,
-        totalTokensPanel: TotalTokensPanel,
-        parentDisposable: Disposable,
-        featureType: FeatureType,
-        tagManager: TagManager,
-        onSubmit: (String) -> Unit,
-        onStop: () -> Unit,
-        withRemovableSelectedEditorTag: Boolean
-    ) : this(
-        project,
-        totalTokensPanel,
-        parentDisposable,
-        featureType,
-        tagManager,
-        onSubmit,
-        onStop,
-        null,
-        null,
-        null,
-        null,
-        withRemovableSelectedEditorTag,
-        null,
-        null,
-        null
-    )
 
     companion object {
         private const val CORNER_RADIUS = 16
@@ -145,6 +122,9 @@ class UserInputPanel @JvmOverloads constructor(
         )
 
     private var footerPanelRef: JPanel? = null
+    private var modelSelectorComponentRef: JComponent? = null
+    private var secondaryFooterComponentRef: JComponent? = null
+    private var secondaryFooterSeparatorRef: JComponent? = null
     private val tokenUsageCounterPanel = agentTokenCounterPanel as? TokenUsageCounterPanel
 
     private val applyChip =
@@ -291,6 +271,10 @@ class UserInputPanel @JvmOverloads constructor(
         addToBottom(createToolbarSeparator().also { separatorRef = it })
         addToBottom(createFooterPanel(featureType).also { footerPanelRef = it })
 
+        promptTextField.addPropertyChangeListener("preferredSize") { _ ->
+            runInEdt { updatePreferredSizeFromChildren() }
+        }
+
         if (featureType == FeatureType.INLINE_EDIT) {
             invokeLater { updatePreferredSizeFromChildren() }
             minimumSize = Dimension(JBUI.scale(600), JBUI.scale(80))
@@ -304,17 +288,6 @@ class UserInputPanel @JvmOverloads constructor(
     }
 
     private fun setupTextChangeListener() {
-        promptTextField.document.addDocumentListener(object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) {
-                runInEdt {
-                    updatePreferredSizeFromChildren()
-                }
-            }
-        }, disposableCoroutineScope)
-
-        promptTextField.addPropertyChangeListener("preferredSize") { _ ->
-            runInEdt { updatePreferredSizeFromChildren() }
-        }
         userInputHeaderPanel.addPropertyChangeListener("preferredSize") { _ ->
             runInEdt { updatePreferredSizeFromChildren() }
         }
@@ -592,17 +565,39 @@ class UserInputPanel @JvmOverloads constructor(
 
     private fun createFooterPanel(featureType: FeatureType): JPanel {
         val modelSettings = ModelSettings.getInstance()
-        val currentService = modelSettings.getServiceForFeature(featureType)
-        val availableProviders = modelSettings.getAvailableProviders(featureType)
-        val modelComboBox = ModelComboBoxAction(
-            { imageActionSupported.set(isImageActionSupported()) },
-            currentService,
-            availableProviders,
-            true,
-            featureType
-        ).createCustomComponent(ActionPlaces.UNKNOWN).apply {
+        val modelComboBox = modelSelectorComponentFactory?.invoke(this) ?: run {
+            val currentService = modelSettings.getServiceForFeature(featureType)
+            val availableProviders = modelSettings.getAvailableProviders(featureType)
+            ModelComboBoxAction(
+                { imageActionSupported.set(isImageActionSupported()) },
+                currentService,
+                availableProviders,
+                true,
+                featureType
+            ).createCustomComponent(ActionPlaces.UNKNOWN)
+        }.apply {
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
         }
+        modelSelectorComponentRef = modelComboBox
+        val secondaryFooterComponent = secondaryFooterComponentFactory?.invoke(this)?.apply {
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        }
+        val secondaryFooterSeparator = if (secondaryFooterComponent != null) {
+            createActionSeparator()
+        } else {
+            null
+        }
+        secondaryFooterComponentRef = secondaryFooterComponent
+        secondaryFooterSeparatorRef = secondaryFooterSeparator
+        val isSecondaryFooterVisible = secondaryFooterComponentVisibilityProvider?.invoke() ?: true
+        secondaryFooterComponent?.isVisible = isSecondaryFooterVisible
+        secondaryFooterSeparator?.isVisible = isSecondaryFooterVisible
+        agentTokenCounterPanel?.isVisible = agentTokenCounterVisibilityProvider?.invoke() ?: true
+        promptEnhancerButton?.isVisible = promptEnhancerVisibilityProvider?.invoke() ?: true
+        val isSessionTimelineVisible = sessionTimelineVisibilityProvider?.invoke()
+            ?: (onStartSessionTimeline != null)
+        sessionTimelineButton?.isVisible = isSessionTimelineVisible
+        sessionTimelineSeparator?.isVisible = isSessionTimelineVisible
 
         val pnl = panel {
             twoColumnsRow(
@@ -610,6 +605,12 @@ class UserInputPanel @JvmOverloads constructor(
                     panel {
                         row {
                             cell(modelComboBox).gap(RightGap.SMALL)
+                            if (secondaryFooterComponent != null) {
+                                if (secondaryFooterSeparator != null) {
+                                    cell(secondaryFooterSeparator).gap(RightGap.SMALL)
+                                }
+                                cell(secondaryFooterComponent).gap(RightGap.SMALL)
+                            }
                             if (agentTokenCounterPanel != null) {
                                 cell(agentTokenCounterPanel).gap(RightGap.SMALL)
                             }
@@ -681,6 +682,24 @@ class UserInputPanel @JvmOverloads constructor(
     private fun isCodeGPTModelSupported(modelCode: String): Boolean {
         val model = ModelSettings.getInstance().findModel(ServiceType.PROXYAI, modelCode)
         return model?.llmModel?.capabilities?.any { it is LLMCapability.Vision.Image } == true
+    }
+
+    fun refreshModelDependentState() {
+        imageActionSupported.set(isImageActionSupported())
+        agentTokenCounterPanel?.isVisible = agentTokenCounterVisibilityProvider?.invoke() ?: true
+        val isSecondaryFooterVisible = secondaryFooterComponentVisibilityProvider?.invoke() ?: true
+        secondaryFooterComponentRef?.isVisible = isSecondaryFooterVisible
+        secondaryFooterSeparatorRef?.isVisible = isSecondaryFooterVisible
+        promptEnhancerButton?.isVisible = promptEnhancerVisibilityProvider?.invoke() ?: true
+        val isSessionTimelineVisible = sessionTimelineVisibilityProvider?.invoke()
+            ?: (onStartSessionTimeline != null)
+        sessionTimelineButton?.isVisible = isSessionTimelineVisible
+        sessionTimelineSeparator?.isVisible = isSessionTimelineVisible
+        (modelSelectorComponentRef?.getClientProperty("proxyai.refreshPresentation") as? Runnable)?.run()
+        (secondaryFooterComponentRef?.getClientProperty("proxyai.refreshPresentation") as? Runnable)?.run()
+        footerPanelRef?.revalidate()
+        footerPanelRef?.repaint()
+        updatePreferredSizeFromChildren()
     }
 
     private fun updatePreferredSizeFromChildren() {

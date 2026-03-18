@@ -7,6 +7,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.tools.*
+import ee.carlrobert.codegpt.diagnostics.DiagnosticsFilter
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentUiConfig
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.DiffViewAction
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
@@ -58,6 +59,7 @@ object ToolCallDescriptorFactory {
             ToolKind.SKILL -> createSkillDescriptor(args, result, projectId)
             ToolKind.ASK_QUESTION -> createAskDescriptor(args, result, projectId)
             ToolKind.EXIT -> createExitDescriptor(args, result, projectId)
+            ToolKind.DIAGNOSTICS -> createDiagnosticsDescriptor(args, result, projectId)
             ToolKind.OTHER -> createOtherDescriptor(toolName, args, result, projectId)
         }
     }
@@ -73,6 +75,7 @@ object ToolCallDescriptorFactory {
             toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.KILL_SHELL
             toolName == "WebSearch" || args is WebSearchTool.Args || result is WebSearchTool.Result -> ToolKind.WEB
             toolName == "WebFetch" || args is WebFetchTool.Args || result is WebFetchTool.Result -> ToolKind.WEB
+            looksLikeWebPayload(args) -> ToolKind.WEB
             toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
             toolName == "MCP" || args is McpTool.Args || result is McpTool.Result -> ToolKind.MCP
             toolName == "ResolveLibraryId" || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
@@ -80,6 +83,7 @@ object ToolCallDescriptorFactory {
             toolName == "LoadSkill" || args is LoadSkillTool.Args -> ToolKind.SKILL
             toolName == "AskUserQuestion" || args is AskUserQuestionTool.Args -> ToolKind.ASK_QUESTION
             toolName == "Exit" -> ToolKind.EXIT
+            toolName == "Diagnostics" || args is DiagnosticsTool.Args -> ToolKind.DIAGNOSTICS
             else -> ToolKind.OTHER
         }
     }
@@ -93,8 +97,15 @@ object ToolCallDescriptorFactory {
         val mcpArgs = args as? McpTool.Args
         val mcpResult = result as? McpTool.Result
         val resolvedToolName = mcpResult?.toolName ?: mcpArgs?.toolName ?: toolName
-        val server = mcpResult?.serverName ?: mcpResult?.serverId ?: mcpArgs?.serverName ?: mcpArgs?.serverId
-        val titleMain = resolvedToolName
+        val server =
+            mcpResult?.serverName ?: mcpResult?.serverId ?: mcpArgs?.serverName ?: mcpArgs?.serverId
+        val summary = mcpArgs?.arguments
+            ?.entries
+            ?.take(2)
+            ?.joinToString(" · ") { (key, value) ->
+                val valueText = value.toString().trim('"')
+                "$key=${truncateQuery(valueText)}"
+            }
 
         val actions = if (mcpResult != null) {
             listOf(
@@ -111,13 +122,14 @@ object ToolCallDescriptorFactory {
             kind = ToolKind.MCP,
             icon = Icons.MCP,
             titlePrefix = "MCP:",
-            titleMain = titleMain,
+            titleMain = resolvedToolName,
             tooltip = "MCP tool call: $resolvedToolName",
             args = args,
             result = result,
             projectId = projectId,
             secondaryBadges = listOfNotNull(serverBadge),
-            actions = actions
+            actions = actions,
+            summary = summary
         )
     }
 
@@ -133,6 +145,7 @@ object ToolCallDescriptorFactory {
                     showTextDialog(result.loadedContent, "Skill Content: ${result.name}")
                 }
             )
+
             else -> emptyList()
         }
         return ToolCallDescriptor(
@@ -474,7 +487,8 @@ object ToolCallDescriptorFactory {
 
     private fun buildSearchBadges(result: Any?): List<Badge> {
         return if (result is IntelliJSearchTool.Result) {
-            listOf(Badge(
+            listOf(
+                Badge(
                 "[${result.totalMatches} matches]",
                 JBColor.BLUE,
                 action = { showTextDialog(result.output, "Search Results") }
@@ -517,21 +531,12 @@ object ToolCallDescriptorFactory {
         result: Any?,
         projectId: String?
     ): ToolCallDescriptor {
-        val query = when (args) {
-            is WebSearchTool.Args -> args.query
-            is WebFetchTool.Args -> args.url
-            else -> "Unknown"
-        }
+        val isFetch = isWebFetchArgs(args) || result is WebFetchTool.Result
+        val query = extractWebQuery(args, result)
 
-        val titlePrefix = when (args) {
-            is WebFetchTool.Args -> "Fetch:"
-            else -> "Web:"
-        }
+        val titlePrefix = if (isFetch) "Fetch:" else "Web:"
 
-        val tooltip = when (args) {
-            is WebFetchTool.Args -> "Fetch: $query"
-            else -> "Web search: $query"
-        }
+        val tooltip = if (isFetch) "Fetch: $query" else "Web search: $query"
 
         val truncatedQuery = truncateQuery(query)
 
@@ -546,6 +551,74 @@ object ToolCallDescriptorFactory {
             result = result,
             projectId = projectId
         )
+    }
+
+    private fun extractWebQuery(args: Any, result: Any?): String {
+        return when (args) {
+            is WebSearchTool.Args -> args.query
+            is WebFetchTool.Args -> args.url
+            is JsonObject -> jsonObjectString(
+                args,
+                "url",
+                "uri",
+                "href",
+                "link",
+                "query",
+                "q"
+            ) ?: extractFirstUrl(args.toString()) ?: "Unknown"
+
+            is Map<*, *> -> mapString(
+                args,
+                "url",
+                "uri",
+                "href",
+                "link",
+                "query",
+                "q"
+            ) ?: extractFirstUrl(args.toString()) ?: "Unknown"
+
+            is String -> extractFirstUrl(args) ?: args.takeIf { it.isNotBlank() } ?: "Unknown"
+            else -> (result as? WebFetchTool.Result)?.url ?: "Unknown"
+        }
+    }
+
+    private fun isWebFetchArgs(args: Any): Boolean {
+        return when (args) {
+            is WebFetchTool.Args -> true
+            is JsonObject -> jsonObjectString(args, "url", "uri", "href", "link") != null
+            is Map<*, *> -> mapString(args, "url", "uri", "href", "link") != null
+            is String -> extractFirstUrl(args) != null
+            else -> false
+        }
+    }
+
+    private fun looksLikeWebPayload(args: Any): Boolean {
+        return when (args) {
+            is JsonObject -> jsonObjectString(args, "url", "uri", "href", "link", "query", "q") != null
+            is Map<*, *> -> mapString(args, "url", "uri", "href", "link", "query", "q") != null
+            is String -> extractFirstUrl(args) != null
+            else -> false
+        }
+    }
+
+    private fun jsonObjectString(obj: JsonObject, vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            (obj[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        } ?: (obj["action"] as? JsonObject)?.let { action ->
+            keys.firstNotNullOfOrNull { key ->
+                (action[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+            }
+        }
+    }
+
+    private fun mapString(map: Map<*, *>, vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            (map[key] as? String)?.takeIf { it.isNotBlank() }
+        } ?: (map["action"] as? Map<*, *>)?.let { action ->
+            keys.firstNotNullOfOrNull { key ->
+                (action[key] as? String)?.takeIf { it.isNotBlank() }
+            }
+        }
     }
 
     private fun createTaskDescriptor(
@@ -761,6 +834,57 @@ object ToolCallDescriptorFactory {
         )
     }
 
+    private fun createDiagnosticsDescriptor(
+        args: Any,
+        result: Any?,
+        projectId: String?
+    ): ToolCallDescriptor {
+        val diagnosticsArgs = args as? DiagnosticsTool.Args
+        val filePath = diagnosticsArgs?.filePath ?: ""
+        val fileName = extractBaseName(filePath)
+        val filterLabel = when (diagnosticsArgs?.filter) {
+            DiagnosticsFilter.ALL -> "all"
+            else -> "errors"
+        }
+
+        val badges = mutableListOf<Badge>()
+        val actions = mutableListOf<ToolAction>()
+
+        if (result is DiagnosticsTool.Result) {
+            when {
+                result.error != null -> badges.add(Badge("Error", JBColor.RED))
+                else -> {
+                    badges.add(Badge("[${result.diagnosticCount} $filterLabel]", JBColor.BLUE))
+                    if (result.output.isNotBlank()) {
+                        actions.add(
+                            ToolAction("View Diagnostics", AllIcons.Actions.Show) {
+                                showTextDialog(result.output, "Diagnostics: $fileName")
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        return ToolCallDescriptor(
+            kind = ToolKind.DIAGNOSTICS,
+            icon = AllIcons.General.InspectionsOK,
+            titlePrefix = "Diagnostics:",
+            titleMain = fileName,
+            tooltip = "Diagnostics: $filePath ($filterLabel)",
+            fileLink = FileLink(
+                path = filePath,
+                displayName = fileName,
+                enabled = filePath.isNotBlank()
+            ),
+            secondaryBadges = badges,
+            actions = actions,
+            args = args,
+            result = result,
+            projectId = projectId
+        )
+    }
+
     private fun createOtherDescriptor(
         toolName: String,
         args: Any,
@@ -769,10 +893,10 @@ object ToolCallDescriptorFactory {
     ): ToolCallDescriptor {
         return ToolCallDescriptor(
             kind = ToolKind.OTHER,
-            icon = AllIcons.Actions.Help,
-            titlePrefix = "Tool:",
+            icon = AllIcons.Actions.Execute,
+            titlePrefix = "",
             titleMain = toolName,
-            tooltip = "Tool: $toolName",
+            tooltip = toolName,
             args = args,
             result = result,
             projectId = projectId
@@ -817,7 +941,8 @@ object ToolCallDescriptorFactory {
 
     private fun buildDocsBadges(result: Any?): List<Badge> {
         return if (result is GetLibraryDocsTool.Result.Success) {
-            listOf(Badge(
+            listOf(
+                Badge(
                 "[View Results]",
                 JBColor.BLUE,
                 action = {
@@ -836,7 +961,8 @@ object ToolCallDescriptorFactory {
         return when (result) {
             is WebSearchTool.Result -> {
                 val argsObj = args as? WebSearchTool.Args
-                val badges = mutableListOf(Badge(
+                val badges = mutableListOf(
+                    Badge(
                     "[${result.results.size} results]",
                     JBColor.BLUE,
                     action = { showWebResultsDialog(result) }
@@ -971,4 +1097,10 @@ object ToolCallDescriptorFactory {
         val footerPanel = createDialogFooterPanel(dialog)
         showDialog(dialog, scrollPane, footerPanel)
     }
+
+    private fun extractFirstUrl(text: String): String? {
+        return URL_REGEX.find(text)?.value
+    }
+
+    private val URL_REGEX = Regex("""https?://[^\s"'<>]+""")
 }

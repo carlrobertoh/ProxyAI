@@ -60,14 +60,18 @@ class CustomServicesSettings :
         val oldSettingsService = serviceOrNull<CustomServiceSettings>()
 
         // This line checks if the legacy API key exists to determine if migration of old settings is needed
-        val oldApiKey = CredentialsStore.getCredential(CredentialsStore.CredentialKey.CustomServiceApiKeyLegacy)
+        val oldApiKey =
+            CredentialsStore.getCredential(CredentialsStore.CredentialKey.CustomServiceApiKeyLegacy)
 
         if (oldSettingsService != null && oldApiKey != null) {
             val migrated = CustomServiceSettingsState().apply { copyFrom(oldSettingsService.state) }
             state.services.clear()
             state.services.add(migrated)
 
-            CredentialsStore.setCredential(CredentialsStore.CredentialKey.CustomServiceApiKeyLegacy, null)
+            CredentialsStore.setCredential(
+                CredentialsStore.CredentialKey.CustomServiceApiKeyLegacy,
+                null
+            )
 
             oldSettingsService.state.apply {
                 template = CustomServiceTemplate.OPENAI
@@ -156,7 +160,6 @@ class CustomServiceSettingsState : BaseState() {
     var name by string(DEFAULT_SERVICE_SETTINGS_NAME)
     var template by enum(CustomServiceTemplate.OPENAI)
     var contextWindowSize by property(DEFAULT_CUSTOM_OPENAI_CONTEXT_WINDOW_SIZE)
-    var maxOutputTokens by property(DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS)
     var chatCompletionSettings by property(CustomServiceChatCompletionSettingsState())
     var codeCompletionSettings by property(CustomServiceCodeCompletionSettingsState())
 

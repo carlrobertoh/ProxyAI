@@ -22,6 +22,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.agent.SubagentTool
 import ee.carlrobert.codegpt.settings.ProxyAISubagent
+import ee.carlrobert.codegpt.settings.ProxyAISubagentTarget
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
 import java.awt.Dimension
@@ -35,7 +36,7 @@ class SubagentsForm(private val project: Project) {
 
     private val listModel = DefaultListModel<SubagentDetails>()
     private val list = JBList(listModel)
-    private val detailsPanel = SubagentDetailsPanel(readOnlyTools, writeTools)
+    private val detailsPanel = SubagentDetailsPanel(project, readOnlyTools, writeTools)
 
     fun createPanel(): JComponent {
         list.cellRenderer = SubagentListCellRenderer()
@@ -86,7 +87,12 @@ class SubagentsForm(private val project: Project) {
                     val tools = suggestTools(input)
                     runInEdt(ModalityState.any()) {
                         if (generated != null) {
-                            val d = SubagentDetails(nextId(), generated!!.title, generated!!.description, tools)
+                            val d = SubagentDetails(
+                                nextId(),
+                                generated!!.title,
+                                generated!!.description,
+                                tools
+                            )
                             listModel.addElement(d)
                             list.selectedIndex = listModel.size - 1
                             detailsPanel.updateData(d)
@@ -134,6 +140,10 @@ class SubagentsForm(private val project: Project) {
         }
     }
 
+    fun dispose() {
+        detailsPanel.dispose()
+    }
+
     private fun currentFormStates(): List<SubagentDetails> {
         detailsPanel.collect()
         return (0 until listModel.size).map { idx -> listModel.getElementAt(idx) }
@@ -152,7 +162,12 @@ class SubagentsForm(private val project: Project) {
             val title = entry.title.trim()
             if (title.isEmpty()) return "Title is required."
             if (entry.description.trim().isEmpty()) return "Description is required."
-            if (entry.tools.isEmpty()) return "Select at least one tool for '$title'."
+            if (entry.externalAgentId.isNullOrBlank() && entry.tools.isEmpty()) {
+                return "Select at least one tool for '$title'."
+            }
+            entry.toStored().runtimeConfigurationError()?.let { error ->
+                return "$title: $error"
+            }
             val key = title.lowercase()
             if (!seen.add(key)) return "Subagent titles must be unique."
         }
@@ -224,15 +239,37 @@ private fun ProxyAISubagent.toDetails(): SubagentDetails {
         title = title,
         description = objective,
         tools = SubagentTool.parse(tools).toMutableSet(),
+        provider = provider,
+        model = model,
+        externalAgentId = externalAgentId,
+        externalAgentOptions = externalAgentOptions.toMutableMap(),
     )
 }
 
 private fun SubagentDetails.toStored(): ProxyAISubagent {
+    val target = when {
+        !externalAgentId.isNullOrBlank() -> ProxyAISubagentTarget(
+            external = ProxyAISubagentTarget.External(
+                agentId = externalAgentId,
+                options = externalAgentOptions.toMap(linkedMapOf())
+            )
+        )
+
+        provider != null || !model.isNullOrBlank() -> ProxyAISubagentTarget(
+            native = ProxyAISubagentTarget.Native(
+                provider = provider,
+                model = model
+            )
+        )
+
+        else -> null
+    }
     return ProxyAISubagent(
         id = id,
         title = title,
         objective = description,
-        tools = SubagentTool.toStoredValues(tools)
+        tools = SubagentTool.toStoredValues(tools),
+        target = target,
     )
 }
 

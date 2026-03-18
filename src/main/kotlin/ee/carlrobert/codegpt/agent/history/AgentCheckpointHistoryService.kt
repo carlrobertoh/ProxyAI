@@ -6,6 +6,7 @@ import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -203,9 +204,14 @@ class AgentCheckpointHistoryService(project: Project) {
         }
 
         return agentIds.mapNotNull { agentId ->
-            runCatching { buildSummary(agentId) }
-                .onFailure { logger.warn("Failed to load checkpoints for agentId=$agentId", it) }
-                .getOrNull()
+            try {
+                buildSummary(agentId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
+                logger.warn("Failed to load checkpoints for agentId=$agentId", throwable)
+                null
+            }
         }.sortedByDescending { it.latestCreatedAt }
     }
 

@@ -1,5 +1,7 @@
 package ee.carlrobert.codegpt.toolwindow.agent
 
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
@@ -15,6 +17,8 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.agent.*
+import ee.carlrobert.codegpt.agent.external.ExternalAcpAgents
+import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentService
 import ee.carlrobert.codegpt.agent.ProxyAIAgent.loadProjectInstructions
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointTurnSequencer
@@ -27,6 +31,8 @@ import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentToolWindowLandingPanel
+import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentModelComboBoxAction
+import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentRuntimeOptionsComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.agent.ui.RollbackPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.TodoListPanel
 import ee.carlrobert.codegpt.toolwindow.agent.ui.ToolCallCard
@@ -43,6 +49,7 @@ import ee.carlrobert.codegpt.ui.components.TokenUsageCounterPanel
 import ee.carlrobert.codegpt.ui.queue.QueuedMessagePanel
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
+import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.StringUtil.stripThinkingBlocks
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
@@ -122,9 +129,15 @@ class AgentToolWindowTabPanel(
         onStop = ::handleCancel,
         withRemovableSelectedEditorTag = true,
         agentTokenCounterPanel = TokenUsageCounterPanel(project, sessionId),
+        agentTokenCounterVisibilityProvider = { agentSession.externalAgentId.isNullOrBlank() },
         sessionIdProvider = { sessionId },
         conversationIdProvider = { conversation.id },
-        onStartSessionTimeline = ::showSessionStartTimelineDialog
+        onStartSessionTimeline = ::showSessionStartTimelineDialog,
+        modelSelectorComponentFactory = ::createAgentModelSelector,
+        secondaryFooterComponentFactory = ::createAgentRuntimeOptionsSelector,
+        secondaryFooterComponentVisibilityProvider = { !agentSession.externalAgentId.isNullOrBlank() },
+        promptEnhancerVisibilityProvider = { agentSession.externalAgentId.isNullOrBlank() },
+        sessionTimelineVisibilityProvider = { agentSession.externalAgentId.isNullOrBlank() }
     )
     private var rollbackPanel: RollbackPanel
     private val todoListPanel = TodoListPanel()
@@ -287,8 +300,10 @@ class AgentToolWindowTabPanel(
         if (message.text.isBlank()) return
         disposeLandingPanelIfPresent()
         scrollablePanel.clearLandingViewIfVisible()
-        agentSession.serviceType =
-            ModelSettings.getInstance().getServiceForFeature(FeatureType.AGENT)
+        val modelSettings = ModelSettings.getInstance()
+        val agentModelSelection = modelSettings.getModelSelectionForFeature(FeatureType.AGENT)
+        agentSession.serviceType = agentModelSelection.provider
+        agentSession.modelCode = agentModelSelection.selectionId
 
         val agentService = project.service<AgentService>()
 
@@ -380,6 +395,101 @@ class AgentToolWindowTabPanel(
             project.service<AgentToolWindowContentManager>()
                 .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.STOPPED)
         }
+    }
+
+    private fun createAgentModelSelector(inputPanel: UserInputPanel): JComponent {
+        val modelSettings = ModelSettings.getInstance()
+        return AgentModelComboBoxAction(
+            project,
+            agentSession,
+            {
+                inputPanel.refreshModelDependentState()
+            },
+            { externalAgentId ->
+                project.service<ExternalAcpAgentService>().closeSession(sessionId)
+                agentSession.externalAgentId = externalAgentId
+                agentSession.externalAgentSessionId = null
+                agentSession.externalAgentConfigOptions = emptyList()
+                agentSession.externalAgentConfigSelections = emptyMap()
+                agentSession.externalAgentErrorMessage = null
+                agentSession.externalAgentConfigLoading = !externalAgentId.isNullOrBlank()
+                if (!externalAgentId.isNullOrBlank()) {
+                    backgroundScope.launch {
+                        runCatching {
+                            project.service<ExternalAcpAgentService>().warmUpSession(agentSession)
+                        }.onFailure { ex ->
+                            agentSession.externalAgentConfigLoading = false
+                            project.service<ExternalAcpAgentService>().closeSession(sessionId)
+                            agentSession.externalAgentErrorMessage =
+                                buildExternalAgentFailureMessage(externalAgentId, ex)
+                            OverlayUtil.showNotification(
+                                "${displayExternalAgentName(externalAgentId)} unavailable. ${agentSession.externalAgentErrorMessage}",
+                                NotificationType.ERROR
+                            )
+                        }
+                        withContext(Dispatchers.EDT) {
+                            inputPanel.refreshModelDependentState()
+                        }
+                    }
+                }
+            },
+            modelSettings.getServiceForFeature(FeatureType.AGENT),
+            modelSettings.getAvailableProviders(FeatureType.AGENT),
+            true
+        ).createCustomComponent(com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN)
+    }
+
+    private fun displayExternalAgentName(externalAgentId: String): String {
+        return ExternalAcpAgents.displayName(externalAgentId)
+    }
+
+    private fun buildExternalAgentFailureMessage(
+        externalAgentId: String,
+        throwable: Throwable
+    ): String {
+        return ExternalAcpAgents.buildFailureMessage(
+            id = externalAgentId,
+            throwable = throwable,
+            fallbackMessage = "Failed to start ${displayExternalAgentName(externalAgentId)}"
+        )
+    }
+
+    private fun buildExternalAgentConfigFailureMessage(throwable: Throwable): String {
+        val message = throwable.message.orEmpty()
+        return when {
+            message.contains("does not support runtime option changes", ignoreCase = true) ->
+                "This agent exposes runtime info but does not support changing it over ACP."
+
+            message.isNotBlank() -> message
+            else -> "Failed to update runtime option"
+        }
+    }
+
+    private fun createAgentRuntimeOptionsSelector(inputPanel: UserInputPanel): JComponent {
+        return AgentRuntimeOptionsComboBoxAction(
+            agentSession,
+            { optionId, value ->
+                backgroundScope.launch {
+                    agentSession.externalAgentConfigLoading = true
+                    withContext(Dispatchers.EDT) {
+                        inputPanel.refreshModelDependentState()
+                    }
+                    runCatching {
+                        project.service<ExternalAcpAgentService>()
+                            .setSessionConfigOption(agentSession, optionId, value)
+                    }.onFailure { ex ->
+                        agentSession.externalAgentConfigLoading = false
+                        OverlayUtil.showNotification(
+                            "${displayExternalAgentName(agentSession.externalAgentId ?: "agent")} option update failed. ${buildExternalAgentConfigFailureMessage(ex)}",
+                            NotificationType.ERROR
+                        )
+                    }
+                    withContext(Dispatchers.EDT) {
+                        inputPanel.refreshModelDependentState()
+                    }
+                }
+            }
+        ).createCustomComponent(com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN)
     }
 
     private fun displayLandingView() {

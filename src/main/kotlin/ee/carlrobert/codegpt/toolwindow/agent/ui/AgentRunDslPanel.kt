@@ -141,6 +141,7 @@ class AgentRunDslPanel(
     private fun formatTaskSummary(summary: TaskSummary?): String? {
         if (summary == null) return null
         val parts = mutableListOf<String>()
+        summary.runtimeLabel?.takeIf { it.isNotBlank() }?.let(parts::add)
         if (summary.toolCalls > 0) {
             parts.add("${summary.toolCalls} calls")
         }

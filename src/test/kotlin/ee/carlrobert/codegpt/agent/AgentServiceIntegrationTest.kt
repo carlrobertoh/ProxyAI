@@ -191,7 +191,9 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         contentManager.createNewAgentTab(
             AgentSession(
                 sessionId = sessionId,
-                conversation = Conversation()
+                conversation = Conversation(),
+                createdAt = System.currentTimeMillis(),
+                lastActiveAt = System.currentTimeMillis()
             ),
             select = false
         )

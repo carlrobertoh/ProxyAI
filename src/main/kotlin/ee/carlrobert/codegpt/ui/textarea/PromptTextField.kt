@@ -677,8 +677,8 @@ class PromptTextField(
     }
 
     private fun getToolWindowHeight(toolWindow: ToolWindow): Int {
-        return toolWindow.component.visibleRect?.height
-            ?: PromptTextFieldConstants.DEFAULT_TOOL_WINDOW_HEIGHT
+        val h = toolWindow.component.visibleRect.height
+        return if (h > 0) h else PromptTextFieldConstants.DEFAULT_TOOL_WINDOW_HEIGHT
     }
 
     companion object {

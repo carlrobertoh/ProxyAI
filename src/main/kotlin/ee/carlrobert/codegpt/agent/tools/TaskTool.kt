@@ -12,23 +12,31 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.*
+import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentService
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.ProxyAISubagent
+import ee.carlrobert.codegpt.settings.agents.ResolvedSubagentRuntime
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
+import ee.carlrobert.codegpt.settings.agents.SubagentRuntimeResolver
+import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
-import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.tokens.truncateToolResult
+import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
+import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
+import ee.carlrobert.codegpt.conversations.Conversation
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 class TaskTool(
     private val project: Project,
     private val sessionId: String,
-    private val provider: ServiceType,
+    private val parentModelSelection: ModelSelection,
     private val events: AgentEvents,
     private val hookManager: HookManager,
 ) : BaseTool<TaskTool.Args, TaskTool.Result>(
@@ -134,32 +142,115 @@ class TaskTool(
         trackingEvents: AgentEvents,
         totalTokenCounter: AtomicLong
     ): Result {
-        val toolCallBridge = SubagentToolCallBridge(trackingEvents, parentId, sessionId)
-        val agent = createSubagent(args, trackingEvents, toolCallBridge, totalTokenCounter)
-        toolCallBridge.setToolRegistry((agent as? GraphAIAgent<*, *>)?.toolRegistry)
+        val configuredSubagent =
+            SubagentRuntimeResolver.findConfiguredSubagent(project, args.subagentType)
+        val resolvedRuntime = SubagentRuntimeResolver.resolve(
+            configuredSubagent = configuredSubagent,
+            parentSelection = parentModelSelection,
+            taskModelOverride = args.model
+        )
 
-        val output = normalizeSubagentOutput(agent.run(args.prompt), args.subagentType)
+        val output = when (resolvedRuntime) {
+            is ResolvedSubagentRuntime.Native -> executeNativeSubagent(
+                args = args,
+                configuredSubagent = configuredSubagent,
+                resolvedRuntime = resolvedRuntime,
+                trackingEvents = trackingEvents,
+                parentId = parentId,
+                totalTokenCounter = totalTokenCounter
+            )
+
+            is ResolvedSubagentRuntime.External -> executeExternalSubagent(
+                args = args,
+                configuredSubagent = configuredSubagent,
+                resolvedRuntime = resolvedRuntime,
+                trackingEvents = trackingEvents,
+                parentId = parentId
+            )
+        }
         val result = args.createResult(output, startTime, totalTokenCounter.get())
         emitStopHook(args, result.output, result.executionTime)
         return result
     }
 
-    private fun createSubagent(
+    private suspend fun executeNativeSubagent(
         args: Args,
+        configuredSubagent: ProxyAISubagent?,
+        resolvedRuntime: ResolvedSubagentRuntime.Native,
+        trackingEvents: AgentEvents,
+        parentId: String,
+        totalTokenCounter: AtomicLong
+    ): String {
+        val toolCallBridge = SubagentToolCallBridge(trackingEvents, parentId, sessionId)
+        val agent = createNativeSubagent(
+            args = args,
+            configuredSubagent = configuredSubagent,
+            resolvedRuntime = resolvedRuntime,
+            trackingEvents = trackingEvents,
+            toolCallBridge = toolCallBridge,
+            totalTokenCounter = totalTokenCounter
+        )
+        toolCallBridge.setToolRegistry((agent as? GraphAIAgent<*, *>)?.toolRegistry)
+        return normalizeSubagentOutput(agent.run(args.prompt), args.subagentType)
+    }
+
+    private suspend fun executeExternalSubagent(
+        args: Args,
+        configuredSubagent: ProxyAISubagent?,
+        resolvedRuntime: ResolvedSubagentRuntime.External,
+        trackingEvents: AgentEvents,
+        parentId: String
+    ): String {
+        val output = StringBuilder()
+        val bridgeEvents = ExternalSubagentEventsAdapter(
+            delegate = trackingEvents,
+            parentId = parentId,
+            sessionId = sessionId,
+            output = output
+        )
+        val subagentSessionId = "$sessionId:subagent:${UUID.randomUUID()}"
+        val subagentSession = AgentSession(
+            sessionId = subagentSessionId,
+            conversation = Conversation(),
+            externalAgentId = resolvedRuntime.externalAgentId,
+            externalAgentConfigSelections = resolvedRuntime.configSelections
+        )
+        val prompt = buildExternalSubagentPrompt(args, configuredSubagent)
+
+        try {
+            project.service<ExternalAcpAgentService>().runPromptLoop(
+                session = subagentSession,
+                firstMessage = MessageWithContext(prompt, uiVisible = false),
+                events = bridgeEvents,
+                pollNextQueued = { null }
+            )
+        } finally {
+            project.service<ExternalAcpAgentService>().closeSession(subagentSessionId)
+        }
+
+        return normalizeSubagentOutput(output.toString(), args.subagentType)
+    }
+
+    private fun createNativeSubagent(
+        args: Args,
+        configuredSubagent: ProxyAISubagent?,
+        resolvedRuntime: ResolvedSubagentRuntime.Native,
         trackingEvents: AgentEvents,
         toolCallBridge: SubagentToolCallBridge,
         totalTokenCounter: AtomicLong
     ): AIAgent<String, String> {
         val approveToolCall = approvalHandler(trackingEvents)
-        val configuredSubagent = configuredSubagent(args.subagentType)
-        return if (configuredSubagent != null) {
+        return if (!isBuiltInAgentType(args.subagentType)) {
+            val customSubagent = configuredSubagent
+                ?: error("Unknown subagent type: ${args.subagentType}")
             AgentFactory.createManualAgent(
-                provider,
+                resolvedRuntime.provider,
+                resolvedRuntime.selection,
                 project,
                 sessionId,
-                configuredSubagent.title,
-                configuredSubagent.behavior,
-                configuredSubagent.tools,
+                customSubagent.title,
+                customSubagent.objective,
+                customSubagent.tools.toSet(),
                 approveToolCall = approveToolCall,
                 onAgentToolCallStarting = toolCallBridge::onToolCallStarting,
                 onAgentToolCallCompleted = toolCallBridge::onToolCallCompleted,
@@ -169,10 +260,11 @@ class TaskTool(
             )
         } else {
             val agentType = AgentType.fromString(args.subagentType)
-            val builtInConfig = lookupBuiltInConfig(project, agentType)
+            val builtInConfig = configuredSubagent
             AgentFactory.createAgent(
                 agentType,
-                provider,
+                resolvedRuntime.provider,
+                resolvedRuntime.selection,
                 project,
                 sessionId,
                 approveToolCall = approveToolCall,
@@ -187,11 +279,26 @@ class TaskTool(
         }
     }
 
-    private fun configuredSubagent(subagentType: String): ConfiguredSubagent? {
-        return if (isBuiltInAgentType(subagentType)) null else findConfiguredSubagent(
-            project,
-            subagentType
-        )
+    private fun buildExternalSubagentPrompt(
+        args: Args,
+        configuredSubagent: ProxyAISubagent?
+    ): String {
+        val title = configuredSubagent?.title?.takeIf { it.isNotBlank() } ?: args.subagentType
+        val objective = configuredSubagent?.objective
+            ?.takeIf { it.isNotBlank() }
+            ?: "Execute the delegated task precisely and report the result concisely."
+        return """
+            You are a delegated subagent inside ProxyAI.
+
+            Subagent name: $title
+            Subagent objective:
+            $objective
+
+            Execute the task below and return a concise result.
+
+            Task:
+            ${args.prompt}
+        """.trimIndent()
     }
 
     private suspend fun emitStopHook(args: Args, output: String, duration: Long) {
@@ -377,36 +484,11 @@ private fun buildTaskDescription(project: Project): String {
     }.trimEnd()
 }
 
-private data class ConfiguredSubagent(
-    val title: String,
-    val behavior: String,
-    val tools: Set<String>
-)
-
 private fun isBuiltInAgentType(value: String): Boolean {
     return when (value.lowercase().trim()) {
         "general-purpose", "explore" -> true
         else -> false
     }
-}
-
-private fun findConfiguredSubagent(project: Project, name: String): ConfiguredSubagent? {
-    val subagent = runCatching {
-        project.service<ProxyAISettingsService>().getSubagents()
-            .firstOrNull {
-                !SubagentDefaults.isBuiltInId(it.id) && it.title.equals(
-                    name,
-                    ignoreCase = true
-                )
-            }
-    }.getOrNull() ?: return null
-    val title = subagent.title.takeIf { it.isNotBlank() } ?: name
-    return ConfiguredSubagent(title, subagent.objective, subagent.tools.toSet())
-}
-
-private fun lookupBuiltInConfig(project: Project, agentType: AgentType): ProxyAISubagent? {
-    val id = SubagentDefaults.builtInIdFor(agentType) ?: return null
-    return project.service<ProxyAISettingsService>().getSubagents().firstOrNull { it.id == id }
 }
 
 private fun approvalHandler(events: AgentEvents): suspend (String, String) -> Boolean =
@@ -419,6 +501,44 @@ private fun approvalHandler(events: AgentEvents): suspend (String, String) -> Bo
         }
         events.approveToolCall(ToolApprovalRequest(approvalType, title, details))
     }
+
+private class ExternalSubagentEventsAdapter(
+    private val delegate: AgentEvents,
+    private val parentId: String,
+    private val sessionId: String,
+    private val output: StringBuilder,
+) : AgentEvents {
+    private val childIdsByToolId = ConcurrentHashMap<String, String?>()
+
+    override fun onTextReceived(text: String) {
+        output.append(text)
+    }
+
+    override fun onToolStarting(id: String, toolName: String, args: Any?) {
+        val childId = delegate.onSubAgentToolStarting(parentId, toolName, args)
+        childIdsByToolId[id] = childId
+        if (childId != null) {
+            ToolRunContext.set(sessionId, childId)
+        }
+    }
+
+    override fun onToolCompleted(id: String?, toolName: String, result: Any?) {
+        val childId = id?.let(childIdsByToolId::remove)
+        delegate.onSubAgentToolCompleted(parentId, childId, toolName, result)
+    }
+
+    override fun onQueuedMessagesResolved() = Unit
+
+    override suspend fun approveToolCall(request: ToolApprovalRequest): Boolean {
+        return when (request.type) {
+            ToolApprovalType.WRITE,
+            ToolApprovalType.EDIT,
+            ToolApprovalType.BASH -> delegate.approveToolCall(request)
+
+            ToolApprovalType.GENERIC -> true
+        }
+    }
+}
 
 private class SubagentToolCallBridge(
     private val events: AgentEvents,

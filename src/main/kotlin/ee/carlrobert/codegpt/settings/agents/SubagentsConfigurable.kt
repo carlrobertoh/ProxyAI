@@ -24,4 +24,10 @@ class SubagentsConfigurable(private val project: Project) : Configurable {
     override fun reset() {
         form.resetChanges()
     }
+
+    override fun disposeUIResources() {
+        if (::form.isInitialized) {
+            form.dispose()
+        }
+    }
 }

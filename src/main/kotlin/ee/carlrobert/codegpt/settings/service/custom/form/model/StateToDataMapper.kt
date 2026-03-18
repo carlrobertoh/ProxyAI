@@ -19,7 +19,6 @@ fun CustomServiceSettingsState.mapToData(): CustomServiceSettingsData =
             CredentialsStore.getCredential(CredentialsStore.CredentialKey.CustomServiceApiKeyById(id!!))
         else null,
         contextWindowSize = contextWindowSize,
-        maxOutputTokens = maxOutputTokens,
         chatCompletionSettings = chatCompletionSettings.mapToData(),
         codeCompletionSettings = codeCompletionSettings.mapToData()
     )

@@ -18,6 +18,7 @@ import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.toolwindow.ui.ModelListPopup
+import ee.carlrobert.codegpt.toolwindow.ui.ModelListPopups
 import java.awt.Color
 import javax.swing.Icon
 import javax.swing.JComponent
@@ -190,18 +191,7 @@ class SettingsModelComboBoxAction(
         group: DefaultActionGroup,
         context: DataContext,
         disposeCallback: Runnable?
-    ): JBPopup {
-        val popup = ModelListPopup(group, context)
-        if (disposeCallback != null) {
-            popup.addListener(object : JBPopupListener {
-                override fun onClosed(event: LightweightWindowEvent) {
-                    disposeCallback.run()
-                }
-            })
-        }
-        popup.isShowSubmenuOnHover = true
-        return popup
-    }
+    ): JBPopup = ModelListPopups.createPopup(group, context, disposeCallback)
 
     private fun getModelsForFeature(featureType: FeatureType): List<ModelSelection> {
         val allModels = service<ModelSettings>().getAvailableModels(featureType)
