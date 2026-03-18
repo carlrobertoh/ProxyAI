@@ -12,8 +12,6 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.event.DocumentEvent
-import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -273,6 +271,10 @@ class UserInputPanel @JvmOverloads constructor(
         addToBottom(createToolbarSeparator().also { separatorRef = it })
         addToBottom(createFooterPanel(featureType).also { footerPanelRef = it })
 
+        promptTextField.addPropertyChangeListener("preferredSize") { _ ->
+            runInEdt { updatePreferredSizeFromChildren() }
+        }
+
         if (featureType == FeatureType.INLINE_EDIT) {
             invokeLater { updatePreferredSizeFromChildren() }
             minimumSize = Dimension(JBUI.scale(600), JBUI.scale(80))
@@ -286,17 +288,6 @@ class UserInputPanel @JvmOverloads constructor(
     }
 
     private fun setupTextChangeListener() {
-        promptTextField.document.addDocumentListener(object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) {
-                runInEdt {
-                    updatePreferredSizeFromChildren()
-                }
-            }
-        }, disposableCoroutineScope)
-
-        promptTextField.addPropertyChangeListener("preferredSize") { _ ->
-            runInEdt { updatePreferredSizeFromChildren() }
-        }
         userInputHeaderPanel.addPropertyChangeListener("preferredSize") { _ ->
             runInEdt { updatePreferredSizeFromChildren() }
         }
