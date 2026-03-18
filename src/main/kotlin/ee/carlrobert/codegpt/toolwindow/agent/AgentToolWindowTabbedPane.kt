@@ -138,33 +138,33 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     fun addNewTab(toolWindowPanel: AgentToolWindowTabPanel, select: Boolean) {
         val wasEmpty = activeTabMapping.isEmpty()
         val tabIndices = activeTabMapping.keys.toTypedArray()
-        var nextIndex = 0
+        var nextNumber = 0
 
         for (title in tabIndices) {
             if (title.matches("Agent \\d+".toRegex())) {
-                val numberPart = title.replace("\\D+".toRegex(), "")
-                val tabNum = numberPart.toInt()
-                if (tabNum - 1 == nextIndex) {
-                    nextIndex++
+                val tabNum = title.replace("\\D+".toRegex(), "").toInt()
+                if (tabNum - 1 == nextNumber) {
+                    nextNumber++
                 } else {
                     break
                 }
             }
         }
 
-        val title = getTitle(toolWindowPanel, nextIndex)
+        val title = getTitle(toolWindowPanel, nextNumber)
         val sessionId = toolWindowPanel.getSessionId()
         toolWindowPanel.getAgentSession().displayName = title
 
-        super.insertTab(title, null, toolWindowPanel, null, nextIndex)
+        val insertionIndex = tabCount
+        super.insertTab(title, null, toolWindowPanel, null, insertionIndex)
         activeTabMapping[title] = toolWindowPanel
         if (select) {
-            selectedIndex = nextIndex
+            selectedIndex = insertionIndex
         }
 
         sessionStates[sessionId] = TabState(status = TabStatus.STOPPED, unseen = false)
 
-        setTabComponentAt(nextIndex, createTabButtonPanel(title, TabStatus.STOPPED))
+        setTabComponentAt(insertionIndex, createTabButtonPanel(title, TabStatus.STOPPED))
         toolWindowPanel.requestFocusForTextArea()
 
         if (wasEmpty) {
@@ -387,39 +387,21 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         }
     }
 
-    private inner class CloseActionListener(private val title: String) : ActionListener {
-        override fun actionPerformed(evt: ActionEvent) {
-            val tabIndex = indexOfTab(title)
-            if (tabIndex >= 0) {
-                closeTabAt(tabIndex)
-            }
-        }
-    }
-
     private inner class TabPopupMenu : JPopupMenu() {
         private var selectedPopupTabIndex = -1
 
         init {
             add(createPopupMenuItem("Rename Title") {
-                if (selectedPopupTabIndex >= 0) {
-                    renameAgentSession(selectedPopupTabIndex)
-                }
+                if (selectedPopupTabIndex >= 0) renameAgentSession(selectedPopupTabIndex)
             })
             addSeparator()
             add(createPopupMenuItem("Close") {
-                if (selectedPopupTabIndex >= 0) {
-                    closeTabAt(selectedPopupTabIndex)
-                }
+                if (selectedPopupTabIndex >= 0) closeTabAt(selectedPopupTabIndex)
             })
             add(createPopupMenuItem("Close Other Tabs") {
-                if (selectedPopupTabIndex < 0) {
-                    return@createPopupMenuItem
-                }
+                if (selectedPopupTabIndex < 0) return@createPopupMenuItem
                 val selectedPopupTabTitle = getTitleAt(selectedPopupTabIndex)
-                val tabPanel = activeTabMapping[selectedPopupTabTitle]
-                if (tabPanel == null) {
-                    return@createPopupMenuItem
-                }
+                val tabPanel = activeTabMapping[selectedPopupTabTitle] ?: return@createPopupMenuItem
                 val keepSessionId = tabPanel.getSessionId()
                 sessionStates.keys.toList()
                     .filter { it != keepSessionId }
@@ -431,7 +413,6 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
                             .removeSession(entry.value.getSessionId())
                         Disposer.dispose(entry.value)
                     }
-
                 removeAll()
                 activeTabMapping.clear()
                 addNewTab(tabPanel)
@@ -441,14 +422,18 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         override fun show(invoker: Component, x: Int, y: Int) {
             selectedPopupTabIndex = this@AgentToolWindowTabbedPane.getUI()
                 .tabForCoordinate(this@AgentToolWindowTabbedPane, x, y)
-            if (selectedPopupTabIndex >= 0) {
-                super.show(invoker, x, y)
-            }
+            if (selectedPopupTabIndex >= 0) super.show(invoker, x, y)
         }
 
-        private fun createPopupMenuItem(label: String, listener: ActionListener): JBMenuItem {
-            return JBMenuItem(label).apply {
-                addActionListener(listener)
+        private fun createPopupMenuItem(label: String, listener: ActionListener): JBMenuItem =
+            JBMenuItem(label).apply { addActionListener(listener) }
+    }
+
+    private inner class CloseActionListener(private val title: String) : ActionListener {
+        override fun actionPerformed(evt: ActionEvent) {
+            val tabIndex = indexOfTab(title)
+            if (tabIndex >= 0) {
+                closeTabAt(tabIndex)
             }
         }
     }
