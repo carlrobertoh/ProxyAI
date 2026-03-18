@@ -4,7 +4,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.SearchTextField
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBFont
@@ -29,7 +28,7 @@ class AcpAgentSettingsForm(project: Project) {
     private val presets = ExternalAcpAgents.all()
     private val root = BorderLayoutPanel()
     private val searchField = SearchTextField().apply {
-        textEditor.emptyText.text = "Search ACP runtimes..."
+        textEditor.emptyText.text = "Search external agents..."
         border = JBUI.Borders.compound(
             JBUI.Borders.customLine(UIUtil.getTooltipSeparatorColor(), 1),
             JBUI.Borders.empty(3, 8)
@@ -38,13 +37,6 @@ class AcpAgentSettingsForm(project: Project) {
     }
     private val tableModel = AcpAgentTableModel()
     private val rowSorter = TableRowSorter(tableModel)
-    private val helperLabel = JBLabel(
-        "ACP runtimes are external agents that can appear in the Agent runtime dropdown."
-    ).apply {
-        font = JBFont.small()
-        foreground = UIUtil.getContextHelpForeground()
-        border = JBUI.Borders.emptyTop(6)
-    }
     private val table = JBTable(tableModel).apply {
         rowSorter = this@AcpAgentSettingsForm.rowSorter
         emptyText.text = "No ACP runtimes match your search."
@@ -94,7 +86,6 @@ class AcpAgentSettingsForm(project: Project) {
             BorderLayoutPanel().apply {
                 border = JBUI.Borders.emptyBottom(8)
                 addToTop(searchField)
-                addToCenter(helperLabel)
             }
         )
         root.addToCenter(scrollPane)

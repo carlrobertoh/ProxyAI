@@ -114,11 +114,15 @@ class ExternalAcpAgentService(private val project: Project) {
         ensureSessionReady(session, preset, NO_OP_EVENTS)
     }
 
-    suspend fun loadConfigOptions(externalAgentId: String): List<AcpConfigOption> {
+    suspend fun loadConfigOptions(
+        externalAgentId: String,
+        existingSelections: Map<String, String> = emptyMap()
+    ): List<AcpConfigOption> {
         val session = AgentSession(
             sessionId = "subagent-settings:$externalAgentId:${UUID.randomUUID()}",
             conversation = Conversation(),
-            externalAgentId = externalAgentId
+            externalAgentId = externalAgentId,
+            externalAgentConfigSelections = existingSelections
         )
         return try {
             warmUpSession(session)

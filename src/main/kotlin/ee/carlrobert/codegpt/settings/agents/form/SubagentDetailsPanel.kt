@@ -295,8 +295,11 @@ class SubagentDetailsPanel(
         rebuildExternalOptionsPanel()
 
         val requestId = ++loadSequence
+        val selectionsSnapshot = current?.externalAgentOptions?.toMap().orEmpty()
         loadJob = backgroundScope.launch {
-            val result = runCatching { externalAgentService.loadConfigOptions(externalAgentId) }
+            val result = runCatching {
+                externalAgentService.loadConfigOptions(externalAgentId, selectionsSnapshot)
+            }
 
             runInEdt(ModalityState.any()) {
                 if (requestId != loadSequence || current?.externalAgentId != externalAgentId) {
@@ -405,6 +408,10 @@ class SubagentDetailsPanel(
         combo.addActionListener {
             val selected = combo.selectedItem as? AcpConfigOptionChoice ?: return@addActionListener
             current?.externalAgentOptions?.set(option.id, selected.value)
+            if (option.category == "model") {
+                current?.externalAgentId?.let { externalOptionsCache.remove(it) }
+                refreshExternalOptions()
+            }
         }
 
         val comboPanel = JPanel(BorderLayout())
