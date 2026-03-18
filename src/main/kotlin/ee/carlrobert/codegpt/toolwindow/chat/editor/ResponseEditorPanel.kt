@@ -40,6 +40,8 @@ import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import javax.swing.BorderFactory
+import javax.swing.JComponent
+import javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
 
 class ResponseEditorPanel(
     private val project: Project,
@@ -298,7 +300,7 @@ class ResponseEditorPanel(
                 additionalLinesCount = 0
                 additionalColumnsCount = 0
                 isAdditionalPageAtBottom = false
-                isUseSoftWraps = false
+                isUseSoftWraps = true
             }
             editor.gutterComponentEx.apply {
                 isVisible = false
@@ -306,10 +308,11 @@ class ResponseEditorPanel(
             }
             editor.component.border = JBUI.Borders.empty(0, 0)
             editor.scrollPane.border = JBUI.Borders.empty(0, 0)
+            editor.scrollPane.horizontalScrollBarPolicy = HORIZONTAL_SCROLLBAR_NEVER
         }
     }
 
-    private fun createCompactEditorContainer(editor: EditorEx): javax.swing.JComponent {
+    private fun createCompactEditorContainer(editor: EditorEx): JComponent {
         val container = BorderLayoutPanel().apply {
             isOpaque = false
             border = JBUI.Borders.empty()

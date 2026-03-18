@@ -71,13 +71,17 @@ object EditorFactory {
             additionalLinesCount = 0
             isAdditionalPageAtBottom = false
             isVirtualSpace = false
-            isUseSoftWraps = false
+            isUseSoftWraps = !diffKind
             isLineNumbersShown = diffKind
             isLineMarkerAreaShown = diffKind
         }
         editor.gutterComponentEx.apply {
             isVisible = diffKind
             parent.isVisible = diffKind
+        }
+
+        if (!diffKind) {
+            editor.scrollPane.horizontalScrollBarPolicy = javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         }
 
         editor.contentComponent.border = JBUI.Borders.emptyLeft(4)
