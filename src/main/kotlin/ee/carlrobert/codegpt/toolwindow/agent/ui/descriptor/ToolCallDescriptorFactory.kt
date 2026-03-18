@@ -7,6 +7,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.tools.*
+import ee.carlrobert.codegpt.diagnostics.DiagnosticsFilter
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentUiConfig
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.DiffViewAction
 import ee.carlrobert.codegpt.toolwindow.agent.ui.renderer.ChangeColors
@@ -58,6 +59,7 @@ object ToolCallDescriptorFactory {
             ToolKind.SKILL -> createSkillDescriptor(args, result, projectId)
             ToolKind.ASK_QUESTION -> createAskDescriptor(args, result, projectId)
             ToolKind.EXIT -> createExitDescriptor(args, result, projectId)
+            ToolKind.DIAGNOSTICS -> createDiagnosticsDescriptor(args, result, projectId)
             ToolKind.OTHER -> createOtherDescriptor(toolName, args, result, projectId)
         }
     }
@@ -81,6 +83,7 @@ object ToolCallDescriptorFactory {
             toolName == "LoadSkill" || args is LoadSkillTool.Args -> ToolKind.SKILL
             toolName == "AskUserQuestion" || args is AskUserQuestionTool.Args -> ToolKind.ASK_QUESTION
             toolName == "Exit" -> ToolKind.EXIT
+            toolName == "Diagnostics" || args is DiagnosticsTool.Args -> ToolKind.DIAGNOSTICS
             else -> ToolKind.OTHER
         }
     }
@@ -96,7 +99,6 @@ object ToolCallDescriptorFactory {
         val resolvedToolName = mcpResult?.toolName ?: mcpArgs?.toolName ?: toolName
         val server =
             mcpResult?.serverName ?: mcpResult?.serverId ?: mcpArgs?.serverName ?: mcpArgs?.serverId
-        val titleMain = resolvedToolName
         val summary = mcpArgs?.arguments
             ?.entries
             ?.take(2)
@@ -120,7 +122,7 @@ object ToolCallDescriptorFactory {
             kind = ToolKind.MCP,
             icon = Icons.MCP,
             titlePrefix = "MCP:",
-            titleMain = titleMain,
+            titleMain = resolvedToolName,
             tooltip = "MCP tool call: $resolvedToolName",
             args = args,
             result = result,
@@ -826,6 +828,57 @@ object ToolCallDescriptorFactory {
             titleMain = libraryId,
             tooltip = "Get library docs: $libraryId",
             secondaryBadges = buildDocsBadges(result),
+            args = args,
+            result = result,
+            projectId = projectId
+        )
+    }
+
+    private fun createDiagnosticsDescriptor(
+        args: Any,
+        result: Any?,
+        projectId: String?
+    ): ToolCallDescriptor {
+        val diagnosticsArgs = args as? DiagnosticsTool.Args
+        val filePath = diagnosticsArgs?.filePath ?: ""
+        val fileName = extractBaseName(filePath)
+        val filterLabel = when (diagnosticsArgs?.filter) {
+            DiagnosticsFilter.ALL -> "all"
+            else -> "errors"
+        }
+
+        val badges = mutableListOf<Badge>()
+        val actions = mutableListOf<ToolAction>()
+
+        if (result is DiagnosticsTool.Result) {
+            when {
+                result.error != null -> badges.add(Badge("Error", JBColor.RED))
+                else -> {
+                    badges.add(Badge("[${result.diagnosticCount} $filterLabel]", JBColor.BLUE))
+                    if (result.output.isNotBlank()) {
+                        actions.add(
+                            ToolAction("View Diagnostics", AllIcons.Actions.Show) {
+                                showTextDialog(result.output, "Diagnostics: $fileName")
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        return ToolCallDescriptor(
+            kind = ToolKind.DIAGNOSTICS,
+            icon = AllIcons.General.InspectionsOK,
+            titlePrefix = "Diagnostics:",
+            titleMain = fileName,
+            tooltip = "Diagnostics: $filePath ($filterLabel)",
+            fileLink = FileLink(
+                path = filePath,
+                displayName = fileName,
+                enabled = filePath.isNotBlank()
+            ),
+            secondaryBadges = badges,
+            actions = actions,
             args = args,
             result = result,
             projectId = projectId
