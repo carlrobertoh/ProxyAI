@@ -113,6 +113,7 @@ class AgentToolWindowTabPanel(
         ).apply {
             isVisible = false
         }
+    private val tokenUsageCounterPanel = TokenUsageCounterPanel(project, sessionId)
 
     private val userInputPanel = UserInputPanel(
         project,
@@ -128,8 +129,8 @@ class AgentToolWindowTabPanel(
         onSubmit = ::handleSubmit,
         onStop = ::handleCancel,
         withRemovableSelectedEditorTag = true,
-        agentTokenCounterPanel = TokenUsageCounterPanel(project, sessionId),
-        agentTokenCounterVisibilityProvider = { agentSession.externalAgentId.isNullOrBlank() },
+        agentTokenCounterPanel = tokenUsageCounterPanel,
+        agentTokenCounterVisibilityProvider = { tokenUsageCounterPanel.hasReportedUsage() },
         sessionIdProvider = { sessionId },
         conversationIdProvider = { conversation.id },
         onStartSessionTimeline = ::showSessionStartTimelineDialog,
@@ -300,8 +301,7 @@ class AgentToolWindowTabPanel(
         if (message.text.isBlank()) return
         disposeLandingPanelIfPresent()
         scrollablePanel.clearLandingViewIfVisible()
-        val modelSettings = ModelSettings.getInstance()
-        val agentModelSelection = modelSettings.getModelSelectionForFeature(FeatureType.AGENT)
+        val agentModelSelection = service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
         agentSession.serviceType = agentModelSelection.provider
         agentSession.modelCode = agentModelSelection.selectionId
 
@@ -409,10 +409,13 @@ class AgentToolWindowTabPanel(
                 project.service<ExternalAcpAgentService>().closeSession(sessionId)
                 agentSession.externalAgentId = externalAgentId
                 agentSession.externalAgentSessionId = null
+                agentSession.externalAgentMcpServerIds = emptySet()
                 agentSession.externalAgentConfigOptions = emptyList()
                 agentSession.externalAgentConfigSelections = emptyMap()
                 agentSession.externalAgentErrorMessage = null
                 agentSession.externalAgentConfigLoading = !externalAgentId.isNullOrBlank()
+                project.messageBus.syncPublisher(AgentUiStateNotifier.AGENT_UI_STATE_TOPIC)
+                    .sessionRuntimeChanged(sessionId)
                 if (!externalAgentId.isNullOrBlank()) {
                     backgroundScope.launch {
                         runCatching {
@@ -474,15 +477,18 @@ class AgentToolWindowTabPanel(
                     withContext(Dispatchers.EDT) {
                         inputPanel.refreshModelDependentState()
                     }
-                    runCatching {
-                        project.service<ExternalAcpAgentService>()
-                            .setSessionConfigOption(agentSession, optionId, value)
-                    }.onFailure { ex ->
+                    try {
+                        runCatching {
+                            project.service<ExternalAcpAgentService>()
+                                .setSessionConfigOption(agentSession, optionId, value)
+                        }.onFailure { ex ->
+                            OverlayUtil.showNotification(
+                                "${displayExternalAgentName(agentSession.externalAgentId ?: "agent")} option update failed. ${buildExternalAgentConfigFailureMessage(ex)}",
+                                NotificationType.ERROR
+                            )
+                        }
+                    } finally {
                         agentSession.externalAgentConfigLoading = false
-                        OverlayUtil.showNotification(
-                            "${displayExternalAgentName(agentSession.externalAgentId ?: "agent")} option update failed. ${buildExternalAgentConfigFailureMessage(ex)}",
-                            NotificationType.ERROR
-                        )
                     }
                     withContext(Dispatchers.EDT) {
                         inputPanel.refreshModelDependentState()

@@ -1,8 +1,6 @@
 package ee.carlrobert.codegpt.ui.hover
 
-import com.intellij.codeInsight.documentation.DocumentationHintEditorPane
 import com.intellij.codeInsight.documentation.DocumentationManager
-import com.intellij.lang.documentation.DocumentationImageResolver
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.ReadAction
@@ -21,7 +19,6 @@ import com.intellij.util.ui.UIUtil
 import ee.carlrobert.codegpt.util.NavigationResolverFactory
 import ee.carlrobert.codegpt.util.EditorUtil
 import java.awt.Dimension
-import java.awt.Image
 import java.awt.MouseInfo
 import java.awt.Point
 import java.awt.event.MouseAdapter
@@ -30,6 +27,7 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import javax.swing.JEditorPane
 import javax.swing.JComponent
 import javax.swing.JTextPane
 import javax.swing.SwingUtilities
@@ -73,10 +71,37 @@ object PsiLinkHoverPreview {
         private val executor = AppExecutorUtil.getAppExecutorService()
 
         override fun hyperlinkUpdate(e: HyperlinkEvent) {
+            if (isAnchorLink(e.description)) {
+                handleAnchorEvent(e)
+                return
+            }
             when (e.eventType) {
                 HyperlinkEvent.EventType.ENTERED -> onEntered(e)
                 HyperlinkEvent.EventType.EXITED -> onExited()
                 else -> {}
+            }
+        }
+
+        private fun handleAnchorEvent(e: HyperlinkEvent) {
+            when (e.eventType) {
+                HyperlinkEvent.EventType.ENTERED -> {
+                    scheduledClose?.cancel(true)
+                    scheduledClose = null
+                    pending?.cancel(true)
+                    pending = null
+                    lastDesc = null
+                }
+
+                HyperlinkEvent.EventType.EXITED -> onExited()
+                HyperlinkEvent.EventType.ACTIVATED -> {
+                    scheduledClose?.cancel(true)
+                    scheduledClose = null
+                    pending?.cancel(true)
+                    pending = null
+                    scrollToReference(e.source, e.description)
+                }
+
+                else -> Unit
             }
         }
 
@@ -89,28 +114,24 @@ object PsiLinkHoverPreview {
             }, EXIT_CLOSE_DELAY_MS, TimeUnit.MILLISECONDS)
         }
 
-        fun cancelAndHide() {
+        fun cancelAndHide(force: Boolean = false) {
             scheduledClose?.cancel(true)
             scheduledClose = null
 
             val comp = popupComponent
-            if (comp != null && isMouseOverComponent(comp)) return
+            if (!force && comp != null && isMouseOverComponent(comp)) return
 
             pending?.cancel(true)
             pending = null
 
+            val popupToCancel = popup ?: return
+            popup = null
+            popupComponent = null
+
             try {
-                if (SwingUtilities.isEventDispatchThread()) {
-                    popup?.cancel()
-                    popup = null
-                    popupComponent = null
-                } else {
-                    ApplicationManager.getApplication().invokeLater({
-                        popup?.cancel()
-                        popup = null
-                        popupComponent = null
-                    }, ModalityState.any())
-                }
+                ApplicationManager.getApplication().invokeLater({
+                    popupToCancel.cancel()
+                }, ModalityState.any())
             } catch (t: Throwable) {
                 logger.warn("Failed while cancelling popup", t)
             }
@@ -170,11 +191,7 @@ object PsiLinkHoverPreview {
         private fun showDocHint(where: RelativePoint, html: String) {
             scheduledClose?.cancel(true)
             scheduledClose = null
-            cancelAndHide()
-
-            val imageResolver = object : DocumentationImageResolver {
-                override fun resolveImage(p0: String): Image? = null
-            }
+            cancelAndHide(force = true)
 
             val safeHtml = if (html.contains("<body", ignoreCase = true)) {
                 html.replaceFirst(
@@ -185,7 +202,7 @@ object PsiLinkHoverPreview {
                 "<html><body style=\"margin:0;padding:0\">$html</body></html>"
             }
 
-            val editor = DocumentationHintEditorPane(project, emptyMap(), imageResolver).apply {
+            val editor = JEditorPane().apply {
                 isEditable = false
                 contentType = "text/html"
                 text = safeHtml
@@ -195,6 +212,11 @@ object PsiLinkHoverPreview {
                 foreground = UIUtil.getLabelForeground()
                 isOpaque = true
                 margin = JBUI.insets(8)
+            }
+            editor.addHyperlinkListener { event ->
+                if (event.eventType == HyperlinkEvent.EventType.ACTIVATED && isAnchorLink(event.description)) {
+                    scrollToReference(editor, event.description)
+                }
             }
 
             val scroll = ScrollPaneFactory.createScrollPane(editor).apply {
@@ -217,8 +239,6 @@ object PsiLinkHoverPreview {
                 .setCancelOnClickOutside(true)
                 .setCancelKeyEnabled(true)
                 .createPopup()
-
-            editor.setHint(newPopup)
 
             popup = newPopup
             popupComponent = scroll
@@ -250,6 +270,25 @@ object PsiLinkHoverPreview {
                 logger.debug("Failed to determine mouse-over state", t)
                 false
             }
+        }
+
+        private fun isAnchorLink(description: String?): Boolean {
+            return !description.isNullOrBlank() && description.startsWith("#")
+        }
+
+        private fun scrollToReference(source: Any?, description: String?) {
+            val anchor = description?.removePrefix("#")?.takeIf { it.isNotBlank() } ?: return
+            val editor = source as? JEditorPane ?: return
+            ApplicationManager.getApplication().invokeLater({
+                if (!editor.isDisplayable) {
+                    return@invokeLater
+                }
+                runCatching {
+                    editor.scrollToReference(anchor)
+                }.onFailure { error ->
+                    logger.debug("Failed to scroll to anchor #$anchor", error)
+                }
+            }, ModalityState.any())
         }
 
         private fun decode(value: String): String = try {
@@ -303,7 +342,7 @@ object PsiLinkHoverPreview {
         }
 
         private fun computeHoverSize(
-            editor: DocumentationHintEditorPane,
+            editor: JEditorPane,
             maxW: Int,
             maxH: Int
         ): Dimension {

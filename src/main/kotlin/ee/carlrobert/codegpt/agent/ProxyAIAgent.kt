@@ -90,7 +90,7 @@ object ProxyAIAgent {
         val modelSelection =
             service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
         val skills = project.service<SkillDiscoveryService>().listSkills()
-        val stream = shouldStreamAgentToolLoop(project, provider)
+        val stream = shouldStreamAgentToolLoop(provider)
         val projectInstructions = loadProjectInstructions(project.basePath)
         val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
@@ -99,7 +99,6 @@ object ProxyAIAgent {
             project = project,
             events = events,
             sessionId = sessionId,
-            provider = provider,
             parentModelSelection = modelSelection,
             hookManager = hookManager
         )
@@ -198,7 +197,7 @@ object ProxyAIAgent {
                             output.forEach { msg ->
                                 (msg as? Message.Reasoning)?.let {
                                     if (it.content.isNotBlank()) {
-                                        events.onTextReceived("<think>${it.content}</think>")
+                                        events.onThinkingReceived(it.content)
                                     }
                                 }
                             }
@@ -213,7 +212,7 @@ object ProxyAIAgent {
                         }
                         (msg as? Message.Reasoning)?.let {
                             if (it.content.isNotBlank()) {
-                                events.onTextReceived("<think>${it.content}</think>")
+                                events.onThinkingReceived(it.content)
                             }
                         }
                     }
@@ -297,10 +296,7 @@ object ProxyAIAgent {
         }
     }
 
-    private fun shouldStreamAgentToolLoop(
-        project: Project,
-        provider: ServiceType,
-    ): Boolean {
+    private fun shouldStreamAgentToolLoop(provider: ServiceType): Boolean {
         return when (provider) {
             ServiceType.CUSTOM_OPENAI -> {
                 val selectedModel =
@@ -320,7 +316,6 @@ object ProxyAIAgent {
         project: Project,
         events: AgentEvents,
         sessionId: String,
-        provider: ServiceType,
         parentModelSelection: ModelSelection,
         hookManager: HookManager
     ): ToolRegistry {
@@ -334,84 +329,23 @@ object ProxyAIAgent {
             tool(ConfirmingEditTool(EditTool(project, sessionId, hookManager), standardApproval))
             tool(ConfirmingWriteTool(WriteTool(project, sessionId, hookManager), writeApproval))
             tool(TodoWriteTool(project, sessionId, hookManager))
-            tool(
-                AskUserQuestionTool(
-                    workingDirectory = workingDirectory,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                    events = events
-                )
-            )
-            createMcpTools(
-                sessionId = sessionId,
-                contextService = contextService,
-                approve = genericApproval
-            ).forEach { mcpTool -> tool(mcpTool) }
+            tool(AskUserQuestionTool(workingDirectory, sessionId, hookManager, events))
+            createMcpTools(sessionId, contextService, genericApproval).forEach { mcpTool ->
+                tool(mcpTool)
+            }
             tool(ExitTool)
-            tool(
-                IntelliJSearchTool(
-                    project = project,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
-            tool(
-                DiagnosticsTool(
-                    project = project,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
-            tool(
-                WebSearchTool(
-                    workingDirectory = workingDirectory,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
-            tool(
-                WebFetchTool(
-                    workingDirectory = workingDirectory,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
-            tool(
-                BashOutputTool(
-                    workingDirectory = workingDirectory,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
-            tool(
-                KillShellTool(
-                    workingDirectory = workingDirectory,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
-            tool(
-                ResolveLibraryIdTool(
-                    workingDirectory = workingDirectory,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
-            tool(
-                GetLibraryDocsTool(
-                    workingDirectory = workingDirectory,
-                    sessionId = sessionId,
-                    hookManager = hookManager,
-                )
-            )
+            tool(IntelliJSearchTool(project, sessionId, hookManager))
+            tool(DiagnosticsTool(project, sessionId, hookManager))
+            tool(WebSearchTool(workingDirectory, sessionId, hookManager))
+            tool(WebFetchTool(workingDirectory, sessionId, hookManager))
+            tool(BashOutputTool(workingDirectory, sessionId, hookManager))
+            tool(KillShellTool(workingDirectory, sessionId, hookManager))
+            tool(ResolveLibraryIdTool(workingDirectory, sessionId, hookManager))
+            tool(GetLibraryDocsTool(workingDirectory, sessionId, hookManager))
             tool(
                 ConfirmingLoadSkillTool(
-                    LoadSkillTool(
-                        project = project,
-                        sessionId = sessionId,
-                        hookManager = hookManager
-                    ),
-                    project = project
+                    LoadSkillTool(project, sessionId, hookManager),
+                    project
                 ) { name, details -> genericApproval(name, details) }
             )
             tool(
@@ -438,15 +372,7 @@ object ProxyAIAgent {
                     hookManager = hookManager
                 )
             )
-            tool(
-                TaskTool(
-                    project,
-                    sessionId,
-                    parentModelSelection,
-                    events,
-                    hookManager
-                )
-            )
+            tool(TaskTool(project, sessionId, parentModelSelection, events, hookManager))
         }
     }
 

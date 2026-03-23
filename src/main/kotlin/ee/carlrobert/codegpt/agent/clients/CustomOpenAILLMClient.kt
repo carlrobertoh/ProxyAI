@@ -8,6 +8,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.*
+import ai.koog.prompt.executor.clients.openai.models.OpenAIChatCompletionResponse
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
@@ -26,10 +27,10 @@ import ee.carlrobert.codegpt.settings.service.custom.CustomServicePlaceholders
 import ee.carlrobert.codegpt.util.JsonMapper
 import io.ktor.client.*
 import io.ktor.client.plugins.*
-import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.plugins.api.*
 import io.ktor.client.request.*
-import io.ktor.http.ContentType
-import io.ktor.http.content.TextContent
+import io.ktor.http.*
+import io.ktor.http.content.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
@@ -198,6 +199,10 @@ class CustomOpenAILLMClient(
 
             else -> this
         }
+    }
+
+    override fun decodeResponse(data: String): OpenAIChatCompletionResponse {
+        return json.decodeFromString(data)
     }
 
     override suspend fun getCodeCompletion(infillRequest: InfillRequest): String {

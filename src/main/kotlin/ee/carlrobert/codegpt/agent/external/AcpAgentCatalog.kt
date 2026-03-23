@@ -6,6 +6,7 @@ data class ExternalAcpAgentPreset(
     val vendor: String,
     val command: String,
     val args: List<String>,
+    val toolEventFlavor: AcpToolEventFlavor = AcpToolEventFlavor.STANDARD,
     val env: Map<String, String> = emptyMap(),
     val enabledByDefault: Boolean = false,
     val description: String? = null,
@@ -28,6 +29,7 @@ object ExternalAcpAgents {
             vendor = "OpenAI",
             command = "npx",
             args = listOf("-y", "@zed-industries/codex-acp"),
+            toolEventFlavor = AcpToolEventFlavor.ZED_ADAPTER,
             enabledByDefault = true,
             description = "OpenAI Codex via the Zed ACP adapter."
         ),
@@ -54,6 +56,7 @@ object ExternalAcpAgents {
             vendor = "Anthropic",
             command = "npx",
             args = listOf("-y", "@zed-industries/claude-code-acp"),
+            toolEventFlavor = AcpToolEventFlavor.ZED_ADAPTER,
             enabledByDefault = true,
             description = "Anthropic Claude Code via the Zed ACP adapter."
         ),
@@ -63,6 +66,7 @@ object ExternalAcpAgents {
             vendor = "Google",
             command = "gemini",
             args = listOf("--experimental-acp"),
+            toolEventFlavor = AcpToolEventFlavor.GEMINI_CLI,
             description = "Google Gemini CLI in experimental ACP mode."
         ),
         ExternalAcpAgentPreset(
@@ -119,6 +123,7 @@ object ExternalAcpAgents {
             vendor = "Anthropic",
             command = "npx",
             args = listOf("-y", "@zed-industries/claude-agent-acp"),
+            toolEventFlavor = AcpToolEventFlavor.ZED_ADAPTER,
             description = "Anthropic Claude Agent via the Zed ACP adapter."
         ),
         ExternalAcpAgentPreset(
@@ -276,7 +281,7 @@ object ExternalAcpAgents {
         val message = throwable.message.orEmpty()
         return when {
             message.contains("Cannot run program", ignoreCase = true) &&
-                message.contains("No such file or directory", ignoreCase = true) ->
+                    message.contains("No such file or directory", ignoreCase = true) ->
                 "Command not found: $command"
 
             message.isNotBlank() -> message

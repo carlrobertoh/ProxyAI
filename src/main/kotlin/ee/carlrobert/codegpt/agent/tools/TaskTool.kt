@@ -527,7 +527,7 @@ private class ExternalSubagentEventsAdapter(
         delegate.onSubAgentToolCompleted(parentId, childId, toolName, result)
     }
 
-    override fun onQueuedMessagesResolved() = Unit
+    override fun onQueuedMessagesResolved(message: MessageWithContext?) = Unit
 
     override suspend fun approveToolCall(request: ToolApprovalRequest): Boolean {
         return when (request.type) {

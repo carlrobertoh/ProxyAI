@@ -10,17 +10,23 @@ import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.settings.models.ModelSettings
-import ee.carlrobert.codegpt.settings.service.*
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelChangeNotifier
+import ee.carlrobert.codegpt.settings.service.ModelChangeNotifierAdapter
+import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTService
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetails
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier
+import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsListener
+import ee.carlrobert.codegpt.toolwindow.agent.AgentUiStateNotifier
 import java.text.NumberFormat
 import java.util.*
 
 class AgentCreditsToolbarLabel(
-    private val project: Project
+    private val project: Project,
+    private val sessionProvider: () -> AgentSession?
 ) : JBLabel(), Disposable {
 
     private val numberFormat = NumberFormat.getNumberInstance(Locale.US).apply {
@@ -67,13 +73,31 @@ class AgentCreditsToolbarLabel(
                 }
             }
         )
+        messageBusConnection.subscribe(
+            AgentUiStateNotifier.AGENT_UI_STATE_TOPIC,
+            object : AgentUiStateNotifier {
+                override fun activeSessionChanged() {
+                    updateDisplay()
+                }
+
+                override fun sessionRuntimeChanged(sessionId: String) {
+                    updateDisplay()
+                }
+            }
+        )
+    }
+
+    fun refresh() {
+        updateDisplay()
     }
 
     private fun updateDisplay() {
         ApplicationManager.getApplication().invokeLater {
+            val activeSession = sessionProvider()
             val provider = ModelSettings.getInstance()
                 .getServiceForFeature(FeatureType.AGENT)
-            if (provider != ServiceType.PROXYAI) {
+            val isExternalAgentSelected = !activeSession?.externalAgentId.isNullOrBlank()
+            if (provider != ServiceType.PROXYAI || isExternalAgentSelected) {
                 text = null
                 toolTipText = null
                 isVisible = false

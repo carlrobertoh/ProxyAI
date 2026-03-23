@@ -1,9 +1,11 @@
 package ee.carlrobert.codegpt.toolwindow.agent
 
+import com.agentclientprotocol.model.AvailableCommand
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import kotlinx.serialization.json.JsonElement
 
 data class AcpConfigOptionChoice(
     val value: String,
@@ -25,7 +27,7 @@ object AcpConfigOptions {
     fun selectable(options: List<AcpConfigOption>): List<AcpConfigOption> {
         return options
             .asSequence()
-            .filter { it.type == "select" && it.options.isNotEmpty() }
+            .filter { it.type in setOf("select", "boolean") && it.options.isNotEmpty() }
             .sortedBy { categoryOrder(it.category) }
             .toList()
     }
@@ -40,7 +42,9 @@ object AcpConfigOptions {
     }
 
     fun selectedValueName(options: List<AcpConfigOption>, category: String): String? {
-        val option = selectable(options).firstOrNull { it.category == category } ?: return null
+        val option = selectable(options).firstOrNull {
+            it.category == category || it.id == category
+        } ?: return null
         return option.options
             .firstOrNull { it.value == option.currentValue }
             ?.name
@@ -73,6 +77,24 @@ object AcpConfigOptions {
             .toMap(linkedMapOf())
     }
 
+    fun summaryParts(
+        options: List<AcpConfigOption>,
+        maxEntries: Int = 3
+    ): List<String> {
+        return selectable(options)
+            .mapNotNull { option ->
+                selectedValueName(options, option.category ?: option.id)?.let { value ->
+                    if (option.category in setOf("model", "mode", "thought_level")) {
+                        value
+                    } else {
+                        "${label(option)}: $value"
+                    }
+                }
+            }
+            .distinct()
+            .take(maxEntries)
+    }
+
     private fun categoryOrder(category: String?): Int {
         return when (category.orEmpty()) {
             "model" -> 0
@@ -95,6 +117,7 @@ data class AgentSession(
     var modelCode: String? = null,
     var externalAgentId: String? = null,
     var externalAgentSessionId: String? = null,
+    var externalAgentMcpServerIds: Set<String> = emptySet(),
     var externalAgentConfigOptions: List<AcpConfigOption> = emptyList(),
     var externalAgentConfigSelections: Map<String, String> = emptyMap(),
     var externalAgentConfigLoading: Boolean = false,
@@ -105,4 +128,14 @@ data class AgentSession(
     var lastActiveAt: Long = System.currentTimeMillis()
 ) {
     var externalAgentErrorMessage: String? = null
+    var externalAgentPeerProfileId: String? = null
+    var externalAgentAvailableCommands: List<AvailableCommand> = emptyList()
+    var externalAgentVendorMeta: JsonElement? = null
+    var externalAgentRequestMeta: JsonElement? = null
+    var externalAgentSessionTitle: String? = null
+
+    fun shouldRecreateExternalAgentSession(selectedMcpServerIds: Set<String>): Boolean {
+        return !externalAgentSessionId.isNullOrBlank() &&
+            externalAgentMcpServerIds != selectedMcpServerIds
+    }
 }

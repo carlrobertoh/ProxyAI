@@ -1,42 +1,51 @@
 package ee.carlrobert.codegpt.agent.external
 
+import com.agentclientprotocol.agent.AgentInfo
+import com.agentclientprotocol.client.ClientInfo
+import com.agentclientprotocol.model.*
+import com.agentclientprotocol.transport.StdioTransport
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VfsUtil
 import ee.carlrobert.codegpt.agent.AgentEvents
 import ee.carlrobert.codegpt.agent.MessageWithContext
-import ee.carlrobert.codegpt.agent.ToolSpecs
-import ee.carlrobert.codegpt.agent.tools.BashTool
-import ee.carlrobert.codegpt.agent.tools.EditTool
-import ee.carlrobert.codegpt.agent.tools.WriteTool
+import ee.carlrobert.codegpt.agent.external.acpcompat.AcpProtocol
+import ee.carlrobert.codegpt.agent.external.acpcompat.JsonRpcException
+import ee.carlrobert.codegpt.agent.external.acpcompat.ProtocolOptions
+import ee.carlrobert.codegpt.agent.external.acpcompat.invoke
+import ee.carlrobert.codegpt.agent.external.acpcompat.setNotificationHandler
+import ee.carlrobert.codegpt.agent.external.acpcompat.vendor.AcpCompatibilityRegistry
+import ee.carlrobert.codegpt.agent.external.acpcompat.vendor.AcpPeerProfile
+import ee.carlrobert.codegpt.agent.external.host.AcpFileHost
+import ee.carlrobert.codegpt.agent.external.host.AcpHostCapabilities
+import ee.carlrobert.codegpt.agent.external.host.AcpTerminalHost
+import ee.carlrobert.codegpt.agent.external.host.DefaultAcpTerminalProcessLauncher
 import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.mcp.McpSettings
+import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AcpConfigOption
+import ee.carlrobert.codegpt.toolwindow.agent.AcpConfigOptions
+import ee.carlrobert.codegpt.toolwindow.agent.AcpConfigOptionChoice
 import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
-import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.*
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
+import ee.carlrobert.codegpt.util.CommandRuntimeHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.*
+import kotlinx.io.asSink
+import kotlinx.io.asSource
+import kotlinx.io.buffered
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import java.io.File
-import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.UUID
-import kotlin.io.path.createDirectories
-import kotlin.io.path.notExists
-
-private data class ExternalToolCall(
-    val toolName: String,
-    val args: Any?
-)
 
 @Service(Service.Level.PROJECT)
 class ExternalAcpAgentService(private val project: Project) {
@@ -46,20 +55,17 @@ class ExternalAcpAgentService(private val project: Project) {
         const val FULL_ACCESS_MODE_ID = "full-access"
 
         val NO_OP_EVENTS = object : AgentEvents {
-            override fun onQueuedMessagesResolved() = Unit
-            override fun onAgentException(
-                provider: ee.carlrobert.codegpt.settings.service.ServiceType,
-                throwable: Throwable
-            ) = Unit
+            override fun onQueuedMessagesResolved(message: MessageWithContext?) = Unit
+            override fun onAgentException(provider: ServiceType, throwable: Throwable) = Unit
         }
     }
 
     private val logger = thisLogger()
     private val json = Json { ignoreUnknownKeys = true }
-    private val sessionConfigAdapter = AcpSessionConfigAdapter(json)
     private val toolCallDecoder = AcpToolCallDecoder(json)
-    private val sessionUpdateParser = AcpSessionUpdateParser(toolCallDecoder)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val sessionRoot: Path =
+        Paths.get(project.basePath ?: System.getProperty("user.dir")).toAbsolutePath().normalize()
     private val states = ConcurrentHashMap<String, AcpProcessState>()
     private val sessionSetupMutexes = ConcurrentHashMap<String, Mutex>()
 
@@ -72,6 +78,12 @@ class ExternalAcpAgentService(private val project: Project) {
         val preset = ExternalAcpAgents.find(session.externalAgentId)
             ?: error("Unsupported external agent: ${session.externalAgentId}")
         val state = ensureSessionReady(session, preset, events)
+        val debugModeEnabled = ConfigurationSettings.getState().debugModeEnabled
+        if (debugModeEnabled) {
+            logger.info(
+                "[${preset.displayName}] run/start session=${session.sessionId} externalSessionId=${session.externalAgentSessionId} firstMessageId=${firstMessage.id}"
+            )
+        }
 
         var current: MessageWithContext? = firstMessage
         while (current != null && scope.isActive) {
@@ -80,7 +92,23 @@ class ExternalAcpAgentService(private val project: Project) {
                 ?: error("Missing ACP session id for ${session.sessionId}")
 
             try {
+                if (debugModeEnabled) {
+                    logger.info(
+                        "[${preset.displayName}] prompt/send session=${session.sessionId} externalSessionId=$externalSessionId messageId=${promptMessage.id} preview=${promptMessage.text.logPreview()}"
+                    )
+                }
+                logger.debug(
+                    "Sending ACP prompt for session=${session.sessionId} externalSessionId=$externalSessionId messageId=${promptMessage.id} uiVisible=${promptMessage.uiVisible} preview=${promptMessage.text.logPreview()}"
+                )
                 sendPrompt(state, externalSessionId, promptMessage)
+                if (debugModeEnabled) {
+                    logger.info(
+                        "[${preset.displayName}] prompt/sent session=${session.sessionId} externalSessionId=$externalSessionId messageId=${promptMessage.id}"
+                    )
+                }
+                logger.debug(
+                    "ACP prompt completed for session=${session.sessionId} externalSessionId=$externalSessionId messageId=${promptMessage.id}"
+                )
             } catch (cancelled: CancellationException) {
                 cancelSession(state, externalSessionId)
                 throw cancelled
@@ -88,11 +116,18 @@ class ExternalAcpAgentService(private val project: Project) {
 
             val nextMessage = pollNextQueued()
             if (nextMessage == null) {
+                if (debugModeEnabled) {
+                    logger.info("[${preset.displayName}] run/complete session=${session.sessionId}")
+                }
+                logger.debug("ACP run finished with no queued follow-up for session=${session.sessionId}")
                 events.onAgentCompleted(preset.displayName)
                 return
             }
 
-            events.onQueuedMessagesResolved()
+            logger.debug(
+                "Promoting queued ACP message for session=${session.sessionId} nextMessageId=${nextMessage.id} uiVisible=${nextMessage.uiVisible} preview=${nextMessage.text.logPreview()}"
+            )
+            events.onQueuedMessagesResolved(nextMessage)
             current = nextMessage
             delay(50)
         }
@@ -103,7 +138,7 @@ class ExternalAcpAgentService(private val project: Project) {
         sessionSetupMutexes.remove(sessionId)
     }
 
-    suspend fun cancelSession(sessionId: String, externalSessionId: String?) {
+    fun cancelSession(sessionId: String, externalSessionId: String?) {
         val state = states[sessionId] ?: return
         val activeSessionId = externalSessionId ?: return
         cancelSession(state, activeSessionId)
@@ -142,28 +177,40 @@ class ExternalAcpAgentService(private val project: Project) {
         val state = ensureSessionReady(session, preset, NO_OP_EVENTS)
         val externalSessionId = session.externalAgentSessionId
             ?: error("Missing ACP session id for ${session.sessionId}")
-        val result = sessionConfigAdapter.updateOption(
-            request = AcpConfigUpdateRequest(
-                sessionId = externalSessionId,
-                optionId = optionId,
-                value = value
-            ),
-            support = state.configUpdateSupport,
-            sendRequest = state::sendRequest
-        )
-        when (result) {
-            AcpConfigUpdateResult.Unsupported -> {
-                state.configUpdateSupport = AcpConfigUpdateSupport.Unsupported
-                throw IllegalStateException("${preset.displayName} does not support runtime option changes")
-            }
+        when (optionId) {
+            AcpConfigCategories.MODE -> state.setMode(
+                SessionId(externalSessionId),
+                SessionModeId(value)
+            )
 
-            is AcpConfigUpdateResult.Applied -> {
-                state.configUpdateSupport = result.support
-                session.externalAgentConfigSelections =
-                    session.externalAgentConfigSelections + (optionId to value)
-                updateSessionConfigOptions(session, result.response)
+            AcpConfigCategories.MODEL -> state.setModel(
+                SessionId(externalSessionId),
+                ModelId(value)
+            )
+
+            else -> {
+                val option = session.externalAgentConfigOptions.firstOrNull { it.id == optionId }
+                    ?: error("Unknown ACP runtime option '$optionId'")
+                mergeSessionConfigOptions(
+                    session,
+                    state.setConfigOption(
+                        SessionId(externalSessionId),
+                        option,
+                        value
+                    )
+                )
             }
         }
+        if (optionId == AcpConfigCategories.MODE || optionId == AcpConfigCategories.MODEL) {
+            session.externalAgentConfigOptions =
+                session.externalAgentConfigOptions.updateCurrentValue(optionId, value)
+        }
+        session.externalAgentConfigSelections = AcpConfigOptions.normalizeSelections(
+            session.externalAgentConfigOptions,
+            session.externalAgentConfigSelections +
+                (optionId to value) +
+                session.externalAgentConfigOptions.currentSelections()
+        )
     }
 
     private suspend fun ensureSessionReady(
@@ -194,14 +241,28 @@ class ExternalAcpAgentService(private val project: Project) {
         }
 
         existing?.close()
-        val resolvedCommand = AcpProcessHelper.resolveCommand(
+        val resolvedCommand = CommandRuntimeHelper.resolveCommand(
             command = preset.command,
             extraEnvironment = preset.env
         )
             ?: throw IllegalStateException(
-                AcpProcessHelper.getCommandNotFoundMessage(preset.command)
+                buildString {
+                    append("Command '${preset.command}' not found. ")
+                    when (preset.command) {
+                        "npx", "node" -> {
+                            append("Node.js/npm is required for this ACP runtime. ")
+                            append("Ensure it is installed and available to the IDE process. ")
+                            append("You can also point the runtime to an absolute executable path.")
+                        }
+
+                        else -> {
+                            append("Ensure it is installed and available to the IDE process. ")
+                            append("You can also point the runtime to an absolute executable path.")
+                        }
+                    }
+                }
             )
-        val enhancedEnv = AcpProcessHelper.createEnvironment(
+        val enhancedEnv = CommandRuntimeHelper.createEnvironment(
             extraEnvironment = preset.env,
             resolvedCommand = resolvedCommand
         )
@@ -220,65 +281,58 @@ class ExternalAcpAgentService(private val project: Project) {
         val state = AcpProcessState(
             proxySessionId = session.sessionId,
             preset = preset,
+            launchEnv = enhancedEnv,
             process = process,
             events = events
         )
         states[session.sessionId] = state
-        state.startReader()
         state.startStderrLogger()
         initialize(state)
         return state
     }
 
     private suspend fun initialize(state: AcpProcessState) {
-        val response = state.sendRequest(
-            method = "initialize",
-            params = buildJsonObject {
-                put("protocolVersion", PROTOCOL_VERSION)
-                putJsonObject("clientCapabilities") {
-                    putJsonObject("fs") {
-                        put("readTextFile", true)
-                        put("writeTextFile", true)
-                    }
-                }
-                putJsonObject("clientInfo") {
-                    put("name", "proxyai")
-                    put("title", "ProxyAI")
-                    put("version", "dev")
-                }
-            }
+        val response = state.initialize(
+            ClientInfo(
+                protocolVersion = PROTOCOL_VERSION,
+                capabilities = state.clientCapabilities(),
+                implementation = Implementation(
+                    name = "ProxyAI",
+                    version = "unknown",
+                    title = "ProxyAI"
+                )
+            )
         )
-        state.authMethodIds =
-            response["authMethods"]?.jsonArray?.mapNotNull { it.jsonObject.string("id") }.orEmpty()
+        state.authMethodIds = response.authMethods.map(AuthMethod::id)
+        currentSession(state.proxySessionId)?.externalAgentPeerProfileId = state.peerProfile.profileId
     }
 
     private suspend fun createSession(state: AcpProcessState, session: AgentSession): String {
         return try {
+            val selectedMcpServerIds = selectedMcpServerIds(session.sessionId)
+            val mcpServers = buildMcpServers(selectedMcpServerIds)
             val response = runCatching {
-                state.sendRequest(
-                    method = "session/new",
-                    params = buildJsonObject {
-                        put("cwd", project.basePath ?: System.getProperty("user.dir"))
-                        put("mcpServers", buildMcpServers(session.sessionId))
-                    }
+                state.createSession(
+                    cwd = project.basePath ?: System.getProperty("user.dir"),
+                    mcpServers = mcpServers,
+                    requestMeta = session.externalAgentRequestMeta
                 )
             }.recoverCatching { ex ->
                 if (ex.isAuthenticationRequiredError() && state.authMethodIds.isNotEmpty()) {
                     authenticate(state, state.authMethodIds.first())
-                    state.sendRequest(
-                        method = "session/new",
-                        params = buildJsonObject {
-                            put("cwd", project.basePath ?: System.getProperty("user.dir"))
-                            put("mcpServers", buildMcpServers(session.sessionId))
-                        }
+                    state.createSession(
+                        cwd = project.basePath ?: System.getProperty("user.dir"),
+                        mcpServers = mcpServers,
+                        requestMeta = session.externalAgentRequestMeta
                     )
                 } else {
                     throw ex
                 }
             }.getOrThrow()
-            updateSessionConfigOptions(session, response)
-            val externalSessionId = response["sessionId"]?.jsonPrimitive?.content
-                ?: error("ACP agent did not return a sessionId")
+            applyRuntimeState(session, response.toRuntimeState())
+            session.externalAgentMcpServerIds = selectedMcpServerIds
+            session.externalAgentPeerProfileId = state.peerProfile.profileId
+            val externalSessionId = response.sessionId.value
             applyConfiguredSelections(state, session, externalSessionId)
             externalSessionId
         } finally {
@@ -286,21 +340,50 @@ class ExternalAcpAgentService(private val project: Project) {
         }
     }
 
-    private suspend fun authenticate(state: AcpProcessState, methodId: String) {
-        state.sendRequest(
-            method = "authenticate",
-            params = buildJsonObject {
-                put("methodId", methodId)
-            }
-        )
+    private suspend fun authenticate(state: AcpProcessState, methodId: AuthMethodId) {
+        state.authenticate(methodId)
     }
 
-    private fun updateSessionConfigOptions(session: AgentSession, response: JsonObject) {
-        session.externalAgentConfigOptions = sessionConfigAdapter.merge(
-            existing = session.externalAgentConfigOptions,
-            response = response
+    private fun currentSession(proxySessionId: String): AgentSession? {
+        return project.service<AgentToolWindowContentManager>().getSession(proxySessionId)
+    }
+
+    private fun applyRuntimeState(
+        session: AgentSession,
+        runtimeState: AcpRuntimeState
+    ) {
+        session.externalAgentConfigOptions = buildConfigOptions(
+            modes = runtimeState.modes,
+            models = runtimeState.models,
+            configOptions = runtimeState.configOptions
         )
+        session.externalAgentConfigSelections = AcpConfigOptions.normalizeSelections(
+            session.externalAgentConfigOptions,
+            session.externalAgentConfigSelections + session.externalAgentConfigOptions.currentSelections()
+        )
+        session.externalAgentAvailableCommands = runtimeState.availableCommands
+        session.externalAgentVendorMeta = runtimeState.vendorMeta
+        runtimeState.sessionTitle
+            ?.takeIf(String::isNotBlank)
+            ?.let { session.externalAgentSessionTitle = it }
         session.externalAgentConfigLoading = false
+    }
+
+    private fun mergeSessionConfigOptions(
+        session: AgentSession,
+        configOptions: List<SessionConfigOption>
+    ) {
+        val standard = session.externalAgentConfigOptions.filter {
+            it.id == AcpConfigCategories.MODE || it.id == AcpConfigCategories.MODEL
+        }
+        session.externalAgentConfigOptions = (standard + configOptions.toAcpConfigOptions())
+            .associateByTo(linkedMapOf(), AcpConfigOption::id)
+            .values
+            .toList()
+        session.externalAgentConfigSelections = AcpConfigOptions.normalizeSelections(
+            session.externalAgentConfigOptions,
+            session.externalAgentConfigSelections + session.externalAgentConfigOptions.currentSelections()
+        )
     }
 
     private suspend fun applyConfiguredSelections(
@@ -333,8 +416,10 @@ class ExternalAcpAgentService(private val project: Project) {
             addAll(remaining.entries.map { it.key to it.value })
         }
 
+        val sessionId = SessionId(externalSessionId)
         for ((optionId, value) in orderedSelections) {
-            val option = session.externalAgentConfigOptions.firstOrNull { it.id == optionId } ?: continue
+            val option =
+                session.externalAgentConfigOptions.firstOrNull { it.id == optionId } ?: continue
             if (option.currentValue == value) {
                 continue
             }
@@ -343,33 +428,30 @@ class ExternalAcpAgentService(private val project: Project) {
                 continue
             }
 
-            when (val result = runCatching {
-                sessionConfigAdapter.updateOption(
-                    request = AcpConfigUpdateRequest(
-                        sessionId = externalSessionId,
-                        optionId = optionId,
-                        value = value
-                    ),
-                    support = state.configUpdateSupport,
-                    sendRequest = state::sendRequest
+            runCatching {
+                when (optionId) {
+                    AcpConfigCategories.MODE -> state.setMode(sessionId, SessionModeId(value))
+                    AcpConfigCategories.MODEL -> state.setModel(sessionId, ModelId(value))
+                    else -> mergeSessionConfigOptions(
+                        session,
+                        state.setConfigOption(sessionId, option, value)
+                    )
+                }
+                if (optionId == AcpConfigCategories.MODE || optionId == AcpConfigCategories.MODEL) {
+                    session.externalAgentConfigOptions =
+                        session.externalAgentConfigOptions.updateCurrentValue(optionId, value)
+                }
+                session.externalAgentConfigSelections = AcpConfigOptions.normalizeSelections(
+                    session.externalAgentConfigOptions,
+                    session.externalAgentConfigSelections +
+                        (optionId to value) +
+                        session.externalAgentConfigOptions.currentSelections()
                 )
-            }.getOrElse { error ->
+            }.onFailure { error ->
                 logger.warn(
                     "Failed to apply ACP subagent option $optionId=$value for ${session.externalAgentId}",
                     error
                 )
-                continue
-            }) {
-                AcpConfigUpdateResult.Unsupported -> {
-                    state.configUpdateSupport = AcpConfigUpdateSupport.Unsupported
-                    logger.warn("ACP agent ${session.externalAgentId} does not support runtime option changes")
-                    return
-                }
-
-                is AcpConfigUpdateResult.Applied -> {
-                    state.configUpdateSupport = result.support
-                    updateSessionConfigOptions(session, result.response)
-                }
             }
         }
     }
@@ -379,81 +461,59 @@ class ExternalAcpAgentService(private val project: Project) {
         externalSessionId: String,
         message: MessageWithContext
     ) {
-        state.sendRequest(
-            method = "session/prompt",
-            params = buildJsonObject {
-                put("sessionId", externalSessionId)
-                put("prompt", buildPromptBlocks(message))
-            }
+        state.sendPrompt(
+            sessionId = SessionId(externalSessionId),
+            prompt = buildPromptBlocks(message)
         )
     }
 
-    private suspend fun cancelSession(state: AcpProcessState, externalSessionId: String) {
+    private fun cancelSession(state: AcpProcessState, externalSessionId: String) {
         runCatching {
-            state.sendNotification(
-                method = "session/cancel",
-                params = buildJsonObject {
-                    put("sessionId", externalSessionId)
-                }
-            )
+            state.cancel(SessionId(externalSessionId))
         }.onFailure {
             logger.debug("Failed to cancel ACP session $externalSessionId", it)
         }
     }
 
-    private fun buildMcpServers(proxySessionId: String): JsonArray {
-        val selectedServerIds =
-            project.service<ee.carlrobert.codegpt.agent.AgentMcpContextService>()
-                .get(proxySessionId)
-                ?.selectedServerIds
-                .orEmpty()
+    private fun selectedMcpServerIds(proxySessionId: String): Set<String> {
+        return project.service<ee.carlrobert.codegpt.agent.AgentMcpContextService>()
+            .get(proxySessionId)
+            ?.selectedServerIds
+            .orEmpty()
+    }
+
+    private fun buildMcpServers(selectedServerIds: Set<String>): List<McpServer> {
         if (selectedServerIds.isEmpty()) {
-            return JsonArray(emptyList())
+            return emptyList()
         }
 
         val serversById =
             project.service<McpSettings>().state.servers.associateBy { it.id.toString() }
-        return JsonArray(selectedServerIds.mapNotNull { serverId ->
+        return selectedServerIds.mapNotNull { serverId ->
             val server = serversById[serverId] ?: return@mapNotNull null
-            buildJsonObject {
-                put("type", "stdio")
-                put("name", server.name ?: serverId)
-                put("command", server.command ?: "npx")
-                putJsonArray("args") {
-                    server.arguments.forEach { add(JsonPrimitive(it)) }
+            McpServer.Stdio(
+                name = server.name ?: serverId,
+                command = server.command ?: "npx",
+                args = server.arguments,
+                env = server.environmentVariables.map { (key, value) ->
+                    EnvVariable(name = key, value = value)
                 }
-                putJsonArray("env") {
-                    server.environmentVariables.forEach { (key, value) ->
-                        add(
-                            buildJsonObject {
-                                put("name", key)
-                                put("value", value)
-                            }
-                        )
-                    }
-                }
-            }
-        })
+            )
+        }
     }
 
-    private fun buildPromptBlocks(message: MessageWithContext): JsonArray {
-        val blocks = mutableListOf<JsonElement>()
+    private fun buildPromptBlocks(message: MessageWithContext): List<ContentBlock> {
+        val blocks = mutableListOf<ContentBlock>()
         val selectedTags = message.tags.filter { it.selected }
 
         if (selectedTags.isNotEmpty()) {
             val tagSummary = buildTagSummary(selectedTags)
             if (tagSummary.isNotBlank()) {
-                blocks += buildJsonObject {
-                    put("type", "text")
-                    put("text", tagSummary)
-                }
+                blocks += ContentBlock.Text(tagSummary)
             }
         }
 
-        blocks += buildJsonObject {
-            put("type", "text")
-            put("text", message.text)
-        }
+        blocks += ContentBlock.Text(message.text)
 
         selectedTags.forEach { tag ->
             when (tag) {
@@ -463,17 +523,16 @@ class ExternalAcpAgentService(private val project: Project) {
             }
         }
 
-        return JsonArray(blocks)
+        return blocks
     }
 
-    private fun resourceLinkBlock(path: String): JsonObject {
+    private fun resourceLinkBlock(path: String): ContentBlock.ResourceLink {
         val filePath = Paths.get(path)
-        return buildJsonObject {
-            put("type", "resource_link")
-            put("uri", Paths.get(path).toUri().toString())
-            put("name", filePath.fileName?.toString() ?: path)
-            put("mimeType", "text/plain")
-        }
+        return ContentBlock.ResourceLink(
+            uri = Paths.get(path).toUri().toString(),
+            name = filePath.fileName?.toString() ?: path,
+            mimeType = "text/plain"
+        )
     }
 
     private fun buildTagSummary(tags: List<TagDetails>): String {
@@ -502,358 +561,391 @@ class ExternalAcpAgentService(private val project: Project) {
         }.trim()
     }
 
+    private fun buildConfigOptions(
+        modes: SessionModeState?,
+        models: SessionModelState?,
+        configOptions: List<SessionConfigOption>
+    ): List<AcpConfigOption> {
+        val standard = buildList {
+            models?.let { state ->
+                add(
+                    AcpConfigOption(
+                        id = AcpConfigCategories.MODEL,
+                        name = "Model",
+                        category = AcpConfigCategories.MODEL,
+                        type = "select",
+                        currentValue = state.currentModelId.value,
+                        options = state.availableModels.map { model ->
+                            AcpConfigOptionChoice(
+                                value = model.modelId.value,
+                                name = model.name,
+                                description = model.description
+                            )
+                        }
+                    )
+                )
+            }
+            modes?.let { state ->
+                add(
+                    AcpConfigOption(
+                        id = AcpConfigCategories.MODE,
+                        name = "Mode",
+                        category = AcpConfigCategories.MODE,
+                        type = "select",
+                        currentValue = state.currentModeId.value,
+                        options = state.availableModes.map { mode ->
+                            AcpConfigOptionChoice(
+                                value = mode.id.value,
+                                name = mode.name,
+                                description = mode.description
+                            )
+                        }
+                    )
+                )
+            }
+        }
+        return (standard + configOptions.toAcpConfigOptions())
+            .associateByTo(linkedMapOf(), AcpConfigOption::id)
+            .values
+            .toList()
+    }
+
     private inner class AcpProcessState(
         val proxySessionId: String,
         val preset: ExternalAcpAgentPreset,
+        val launchEnv: Map<String, String>,
         val process: Process,
         @Volatile var events: AgentEvents
     ) {
-        private val toolCallsById = ConcurrentHashMap<String, ExternalToolCall>()
-        private val rpcConnection = AcpJsonRpcConnection(
-            json = json,
-            process = process,
-            scope = scope,
-            logger = logger,
-            processName = preset.displayName,
-            onRequest = ::handleRequest,
-            onNotification = { notification -> handleNotification(notification, events) }
+        private val compatibilityRegistry = AcpCompatibilityRegistry()
+
+        @Volatile
+        var peerProfile: AcpPeerProfile = compatibilityRegistry.initialProfile(preset)
+
+        private val transport = StdioTransport(
+            parentScope = scope,
+            ioDispatcher = Dispatchers.IO,
+            input = process.inputStream.asSource().buffered(),
+            output = process.outputStream.asSink().buffered(),
+            name = preset.displayName
+        )
+        private val protocol = AcpProtocol(
+            scope,
+            transport,
+            ProtocolOptions(
+                protocolDebugName = preset.displayName,
+                outboundPayloadAugmenter = { methodName, payload ->
+                    compatibilityRegistry.augmentOutboundPayload(
+                        profile = peerProfile,
+                        methodName = methodName,
+                        payload = payload,
+                        sessionRequestMeta = when (methodName.name) {
+                            "session/new", "session/load" -> currentSession()?.externalAgentRequestMeta
+                            else -> null
+                        },
+                        launchEnv = launchEnv
+                    )
+                },
+                inboundPayloadNormalizer = { methodName, payload ->
+                    compatibilityRegistry.normalizeInboundPayload(
+                        profile = peerProfile,
+                        methodName = methodName,
+                        payload = payload
+                    )
+                },
+                trace = ::acpTrace
+            )
+        )
+        private val hostCapabilities = AcpHostCapabilities(
+            fileHost = AcpFileHost(),
+            terminalHost = AcpTerminalHost(DefaultAcpTerminalProcessLauncher(scope))
+        )
+        private val hostBridge = AcpHostBridge(
+            proxySessionId = proxySessionId,
+            displayName = preset.displayName,
+            toolEventFlavor = preset.toolEventFlavor,
+            fullAccessModeId = FULL_ACCESS_MODE_ID,
+            sessionRoot = sessionRoot,
+            toolCallDecoder = toolCallDecoder,
+            hostCapabilities = hostCapabilities,
+            currentSession = ::currentSession,
+            eventsProvider = { events },
+            trace = ::acpTrace
+        )
+        private val sessionUpdateBridge = AcpSessionUpdateBridge(
+            proxySessionId = proxySessionId,
+            toolEventFlavor = preset.toolEventFlavor,
+            toolCallDecoder = toolCallDecoder,
+            updateModeSelection = ::updateCurrentMode,
+            updateConfigOptions = ::updateConfigOptions,
+            updateAvailableCommands = ::updateAvailableCommands,
+            updateSessionInfo = ::updateSessionInfo,
+            trace = ::acpTrace
         )
 
         @Volatile
-        var authMethodIds: List<String> = emptyList()
+        var authMethodIds: List<AuthMethodId> = emptyList()
 
-        @Volatile
-        var configUpdateSupport: AcpConfigUpdateSupport = AcpConfigUpdateSupport.Unknown
-
-        fun isAlive(): Boolean = rpcConnection.isAlive()
-
-        fun startReader() = rpcConnection.startReader()
-
-        fun startStderrLogger() = rpcConnection.startStderrLogger()
-
-        suspend fun sendRequest(method: String, params: JsonObject): JsonObject =
-            rpcConnection.request(method, params)
-
-        suspend fun sendNotification(method: String, params: JsonObject) =
-            rpcConnection.notify(method, params)
-
-        private suspend fun handleRequest(request: AcpJsonRpcRequest): JsonElement? {
-            return when (request.method) {
-                "session/request_permission", "requestPermission" ->
-                    handleRequestPermission(request.params)
-
-                "fs/read_text_file", "readTextFile" -> handleReadTextFile(request.params)
-                "fs/write_text_file", "writeTextFile" -> handleWriteTextFile(request.params)
-                else -> null
+        init {
+            hostBridge.register(protocol)
+            protocol.setNotificationHandler(AcpMethod.ClientMethods.SessionUpdate) { notification ->
+                sessionUpdateBridge.handle(notification, events)
             }
+            protocol.start()
         }
 
-        private fun handleNotification(notification: AcpJsonRpcNotification, events: AgentEvents) {
-            when (val update = sessionUpdateParser.parse(notification)) {
-                null -> Unit
-                is AcpSessionUpdate.TextChunk -> events.onTextReceived(update.text)
-                is AcpSessionUpdate.ThoughtChunk -> events.onTextReceived("<think>${update.text}</think>")
-                is AcpSessionUpdate.ToolCall -> handleToolCall(update, events)
-                is AcpSessionUpdate.ToolCallUpdate -> handleToolCallUpdate(update, events)
-                is AcpSessionUpdate.ConfigOptionUpdate -> handleConfigOptionUpdate(update.update)
-            }
-        }
+        fun isAlive(): Boolean = process.isAlive
 
-        private suspend fun handleRequestPermission(params: JsonObject): JsonObject {
-            val requestData = toolCallDecoder.decodePermissionRequest(params)
-            val session = currentSession()
-            val mode = session.currentAcpMode()
-            if (mode == FULL_ACCESS_MODE_ID) {
-                logger.debug(
-                    "Auto-approving ${preset.displayName} ACP permission in mode=$mode for tool=${requestData.toolName} title=${requestData.rawTitle}"
-                )
-                return permissionResponse(selectApprovedPermissionOptionId(requestData.options))
-            }
+        fun clientCapabilities(): ClientCapabilities = hostCapabilities.clientCapabilities()
 
-            val request = buildApprovalRequest(
-                requestData.rawTitle,
-                requestData.details,
-                requestData.toolName,
-                requestData.parsedArgs
-            )
-            val approved = runCatching { events.approveToolCall(request) }.getOrDefault(false)
-            val selectedOptionId = if (approved) {
-                selectApprovedPermissionOptionId(requestData.options)
-            } else {
-                selectRejectedPermissionOptionId(requestData.options)
-            }
-            logger.debug(
-                "Resolved ${preset.displayName} ACP permission in mode=$mode for tool=${requestData.toolName} approved=$approved title=${requestData.rawTitle}"
-            )
-            return permissionResponse(selectedOptionId)
-        }
-
-        private fun handleToolCall(update: AcpSessionUpdate.ToolCall, events: AgentEvents) {
-            val toolCall = update.toolCall
-            toolCallsById[toolCall.id] = ExternalToolCall(toolCall.toolName, toolCall.args)
-            if (!shouldDeferToolStart(toolCall.toolName, toolCall.args, update.status)) {
-                events.onToolStarting(toolCall.id, toolCall.toolName, toolCall.args)
-            }
-
-            if (update.status?.isTerminal == true) {
-                completeToolCall(
-                    toolCallId = toolCall.id,
-                    toolName = toolCall.toolName,
-                    args = toolCall.args,
-                    status = update.status,
-                    rawOutput = update.rawOutput,
-                    events = events
-                )
-            }
-        }
-
-        private fun handleToolCallUpdate(
-            update: AcpSessionUpdate.ToolCallUpdate,
-            events: AgentEvents
-        ) {
-            val updatedToolCall = update.toolCall
-            val currentToolCall = toolCallsById[update.toolCallId]
-            val effectiveToolName = updatedToolCall?.toolName ?: currentToolCall?.toolName ?: "Tool"
-            val effectiveArgs = updatedToolCall?.args ?: currentToolCall?.args
-
-            if (updatedToolCall != null) {
-                toolCallsById[update.toolCallId] = ExternalToolCall(effectiveToolName, effectiveArgs)
-            }
-
-            if (currentToolCall?.args == null && effectiveArgs != null) {
-                events.onToolStarting(update.toolCallId, effectiveToolName, effectiveArgs)
-            }
-
-            if (!update.status.isTerminal) {
-                return
-            }
-
-            completeToolCall(
-                toolCallId = update.toolCallId,
-                toolName = effectiveToolName,
-                args = effectiveArgs,
-                status = update.status,
-                rawOutput = update.rawOutput,
-                events = events
-            )
-        }
-
-        private fun completeToolCall(
-            toolCallId: String,
-            toolName: String,
-            args: Any?,
-            status: AcpToolCallStatus,
-            rawOutput: JsonElement?,
-            events: AgentEvents
-        ) {
-            val result = toolCallDecoder.decodeResult(
-                toolName = toolName,
-                args = args,
-                status = status,
-                rawOutput = rawOutput
-            )
-            toolCallsById.remove(toolCallId)
-            events.onToolCompleted(toolCallId, toolName, result)
-        }
-
-        private fun shouldDeferToolStart(
-            toolName: String,
-            args: Any?,
-            status: AcpToolCallStatus?
-        ): Boolean {
-            return toolName in setOf("WebSearch", "WebFetch") &&
-                args == null &&
-                status?.isTerminal != true
-        }
-
-        private fun handleConfigOptionUpdate(update: JsonObject) {
-            project.service<AgentToolWindowContentManager>()
-                .getSession(proxySessionId)
-                ?.let { session ->
-                    updateSessionConfigOptions(session, update)
-                }
-        }
-
-        private fun handleReadTextFile(params: JsonObject): JsonObject {
-            val path = requestPath(params)
-            val raw = Files.readString(path)
-            val line = params["line"]?.jsonPrimitive?.intOrNull
-            val limit = params["limit"]?.jsonPrimitive?.intOrNull
-            val content = if (line != null && limit != null && line > 0 && limit > 0) {
-                raw.lineSequence()
-                    .drop(line - 1)
-                    .take(limit)
-                    .joinToString("\n")
-            } else {
-                raw
-            }
-            return buildJsonObject {
-                put("content", content)
-            }
-        }
-
-        private fun handleWriteTextFile(params: JsonObject): JsonElement {
-            val path = requestPath(params)
-            val content = params["content"]?.jsonPrimitive?.content ?: ""
-            if (path.parent != null && path.parent.notExists()) {
-                path.parent.createDirectories()
-            }
-            Files.writeString(path, content)
-            val virtualFile =
-                LocalFileSystem.getInstance().refreshAndFindFileByIoFile(path.toFile())
-            if (virtualFile != null) {
-                VfsUtil.markDirtyAndRefresh(false, false, false, virtualFile)
-            } else {
-                val parent = path.parent?.toFile()
-                if (parent != null) {
-                    LocalFileSystem.getInstance().refreshAndFindFileByIoFile(parent)
-                        ?.let { parentVf ->
-                            VfsUtil.markDirtyAndRefresh(false, false, true, parentVf)
+        fun startStderrLogger() {
+            scope.launch {
+                process.errorStream.bufferedReader().useLines { lines ->
+                    lines.forEach { line ->
+                        if (line.isNotBlank()) {
+                            logger.info("[${preset.displayName}] $line")
                         }
+                    }
                 }
             }
-            return JsonNull
         }
 
-        private fun selectApprovedPermissionOptionId(options: JsonArray): String {
-            return selectPermissionOptionId(
-                options = options,
-                preferredKinds = listOf("allow_once", "allow_always", "trust"),
-                fallback = "allow"
+        suspend fun initialize(clientInfo: ClientInfo): AgentInfo {
+            return AcpMethod.AgentMethods.Initialize(
+                protocol,
+                InitializeRequest(
+                    clientInfo.protocolVersion,
+                    clientInfo.capabilities,
+                    clientInfo.implementation,
+                    clientInfo._meta
+                )
+            )
+                .let {
+                    peerProfile = compatibilityRegistry.resolveProfile(
+                        preset = preset,
+                        agentInfo = AgentInfo(
+                            it.protocolVersion,
+                            it.agentCapabilities,
+                            it.authMethods,
+                            it.agentInfo,
+                            it._meta
+                        )
+                    )
+                    AgentInfo(
+                        it.protocolVersion,
+                        it.agentCapabilities,
+                        it.authMethods,
+                        it.agentInfo,
+                        it._meta
+                    )
+                }
+        }
+
+        suspend fun authenticate(methodId: AuthMethodId) {
+            AcpMethod.AgentMethods.Authenticate(protocol, AuthenticateRequest(methodId))
+        }
+
+        suspend fun createSession(
+            cwd: String,
+            mcpServers: List<McpServer>,
+            requestMeta: JsonElement? = null
+        ): NewSessionResponse {
+            return AcpMethod.AgentMethods.SessionNew(
+                protocol,
+                NewSessionRequest(cwd = cwd, mcpServers = mcpServers, _meta = requestMeta)
             )
         }
 
-        private fun selectRejectedPermissionOptionId(options: JsonArray): String {
-            return selectPermissionOptionId(
-                options = options,
-                preferredKinds = listOf("reject_once", "reject_always", "deny", "abort", "cancel"),
-                fallback = "abort",
-                predicate = { value ->
-                    value.contains("reject") || value.contains("deny") ||
-                            value.contains("abort") || value.contains("cancel")
-                }
+        suspend fun sendPrompt(sessionId: SessionId, prompt: List<ContentBlock>) {
+            AcpMethod.AgentMethods.SessionPrompt(
+                protocol,
+                PromptRequest(sessionId = sessionId, prompt = prompt)
             )
         }
 
-        private fun selectPermissionOptionId(
-            options: JsonArray,
-            preferredKinds: List<String>,
-            fallback: String,
-            predicate: (String) -> Boolean = { false }
-        ): String {
-            preferredKinds.forEach { preferred ->
-                options.firstOrNull { optionMatches(it.jsonObject, preferred) }?.let {
-                    return optionIdOf(it.jsonObject) ?: preferred
-                }
-            }
-
-            options.firstOrNull { option ->
-                optionValues(option.jsonObject).any(predicate)
-            }?.let { option ->
-                return optionIdOf(option.jsonObject) ?: fallback
-            }
-
-            return options.firstOrNull()?.jsonObject?.let(::optionIdOf) ?: fallback
+        fun cancel(sessionId: SessionId) {
+            AcpMethod.AgentMethods.SessionCancel(protocol, CancelNotification(sessionId))
         }
 
-        private fun optionMatches(option: JsonObject, expected: String): Boolean {
-            return optionValues(option).any { it == expected }
-        }
-
-        private fun optionValues(option: JsonObject): List<String> {
-            return listOfNotNull(
-                option["kind"]?.jsonPrimitive?.contentOrNull?.lowercase(),
-                option["optionId"]?.jsonPrimitive?.contentOrNull?.lowercase(),
-                option["id"]?.jsonPrimitive?.contentOrNull?.lowercase()
+        suspend fun setMode(sessionId: SessionId, modeId: SessionModeId) {
+            AcpMethod.AgentMethods.SessionSetMode(
+                protocol,
+                SetSessionModeRequest(sessionId, modeId)
             )
         }
 
-        private fun optionIdOf(option: JsonObject): String? {
-            return option["optionId"]?.jsonPrimitive?.contentOrNull
-                ?: option["id"]?.jsonPrimitive?.contentOrNull
-        }
-
-        private fun buildApprovalRequest(
-            rawTitle: String,
-            details: String,
-            toolName: String,
-            parsedArgs: Any?
-        ): ToolApprovalRequest {
-            val approvalType = when (parsedArgs) {
-                is WriteTool.Args -> ToolApprovalType.WRITE
-                is EditTool.Args -> ToolApprovalType.EDIT
-                is BashTool.Args -> ToolApprovalType.BASH
-                else -> ToolSpecs.approvalTypeFor(toolName)
-            }
-            val payload = approvalPayload(parsedArgs)
-            val title = rawTitle.ifBlank {
-                when (approvalType) {
-                    ToolApprovalType.BASH -> "Run shell command?"
-                    ToolApprovalType.WRITE -> "Write file?"
-                    ToolApprovalType.EDIT -> "Edit file?"
-                    ToolApprovalType.GENERIC -> "Allow action?"
-                }
-            }
-            return ToolApprovalRequest(
-                type = approvalType,
-                title = title,
-                details = details,
-                payload = payload
+        suspend fun setModel(sessionId: SessionId, modelId: ModelId) {
+            AcpMethod.AgentMethods.SessionSetModel(
+                protocol,
+                SetSessionModelRequest(sessionId, modelId)
             )
         }
 
-        private fun approvalPayload(parsedArgs: Any?): ToolApprovalPayload? {
-            return when (parsedArgs) {
-                is WriteTool.Args -> WritePayload(parsedArgs.filePath, parsedArgs.content)
-                is EditTool.Args -> EditPayload(
-                    filePath = parsedArgs.filePath,
-                    oldString = parsedArgs.oldString,
-                    newString = parsedArgs.newString,
-                    replaceAll = parsedArgs.replaceAll
+        suspend fun setConfigOption(
+            sessionId: SessionId,
+            option: AcpConfigOption,
+            value: String
+        ): List<SessionConfigOption> {
+            val optionValue = when (option.type) {
+                "boolean" -> SessionConfigOptionValue.BoolValue(
+                    value.toBooleanStrictOrNull()
+                        ?: error("Invalid boolean ACP option value '$value' for ${option.id}")
                 )
 
-                is BashTool.Args -> BashPayload(parsedArgs.command, parsedArgs.description)
-                else -> null
+                else -> SessionConfigOptionValue.StringValue(value)
             }
-        }
-
-        private fun permissionResponse(optionId: String): JsonObject {
-            return buildJsonObject {
-                putJsonObject("outcome") {
-                    put("outcome", "selected")
-                    put("optionId", optionId)
-                }
-            }
+            return AcpMethod.AgentMethods.SessionSetConfigOption(
+                protocol,
+                SetSessionConfigOptionRequest(
+                    sessionId = sessionId,
+                    configId = SessionConfigId(option.id),
+                    value = optionValue
+                )
+            ).configOptions
         }
 
         private fun currentSession(): AgentSession? {
             return project.service<AgentToolWindowContentManager>().getSession(proxySessionId)
         }
 
-        fun close() = rpcConnection.close()
-    }
+        private fun updateCurrentMode(currentModeId: String) {
+            currentSession()?.let { session ->
+                session.externalAgentConfigOptions =
+                    session.externalAgentConfigOptions.updateCurrentValue(
+                        AcpConfigCategories.MODE,
+                        currentModeId
+                    )
+                session.externalAgentConfigSelections = AcpConfigOptions.normalizeSelections(
+                    session.externalAgentConfigOptions,
+                    session.externalAgentConfigSelections + session.externalAgentConfigOptions.currentSelections()
+                )
+            }
+        }
 
-    private fun AgentSession?.currentAcpMode(): String? {
-        return this?.externalAgentConfigOptions
-            ?.firstOrNull(AcpSessionConfigId.MODE::matches)
-            ?.currentValue
-    }
+        private fun updateConfigOptions(configOptions: List<SessionConfigOption>) {
+            currentSession()?.let { session ->
+                mergeSessionConfigOptions(session, configOptions)
+            }
+        }
 
-    private fun requestPath(params: JsonObject): Path {
-        val rawPath = params["path"]?.jsonPrimitive?.contentOrNull
-            ?: params["uri"]?.jsonPrimitive?.contentOrNull
-            ?: error("Missing path")
-        return uriToPath(rawPath)
-    }
+        private fun updateAvailableCommands(availableCommands: List<AvailableCommand>) {
+            currentSession()?.externalAgentAvailableCommands = availableCommands
+        }
 
-    private fun uriToPath(uri: String): Path {
-        return when {
-            uri.startsWith("file://") -> Paths.get(java.net.URI.create(uri))
-            else -> Paths.get(uri)
+        private fun updateSessionInfo(title: String?, updatedAt: String?) {
+            currentSession()?.let { session ->
+                if (!title.isNullOrBlank()) {
+                    session.externalAgentSessionTitle = title
+                }
+            }
+        }
+
+        private fun acpTrace(message: String) {
+            if (
+                ConfigurationSettings.getState().debugModeEnabled ||
+                preset.toolEventFlavor == AcpToolEventFlavor.GEMINI_CLI
+            ) {
+                logger.info("[ACP TRACE][${preset.displayName}/${peerProfile.profileId}] $message")
+            }
+        }
+
+        fun close() {
+            protocol.close()
+            process.destroy()
         }
     }
 
     private fun Throwable.isAuthenticationRequiredError(): Boolean {
-        return message?.contains("Authentication required", ignoreCase = true) == true
+        return (this as? JsonRpcException)?.message?.contains(
+            "Authentication required",
+            ignoreCase = true
+        ) == true ||
+                message?.contains("Authentication required", ignoreCase = true) == true
+    }
+}
+
+internal object AcpConfigCategories {
+    const val MODEL = "model"
+    const val MODE = "mode"
+    const val THOUGHT_LEVEL = "thought_level"
+}
+
+internal fun List<AcpConfigOption>.updateCurrentValue(
+    optionId: String,
+    value: String
+): List<AcpConfigOption> {
+    return map { option ->
+        if (option.id == optionId) {
+            option.copy(currentValue = value)
+        } else {
+            option
+        }
+    }
+}
+
+internal fun List<AcpConfigOption>.currentSelections(): Map<String, String> {
+    return mapNotNull { option ->
+        option.currentValue?.takeIf { it.isNotBlank() }?.let { option.id to it }
+    }.toMap(linkedMapOf())
+}
+
+private fun List<SessionConfigOption>.toAcpConfigOptions(): List<AcpConfigOption> {
+    return map { option ->
+        when (option) {
+            is SessionConfigOption.Select -> {
+                val flattenedOptions = when (val selectOptions = option.options) {
+                    is SessionConfigSelectOptions.Flat -> selectOptions.options.map { choice ->
+                        AcpConfigOptionChoice(
+                            value = choice.value.value,
+                            name = choice.name,
+                            description = choice.description
+                        )
+                    }
+
+                    is SessionConfigSelectOptions.Grouped -> selectOptions.groups.flatMap { group ->
+                        group.options.map { choice ->
+                            AcpConfigOptionChoice(
+                                value = choice.value.value,
+                                name = "${group.name}: ${choice.name}",
+                                description = choice.description
+                            )
+                        }
+                    }
+                }
+                AcpConfigOption(
+                    id = option.id.value,
+                    name = option.name,
+                    description = option.description,
+                    category = option.id.value.toAcpConfigCategory(),
+                    type = "select",
+                    currentValue = option.currentValue.value,
+                    options = flattenedOptions
+                )
+            }
+
+            is SessionConfigOption.BooleanOption -> AcpConfigOption(
+                id = option.id.value,
+                name = option.name,
+                description = option.description,
+                category = option.id.value.toAcpConfigCategory(),
+                type = "boolean",
+                currentValue = option.currentValue.toString(),
+                options = listOf(
+                    AcpConfigOptionChoice("true", "Enabled"),
+                    AcpConfigOptionChoice("false", "Disabled")
+                )
+            )
+        }
+    }
+}
+
+private fun String.toAcpConfigCategory(): String? {
+    return when (lowercase()) {
+        AcpConfigCategories.MODEL -> AcpConfigCategories.MODEL
+        AcpConfigCategories.MODE -> AcpConfigCategories.MODE
+        AcpConfigCategories.THOUGHT_LEVEL,
+        "reasoning",
+        "reasoning_effort" -> AcpConfigCategories.THOUGHT_LEVEL
+        else -> null
     }
 }

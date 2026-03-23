@@ -13,8 +13,8 @@ import kotlinx.serialization.Serializable
 
 class BashOutputTool(
     workingDirectory: String,
-    hookManager: HookManager,
     private val sessionId: String,
+    hookManager: HookManager,
 ) :
     BaseTool<BashOutputTool.Args, BashOutputTool.Result>(
         workingDirectory = workingDirectory,

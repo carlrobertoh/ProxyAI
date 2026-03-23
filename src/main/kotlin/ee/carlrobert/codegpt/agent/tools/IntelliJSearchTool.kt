@@ -32,9 +32,9 @@ import java.nio.file.Paths
  * Enhanced search tool using IntelliJ's native SearchService and FindModel.
  */
 class IntelliJSearchTool(
-    hookManager: HookManager,
-    sessionId: String,
     private val project: Project,
+    sessionId: String,
+    hookManager: HookManager,
 ) : BaseTool<IntelliJSearchTool.Args, IntelliJSearchTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
     argsSerializer = Args.serializer(),

@@ -316,6 +316,7 @@ class AgentModelComboBoxAction(
             override fun actionPerformed(event: AnActionEvent) {
                 agentSession.externalAgentId = preset.id
                 agentSession.externalAgentSessionId = null
+                agentSession.externalAgentMcpServerIds = emptySet()
                 onAgentRuntimeChanged(preset.id)
                 updateExternalAgentPresentation(preset.id)
                 onModelChange(modelSettings.getServiceForFeature(FeatureType.AGENT))
@@ -484,6 +485,7 @@ class AgentModelComboBoxAction(
     private fun clearExternalAgentSelection() {
         agentSession.externalAgentId = null
         agentSession.externalAgentSessionId = null
+        agentSession.externalAgentMcpServerIds = emptySet()
         onAgentRuntimeChanged(null)
     }
 

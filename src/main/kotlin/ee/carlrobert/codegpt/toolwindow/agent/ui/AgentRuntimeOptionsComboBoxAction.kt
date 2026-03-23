@@ -144,13 +144,7 @@ class AgentRuntimeOptionsComboBoxAction(
             ?.takeIf(String::isNotBlank)
             ?.let { return it }
 
-        val parts = listOfNotNull(
-            AcpConfigOptions.selectedValueName(agentSession.externalAgentConfigOptions, "model"),
-            AcpConfigOptions.selectedValueName(agentSession.externalAgentConfigOptions, "thought_level")
-        ).ifEmpty {
-            listOfNotNull(AcpConfigOptions.selectedValueName(agentSession.externalAgentConfigOptions, "mode"))
-        }
-
+        val parts = AcpConfigOptions.summaryParts(agentSession.externalAgentConfigOptions)
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "Options"
     }
 

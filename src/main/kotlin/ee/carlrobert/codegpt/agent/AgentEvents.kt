@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.agent
 
+import com.agentclientprotocol.model.PlanEntry
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.tools.AskUserQuestionTool
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -9,6 +10,8 @@ import java.util.UUID
 
 interface AgentEvents {
     fun onTextReceived(text: String) {}
+    fun onThinkingReceived(text: String) {}
+    fun onPlanUpdated(entries: List<PlanEntry>) {}
     fun onAgentCompleted(agentId: String) {}
     fun onToolStarting(id: String, toolName: String, args: Any?) {}
     fun onToolCompleted(id: String?, toolName: String, result: Any?) {}
@@ -23,8 +26,13 @@ interface AgentEvents {
 
     fun onRetry(attempt: Int, maxAttempts: Int) {}
     fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {}
-    fun onQueuedMessagesResolved()
+    fun onQueuedMessagesResolved(message: MessageWithContext? = null)
     fun onTokenUsageAvailable(tokenUsage: Long) {}
+    fun onUsageAvailable(event: AgentUsageEvent) {
+        onTokenUsageAvailable(event.usedTokens)
+    }
+    fun onRuntimeOptionsUpdated() {}
+    fun onSessionInfoUpdated(title: String?, updatedAt: String? = null) {}
     fun onCreditsAvailable(event: AgentCreditsEvent) {}
     fun onAgentException(provider: ServiceType, throwable: Throwable) {}
     fun onHistoryCompressionStateChanged(isCompressing: Boolean) {}

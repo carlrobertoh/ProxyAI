@@ -48,7 +48,11 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
     init {
         tabComponentInsets = null
         setComponentPopupMenu(TabPopupMenu())
-        addChangeListener { refreshTabState() }
+        addChangeListener {
+            refreshTabState()
+            project.messageBus.syncPublisher(AgentUiStateNotifier.AGENT_UI_STATE_TOPIC)
+                .activeSessionChanged()
+        }
     }
 
     enum class TabStatus {

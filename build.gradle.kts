@@ -80,6 +80,10 @@ dependencies {
     implementation(libs.jackson.datatype.jsr310)
     implementation(libs.jackson.module.kotlin)
     implementation(libs.kotlin.stdlib)
+    implementation(libs.acp.sdk) {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
+    }
 
     implementation(libs.flexmark.all) {
         // vulnerable transitive dependency

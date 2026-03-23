@@ -85,6 +85,7 @@ public class ChatMessageResponseBody extends JPanel {
   private final ResponseBodyProgressPanel progressPanel = new ResponseBodyProgressPanel();
   private final JPanel contentPanel =
       new JPanel(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, 4, true, false));
+  private final StringBuilder accumulatedThinking = new StringBuilder();
 
   private ResponseEditorPanel currentlyProcessedEditorPanel;
   private MermaidResponsePanel currentlyProcessedMermaidPanel;
@@ -168,6 +169,20 @@ public class ChatMessageResponseBody extends JPanel {
     for (Segment item : parsedResponse) {
       processResponse(item, true);
     }
+  }
+
+  public void appendThinking(String partialThinking) {
+    if (partialThinking.isEmpty()) {
+      return;
+    }
+
+    if (accumulatedThinking.length() > 0) {
+      accumulatedThinking.append('\n');
+    }
+    accumulatedThinking.append(partialThinking);
+    processThinkingOutput(accumulatedThinking.toString());
+    revalidate();
+    repaint();
   }
 
   public void displayMissingCredential() {
@@ -254,6 +269,7 @@ public class ChatMessageResponseBody extends JPanel {
   public void clear() {
     contentPanel.removeAll();
     streamOutputParser.clear();
+    accumulatedThinking.setLength(0);
 
     // Reset for the next incoming message
     prepareProcessingText(true);

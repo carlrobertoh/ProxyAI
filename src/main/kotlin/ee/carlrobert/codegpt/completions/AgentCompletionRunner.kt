@@ -68,7 +68,7 @@ internal object AgentCompletionRunner : CompletionRunner {
                 }
             }
 
-            override fun onQueuedMessagesResolved() = Unit
+            override fun onQueuedMessagesResolved(message: MessageWithContext?) = Unit
         }
 
         val cancellableRequest = CancellableRequest {
@@ -137,7 +137,7 @@ internal object AgentCompletionRunner : CompletionRunner {
                                 }
                                 (msg as? ai.koog.prompt.message.Message.Reasoning)?.let {
                                     if (it.content.isNotBlank()) {
-                                        events.onTextReceived("<think>${it.content}</think>")
+                                        events.onThinkingReceived(it.content)
                                     }
                                 }
                             }

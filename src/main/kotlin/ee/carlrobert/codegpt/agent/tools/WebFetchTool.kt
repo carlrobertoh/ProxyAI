@@ -13,9 +13,9 @@ import java.net.URI
 
 class WebFetchTool(
     workingDirectory: String,
-    private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)",
     sessionId: String,
     hookManager: HookManager,
+    private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)",
 ) : BaseTool<WebFetchTool.Args, WebFetchTool.Result>(
     workingDirectory = workingDirectory,
     argsSerializer = Args.serializer(),

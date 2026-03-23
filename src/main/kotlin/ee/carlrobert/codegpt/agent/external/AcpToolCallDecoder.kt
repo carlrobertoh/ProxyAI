@@ -1,68 +1,179 @@
 package ee.carlrobert.codegpt.agent.external
 
+import com.agentclientprotocol.model.ContentBlock
+import com.agentclientprotocol.model.RequestPermissionRequest
+import com.agentclientprotocol.model.SessionUpdate
+import com.agentclientprotocol.model.ToolCallContent
+import com.agentclientprotocol.model.ToolCallStatus
+import com.agentclientprotocol.model.ToolCallLocation
+import com.agentclientprotocol.model.ToolKind
 import ee.carlrobert.codegpt.agent.ToolSpecs
-import ee.carlrobert.codegpt.agent.tools.*
+import ee.carlrobert.codegpt.agent.tools.EditTool
+import ee.carlrobert.codegpt.agent.tools.McpTool
+import ee.carlrobert.codegpt.agent.tools.WriteTool
+import ee.carlrobert.codegpt.agent.external.events.AcpExternalEvent
+import ee.carlrobert.codegpt.agent.external.events.AcpPermissionRequestSnapshot
+import ee.carlrobert.codegpt.agent.external.events.AcpToolCallArgs
+import ee.carlrobert.codegpt.agent.external.events.AcpToolCallSnapshot
+import ee.carlrobert.codegpt.agent.external.events.toAcpToolCallContent
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import java.nio.charset.StandardCharsets
-
-internal data class AcpDecodedToolCall(
-    val id: String,
-    val toolName: String,
-    val args: Any?
-)
-
-internal data class AcpPermissionRequestData(
-    val rawTitle: String,
-    val toolName: String,
-    val parsedArgs: Any?,
-    val details: String,
-    val options: JsonArray
-)
-
-private data class DiffContent(
-    val path: String,
-    val oldText: String?,
-    val newText: String
-)
-
-private data class ResolvedToolCall(
-    val rawTitle: String,
-    val toolName: String,
-    val args: Any?
-)
 
 internal class AcpToolCallDecoder(
     private val json: Json
 ) {
+    private val support = AcpToolCallDecodingSupport(json)
+    private val standardNormalizer = StandardSemanticToolCallNormalizer()
+    private val zedNormalizer = ZedAdapterToolCallNormalizer()
+    private val geminiNormalizer = GeminiCliToolCallNormalizer()
+    private val fallbackNormalizer = FallbackToolCallNormalizer()
 
-    fun decodeToolCall(metadata: JsonObject): AcpDecodedToolCall? {
-        val toolCallId = metadata.string("toolCallId") ?: return null
-        val tool = resolveToolCall(metadata)
-        return AcpDecodedToolCall(
-            id = toolCallId,
-            toolName = tool.toolName,
-            args = tool.args
+    fun decodeExternalEvent(
+        flavor: AcpToolEventFlavor,
+        update: SessionUpdate
+    ): AcpExternalEvent? {
+        return when (update) {
+            is SessionUpdate.UserMessageChunk -> null
+            is SessionUpdate.AgentMessageChunk -> {
+                (update.content as? ContentBlock.Text)?.text?.let {
+                    AcpExternalEvent.TextChunk(it)
+                }
+            }
+
+            is SessionUpdate.AgentThoughtChunk -> {
+                (update.content as? ContentBlock.Text)?.text?.let {
+                    AcpExternalEvent.ThinkingChunk(it)
+                }
+            }
+
+            is SessionUpdate.PlanUpdate -> AcpExternalEvent.PlanUpdate(update.entries)
+            is SessionUpdate.UsageUpdate -> AcpExternalEvent.UsageUpdate(
+                used = update.used,
+                size = update.size,
+                cost = update.cost
+            )
+            is SessionUpdate.ConfigOptionUpdate -> AcpExternalEvent.ConfigOptionUpdate(update.configOptions)
+            is SessionUpdate.SessionInfoUpdate -> AcpExternalEvent.SessionInfoUpdate(
+                title = update.title,
+                updatedAt = update.updatedAt
+            )
+            is SessionUpdate.UnknownSessionUpdate -> AcpExternalEvent.UnknownSessionUpdate(
+                type = update.sessionUpdateType,
+                rawJson = update.rawJson
+            )
+            is SessionUpdate.AvailableCommandsUpdate -> AcpExternalEvent.AvailableCommandsUpdate(update.availableCommands)
+            is SessionUpdate.CurrentModeUpdate -> AcpExternalEvent.CurrentModeUpdate(update.currentModeId.value)
+            is SessionUpdate.ToolCall -> AcpExternalEvent.ToolCallStarted(decodeToolCallSnapshot(flavor, update))
+            is SessionUpdate.ToolCallUpdate -> AcpExternalEvent.ToolCallUpdated(decodeToolCallSnapshot(flavor, update))
+        }
+    }
+
+    fun decodePermissionRequest(
+        flavor: AcpToolEventFlavor,
+        request: RequestPermissionRequest
+    ): AcpPermissionRequestSnapshot {
+        return AcpPermissionRequestSnapshot(
+            toolCall = decodeToolCallSnapshot(
+                flavor = flavor,
+                toolCallId = request.toolCall.toolCallId.value,
+            rawTitle = request.toolCall.title ?: "Allow action?",
+            rawKind = request.toolCall.kind?.wireValue,
+            rawInput = request.toolCall.rawInput,
+            locations = request.toolCall.locations.orEmpty(),
+            content = request.toolCall.content.orEmpty(),
+            rawMeta = request.toolCall._meta,
+            defaultTitle = "Allow action?"
+        ),
+            details = permissionDetails(
+                locations = request.toolCall.locations.orEmpty(),
+                rawInput = request.toolCall.rawInput,
+                fallback = request.toolCall.toString()
+            ),
+            options = request.options
         )
     }
 
-    fun decodePermissionRequest(params: JsonObject): AcpPermissionRequestData {
-        val toolCall = params["toolCall"] as? JsonObject ?: JsonObject(emptyMap())
-        val tool = resolveToolCall(toolCall, defaultTitle = "Allow action?")
-        return AcpPermissionRequestData(
-            rawTitle = tool.rawTitle,
-            toolName = tool.toolName,
-            parsedArgs = tool.args,
-            details = permissionDetails(toolCall),
-            options = params["options"].asJsonArrayOrEmpty()
+    private fun decodeToolCallSnapshot(
+        flavor: AcpToolEventFlavor,
+        update: SessionUpdate.ToolCall
+    ): AcpToolCallSnapshot {
+        return decodeToolCallSnapshot(
+            flavor = flavor,
+            toolCallId = update.toolCallId.value,
+            rawTitle = update.title,
+            rawKind = update.kind?.wireValue,
+            rawInput = update.rawInput,
+            locations = update.locations,
+            content = update.content,
+            rawMeta = update._meta,
+            rawOutput = update.rawOutput,
+            status = update.status?.toAcpToolCallStatus()
+        )
+    }
+
+    private fun decodeToolCallSnapshot(
+        flavor: AcpToolEventFlavor,
+        update: SessionUpdate.ToolCallUpdate
+    ): AcpToolCallSnapshot {
+        return decodeToolCallSnapshot(
+            flavor = flavor,
+            toolCallId = update.toolCallId.value,
+            rawTitle = update.title.orEmpty(),
+            rawKind = update.kind?.wireValue,
+            rawInput = update.rawInput,
+            locations = update.locations.orEmpty(),
+            content = update.content.orEmpty(),
+            rawMeta = update._meta,
+            rawOutput = update.rawOutput,
+            status = update.status?.toAcpToolCallStatus(),
+            defaultTitle = ""
+        )
+    }
+
+    private fun decodeToolCallSnapshot(
+        flavor: AcpToolEventFlavor,
+        toolCallId: String,
+        rawTitle: String,
+        rawKind: String?,
+        rawInput: JsonElement?,
+        locations: List<ToolCallLocation>,
+        content: List<ToolCallContent>,
+        rawMeta: JsonElement? = null,
+        rawOutput: JsonElement? = null,
+        status: AcpToolCallStatus? = null,
+        defaultTitle: String = "Tool"
+    ): AcpToolCallSnapshot {
+        val resolved = resolveToolCall(
+            flavor = flavor,
+            context = AcpToolCallContext(
+                toolCallId = toolCallId,
+                rawTitle = rawTitle,
+                rawKind = rawKind,
+                rawInput = rawInput,
+                locations = locations,
+                content = content,
+                defaultTitle = defaultTitle
+            )
+        )
+        return AcpToolCallSnapshot(
+            id = toolCallId,
+            title = resolved.rawTitle,
+            toolName = resolved.toolName,
+            kind = rawKind?.toAcpToolKind(),
+            status = status,
+            args = resolved.typedArgs,
+            locations = locations,
+            content = content.toAcpToolCallContent(),
+            meta = rawMeta,
+            rawInput = rawInput,
+            rawOutput = rawOutput
         )
     }
 
     fun decodeResult(
         toolName: String,
-        args: Any?,
+        args: AcpToolCallArgs?,
         status: AcpToolCallStatus,
         rawOutput: JsonElement?
     ): Any? {
@@ -71,325 +182,131 @@ internal class AcpToolCallDecoder(
 
         if (status == AcpToolCallStatus.COMPLETED) {
             when (args) {
-                is McpTool.Args -> return McpTool.Result(
-                    serverId = args.serverId,
-                    serverName = args.serverName,
-                    toolName = args.toolName,
+                is AcpToolCallArgs.Mcp -> return McpTool.Result(
+                    serverId = args.value.serverId,
+                    serverName = args.value.serverName,
+                    toolName = args.value.toolName,
                     success = true,
                     output = payload.ifBlank { "MCP tool completed" }
                 )
 
-                is EditTool.Args -> return EditTool.Result.Success(
-                    filePath = args.filePath,
+                is AcpToolCallArgs.Edit -> return EditTool.Result.Success(
+                    filePath = args.value.filePath,
                     replacementsMade = 1,
                     message = "Edit completed"
                 )
 
-                is WriteTool.Args -> return WriteTool.Result.Success(
-                    filePath = args.filePath,
-                    bytesWritten = args.content.toByteArray(StandardCharsets.UTF_8).size,
+                is AcpToolCallArgs.Write -> return WriteTool.Result.Success(
+                    filePath = args.value.filePath,
+                    bytesWritten = args.value.content.toByteArray(StandardCharsets.UTF_8).size,
                     isNewFile = false,
                     message = "Write completed"
                 )
+
+                else -> Unit
             }
         }
 
         if (status == AcpToolCallStatus.FAILED || status == AcpToolCallStatus.CANCELLED) {
             val message = payload.ifBlank { "Tool ${status.wireValue}" }
             when (args) {
-                is McpTool.Args -> return McpTool.Result.error(
-                    toolName = args.toolName,
+                is AcpToolCallArgs.Mcp -> return McpTool.Result.error(
+                    toolName = args.value.toolName,
                     output = message,
-                    serverId = args.serverId,
-                    serverName = args.serverName
+                    serverId = args.value.serverId,
+                    serverName = args.value.serverName
                 )
 
-                is EditTool.Args -> return EditTool.Result.Error(args.filePath, message)
-                is WriteTool.Args -> return WriteTool.Result.Error(args.filePath, message)
+                is AcpToolCallArgs.Edit -> return EditTool.Result.Error(args.value.filePath, message)
+                is AcpToolCallArgs.Write -> return WriteTool.Result.Error(args.value.filePath, message)
+                else -> Unit
             }
         }
 
         return payload.ifBlank { null }
     }
 
-    private fun resolveToolCall(
-        metadata: JsonObject,
-        defaultTitle: String = "Tool"
-    ): ResolvedToolCall {
-        val rawTitle = metadata.string("title") ?: defaultTitle
-        val rawKind = metadata.string("kind")
-        val rawInput = metadata["rawInput"]
-        val initialToolName = normalizeToolName(rawTitle, rawKind, rawInput)
-        val parsedArgs = if (initialToolName == "MCP") {
-            decodeMcpArgs(rawTitle, rawInput)
-        } else {
-            decodeToolArgs(initialToolName, rawInput, metadata)
-        }
-        return ResolvedToolCall(
-            rawTitle = rawTitle,
-            toolName = resolveToolName(initialToolName, parsedArgs),
-            args = parsedArgs
+    fun decodeResult(
+        toolCall: AcpToolCallSnapshot,
+        rawOutput: JsonElement?
+    ): Any? {
+        return decodeResult(
+            toolName = toolCall.toolName,
+            args = toolCall.args,
+            status = toolCall.status ?: AcpToolCallStatus.COMPLETED,
+            rawOutput = rawOutput ?: toolCall.rawOutput
         )
     }
 
-    private fun permissionDetails(toolCall: JsonObject): String {
+    private fun resolveToolCall(
+        flavor: AcpToolEventFlavor,
+        context: AcpToolCallContext
+    ): AcpResolvedToolCall {
+        val vendorNormalizers = when (flavor) {
+            AcpToolEventFlavor.ZED_ADAPTER -> listOf(zedNormalizer, standardNormalizer)
+            AcpToolEventFlavor.GEMINI_CLI -> listOf(geminiNormalizer, standardNormalizer)
+            AcpToolEventFlavor.STANDARD -> listOf(standardNormalizer)
+        }
+        return vendorNormalizers
+            .firstNotNullOfOrNull { it.normalize(context, support) }
+            ?: fallbackNormalizer.normalize(context, support)
+    }
+
+    private fun permissionDetails(
+        locations: List<ToolCallLocation>,
+        rawInput: JsonElement?,
+        fallback: String
+    ): String {
         return buildString {
-            (toolCall["locations"] as? JsonArray)
-                ?.mapNotNull { (it as? JsonObject)?.string("path") }
-                ?.takeIf { it.isNotEmpty() }
+            locations.map(ToolCallLocation::path)
+                .takeIf { it.isNotEmpty() }
                 ?.let { paths ->
                     appendLine("Locations:")
-                    paths.forEach { path -> appendLine(path) }
+                    paths.forEach(::appendLine)
                 }
-
-            toolCall["rawInput"]?.let { rawInput ->
+            rawInput?.let { input ->
                 if (isNotBlank()) {
                     appendLine()
                 }
                 appendLine("Input:")
-                append(rawInput.toString())
+                append(input.toString())
             }
-        }.ifBlank { toolCall.toString() }
+        }.ifBlank { fallback }
+    }
+}
+
+private val ToolKind.wireValue: String
+    get() = when (this) {
+        ToolKind.READ -> "read"
+        ToolKind.EDIT -> "edit"
+        ToolKind.EXECUTE -> "execute"
+        ToolKind.SEARCH -> "search"
+        ToolKind.FETCH -> "fetch"
+        else -> name.lowercase()
     }
 
-    private fun normalizeToolName(
-        rawTitle: String,
-        kind: String?,
-        rawInput: JsonElement?
-    ): String {
-        val normalizedKind = kind?.lowercase().orEmpty()
-        val rawInputObject = rawInput.asJsonObjectOrNull(json)
-        val actionType = (rawInputObject?.get("action") as? JsonObject)?.string("type")?.lowercase()
-        val titleLower = rawTitle.lowercase()
+private fun ToolCallStatus.toAcpToolCallStatus(): AcpToolCallStatus {
+    return when (this) {
+        ToolCallStatus.PENDING,
+        ToolCallStatus.IN_PROGRESS -> AcpToolCallStatus.IN_PROGRESS
 
-        return when {
-            looksLikeMcpToolName(rawTitle) -> "MCP"
-            rawInputObject?.get("command") != null || rawInputObject?.get("cmd") != null -> "Bash"
-            normalizedKind == "execute" || normalizedKind == "terminal" || normalizedKind == "bash" -> "Bash"
-            actionType == "search" -> "WebSearch"
-            actionType == "open_page" || actionType == "fetch" || actionType == "open" -> "WebFetch"
-            normalizedKind == "edit" -> "Edit"
-            normalizedKind == "read" -> "Read"
-            normalizedKind == "search" -> "IntelliJSearch"
-            normalizedKind == "fetch" && (
-                titleLower == "searching the web" || titleLower.startsWith("searching for:")
-                ) -> "WebSearch"
-            normalizedKind == "fetch" || titleLower.startsWith("opening:") -> "WebFetch"
-            else -> rawTitle.ifBlank { kind ?: "Tool" }
-        }
+        ToolCallStatus.COMPLETED -> AcpToolCallStatus.COMPLETED
+        ToolCallStatus.FAILED -> AcpToolCallStatus.FAILED
     }
+}
 
-    private fun resolveToolName(initialToolName: String, args: Any?): String {
-        return when (args) {
-            is McpTool.Args -> "MCP"
-            is WriteTool.Args -> "Write"
-            is EditTool.Args -> "Edit"
-            is ReadTool.Args -> "Read"
-            is IntelliJSearchTool.Args -> "IntelliJSearch"
-            is BashTool.Args -> "Bash"
-            is WebSearchTool.Args -> "WebSearch"
-            is WebFetchTool.Args -> "WebFetch"
-            else -> initialToolName
-        }
-    }
-
-    private fun decodeToolArgs(
-        toolName: String,
-        rawInput: JsonElement?,
-        metadata: JsonObject? = null
-    ): Any? {
-        val payload = rawInput.toPayloadString()
-        ToolSpecs.decodeArgsOrNull(json, toolName, payload)?.let { return it }
-
-        val obj = rawInput.asJsonObjectOrNull(json) ?: JsonObject(emptyMap())
-        return when (toolName) {
-            "Edit" -> decodeEditOrWriteArgs(obj, metadata) ?: payload.ifBlank { null }
-            "Write" -> decodeWriteArgs(obj, metadata) ?: payload.ifBlank { null }
-            "Read" -> decodeReadArgs(obj, metadata) ?: payload.ifBlank { null }
-            "IntelliJSearch" -> decodeSearchArgs(obj) ?: payload.ifBlank { null }
-            "Bash" -> decodeBashArgs(obj) ?: payload.ifBlank { null }
-            "WebSearch" -> decodeWebSearchArgs(obj, metadata) ?: payload.ifBlank { null }
-            "WebFetch" -> decodeWebFetchArgs(obj, rawInput, metadata) ?: payload.ifBlank { null }
-            else -> payload.ifBlank { null }
-        }
-    }
-
-    private fun decodeEditOrWriteArgs(obj: JsonObject, metadata: JsonObject?): Any? {
-        decodeDiffContent(metadata)?.let { diff ->
-            return if (diff.oldText == null) {
-                WriteTool.Args(
-                    filePath = diff.path,
-                    content = diff.newText
-                )
-            } else {
-                EditTool.Args(
-                    filePath = diff.path,
-                    oldString = diff.oldText,
-                    newString = diff.newText,
-                    shortDescription = metadata?.string("title") ?: "ACP edit",
-                    replaceAll = false
-                )
-            }
-        }
-
-        decodeWriteArgs(obj, metadata)?.let { return it }
-        return decodeEditArgs(obj, metadata)
-    }
-
-    private fun decodeEditArgs(obj: JsonObject, metadata: JsonObject? = null): EditTool.Args? {
-        val filePath = obj.string("file_path", "filePath", "path") ?: return null
-        val oldString = obj.string("old_string", "oldString", "old_text", "oldText") ?: return null
-        val newString = obj.string("new_string", "newString", "new_text", "newText") ?: return null
-        val shortDescription = obj.string("short_description", "shortDescription", "description")
-            ?: metadata?.string("title")
-            ?: "ACP edit"
-        val replaceAll = obj.boolean("replace_all", "replaceAll") ?: false
-        return EditTool.Args(filePath, oldString, newString, shortDescription, replaceAll)
-    }
-
-    private fun decodeWriteArgs(
-        obj: JsonObject,
-        metadata: JsonObject? = null
-    ): WriteTool.Args? {
-        val filePath = obj.string("file_path", "filePath", "path")
-            ?: metadata?.firstLocationPath()
-            ?: metadata?.titlePath()
-            ?: obj.firstChangePath()
-            ?: return null
-        val content = obj.string("content", "text")
-            ?: obj.firstChangeContent()
-            ?: decodeDiffContent(metadata)?.takeIf { it.oldText == null }?.newText
-            ?: return null
-        return WriteTool.Args(filePath, content)
-    }
-
-    private fun decodeReadArgs(obj: JsonObject, metadata: JsonObject? = null): ReadTool.Args? {
-        val filePath = obj.string("file_path", "filePath", "path")
-            ?: metadata?.firstLocationPath()
-            ?: metadata?.titlePath()
-            ?: return null
-        return ReadTool.Args(
-            filePath = filePath,
-            offset = obj.int("offset", "line") ?: metadata?.int("line"),
-            limit = obj.int("limit", "maxLinesCount")
-        )
-    }
-
-    private fun decodeSearchArgs(obj: JsonObject): IntelliJSearchTool.Args? {
-        val pattern = obj.string("pattern", "searchText", "query", "nameKeyword") ?: return null
-        return IntelliJSearchTool.Args(
-            pattern = pattern,
-            scope = obj.string("scope"),
-            path = obj.string("path", "directoryToSearch"),
-            fileType = obj.string("fileType", "fileMask"),
-            context = null,
-            caseSensitive = obj.boolean("caseSensitive"),
-            regex = obj.boolean("regex"),
-            wholeWords = null,
-            outputMode = null,
-            limit = obj.int("limit", "maxUsageCount", "fileCountLimit")
-        )
-    }
-
-    private fun decodeBashArgs(obj: JsonObject): BashTool.Args? {
-        val command = obj.commandString() ?: return null
-        return BashTool.Args(
-            command = command,
-            workingDirectory = obj.string("workingDirectory", "workdir", "cwd"),
-            timeout = obj.int("timeout") ?: 60_000,
-            description = obj.string("description", "title"),
-            runInBackground = obj.boolean("run_in_background", "runInBackground")
-        )
-    }
-
-    private fun decodeWebSearchArgs(
-        obj: JsonObject,
-        metadata: JsonObject? = null
-    ): WebSearchTool.Args? {
-        val action = obj["action"] as? JsonObject
-        val query = obj.string("query", "q")
-            ?: action?.string("query")
-            ?: metadata?.string("query", "q")
-            ?: return null
-        return WebSearchTool.Args(query = query)
-    }
-
-    private fun decodeWebFetchArgs(
-        obj: JsonObject,
-        rawInput: JsonElement?,
-        metadata: JsonObject? = null
-    ): WebFetchTool.Args? {
-        val action = obj["action"] as? JsonObject
-        val payload = rawInput.toPayloadString()
-        val url = obj.string("url", "uri", "href", "link")
-            ?: action?.string("url", "uri", "href", "link")
-            ?: metadata?.string("url", "uri")
-            ?: extractFirstUrl(payload)
-            ?: metadata?.string("title")?.let(::extractFirstUrl)
-            ?: return null
-
-        return WebFetchTool.Args(
-            url = url,
-            selector = obj.string("selector", "css_selector", "cssSelector")
-                ?: action?.string("selector", "css_selector", "cssSelector"),
-            timeoutMs = obj.int("timeout_ms", "timeoutMs", "timeout")
-                ?: action?.int("timeout_ms", "timeoutMs", "timeout")
-                ?: 10_000,
-            offset = obj.int("offset", "start_line", "startLine")
-                ?: action?.int("offset", "start_line", "startLine"),
-            limit = obj.int("limit", "max_lines", "maxLines", "count")
-                ?: action?.int("limit", "max_lines", "maxLines", "count")
-        )
-    }
-
-    private fun decodeMcpArgs(rawTitle: String, rawInput: JsonElement?): McpTool.Args {
-        val obj = rawInput.asJsonObjectOrNull(json) ?: JsonObject(emptyMap())
-        val callName = rawTitle.ifBlank { obj.string("tool_name", "toolName") ?: "unknown" }
-        val slashIndex = callName.indexOf('/')
-        val serverName = if (slashIndex > 0) callName.substring(0, slashIndex) else obj.string(
-            "server_name",
-            "serverName"
-        )
-        val toolName = if (slashIndex > 0 && slashIndex < callName.length - 1) {
-            callName.substring(slashIndex + 1)
-        } else {
-            obj.string("tool_name", "toolName") ?: callName.ifBlank { "unknown" }
-        }
-        val arguments = (obj["arguments"] as? JsonObject)?.toMap() ?: obj.toMap()
-        return McpTool.Args(
-            toolName = toolName,
-            serverId = obj.string("server_id", "serverId"),
-            serverName = serverName,
-            arguments = arguments
-        )
-    }
-
-    private fun decodeDiffContent(metadata: JsonObject?): DiffContent? {
-        val diff = (metadata?.get("content") as? JsonArray)
-            ?.firstOrNull { entry ->
-                (entry as? JsonObject)?.string("type") == "diff"
-            } as? JsonObject
-            ?: return null
-        val path = diff.string("path") ?: return null
-        val newText = diff.string("newText", "new_text") ?: return null
-        val oldText = diff.string("oldText", "old_text")
-        return DiffContent(path, oldText, newText)
-    }
-
-    private fun looksLikeMcpToolName(rawTitle: String): Boolean {
-        val candidate = rawTitle.trim()
-        if (candidate.isBlank() || ' ' in candidate || candidate.startsWith("/")) {
-            return false
-        }
-        val slashIndex = candidate.indexOf('/')
-        return slashIndex > 0 && slashIndex < candidate.length - 1
-    }
-
-    private fun extractFirstUrl(text: String): String? {
-        return URL_REGEX.find(text)?.value
-    }
-
-    private companion object {
-        val URL_REGEX = Regex("""https?://[^\s"'<>]+""")
+private fun String.toAcpToolKind(): ToolKind? {
+    return when (this.lowercase()) {
+        "read" -> ToolKind.READ
+        "edit" -> ToolKind.EDIT
+        "delete" -> ToolKind.DELETE
+        "move" -> ToolKind.MOVE
+        "search" -> ToolKind.SEARCH
+        "execute", "terminal", "bash" -> ToolKind.EXECUTE
+        "think" -> ToolKind.THINK
+        "fetch" -> ToolKind.FETCH
+        "switch_mode" -> ToolKind.SWITCH_MODE
+        "other" -> ToolKind.OTHER
+        else -> null
     }
 }

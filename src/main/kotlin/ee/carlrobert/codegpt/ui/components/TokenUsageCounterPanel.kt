@@ -40,6 +40,10 @@ class TokenUsageCounterPanel(
     private var messageBusConnection: MessageBusConnection? = null
     private var lastEstimatedPromptTokens: Long = 0L
     private var calibrationOffset: Long = 0L
+    private var lastReportedSizeTokens: Long? = null
+    private var lastReportedCostAmount: Double? = null
+    private var lastReportedCostCurrency: String? = null
+    private var hasReportedUsage: Boolean = false
 
     init {
         Disposer.register(ApplicationManager.getApplication(), scope)
@@ -47,7 +51,7 @@ class TokenUsageCounterPanel(
         isOpaque = false
         font = JBFont.small()
         border = JBUI.Borders.empty(5, 7)
-        text = "100% context left"
+        isVisible = false
         setupMessageBusConnection()
     }
 
@@ -61,7 +65,11 @@ class TokenUsageCounterPanel(
                         if (event.sessionId == sessionId) {
                             val model = getAgentModelForSession(event.sessionId)
                                 ?: getSelectedAgentModel()
-                                ?: return
+                            hasReportedUsage = true
+                            isVisible = true
+                            lastReportedSizeTokens = event.sizeTokens?.takeIf { it > 0L }
+                            lastReportedCostAmount = event.costAmount
+                            lastReportedCostCurrency = event.costCurrency?.takeIf { it.isNotBlank() }
                             calibrationOffset = event.totalTokens - lastEstimatedPromptTokens
                             updateDisplay(event.totalTokens, model)
                         }
@@ -71,13 +79,18 @@ class TokenUsageCounterPanel(
     }
 
     fun updateFromTotalTokens(totalTokens: Long) {
+        if (!hasReportedUsage) {
+            return
+        }
         lastEstimatedPromptTokens = totalTokens
-        val model = getSelectedAgentModel() ?: return
+        val model = getSelectedAgentModel()
         val calibratedTotal = (totalTokens + calibrationOffset).coerceAtLeast(0L)
         updateDisplay(calibratedTotal, model)
     }
 
-    private fun updateDisplay(totalTokens: Long, model: LLModel) {
+    fun hasReportedUsage(): Boolean = hasReportedUsage
+
+    private fun updateDisplay(totalTokens: Long, model: LLModel?) {
         scope.launch {
             withEdt {
                 updateColorAndText(totalTokens, model)
@@ -88,10 +101,14 @@ class TokenUsageCounterPanel(
         }
     }
 
-    private fun updateColorAndText(usedPromptTokens: Long, model: LLModel) {
-        val budget = computeBudget(model)
+    private fun updateColorAndText(usedPromptTokens: Long, model: LLModel?) {
+        val effectiveCapacity = (
+            lastReportedSizeTokens
+                ?: model?.let { computeBudget(it).inputBudget }
+                ?: return
+            ).coerceAtLeast(1L)
         val percentageUsed =
-            ((usedPromptTokens.coerceAtLeast(0).toDouble() / budget.inputBudget.toDouble()) * 100.0)
+            ((usedPromptTokens.coerceAtLeast(0).toDouble() / effectiveCapacity.toDouble()) * 100.0)
                 .coerceIn(0.0, 100.0)
         val percentageLeft = (100.0 - percentageUsed).coerceIn(0.0, 100.0)
 
@@ -105,14 +122,33 @@ class TokenUsageCounterPanel(
         text = "${percentageLeft.toInt()}% context left"
     }
 
-    private fun updateTooltipText(totalTokens: Long, model: LLModel) {
-        val budget = computeBudget(model)
+    private fun updateTooltipText(totalTokens: Long, model: LLModel?) {
         toolTipText = buildString {
             append("<html><body>")
             append("<b>Usage Details</b><br>")
-            append("Input size: ${numberFormat.format(totalTokens)} tokens<br>")
-            append("Max output size: ${numberFormat.format(budget.reservedOutput)} tokens<br>")
-            append("Max context size: ${numberFormat.format(budget.contextLength)} tokens<br>")
+            append("Current usage: ${numberFormat.format(totalTokens)} tokens<br>")
+            lastReportedSizeTokens?.let {
+                append("Reported context size: ${numberFormat.format(it)} tokens<br>")
+                append(
+                    "Context remaining: ${
+                        numberFormat.format((it - totalTokens).coerceAtLeast(0L))
+                    } tokens<br>"
+                )
+            }
+            if (lastReportedSizeTokens == null) {
+                model?.let {
+                    val budget = computeBudget(it)
+                    append("Max output size: ${numberFormat.format(budget.reservedOutput)} tokens<br>")
+                    append("Max context size: ${numberFormat.format(budget.contextLength)} tokens<br>")
+                }
+            }
+            if (lastReportedCostAmount != null && lastReportedCostCurrency != null) {
+                append(
+                    "Reported cost: ${
+                        numberFormat.format(lastReportedCostAmount)
+                    } ${lastReportedCostCurrency}<br>"
+                )
+            }
             append("</body></html>")
         }
     }

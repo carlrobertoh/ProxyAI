@@ -85,7 +85,11 @@ class AgentService(private val project: Project) {
     val queuedMessageProcessed = _queuedMessageProcessed.asSharedFlow()
 
     fun addToQueue(message: MessageWithContext, sessionId: String) {
-        pendingMessages.getOrPut(sessionId) { ArrayDeque() }.add(message)
+        val queue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
+        queue.add(message)
+        logger.debug(
+            "Queued agent message for session=$sessionId queueSize=${queue.size} uiVisible=${message.uiVisible} messageId=${message.id}"
+        )
     }
 
     suspend fun getCheckpoint(sessionId: String): AgentCheckpointData? {
@@ -114,7 +118,7 @@ class AgentService(private val project: Project) {
     }
 
     fun submitMessage(message: MessageWithContext, events: AgentEvents, sessionId: String) {
-        updateMcpContext(sessionId, message)
+        val selectedServerIds = updateMcpContext(sessionId, message)
 
         if (isSessionRunning(sessionId)) {
             addToQueue(message, sessionId)
@@ -125,6 +129,11 @@ class AgentService(private val project: Project) {
         val contentManager = project.service<AgentToolWindowContentManager>()
         val session = contentManager.getSession(sessionId) ?: return
         if (!session.externalAgentId.isNullOrBlank()) {
+            if (session.shouldRecreateExternalAgentSession(selectedServerIds)) {
+                project.service<ExternalAcpAgentService>().closeSession(sessionId)
+                session.externalAgentSessionId = null
+                session.externalAgentMcpServerIds = emptySet()
+            }
             submitExternalMessage(session, message, events, provider)
             return
         }
@@ -201,7 +210,11 @@ class AgentService(private val project: Project) {
         }
         project.service<ExternalAcpAgentService>().closeSession(sessionId)
         project.service<AgentToolWindowContentManager>()
-            .getSession(sessionId)?.externalAgentSessionId = null
+            .getSession(sessionId)
+            ?.also {
+                it.externalAgentSessionId = null
+                it.externalAgentMcpServerIds = emptySet()
+            }
         project.service<AgentMcpContextService>().clear(sessionId)
     }
 
@@ -227,22 +240,31 @@ class AgentService(private val project: Project) {
         events: AgentEvents,
         provider: ServiceType
     ) {
-        val externalAgentService = project.service<ExternalAcpAgentService>()
+        logger.debug(
+            "Starting external ACP run for session=${session.sessionId} externalAgent=${session.externalAgentId} messageId=${message.id}"
+        )
         sessionJobs[session.sessionId] = CoroutineScope(Dispatchers.IO).launch {
             try {
-                externalAgentService.runPromptLoop(
-                    session = session,
-                    firstMessage = message,
-                    events = events,
-                    pollNextQueued = {
-                        val queue = pendingMessages[session.sessionId] ?: return@runPromptLoop null
-                        if (queue.isEmpty()) {
-                            null
-                        } else {
-                            queue.removeFirst()
+                project.service<ExternalAcpAgentService>()
+                    .runPromptLoop(
+                        session = session,
+                        firstMessage = message,
+                        events = events,
+                        pollNextQueued = {
+                            val queue =
+                                pendingMessages[session.sessionId] ?: return@runPromptLoop null
+                            if (queue.isEmpty()) {
+                                logger.debug("No queued ACP follow-up message for session=${session.sessionId}")
+                                null
+                            } else {
+                                queue.removeFirst().also { next ->
+                                    logger.debug(
+                                        "Dequeued ACP follow-up message for session=${session.sessionId} queueRemaining=${queue.size} messageId=${next.id} uiVisible=${next.uiVisible}"
+                                    )
+                                }
+                            }
                         }
-                    }
-                )
+                    )
             } catch (_: CancellationException) {
                 return@launch
             } catch (ex: Throwable) {
@@ -255,7 +277,7 @@ class AgentService(private val project: Project) {
         }
     }
 
-    private fun updateMcpContext(sessionId: String, message: MessageWithContext) {
+    private fun updateMcpContext(sessionId: String, message: MessageWithContext): Set<String> {
         val selectedServerIds = message.tags
             .filterIsInstance<McpTagDetails>()
             .filter { it.selected }
@@ -273,6 +295,7 @@ class AgentService(private val project: Project) {
 
         project.service<AgentMcpContextService>()
             .update(sessionId, conversationId, selectedServerIds)
+        return selectedServerIds
     }
 
     suspend fun createSeedCheckpointFromHistory(history: List<PromptMessage>): CheckpointRef? =

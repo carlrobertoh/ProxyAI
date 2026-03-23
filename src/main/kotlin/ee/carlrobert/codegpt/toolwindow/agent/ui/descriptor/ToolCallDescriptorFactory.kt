@@ -6,6 +6,8 @@ import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.agent.external.events.AcpBashPreviewArgs
+import ee.carlrobert.codegpt.agent.external.events.AcpSearchPreviewArgs
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.diagnostics.DiagnosticsFilter
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentUiConfig
@@ -66,11 +68,11 @@ object ToolCallDescriptorFactory {
 
     private fun detectToolKind(toolName: String, args: Any, result: Any?): ToolKind {
         return when {
-            toolName == "IntelliJSearch" || args is IntelliJSearchTool.Args -> ToolKind.SEARCH
+            toolName == "IntelliJSearch" || args is IntelliJSearchTool.Args || args is AcpSearchPreviewArgs -> ToolKind.SEARCH
             toolName == "Read" || args is ReadTool.Args -> ToolKind.READ
             toolName == "Write" || args is WriteTool.Args -> ToolKind.WRITE
             toolName == "Edit" || args is EditTool.Args -> ToolKind.EDIT
-            toolName == "Bash" || args is BashTool.Args -> ToolKind.BASH
+            toolName == "Bash" || args is BashTool.Args || args is AcpBashPreviewArgs -> ToolKind.BASH
             toolName == "BashOutput" || args is BashOutputTool.Args -> ToolKind.BASH_OUTPUT
             toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.KILL_SHELL
             toolName == "WebSearch" || args is WebSearchTool.Args || result is WebSearchTool.Result -> ToolKind.WEB
@@ -465,19 +467,24 @@ object ToolCallDescriptorFactory {
     ): ToolCallDescriptor {
         val command = when (args) {
             is BashTool.Args -> args.command
+            is AcpBashPreviewArgs -> args.command ?: args.title
             is BashOutputTool.Args -> args.bashId
             is KillShellTool.Args -> "kill_shell"
             else -> "Unknown"
         }
+        val isGenericBashPreview = args is AcpBashPreviewArgs &&
+            args.command == null &&
+            args.title.equals("Run shell command", ignoreCase = true)
+        val titleMain = if (isGenericBashPreview) "Pending command" else truncateCommand(command)
+        val tooltip = if (isGenericBashPreview) "Command pending approval" else "Command: $command"
 
-        val truncatedCommand = truncateCommand(command)
 
         return ToolCallDescriptor(
             kind = ToolKind.BASH,
             icon = AllIcons.Nodes.Console,
             titlePrefix = "Bash:",
-            titleMain = truncatedCommand,
-            tooltip = "Command: $command",
+            titleMain = titleMain,
+            tooltip = tooltip,
             supportsStreaming = true,
             args = args,
             result = result,
@@ -504,16 +511,29 @@ object ToolCallDescriptorFactory {
         projectId: String?
     ): ToolCallDescriptor {
         val searchArgs = args as? IntelliJSearchTool.Args
-        val pattern = searchArgs?.pattern ?: ""
-        val scopeOrPath = searchArgs?.path?.substringAfterLast('/') ?: (searchArgs?.scope ?: "")
-        val titleMain = buildSearchDisplay(truncatePattern(pattern), scopeOrPath)
+        val searchPreviewArgs = args as? AcpSearchPreviewArgs
+        val pattern = searchArgs?.pattern ?: searchPreviewArgs?.pattern.orEmpty()
+        val scopeOrPath = searchArgs?.path?.substringAfterLast('/')
+            ?: searchPreviewArgs?.path?.substringAfterLast('/')
+            ?: (searchArgs?.scope ?: "")
+        val titleMain = if (pattern.isBlank()) {
+            scopeOrPath.ifBlank {
+                searchPreviewArgs?.title?.takeIf {
+                    it.isNotBlank() && !it.equals("search", ignoreCase = true)
+                } ?: "Search"
+            }
+        } else {
+            buildSearchDisplay(truncatePattern(pattern), scopeOrPath)
+        }
 
         return ToolCallDescriptor(
             kind = ToolKind.SEARCH,
             icon = AllIcons.Actions.Search,
             titlePrefix = "Search:",
             titleMain = titleMain,
-            tooltip = if (scopeOrPath.isBlank()) {
+            tooltip = if (pattern.isBlank()) {
+                searchPreviewArgs?.path?.let { "Search in $it" } ?: "Search"
+            } else if (scopeOrPath.isBlank()) {
                 "Search: \"$pattern\""
             } else {
                 "Search: \"$pattern\" in $scopeOrPath"

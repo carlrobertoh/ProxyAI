@@ -981,6 +981,6 @@ class AgentProviderIntegrationTest : IntegrationTest() {
             this.text.append(text)
         }
 
-        override fun onQueuedMessagesResolved() = Unit
+        override fun onQueuedMessagesResolved(message: MessageWithContext?) = Unit
     }
 }

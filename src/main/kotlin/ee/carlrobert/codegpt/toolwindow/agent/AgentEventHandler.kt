@@ -2,6 +2,8 @@ package ee.carlrobert.codegpt.toolwindow.agent
 
 import ai.koog.agents.core.agent.exception.AIAgentStuckInTheNodeException
 import ai.koog.http.client.KoogHttpClientException
+import com.agentclientprotocol.model.PlanEntry
+import com.agentclientprotocol.model.PlanEntryStatus
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
@@ -18,6 +20,7 @@ import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.agents.SubagentRuntimeResolver
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.ui.*
@@ -297,6 +300,12 @@ class AgentEventHandler(
             } else {
                 request
             }
+            logger.debug(
+                "Enqueueing agent approval for session=$sessionId type=${resolvedRequest.type} title=${resolvedRequest.title.logPreview()} payload=${resolvedRequest.payload.logSummary()}"
+            )
+            approvalTrace(
+                "approval/enqueue session=$sessionId type=${resolvedRequest.type} title=${resolvedRequest.title.logPreview()} payload=${resolvedRequest.payload.logSummary()}"
+            )
             runInEdt {
                 approvalQueue.addLast(ApprovalRequest(resolvedRequest, deferred))
                 maybeShowNextApproval()
@@ -318,6 +327,12 @@ class AgentEventHandler(
         }
 
         val decision = CompletableDeferred<Boolean>()
+        logger.debug(
+            "Enqueueing agent approval for session=$sessionId type=${request.type} title=${request.title.logPreview()} payload=${request.payload.logSummary()}"
+        )
+        approvalTrace(
+            "approval/enqueue session=$sessionId type=${request.type} title=${request.title.logPreview()} payload=${request.payload.logSummary()}"
+        )
         runInEdt {
             approvalQueue.addLast(ApprovalRequest(request, decision))
             maybeShowNextApproval()
@@ -339,6 +354,23 @@ class AgentEventHandler(
     override fun onTextReceived(text: String) {
         runInEdt {
             currentResponseBody?.updateMessage(text)
+            scrollablePanel.update()
+            scrollablePanel.scrollToBottom()
+        }
+    }
+
+    override fun onThinkingReceived(text: String) {
+        runInEdt {
+            currentResponseBody?.appendThinking(text)
+            scrollablePanel.update()
+            scrollablePanel.scrollToBottom()
+        }
+    }
+
+    override fun onPlanUpdated(entries: List<PlanEntry>) {
+        runInEdt {
+            todoListPanel.updateTodos(entries.toTodoItems())
+            todoListPanel.isVisible = entries.isNotEmpty()
             scrollablePanel.update()
             scrollablePanel.scrollToBottom()
         }
@@ -511,10 +543,29 @@ class AgentEventHandler(
         }
     }
 
-    override fun onQueuedMessagesResolved() {
-        val pendingMessage = project.service<AgentService>()
-            .getPendingMessages(sessionId)
-            .firstOrNull { it.uiVisible } ?: return
+    private fun List<PlanEntry>.toTodoItems(): List<TodoWriteTool.TodoItem> {
+        return map { entry ->
+            TodoWriteTool.TodoItem(
+                content = entry.content,
+                status = when (entry.status) {
+                    PlanEntryStatus.PENDING -> TodoWriteTool.TodoStatus.PENDING
+                    PlanEntryStatus.IN_PROGRESS -> TodoWriteTool.TodoStatus.IN_PROGRESS
+                    PlanEntryStatus.COMPLETED -> TodoWriteTool.TodoStatus.COMPLETED
+                },
+                activeForm = entry.content
+            )
+        }
+    }
+
+    override fun onQueuedMessagesResolved(message: MessageWithContext?) {
+        val pendingMessage = message
+            ?: project.service<AgentService>()
+                .getPendingMessages(sessionId)
+                .firstOrNull { it.uiVisible }
+            ?: return
+        logger.debug(
+            "Resolving queued message in UI for session=$sessionId messageId=${pendingMessage.id} uiVisible=${pendingMessage.uiVisible} preview=${pendingMessage.text.logPreview()}"
+        )
         onQueuedMessagesResolved(pendingMessage)
     }
 
@@ -525,11 +576,48 @@ class AgentEventHandler(
     }
 
     override fun onTokenUsageAvailable(tokenUsage: Long) {
-        lastReportedPromptTokens = tokenUsage
+        onUsageAvailable(AgentUsageEvent(usedTokens = tokenUsage))
+    }
 
-        val event = TokenUsageEvent(sessionId, tokenUsage)
+    override fun onUsageAvailable(event: AgentUsageEvent) {
+        lastReportedPromptTokens = event.usedTokens
         project.messageBus.syncPublisher(TokenUsageListener.TOKEN_USAGE_TOPIC)
-            .onTokenUsageChanged(event)
+            .onTokenUsageChanged(
+                TokenUsageEvent(
+                    sessionId = sessionId,
+                    totalTokens = event.usedTokens,
+                    sizeTokens = event.sizeTokens,
+                    costAmount = event.costAmount,
+                    costCurrency = event.costCurrency
+                )
+            )
+    }
+
+    override fun onRuntimeOptionsUpdated() {
+        runInEdt {
+            userInputPanel.refreshModelDependentState()
+        }
+    }
+
+    override fun onSessionInfoUpdated(title: String?, updatedAt: String?) {
+        val normalizedTitle = title?.trim().orEmpty()
+        if (normalizedTitle.isEmpty()) {
+            return
+        }
+
+        val contentManager = project.service<AgentToolWindowContentManager>()
+        val session = contentManager.getSession(sessionId) ?: return
+        val previousExternalTitle = session.externalAgentSessionTitle
+        session.externalAgentSessionTitle = normalizedTitle
+
+        val shouldRename = session.displayName.isBlank() ||
+            session.displayName == previousExternalTitle ||
+            session.displayName.matches(Regex("""Agent \d+( \(\d+\))?"""))
+
+        if (shouldRename) {
+            project.messageBus.syncPublisher(AgentTabTitleNotifier.AGENT_TAB_TITLE_TOPIC)
+                .updateTabTitle(sessionId, normalizedTitle)
+        }
     }
 
     override fun onCreditsAvailable(event: AgentCreditsEvent) {
@@ -587,6 +675,12 @@ class AgentEventHandler(
 
         val contentManager = project.service<AgentToolWindowContentManager>()
         if (contentManager.isSessionAutoApproved(sessionId)) {
+            approvalTrace(
+                "approval/auto-approve session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
+            )
+            logger.debug(
+                "Auto-approving queued agent approval for session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
+            )
             next.deferred.complete(true)
             currentApproval = null
             maybeShowNextApproval()
@@ -615,6 +709,13 @@ class AgentEventHandler(
             updateEditToolCardPreview(next.model)
         }
 
+        logger.debug(
+            "Showing agent approval for session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()} payload=${next.model.payload.logSummary()} queueRemaining=${approvalQueue.size}"
+        )
+        approvalTrace(
+            "approval/show session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()} payload=${next.model.payload.logSummary()} queueRemaining=${approvalQueue.size}"
+        )
+
         runCatching {
             project.service<AgentToolWindowContentManager>()
                 .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.APPROVAL)
@@ -629,6 +730,12 @@ class AgentEventHandler(
                         .markSessionAsAutoApproved(sessionId)
                 }
 
+                logger.debug(
+                    "Approved agent approval for session=$sessionId type=${next.model.type} auto=$auto title=${next.model.title.logPreview()}"
+                )
+                approvalTrace(
+                    "approval/approved session=$sessionId type=${next.model.type} auto=$auto title=${next.model.title.logPreview()}"
+                )
                 next.deferred.complete(true)
                 currentApproval = null
                 clearApprovalContainer()
@@ -639,6 +746,12 @@ class AgentEventHandler(
                 maybeShowNextApproval()
             },
             onReject = {
+                logger.debug(
+                    "Rejected agent approval for session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
+                )
+                approvalTrace(
+                    "approval/rejected session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
+                )
                 next.deferred.complete(false)
                 currentApproval = null
                 clearApprovalContainer()
@@ -756,6 +869,28 @@ class AgentEventHandler(
         val viewHolder = RunViewHolder(vm, view)
         subagentViewHolders[taskId] = viewHolder
         return viewHolder
+    }
+
+    private fun String.logPreview(limit: Int = 120): String {
+        return replace('\n', ' ')
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(limit)
+    }
+
+    private fun ToolApprovalPayload?.logSummary(): String {
+        return when (this) {
+            is WritePayload -> "write:${filePath.logPreview(80)}"
+            is EditPayload -> "edit:${filePath.logPreview(80)}"
+            is BashPayload -> "bash:${command.logPreview(80)}"
+            null -> "none"
+        }
+    }
+
+    private fun approvalTrace(message: String) {
+        if (ConfigurationSettings.getState().debugModeEnabled) {
+            logger.info("[APPROVAL TRACE] $message")
+        }
     }
 
     class RunViewHolder(

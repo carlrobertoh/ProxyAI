@@ -1,5 +1,6 @@
 [versions]
 analytics = "3.1.2"
+acp = "0.17.0"
 assertj = "3.27.3"
 changelog = "2.2.1"
 checkstyle = "10.15.0"
@@ -23,6 +24,7 @@ protobuf-plugin = "0.9.4"
 
 [libraries]
 analytics = { module = "com.rudderstack.sdk.java.analytics:analytics", version.ref = "analytics" }
+acp-sdk = { module = "com.agentclientprotocol:acp", version.ref = "acp" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 commons-text = { module = "org.apache.commons:commons-text", version.ref = "commons-text" }
 flexmark-all = { module = "com.vladsch.flexmark:flexmark-all", version.ref = "flexmark" }

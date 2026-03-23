@@ -43,7 +43,7 @@ class AgentServiceIntegrationTest : IntegrationTest() {
     private lateinit var originalRuntimeFactory: AgentRuntimeFactory
     private val createdSessions = mutableListOf<String>()
     private val noopEvents = object : AgentEvents {
-        override fun onQueuedMessagesResolved() = Unit
+        override fun onQueuedMessagesResolved(message: MessageWithContext?) = Unit
     }
     private val runTimeoutMillis = 5_000L
 
@@ -119,7 +119,7 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         var callbackMessageId: UUID? = null
         var callbackRef: CheckpointRef? = null
         val events = object : AgentEvents {
-            override fun onQueuedMessagesResolved() = Unit
+            override fun onQueuedMessagesResolved(message: MessageWithContext?) = Unit
 
             override fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {
                 callbackMessageId = runMessageId

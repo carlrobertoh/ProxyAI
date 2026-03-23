@@ -6,6 +6,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import ee.carlrobert.codegpt.agent.external.ExternalAcpAgents
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
 import ee.carlrobert.codegpt.settings.hooks.HookConfiguration
 import ee.carlrobert.codegpt.settings.service.ServiceType

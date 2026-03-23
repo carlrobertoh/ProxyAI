@@ -28,6 +28,7 @@ class AgentToolWindowPanel(
     private val tabbedPane = contentManager.initializeTabbedPane()
     private val centerLayout = CardLayout()
     private val centerPanel = JPanel(centerLayout)
+    private val creditsLabel = AgentCreditsToolbarLabel(project, ::currentSession)
     private var landingPanel: AgentToolWindowTabPanel? = null
 
     init {
@@ -75,7 +76,6 @@ class AgentToolWindowPanel(
         val toolbar = ActionManager.getInstance()
             .createActionToolbar("AgentToolWindow", actionGroup, true)
         toolbar.targetComponent = tabbedPane
-        val creditsLabel = AgentCreditsToolbarLabel(project)
         Disposer.register(this, creditsLabel)
         return BorderLayoutPanel()
             .addToLeft(toolbar.component)
@@ -87,6 +87,7 @@ class AgentToolWindowPanel(
     private fun showTabsView() {
         disposeLandingPanel()
         centerLayout.show(centerPanel, TABS_CARD)
+        creditsLabel.refresh()
     }
 
     private fun showLandingView() {
@@ -97,6 +98,7 @@ class AgentToolWindowPanel(
         landingPanel?.requestFocusForTextArea()
         centerPanel.revalidate()
         centerPanel.repaint()
+        creditsLabel.refresh()
     }
 
     private fun createLandingPanel(): AgentToolWindowTabPanel {
@@ -120,6 +122,11 @@ class AgentToolWindowPanel(
         centerPanel.remove(current)
         Disposer.dispose(current)
         landingPanel = null
+    }
+
+    private fun currentSession(): AgentSession? {
+        return landingPanel?.getAgentSession()
+            ?: contentManager.getActiveTabPanel()?.getAgentSession()
     }
 
     override fun dispose() {
