@@ -53,7 +53,7 @@ object DiffSyncManager {
                                     val replacedText =
                                         newText.replace(search.trim(), replace.trim())
                                     runInEdt {
-                                        if (replacedText.length != newText.length) {
+                                        if (replacedText != newText && rightSideDoc.isWritable) {
                                             runUndoTransparentWriteAction {
                                                 rightSideDoc.setText(
                                                     StringUtil.convertLineSeparators(

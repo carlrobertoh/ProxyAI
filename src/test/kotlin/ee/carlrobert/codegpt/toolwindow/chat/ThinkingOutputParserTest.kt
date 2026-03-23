@@ -52,4 +52,16 @@ class ThinkingOutputParserTest {
         assertThat(finalOutput).isEqualTo("The final answer.")
         assertThat(parser.thoughtProcess).isEqualTo("some internal processing with even more details...")
     }
+
+    @Test
+    fun `support close think tag without trailing blank line`() {
+        val parser = ThinkingOutputParser()
+
+        assertThat(parser.processChunk("<think>internal reasoning")).isEmpty()
+
+        val finalOutput = parser.processChunk("</think>feat: add sync fix")
+
+        assertThat(finalOutput).isEqualTo("feat: add sync fix")
+        assertThat(parser.thoughtProcess).isEqualTo("internal reasoning")
+    }
 }

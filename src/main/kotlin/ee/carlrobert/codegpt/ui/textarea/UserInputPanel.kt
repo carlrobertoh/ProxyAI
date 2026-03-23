@@ -118,7 +118,8 @@ class UserInputPanel @JvmOverloads constructor(
             withRemovableSelectedEditorTag,
             onApply,
             getMarkdownContent,
-            featureType
+            featureType,
+            ::schedulePreferredSizeUpdate
         )
 
     private var footerPanelRef: JPanel? = null
@@ -272,8 +273,10 @@ class UserInputPanel @JvmOverloads constructor(
         addToBottom(createFooterPanel(featureType).also { footerPanelRef = it })
 
         promptTextField.addPropertyChangeListener("preferredSize") { _ ->
-            runInEdt { updatePreferredSizeFromChildren() }
+            schedulePreferredSizeUpdate()
         }
+
+        schedulePreferredSizeUpdate()
 
         if (featureType == FeatureType.INLINE_EDIT) {
             invokeLater { updatePreferredSizeFromChildren() }
@@ -289,10 +292,18 @@ class UserInputPanel @JvmOverloads constructor(
 
     private fun setupTextChangeListener() {
         userInputHeaderPanel.addPropertyChangeListener("preferredSize") { _ ->
-            runInEdt { updatePreferredSizeFromChildren() }
+            schedulePreferredSizeUpdate()
         }
         footerPanelRef?.addPropertyChangeListener("preferredSize") { _ ->
-            runInEdt { updatePreferredSizeFromChildren() }
+            schedulePreferredSizeUpdate()
+        }
+    }
+
+    private fun schedulePreferredSizeUpdate() {
+        invokeLater {
+            if (!Disposer.isDisposed(parentDisposable)) {
+                updatePreferredSizeFromChildren()
+            }
         }
     }
 
@@ -651,6 +662,7 @@ class UserInputPanel @JvmOverloads constructor(
         inlineEditControls.forEach { it.isVisible = visible }
         revalidate()
         repaint()
+        schedulePreferredSizeUpdate()
     }
 
     fun setThinkingVisible(visible: Boolean, text: String = CodeGPTBundle.get("shared.thinking")) {
@@ -660,6 +672,7 @@ class UserInputPanel @JvmOverloads constructor(
         thinkingPanel.isVisible = visible
         revalidate()
         repaint()
+        schedulePreferredSizeUpdate()
     }
 
     private fun isImageActionSupported(): Boolean {
