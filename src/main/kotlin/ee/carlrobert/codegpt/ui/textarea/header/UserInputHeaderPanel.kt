@@ -55,7 +55,8 @@ class UserInputHeaderPanel(
     private val withRemovableSelectedEditorTag: Boolean,
     private val onApply: (() -> Unit)? = null,
     private val getMarkdownContent: (() -> String)? = null,
-    private val featureType: FeatureType? = null
+    private val featureType: FeatureType? = null,
+    private val onLayoutChanged: () -> Unit = {}
 ) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener, McpTagUpdateListener {
 
     companion object {
@@ -162,6 +163,7 @@ class UserInputHeaderPanel(
                 invalidate()
                 revalidate()
                 repaint()
+                onLayoutChanged()
 
                 parent?.let {
                     it.invalidate()
@@ -276,6 +278,7 @@ class UserInputHeaderPanel(
 
         revalidate()
         repaint()
+        onLayoutChanged()
     }
 
     private fun createTagPanel(tagDetails: TagDetails) =
@@ -332,12 +335,14 @@ class UserInputHeaderPanel(
         applyChip?.isVisible = visible
         revalidate()
         repaint()
+        onLayoutChanged()
     }
 
     fun setApplyEnabled(enabled: Boolean) {
         applyChip?.isEnabled = enabled
         revalidate()
         repaint()
+        onLayoutChanged()
     }
 
     private fun addInitialTags() {
