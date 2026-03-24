@@ -33,6 +33,7 @@ class ConfigurationSettingsState : BaseState() {
     var methodNameGenerationEnabled by property(true)
     var captureCompileErrors by property(true)
     var autoFormattingEnabled by property(true)
+    var chatEditModeByDefault by property(false)
     var tableData by map<String, String>()
     var chatCompletionSettings by property(ChatCompletionSettingsState())
     var codeCompletionSettings by property(CodeCompletionSettingsState())

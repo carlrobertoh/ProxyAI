@@ -30,6 +30,7 @@ import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.PromptEnhancer
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -247,6 +248,15 @@ class UserInputPanel @JvmOverloads constructor(
     init {
         setupDisposables(parentDisposable)
         setupLayout(featureType)
+        if (featureType == FeatureType.CHAT) {
+            setChatMode(
+                if (ConfigurationSettings.getState().chatEditModeByDefault) {
+                    ChatMode.EDIT
+                } else {
+                    ChatMode.ASK
+                }
+            )
+        }
         bindTokenCounterToInputTokens()
         addSelectedEditorContent()
         if (featureType == FeatureType.INLINE_EDIT) {
