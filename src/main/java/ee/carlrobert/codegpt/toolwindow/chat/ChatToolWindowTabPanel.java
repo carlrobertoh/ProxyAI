@@ -9,6 +9,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.JBColor;
@@ -29,6 +30,7 @@ import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.completions.ToolApprovalMode;
 import ee.carlrobert.codegpt.completions.ToolwindowChatCompletionRequestHandler;
 import ee.carlrobert.codegpt.conversations.Conversation;
+import ee.carlrobert.codegpt.conversations.ConversationAttachedFile;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.mcp.ConnectionStatus;
@@ -38,6 +40,8 @@ import ee.carlrobert.codegpt.psistructure.PsiStructureProvider;
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings;
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
@@ -60,6 +64,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.HistoryTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManagerListener;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
 import java.awt.BorderLayout;
@@ -67,6 +72,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -142,6 +148,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         this::handleSubmit,
         this::handleCancel,
         true);
+    initializeRememberedAttachedFiles();
     userInputPanel.requestFocus();
 
     mcpApprovalContainer = new JPanel();
@@ -385,6 +392,100 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   private ToolApprovalMode getToolApprovalMode() {
     return ToolApprovalMode.REQUIRE_APPROVAL;
+  }
+
+  private void initializeRememberedAttachedFiles() {
+    restoreRememberedAttachedFiles();
+
+    tagManager.addListener(new TagManagerListener() {
+      @Override
+      public void onTagAdded(TagDetails tag) {
+        syncRememberedAttachedFiles();
+      }
+
+      @Override
+      public void onTagRemoved(TagDetails tag) {
+        syncRememberedAttachedFiles();
+      }
+
+      @Override
+      public void onTagSelectionChanged(TagDetails tag, SelectionModel selectionModel) {
+      }
+
+      @Override
+      public void onTagUpdated(TagDetails tag) {
+        syncRememberedAttachedFiles();
+      }
+    });
+
+    ApplicationManager.getApplication().getMessageBus().connect(this).subscribe(
+        ConfigurationStateListener.Companion.getTOPIC(),
+        newState -> syncRememberedAttachedFiles());
+  }
+
+  private void restoreRememberedAttachedFiles() {
+    if (!isRememberAttachedFilesEnabled()) {
+      return;
+    }
+
+    var attachedFiles = conversation.getAttachedFiles();
+    if (attachedFiles == null || attachedFiles.isEmpty()) {
+      return;
+    }
+
+    attachedFiles.forEach(attachedFile -> {
+      var virtualFile = LocalFileSystem.getInstance()
+          .refreshAndFindFileByPath(attachedFile.getPath());
+      if (virtualFile == null || !virtualFile.isValid()) {
+        return;
+      }
+
+      TagDetails tagDetails = virtualFile.isDirectory()
+          ? new FolderTagDetails(virtualFile)
+          : new FileTagDetails(virtualFile);
+      tagDetails.setSelected(attachedFile.isSelected());
+      userInputPanel.addTag(tagDetails);
+    });
+  }
+
+  private void syncRememberedAttachedFiles() {
+    if (draftSubmitHandler != null) {
+      return;
+    }
+
+    var attachedFiles = isRememberAttachedFilesEnabled()
+        ? collectRememberedAttachedFiles()
+        : List.<ConversationAttachedFile>of();
+
+    if (Objects.equals(conversation.getAttachedFiles(), attachedFiles)) {
+      return;
+    }
+
+    conversation.setAttachedFiles(attachedFiles);
+    conversationService.saveConversation(conversation);
+  }
+
+  private List<ConversationAttachedFile> collectRememberedAttachedFiles() {
+    return tagManager.getTags().stream()
+        .filter(tag -> tag instanceof FileTagDetails || tag instanceof FolderTagDetails)
+        .sorted(Comparator.comparingLong(TagDetails::getCreatedOn))
+        .map(this::toConversationAttachedFile)
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  private ConversationAttachedFile toConversationAttachedFile(TagDetails tag) {
+    if (tag instanceof FileTagDetails fileTagDetails) {
+      return new ConversationAttachedFile(fileTagDetails.getVirtualFile().getPath(), tag.getSelected());
+    }
+    if (tag instanceof FolderTagDetails folderTagDetails) {
+      return new ConversationAttachedFile(folderTagDetails.getFolder().getPath(), tag.getSelected());
+    }
+    return null;
+  }
+
+  private boolean isRememberAttachedFilesEnabled() {
+    return ConfigurationSettings.getState().getRememberAttachedFilesToChat();
   }
 
   public void sendMessage(Message message, ConversationType conversationType) {

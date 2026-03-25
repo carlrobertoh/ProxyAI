@@ -118,6 +118,8 @@ public class ConfigurationComponent {
     state.setMethodNameGenerationEnabled(methodNameGenerationCheckBox.isSelected());
     state.setAutoFormattingEnabled(autoFormattingCheckBox.isSelected());
     state.setChatEditModeByDefault(defaultChatModeForm.isEditModeByDefaultEnabled());
+    state.setRememberAttachedFilesToChat(
+        defaultChatModeForm.isRememberAttachedFilesToChatEnabled());
     state.setCodeCompletionSettings(codeCompletionForm.getFormState());
     state.setChatCompletionSettings(chatCompletionForm.getFormState());
 

@@ -41,8 +41,14 @@ class TagManager {
                 remove(tagDetails)
             }
 
-            if (tags.count { !it.selected } == 2) {
-                remove(tags.sortedBy { it.createdOn }.first { !it.selected })
+            if (tagDetails is EditorTagDetails) {
+                val unselectedEditorTags = tags
+                    .filterIsInstance<EditorTagDetails>()
+                    .filterNot { it.selected }
+                    .sortedBy { it.createdOn }
+                if (unselectedEditorTags.size == 2) {
+                    remove(unselectedEditorTags.first())
+                }
             }
 
             tags.add(tagDetails)
@@ -74,6 +80,13 @@ class TagManager {
         val wasRemoved = synchronized(this) { tags.remove(tagDetails) }
         if (wasRemoved) {
             listeners.forEach { it.onTagRemoved(tagDetails) }
+        }
+    }
+
+    fun notifyTagUpdated(tagDetails: TagDetails) {
+        val containsTag = synchronized(this) { tags.contains(tagDetails) }
+        if (containsTag) {
+            listeners.forEach { it.onTagUpdated(tagDetails) }
         }
     }
 

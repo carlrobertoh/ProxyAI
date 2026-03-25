@@ -17,9 +17,11 @@ public class Conversation {
   private LocalDateTime updatedOn;
   private boolean discardTokenLimit;
   private String projectPath;
+  private List<ConversationAttachedFile> attachedFiles;
 
   public Conversation() {
     this.messages = new ArrayList<>();
+    this.attachedFiles = new ArrayList<>();
     this.id = UUID.randomUUID();
     this.createdOn = LocalDateTime.now();
     this.updatedOn = LocalDateTime.now();
@@ -90,5 +92,13 @@ public class Conversation {
 
   public void setProjectPath(String projectPath) {
     this.projectPath = projectPath;
+  }
+
+  public List<ConversationAttachedFile> getAttachedFiles() {
+    return attachedFiles;
+  }
+
+  public void setAttachedFiles(List<ConversationAttachedFile> attachedFiles) {
+    this.attachedFiles = attachedFiles == null ? new ArrayList<>() : new ArrayList<>(attachedFiles);
   }
 }

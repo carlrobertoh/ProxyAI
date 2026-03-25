@@ -310,6 +310,7 @@ class UserInputHeaderPanel(
 
                             else -> Unit
                         }
+                        tagManager.notifyTagUpdated(tagDetails)
                     }
                 }
 

@@ -13,20 +13,32 @@ class DefaultChatModeConfigurationForm {
         CodeGPTBundle.get("configurationConfigurable.section.defaultChatMode.editModeByDefault.title"),
         service<ConfigurationSettings>().state.chatEditModeByDefault
     )
+    private val rememberAttachedFilesToChatCheckBox = JBCheckBox(
+        CodeGPTBundle.get("configurationConfigurable.section.defaultChatMode.rememberAttachedFilesToChat.title"),
+        service<ConfigurationSettings>().state.rememberAttachedFilesToChat
+    )
 
     fun createPanel(): DialogPanel {
         return panel {
             row {
                 cell(editModeByDefaultCheckBox)
             }
+            row {
+                cell(rememberAttachedFilesToChatCheckBox)
+            }
         }.withBorder(JBUI.Borders.emptyLeft(16))
     }
 
     fun resetForm(prevState: ConfigurationSettingsState) {
         editModeByDefaultCheckBox.isSelected = prevState.chatEditModeByDefault
+        rememberAttachedFilesToChatCheckBox.isSelected = prevState.rememberAttachedFilesToChat
     }
 
     fun isEditModeByDefaultEnabled(): Boolean {
         return editModeByDefaultCheckBox.isSelected
+    }
+
+    fun isRememberAttachedFilesToChatEnabled(): Boolean {
+        return rememberAttachedFilesToChatCheckBox.isSelected
     }
 }
