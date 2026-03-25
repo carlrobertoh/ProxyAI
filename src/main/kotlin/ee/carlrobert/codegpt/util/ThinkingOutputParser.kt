@@ -4,7 +4,7 @@ class ThinkingOutputParser {
 
     companion object {
         private const val OPEN_TAG = "<think>"
-        private const val CLOSE_TAG = "</think>\n\n"
+        private const val CLOSE_TAG = "</think>"
     }
 
     var thoughtProcess: String = ""
@@ -43,7 +43,12 @@ class ThinkingOutputParser {
             isFinished = true
             isThinking = false
 
-            val responseStart = indexClose + CLOSE_TAG.length
+            var responseStart = indexClose + CLOSE_TAG.length
+            while (responseStart < current.length &&
+                (current[responseStart] == '\n' || current[responseStart] == '\r')
+            ) {
+                responseStart++
+            }
             return current.substring(responseStart)
         } else {
             thoughtProcess = current.substring(startContent)

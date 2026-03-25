@@ -11,6 +11,8 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.IdeaTextPatchBuilder
 import com.intellij.openapi.diff.impl.patch.UnifiedDiffWriter
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
@@ -57,39 +59,59 @@ abstract class BaseCommitWorkflowAction : DumbAwareAction() {
 
     override fun actionPerformed(event: AnActionEvent) {
         val project: Project = event.project ?: return
-
-        val gitDiff: String = getDiff(event, project)
-        val tokenCount: Int = service<EncodingManager>().countTokens(gitDiff)
-        if (tokenCount > MAX_TOKEN_COUNT_WARNING
-            && OverlayUtil.showTokenSoftLimitWarningDialog(tokenCount) != Messages.OK
-        ) {
-            return
-        }
         val commitWorkflowUi = event.getData(VcsDataKeys.COMMIT_WORKFLOW_UI) ?: return
-        performAction(project, commitWorkflowUi, gitDiff)
+        val includedChanges = commitWorkflowUi.getIncludedChanges()
+
+        object : Task.Backgroundable(project, "Preparing Commit Diff", true) {
+            private var gitDiff: String? = null
+            private var tokenCount: Int = 0
+
+            override fun run(indicator: ProgressIndicator) {
+                indicator.text = "Generating diff for selected changes"
+                gitDiff = getDiff(project, includedChanges)
+                tokenCount = service<EncodingManager>().countTokens(gitDiff.orEmpty())
+            }
+
+            override fun onSuccess() {
+                val diff = gitDiff ?: return
+                if (tokenCount > MAX_TOKEN_COUNT_WARNING
+                    && OverlayUtil.showTokenSoftLimitWarningDialog(tokenCount) != Messages.OK
+                ) {
+                    return
+                }
+
+                performAction(project, commitWorkflowUi, diff)
+            }
+
+            override fun onThrowable(error: Throwable) {
+                Notifications.Bus.notify(
+                    Notification(
+                        "proxyai.notification.group",
+                        "ProxyAI",
+                        error.message ?: "Unable to create git diff",
+                        NotificationType.ERROR
+                    ),
+                    project
+                )
+            }
+        }.queue()
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread {
         return ActionUpdateThread.BGT
     }
 
-    private fun getDiff(event: AnActionEvent, project: Project): String {
-        val commitWorkflowUi = event.getData(VcsDataKeys.COMMIT_WORKFLOW_UI)
-            ?: throw IllegalStateException("Could not retrieve commit workflow ui.")
-
+    private fun getDiff(project: Project, includedChanges: List<Change>): String {
         return generateDiff(
             project,
-            commitWorkflowUi.getIncludedChanges(),
+            includedChanges,
             getRepository(project).root.toNioPath()
         )
     }
 
     private fun getRepository(project: Project): GitRepository {
-        return runCatching {
-            ApplicationManager.getApplication()
-                .executeOnPooledThread<GitRepository?> { getProjectRepository(project) }
-                .get()
-        }.getOrNull() ?: throw IllegalStateException("No repository found for the project.")
+        return getProjectRepository(project)
+            ?: throw IllegalStateException("No repository found for the project.")
     }
 
     private fun generateDiff(
@@ -129,17 +151,30 @@ class CommitMessageEventListener(
     private val messageBuilder = StringBuilder()
     private val thinkingOutputParser = ThinkingOutputParser()
 
+    override fun onOpen() {
+        withCommitMessageUi {
+            it.startLoading()
+        }
+    }
+
     override fun onMessage(message: String) {
         val processedChunk = thinkingOutputParser.processChunk(message)
-        if (processedChunk.isNotEmpty() && thinkingOutputParser.isFinished) {
-            messageBuilder.append(message)
+        if (processedChunk.isNotEmpty()) {
+            messageBuilder.append(processedChunk)
             updateCommitMessage(messageBuilder.toString())
         }
     }
 
     override fun onComplete(messageBuilder: StringBuilder) {
-        if (messageBuilder.isEmpty()) {
-            updateCommitMessage(messageBuilder.toString())
+        if (this.messageBuilder.isEmpty() && messageBuilder.isNotEmpty()) {
+            val processedMessage = ThinkingOutputParser().processChunk(messageBuilder.toString())
+            if (processedMessage.isNotEmpty()) {
+                this.messageBuilder.append(processedMessage)
+            }
+        }
+
+        if (this.messageBuilder.isNotEmpty()) {
+            updateCommitMessage(this.messageBuilder.toString())
         }
         stopLoading()
     }
@@ -161,14 +196,23 @@ class CommitMessageEventListener(
     }
 
     private fun stopLoading() {
-        CompletionProgressNotifier.update(project, false)
+        withCommitMessageUi {
+            it.stopLoading()
+            CompletionProgressNotifier.update(project, false)
+        }
     }
 
     private fun updateCommitMessage(message: String?) {
-        ApplicationManager.getApplication().invokeLater {
+        withCommitMessageUi {
             WriteCommandAction.runWriteCommandAction(project) {
-                commitWorkflowUi.commitMessageUi.setText(message)
+                it.setText(message)
             }
+        }
+    }
+
+    private fun withCommitMessageUi(action: (com.intellij.vcs.commit.CommitMessageUi) -> Unit) {
+        ApplicationManager.getApplication().invokeLater {
+            action(commitWorkflowUi.commitMessageUi)
         }
     }
 }

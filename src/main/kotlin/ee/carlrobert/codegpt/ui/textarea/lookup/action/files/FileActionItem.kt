@@ -8,7 +8,7 @@ import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
-import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.AbstractLookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.InsertsDisplayNameLookupItem
 
@@ -31,6 +31,6 @@ class FileActionItem(private val project: Project, val file: VirtualFile) :
     }
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
-        userInputPanel.addTag(EditorTagDetails(file))
+        userInputPanel.addTag(FileTagDetails(file))
     }
 }

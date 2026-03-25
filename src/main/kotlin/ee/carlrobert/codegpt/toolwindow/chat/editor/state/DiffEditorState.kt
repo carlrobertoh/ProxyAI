@@ -15,6 +15,7 @@ import com.intellij.openapi.actionSystem.Presentation
 import com.intellij.openapi.actionSystem.ex.CustomComponentAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
@@ -127,7 +128,9 @@ abstract class DiffEditorState(
 
             val diffContentFactory = DiffContentFactory.getInstance()
             val leftSide = diffContentFactory.create(project, virtualFile)
-            val rightSideDoc = viewer.getDocument(Side.RIGHT).apply { setReadOnly(true) }
+            val rightSideDoc = EditorFactory.getInstance()
+                .createDocument(viewer.getDocument(Side.RIGHT).text)
+                .apply { setReadOnly(true) }
             val rightSide = diffContentFactory.create(project, rightSideDoc, virtualFile)
             var diffRequest = SimpleDiffRequest(
                 "Code Diff",
