@@ -8,7 +8,9 @@ import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.VfsUtil
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
@@ -419,11 +421,7 @@ class BashTool(
                     if (timedOut.get()) "Command timed out after ${args.timeout}ms of inactivity" else null
                 )
 
-                runInEdt(ModalityState.defaultModalityState()) {
-                    runWriteAction {
-                        VirtualFileManager.getInstance().syncRefresh()
-                    }
-                }
+                refreshWorkingDirectory(workingDirectory)
 
                 Result(
                     args.command,
@@ -434,6 +432,28 @@ class BashTool(
             } finally {
                 if (process.isAlive) {
                     terminateProcess(process)
+                }
+            }
+        }
+    }
+
+    private suspend fun refreshWorkingDirectory(workingDirectory: String) {
+        val directory = File(workingDirectory)
+        if (!directory.exists()) {
+            return
+        }
+
+        runInEdt(ModalityState.defaultModalityState()) {
+            runWriteAction {
+                val localFileSystem = LocalFileSystem.getInstance()
+                val directoryVf = localFileSystem.findFileByIoFile(directory)
+                    ?: localFileSystem.refreshAndFindFileByIoFile(directory)
+
+                if (directoryVf != null) {
+                    VfsUtil.markDirtyAndRefresh(false, false, true, directoryVf)
+                } else {
+                    VirtualFileManager.getInstance()
+                        .refreshAndFindFileByUrl(directory.toURI().toString())
                 }
             }
         }
