@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Agent Client Protocol (ACP) support for external coding agents
+- Configurable subagent runtimes with per-subagent model selection and ACP-specific runtime options
+- Diagnostics tool call rendering in the agent UI
+- Custom OpenAI Responses API support with configurable context window and output size
+
+### Fixed
+
+- WebFetch tool call argument handling for external ACP agents
+
 ## [3.7.5-241.1] - 2026-03-12
 
 ### Added
