@@ -11,6 +11,11 @@ import java.awt.Toolkit
 
 class ChatCompletionConfigurationForm {
 
+    private val editModeByDefaultCheckBox = JBCheckBox(
+        CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.editModeByDefault.title"),
+        service<ConfigurationSettings>().state.chatCompletionSettings.chatEditModeByDefault
+    )
+
     private val editorContextTagCheckBox = JBCheckBox(
         CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.editorContextTag.title"),
         service<ConfigurationSettings>().state.chatCompletionSettings.editorContextTagEnabled
@@ -48,6 +53,10 @@ class ChatCompletionConfigurationForm {
     fun createPanel(): DialogPanel {
         return panel {
             row {
+                cell(editModeByDefaultCheckBox)
+                    .comment(CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.editModeByDefault.description"))
+            }
+            row {
                 cell(clickableLinksCheckBox)
                     .comment(CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.clickableLinks.description"))
             }
@@ -84,6 +93,7 @@ class ChatCompletionConfigurationForm {
     }
 
     fun resetForm(prevState: ChatCompletionSettingsState) {
+        editModeByDefaultCheckBox.isSelected = prevState.chatEditModeByDefault
         editorContextTagCheckBox.isSelected = prevState.editorContextTagEnabled
         psiStructureCheckBox.isSelected = prevState.psiStructureEnabled
         psiStructureAnalyzeDepthField.number = prevState.psiStructureAnalyzeDepth
@@ -95,6 +105,7 @@ class ChatCompletionConfigurationForm {
 
     fun getFormState(): ChatCompletionSettingsState {
         return ChatCompletionSettingsState().apply {
+            this.chatEditModeByDefault = editModeByDefaultCheckBox.isSelected
             this.editorContextTagEnabled = editorContextTagCheckBox.isSelected
             this.psiStructureEnabled = psiStructureCheckBox.isSelected
             this.psiStructureAnalyzeDepth = psiStructureAnalyzeDepthField.number

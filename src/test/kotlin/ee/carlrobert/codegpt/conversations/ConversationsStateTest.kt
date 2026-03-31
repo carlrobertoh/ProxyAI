@@ -2,9 +2,6 @@ package ee.carlrobert.codegpt.conversations
 
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import ee.carlrobert.codegpt.conversations.message.Message
-import ee.carlrobert.codegpt.settings.GeneralSettings
-import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
 import org.assertj.core.api.Assertions.assertThat
 
 class ConversationsStateTest : BasePlatformTestCase() {
@@ -30,6 +27,24 @@ class ConversationsStateTest : BasePlatformTestCase() {
     assertThat(currentConversation!!.messages)
       .flatExtracting("prompt", "response")
       .containsExactly("TEST_PROMPT", "TEST_RESPONSE")
+  }
+
+  fun testSaveConversationPreservesAttachedFiles() {
+    val service = ConversationService.getInstance()
+    val conversation = service.createConversation()
+    conversation.attachedFiles = listOf(
+      ConversationAttachedFile("/tmp/First.kt", true),
+      ConversationAttachedFile("/tmp/Folder", false),
+    )
+
+    service.addConversation(conversation)
+    service.saveConversation(conversation)
+
+    assertThat(ConversationsState.getCurrentConversation()!!.attachedFiles)
+      .containsExactly(
+        ConversationAttachedFile("/tmp/First.kt", true),
+        ConversationAttachedFile("/tmp/Folder", false),
+      )
   }
 
   fun testGetPreviousConversation() {

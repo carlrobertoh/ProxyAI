@@ -6,4 +6,5 @@ interface TagManagerListener {
     fun onTagAdded(tag: TagDetails)
     fun onTagRemoved(tag: TagDetails)
     fun onTagSelectionChanged(tag: TagDetails, selectionModel: SelectionModel)
+    fun onTagUpdated(tag: TagDetails) {}
 }

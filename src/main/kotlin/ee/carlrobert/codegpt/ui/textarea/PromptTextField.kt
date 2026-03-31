@@ -291,6 +291,7 @@ class PromptTextField(
         editorEx.settings.isUseSoftWraps = true
         editorEx.backgroundColor = service<EditorColorsManager>().globalScheme.defaultBackground
         setupDocumentListener(editorEx)
+        adjustHeight(editorEx)
         return editorEx
     }
 
@@ -660,6 +661,7 @@ class PromptTextField(
     private fun adjustHeight(editor: EditorEx) {
         val contentHeight =
             editor.contentComponent.preferredSize.height + PromptTextFieldConstants.HEIGHT_PADDING
+        val minimumHeight = calculateMinimumHeight(editor)
 
         val toolWindow = project.service<ToolWindowManager>().getToolWindow("ProxyAI")
         val maxHeight = if (toolWindow == null || !toolWindow.component.isAncestorOf(this)) {
@@ -667,13 +669,18 @@ class PromptTextField(
         } else {
             JBUI.scale(getToolWindowHeight(toolWindow) / 2)
         }
-        val newHeight = minOf(contentHeight, maxHeight)
+        val newHeight = minOf(maxOf(contentHeight, minimumHeight), maxHeight)
 
         runInEdt {
             preferredSize = Dimension(width, newHeight)
             editor.setVerticalScrollbarVisible(contentHeight > maxHeight)
             parent?.revalidate()
         }
+    }
+
+    private fun calculateMinimumHeight(editor: EditorEx): Int {
+        val verticalPadding = JBUI.scale(PromptTextFieldConstants.BORDER_PADDING * 2)
+        return editor.lineHeight * PromptTextFieldConstants.MIN_VISIBLE_LINES + verticalPadding
     }
 
     private fun getToolWindowHeight(toolWindow: ToolWindow): Int {

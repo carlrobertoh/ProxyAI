@@ -9,6 +9,7 @@ import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.JBColor;
@@ -29,6 +30,7 @@ import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.completions.ToolApprovalMode;
 import ee.carlrobert.codegpt.completions.ToolwindowChatCompletionRequestHandler;
 import ee.carlrobert.codegpt.conversations.Conversation;
+import ee.carlrobert.codegpt.conversations.ConversationAttachedFile;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.mcp.ConnectionStatus;
@@ -60,6 +62,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.HistoryTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManagerListener;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
 import java.awt.BorderLayout;
@@ -67,6 +70,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -142,6 +146,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         this::handleSubmit,
         this::handleCancel,
         true);
+    initializeConversationAttachedFiles();
     userInputPanel.requestFocus();
 
     mcpApprovalContainer = new JPanel();
@@ -385,6 +390,86 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   private ToolApprovalMode getToolApprovalMode() {
     return ToolApprovalMode.REQUIRE_APPROVAL;
+  }
+
+  private void initializeConversationAttachedFiles() {
+    restoreConversationAttachedFiles();
+
+    tagManager.addListener(new TagManagerListener() {
+      @Override
+      public void onTagAdded(TagDetails tag) {
+        syncConversationAttachedFiles();
+      }
+
+      @Override
+      public void onTagRemoved(TagDetails tag) {
+        syncConversationAttachedFiles();
+      }
+
+      @Override
+      public void onTagSelectionChanged(TagDetails tag, SelectionModel selectionModel) {
+      }
+
+      @Override
+      public void onTagUpdated(TagDetails tag) {
+        syncConversationAttachedFiles();
+      }
+    });
+  }
+
+  private void restoreConversationAttachedFiles() {
+    var attachedFiles = conversation.getAttachedFiles();
+    if (attachedFiles == null || attachedFiles.isEmpty()) {
+      return;
+    }
+
+    attachedFiles.forEach(attachedFile -> {
+      var virtualFile = LocalFileSystem.getInstance()
+          .refreshAndFindFileByPath(attachedFile.getPath());
+      if (virtualFile == null || !virtualFile.isValid()) {
+        return;
+      }
+
+      TagDetails tagDetails = virtualFile.isDirectory()
+          ? new FolderTagDetails(virtualFile)
+          : new FileTagDetails(virtualFile);
+      tagDetails.setSelected(attachedFile.isSelected());
+      userInputPanel.addTag(tagDetails);
+    });
+  }
+
+  private void syncConversationAttachedFiles() {
+    if (draftSubmitHandler != null) {
+      return;
+    }
+
+    var attachedFiles = collectConversationAttachedFiles();
+
+    if (Objects.equals(conversation.getAttachedFiles(), attachedFiles)) {
+      return;
+    }
+
+    conversation.setAttachedFiles(attachedFiles);
+    conversationService.saveConversation(conversation);
+  }
+
+  private List<ConversationAttachedFile> collectConversationAttachedFiles() {
+    return tagManager.getTags().stream()
+        .filter(tag -> tag instanceof FileTagDetails || tag instanceof FolderTagDetails)
+        .sorted(Comparator.comparingLong(TagDetails::getCreatedOn))
+        .map(this::toConversationAttachedFile)
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  private ConversationAttachedFile toConversationAttachedFile(TagDetails tag) {
+    if (tag instanceof FileTagDetails fileTagDetails) {
+      return new ConversationAttachedFile(fileTagDetails.getVirtualFile().getPath(), tag.getSelected());
+    }
+    if (tag instanceof FolderTagDetails folderTagDetails) {
+      return new ConversationAttachedFile(folderTagDetails.getFolder().getPath(), tag.getSelected());
+    }
+    return null;
   }
 
   public void sendMessage(Message message, ConversationType conversationType) {

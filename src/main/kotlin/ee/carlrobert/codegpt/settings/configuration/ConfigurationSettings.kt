@@ -47,6 +47,7 @@ class ConfigurationSettingsState : BaseState() {
 }
 
 class ChatCompletionSettingsState : BaseState() {
+    var chatEditModeByDefault by property(false)
     var editorContextTagEnabled by property(true)
     var psiStructureEnabled by property(true)
     var psiStructureAnalyzeDepth by property(3)
