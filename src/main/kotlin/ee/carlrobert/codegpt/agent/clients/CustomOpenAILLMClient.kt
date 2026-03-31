@@ -235,7 +235,7 @@ class CustomOpenAILLMClient(
     ): String {
         val state = requireChatState()
         val customParams: CustomOpenAIParams = params.toCustomOpenAIParams(state)
-        val streamRequest = state.shouldStream()
+        val streamRequest = stream && state.shouldStream()
         val additionalProperties = buildCustomOpenAIAdditionalProperties(
             body = state.body,
             messages = messages,
