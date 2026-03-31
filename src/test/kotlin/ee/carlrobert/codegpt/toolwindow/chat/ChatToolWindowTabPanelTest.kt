@@ -1,21 +1,25 @@
 package ee.carlrobert.codegpt.toolwindow.chat
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.LightVirtualFile
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.completions.ConversationType
+import ee.carlrobert.codegpt.conversations.ConversationAttachedFile
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import testsupport.http.RequestEntity
 import testsupport.http.exchange.StreamHttpExchange
 import testsupport.json.JSONUtil.e
 import testsupport.json.JSONUtil.jsonMapResponse
+import java.io.File
 import java.util.*
 
 class ChatToolWindowTabPanelTest : IntegrationTest() {
@@ -107,6 +111,22 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
 
         waitExpecting {
             conversation.messages.isNotEmpty() && "Hello!" == conversation.messages[0].response
+        }
+    }
+
+    fun testIncludingFilesPersistsConversationAttachedFiles() {
+        val tempFile = File.createTempFile("PersistedAttachment", ".kt").apply {
+            writeText("class $nameWithoutExtension")
+            deleteOnExit()
+        }
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(tempFile)
+        val conversation = ConversationService.getInstance().startConversation(project)
+        val panel = ChatToolWindowTabPanel(project, conversation)
+
+        panel.includeFiles(listOf(virtualFile))
+
+        waitExpecting {
+            conversation.attachedFiles == listOf(ConversationAttachedFile(tempFile.path, true))
         }
     }
 

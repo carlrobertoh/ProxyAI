@@ -40,8 +40,6 @@ import ee.carlrobert.codegpt.psistructure.PsiStructureProvider;
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings;
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
@@ -148,7 +146,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         this::handleSubmit,
         this::handleCancel,
         true);
-    initializeRememberedAttachedFiles();
+    initializeConversationAttachedFiles();
     userInputPanel.requestFocus();
 
     mcpApprovalContainer = new JPanel();
@@ -394,18 +392,18 @@ public class ChatToolWindowTabPanel implements Disposable {
     return ToolApprovalMode.REQUIRE_APPROVAL;
   }
 
-  private void initializeRememberedAttachedFiles() {
-    restoreRememberedAttachedFiles();
+  private void initializeConversationAttachedFiles() {
+    restoreConversationAttachedFiles();
 
     tagManager.addListener(new TagManagerListener() {
       @Override
       public void onTagAdded(TagDetails tag) {
-        syncRememberedAttachedFiles();
+        syncConversationAttachedFiles();
       }
 
       @Override
       public void onTagRemoved(TagDetails tag) {
-        syncRememberedAttachedFiles();
+        syncConversationAttachedFiles();
       }
 
       @Override
@@ -414,20 +412,12 @@ public class ChatToolWindowTabPanel implements Disposable {
 
       @Override
       public void onTagUpdated(TagDetails tag) {
-        syncRememberedAttachedFiles();
+        syncConversationAttachedFiles();
       }
     });
-
-    ApplicationManager.getApplication().getMessageBus().connect(this).subscribe(
-        ConfigurationStateListener.Companion.getTOPIC(),
-        newState -> syncRememberedAttachedFiles());
   }
 
-  private void restoreRememberedAttachedFiles() {
-    if (!isRememberAttachedFilesEnabled()) {
-      return;
-    }
-
+  private void restoreConversationAttachedFiles() {
     var attachedFiles = conversation.getAttachedFiles();
     if (attachedFiles == null || attachedFiles.isEmpty()) {
       return;
@@ -448,14 +438,12 @@ public class ChatToolWindowTabPanel implements Disposable {
     });
   }
 
-  private void syncRememberedAttachedFiles() {
+  private void syncConversationAttachedFiles() {
     if (draftSubmitHandler != null) {
       return;
     }
 
-    var attachedFiles = isRememberAttachedFilesEnabled()
-        ? collectRememberedAttachedFiles()
-        : List.<ConversationAttachedFile>of();
+    var attachedFiles = collectConversationAttachedFiles();
 
     if (Objects.equals(conversation.getAttachedFiles(), attachedFiles)) {
       return;
@@ -465,7 +453,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     conversationService.saveConversation(conversation);
   }
 
-  private List<ConversationAttachedFile> collectRememberedAttachedFiles() {
+  private List<ConversationAttachedFile> collectConversationAttachedFiles() {
     return tagManager.getTags().stream()
         .filter(tag -> tag instanceof FileTagDetails || tag instanceof FolderTagDetails)
         .sorted(Comparator.comparingLong(TagDetails::getCreatedOn))
@@ -482,10 +470,6 @@ public class ChatToolWindowTabPanel implements Disposable {
       return new ConversationAttachedFile(folderTagDetails.getFolder().getPath(), tag.getSelected());
     }
     return null;
-  }
-
-  private boolean isRememberAttachedFilesEnabled() {
-    return ConfigurationSettings.getState().getRememberAttachedFilesToChat();
   }
 
   public void sendMessage(Message message, ConversationType conversationType) {

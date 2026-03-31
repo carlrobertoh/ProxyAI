@@ -250,7 +250,7 @@ class UserInputPanel @JvmOverloads constructor(
         setupLayout(featureType)
         if (featureType == FeatureType.CHAT) {
             setChatMode(
-                if (ConfigurationSettings.getState().chatEditModeByDefault) {
+                if (ConfigurationSettings.getState().chatCompletionSettings.chatEditModeByDefault) {
                     ChatMode.EDIT
                 } else {
                     ChatMode.ASK

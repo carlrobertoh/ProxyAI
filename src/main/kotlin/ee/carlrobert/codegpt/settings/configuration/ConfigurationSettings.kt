@@ -33,8 +33,6 @@ class ConfigurationSettingsState : BaseState() {
     var methodNameGenerationEnabled by property(true)
     var captureCompileErrors by property(true)
     var autoFormattingEnabled by property(true)
-    var chatEditModeByDefault by property(false)
-    var rememberAttachedFilesToChat by property(false)
     var tableData by map<String, String>()
     var chatCompletionSettings by property(ChatCompletionSettingsState())
     var codeCompletionSettings by property(CodeCompletionSettingsState())
@@ -49,6 +47,7 @@ class ConfigurationSettingsState : BaseState() {
 }
 
 class ChatCompletionSettingsState : BaseState() {
+    var chatEditModeByDefault by property(false)
     var editorContextTagEnabled by property(true)
     var psiStructureEnabled by property(true)
     var psiStructureAnalyzeDepth by property(3)

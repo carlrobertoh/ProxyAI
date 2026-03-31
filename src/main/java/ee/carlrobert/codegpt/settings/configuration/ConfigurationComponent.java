@@ -30,7 +30,6 @@ public class ConfigurationComponent {
   private final CodeCompletionConfigurationForm codeCompletionForm;
   private final ChatCompletionConfigurationForm chatCompletionForm;
   private final ScreenshotConfigurationForm screenshotForm;
-  private final DefaultChatModeConfigurationForm defaultChatModeForm;
 
   public ConfigurationComponent(
       Disposable parentDisposable,
@@ -77,7 +76,6 @@ public class ConfigurationComponent {
     codeCompletionForm = new CodeCompletionConfigurationForm();
     chatCompletionForm = new ChatCompletionConfigurationForm();
     screenshotForm = new ScreenshotConfigurationForm();
-    defaultChatModeForm = new DefaultChatModeConfigurationForm();
     screenshotForm.loadState(configuration.getScreenshotWatchPaths());
 
     mainPanel = FormBuilder.createFormBuilder()
@@ -98,9 +96,6 @@ public class ConfigurationComponent {
         .addComponent(new TitledSeparator(
             CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.title")))
         .addComponent(chatCompletionForm.createPanel())
-        .addComponent(new TitledSeparator(
-            CodeGPTBundle.get("configurationConfigurable.section.defaultChatMode.title")))
-        .addComponent(defaultChatModeForm.createPanel())
         .addComponentFillVertically(new JPanel(), 0)
         .getPanel();
   }
@@ -117,9 +112,6 @@ public class ConfigurationComponent {
     state.setCheckForNewScreenshots(checkForNewScreenshotsCheckBox.isSelected());
     state.setMethodNameGenerationEnabled(methodNameGenerationCheckBox.isSelected());
     state.setAutoFormattingEnabled(autoFormattingCheckBox.isSelected());
-    state.setChatEditModeByDefault(defaultChatModeForm.isEditModeByDefaultEnabled());
-    state.setRememberAttachedFilesToChat(
-        defaultChatModeForm.isRememberAttachedFilesToChatEnabled());
     state.setCodeCompletionSettings(codeCompletionForm.getFormState());
     state.setChatCompletionSettings(chatCompletionForm.getFormState());
 
@@ -138,7 +130,6 @@ public class ConfigurationComponent {
     checkForNewScreenshotsCheckBox.setSelected(configuration.getCheckForNewScreenshots());
     methodNameGenerationCheckBox.setSelected(configuration.getMethodNameGenerationEnabled());
     autoFormattingCheckBox.setSelected(configuration.getAutoFormattingEnabled());
-    defaultChatModeForm.resetForm(configuration);
     codeCompletionForm.resetForm(configuration.getCodeCompletionSettings());
     chatCompletionForm.resetForm(configuration.getChatCompletionSettings());
     screenshotForm.loadState(configuration.getScreenshotWatchPaths());

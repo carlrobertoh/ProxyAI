@@ -679,9 +679,7 @@ class PromptTextField(
     }
 
     private fun calculateMinimumHeight(editor: EditorEx): Int {
-        val verticalPadding = JBUI.scale(
-            PromptTextFieldConstants.HEIGHT_PADDING + PromptTextFieldConstants.BORDER_PADDING * 2
-        )
+        val verticalPadding = JBUI.scale(PromptTextFieldConstants.BORDER_PADDING * 2)
         return editor.lineHeight * PromptTextFieldConstants.MIN_VISIBLE_LINES + verticalPadding
     }
 
