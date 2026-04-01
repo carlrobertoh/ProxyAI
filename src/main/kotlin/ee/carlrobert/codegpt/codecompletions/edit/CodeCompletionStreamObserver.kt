@@ -6,6 +6,7 @@ import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.completions.CompletionError
 import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.service.PartialCodeCompletionResponse
 import io.grpc.Status
@@ -23,6 +24,9 @@ class CodeCompletionStreamObserver(
 
     private val messageBuilder = StringBuilder()
     override fun onNext(value: PartialCodeCompletionResponse) {
+        if (ConfigurationSettings.getState().debugModeEnabled) {
+            logger.info("Autocomplete gRPC response chunk: $value")
+        }
         CodeGPTKeys.LAST_COMPLETION_RESPONSE_ID.set(editor, value.id)
         messageBuilder.append(value.partialCompletion)
         eventListener.onMessage(value.partialCompletion)
@@ -54,6 +58,9 @@ class CodeCompletionStreamObserver(
     }
 
     override fun onCompleted() {
+        if (ConfigurationSettings.getState().debugModeEnabled) {
+            logger.info("Autocomplete gRPC stream completed")
+        }
         eventListener.onComplete(messageBuilder)
     }
 }

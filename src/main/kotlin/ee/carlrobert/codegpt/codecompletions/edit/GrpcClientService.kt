@@ -12,6 +12,7 @@ import ee.carlrobert.codegpt.completions.CancellableRequest
 import ee.carlrobert.codegpt.completions.CompletionStreamEventListener
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.util.GitUtil
@@ -56,6 +57,7 @@ class GrpcClientService(private val project: Project) : Disposable {
 
         val editor = request.editor ?: return CancellableRequest {}
         val grpcRequest = createCodeCompletionGrpcRequest(request)
+        logDebugPayload("Autocomplete gRPC request", grpcRequest)
         eventListener.onOpen()
         codeCompletionObserver =
             CodeCompletionStreamObserver(editor, eventListener)
@@ -89,6 +91,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         ensureNextEditConnection()
 
         val request = createNextEditGrpcRequest(editor, fileContent, caretOffset)
+        logDebugPayload("Next-edit gRPC request", request)
         nextEditStreamObserver = NextEditStreamObserver(editor, addToQueue) { refreshConnection() }
         nextEditContext?.cancel(null)
 
@@ -269,6 +272,12 @@ class GrpcClientService(private val project: Project) : Disposable {
 
     private fun createCallCredentials() =
         GrpcCallCredentials(CredentialsStore.getCredential(CodeGptApiKey) ?: "")
+
+    private fun logDebugPayload(label: String, payload: Any) {
+        if (ConfigurationSettings.getState().debugModeEnabled) {
+            logger.info("$label: $payload")
+        }
+    }
 
     override fun dispose() {
         codeCompletionContext?.cancel(null)

@@ -45,6 +45,11 @@ class CodeCompletionFormatter(private val editor: Editor) {
         this.originalCompletion = completion
         this.isDebugEnabled = service<ConfigurationSettings>().state.debugModeEnabled
 
+        if (isDebugEnabled) {
+            logger.info("Original completion: $originalCompletion")
+            logger.info("Normalized completion: $normalizedCompletion")
+        }
+
         return this
             .matchCompletionBrackets()
             .removeSuffix()
@@ -63,6 +68,9 @@ class CodeCompletionFormatter(private val editor: Editor) {
 
     private fun removeSuffix(): CodeCompletionFormatter {
         completion = completion.removeSuffix(textAfterCursor)
+        if (isDebugEnabled) {
+            logger.info("After removeSuffix: $completion")
+        }
         return this
     }
 
@@ -229,6 +237,9 @@ class CodeCompletionFormatter(private val editor: Editor) {
 
         if (originalCompletion.lines().size >= 3 && document.text.contains(originalCompletion)) {
             completion = ""
+            if (isDebugEnabled) {
+                logger.info("Prevented duplicate completion because the full multi-line completion already exists in the document")
+            }
             return this
         }
 
@@ -243,11 +254,17 @@ class CodeCompletionFormatter(private val editor: Editor) {
 
             if (nextLineNormalized == originalNormalized) {
                 completion = ""
+                if (isDebugEnabled) {
+                    logger.info("Prevented duplicate completion because the next line matches the completion exactly")
+                }
                 break
             }
 
             if (isSimilarCode(nextLineNormalized, originalNormalized) > 0.8) {
                 completion = ""
+                if (isDebugEnabled) {
+                    logger.info("Prevented duplicate completion because a nearby line is too similar to the completion")
+                }
                 break
             }
         }
@@ -262,6 +279,9 @@ class CodeCompletionFormatter(private val editor: Editor) {
     private fun getCompletion(): String {
         if (completion.trim().isEmpty()) {
             completion = ""
+        }
+        if (isDebugEnabled) {
+            logger.info("Final formatted completion: $completion")
         }
         return completion
     }

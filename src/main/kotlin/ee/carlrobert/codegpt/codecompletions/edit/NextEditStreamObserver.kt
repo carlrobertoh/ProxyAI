@@ -7,11 +7,11 @@ import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier
 import ee.carlrobert.codegpt.nextedit.NextEditDiffViewer
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.service.NextEditResponse
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
-import ee.carlrobert.codegpt.codecompletions.CodeCompletionFormatter
 
 class NextEditStreamObserver(
     private val editor: Editor,
@@ -24,6 +24,9 @@ class NextEditStreamObserver(
     }
 
     override fun onNext(response: NextEditResponse) {
+        if (ConfigurationSettings.getState().debugModeEnabled) {
+            logger.info("Next-edit gRPC response: $response")
+        }
         if (addToQueue) {
             CodeGPTKeys.REMAINING_NEXT_EDITS.set(editor, response)
         } else {
@@ -48,6 +51,9 @@ class NextEditStreamObserver(
     }
 
     override fun onCompleted() {
+        if (ConfigurationSettings.getState().debugModeEnabled) {
+            logger.info("Next-edit gRPC stream completed")
+        }
         editor.project?.let { CompletionProgressNotifier.update(it, false) }
     }
 }
