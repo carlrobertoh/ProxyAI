@@ -143,12 +143,16 @@ class AgentProviderIntegrationTest : IntegrationTest() {
 
     fun testInceptionAgentUsesMockHarnessThroughRealExecutor() {
         setCredential(InceptionApiKey, "TEST_API_KEY")
-        service<ModelSettings>().setModel(FeatureType.AGENT, "mercury", ServiceType.INCEPTION)
+        service<ModelSettings>().setModel(
+            FeatureType.AGENT,
+            ModelCatalog.MERCURY2,
+            ServiceType.INCEPTION
+        )
         expectInception(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
             assertThat(extractPromptText(request)).contains("Say hello from Inception")
-            chatCompletionChunks("mercury", "Hello from Inception")
+            chatCompletionChunks(ModelCatalog.MERCURY2, "Hello from Inception")
         })
 
         val result = runAgent(ServiceType.INCEPTION, "Say hello from Inception")

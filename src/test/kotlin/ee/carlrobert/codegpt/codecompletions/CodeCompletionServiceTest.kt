@@ -230,7 +230,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.body)
                 .extracting("model", "prompt", "suffix", "stream")
-                .containsExactly("mercury-coder", fixture.prefix, fixture.suffix, false)
+                .containsExactly("mercury-edit-2", fixture.prefix, fixture.suffix, false)
             ResponseEntity(
                 jsonMapResponse(
                     "choices",
@@ -580,7 +580,7 @@ class CodeCompletionServiceTest : IntegrationTest() {
                 request: GrpcCodeCompletionRequest,
                 responseObserver: StreamObserver<PartialCodeCompletionResponse>
             ) {
-                assertThat(request.model).isEqualTo("mercury-coder")
+                assertThat(request.model).isEqualTo("mercury-edit-2")
                 assertThat(request.fileContent).contains(fixture.prefix)
                 assertThat(request.cursorPosition).isGreaterThan(0)
                 responseObserver.onNext(

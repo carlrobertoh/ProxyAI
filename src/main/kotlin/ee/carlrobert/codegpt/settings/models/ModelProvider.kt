@@ -18,6 +18,7 @@ import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
 import ee.carlrobert.codegpt.agent.clients.InceptionAILLMClient
 import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
+import ee.carlrobert.codegpt.settings.models.ModelCatalog.Companion.MERCURY2
 import ee.carlrobert.codegpt.settings.models.ModelCatalog.Companion.MERCURY_CODER
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -187,8 +188,9 @@ private fun defaultModelDisplayName(modelId: String): String {
         MistralAIModels.Chat.Codestral.id -> "Codestral"
 
         // Inception
-        Mercury2.id -> "Mercury 2"
-        MERCURY_CODER -> "Mercury Coder"
+        Mercury2.id, MERCURY2 -> "Mercury 2"
+        MERCURY_CODER -> "Mercury Coder 2"
+        LEGACY_MERCURY_CODER -> "Mercury Coder"
 
         else -> modelId
     }
@@ -336,7 +338,7 @@ val Devstral2: LLModel = LLModel(
 
 val Mercury2: LLModel = LLModel(
     provider = InceptionAILLMClient.Inception,
-    id = "mercury-2",
+    id = MERCURY2,
     capabilities = listOf(
         LLMCapability.Temperature,
         LLMCapability.Schema.JSON.Basic,
@@ -629,7 +631,7 @@ private class InceptionModelProvider : ModelProvider {
                 MERCURY_CODER,
                 OPENAI_CAPABILITIES
             ),
-            displayName = "Mercury Coder",
+            displayName = defaultModelDisplayName(MERCURY_CODER),
         )
     }
 }

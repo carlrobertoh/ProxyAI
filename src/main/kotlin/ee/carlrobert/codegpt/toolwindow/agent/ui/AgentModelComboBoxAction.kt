@@ -17,10 +17,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
 import ee.carlrobert.codegpt.Icons
 import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentPreset
-import ee.carlrobert.codegpt.agent.external.ExternalAcpAgents
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable
 import ee.carlrobert.codegpt.settings.agents.acp.AcpAgentSettings
+import ee.carlrobert.codegpt.settings.models.ModelCatalog
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -427,7 +427,7 @@ class AgentModelComboBoxAction(
         val modelCode = availableModelsForProvider(INCEPTION)
             .firstOrNull()
             ?.model
-            ?: "mercury"
+            ?: ModelCatalog.MERCURY2
         return createModelAction(
             serviceType = INCEPTION,
             label = modelSettings.getModelDisplayName(INCEPTION, modelCode),

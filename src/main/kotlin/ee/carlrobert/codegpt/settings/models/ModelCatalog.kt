@@ -105,6 +105,7 @@ class ModelCatalog {
         // Ollama default models
         const val LLAMA_3_2 = "llama3.2"
 
-        const val MERCURY_CODER = "mercury-coder"
+        const val MERCURY2 = "mercury-2"
+        const val MERCURY_CODER = "mercury-edit-2"
     }
 }

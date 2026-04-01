@@ -23,7 +23,6 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.DumbAwareAction;
-import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupListener;
 import com.intellij.openapi.ui.popup.LightweightWindowEvent;
@@ -31,6 +30,7 @@ import com.intellij.openapi.ui.popup.ListPopup;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
 import ee.carlrobert.codegpt.settings.models.ModelDetailsState;
+import ee.carlrobert.codegpt.settings.models.ModelCatalog;
 import ee.carlrobert.codegpt.settings.models.ModelSelection;
 import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable;
@@ -453,7 +453,7 @@ public class ModelComboBoxAction extends ComboBoxAction {
         .filter(model -> model.getProvider() == INCEPTION)
         .map(ModelSelection::getModel)
         .findFirst()
-        .orElse("mercury");
+        .orElse(ModelCatalog.MERCURY2);
     var modelName = getModelSettings().getModelDisplayName(INCEPTION, modelCode);
     return createModelAction(
         INCEPTION,

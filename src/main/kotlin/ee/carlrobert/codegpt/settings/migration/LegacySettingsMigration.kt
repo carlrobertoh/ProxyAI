@@ -153,7 +153,7 @@ object LegacySettingsMigration {
                     resolveAvailableModel(
                         serviceType = serviceType,
                         featureType = FeatureType.CHAT,
-                        fallbackModel = ModelCatalog.MERCURY_CODER
+                        fallbackModel = ModelCatalog.MERCURY2
                     )
                 }
             } ?: error("Could not resolve legacy chat model for $serviceType")
