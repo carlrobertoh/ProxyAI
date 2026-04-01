@@ -19,7 +19,7 @@ import ee.carlrobert.codegpt.agent.clients.InceptionAILLMClient
 import ee.carlrobert.codegpt.agent.clients.ProxyAILLMClient
 import ee.carlrobert.codegpt.completions.llama.LlamaModel
 import ee.carlrobert.codegpt.settings.models.ModelCatalog.Companion.MERCURY2
-import ee.carlrobert.codegpt.settings.models.ModelCatalog.Companion.MERCURY_CODER
+import ee.carlrobert.codegpt.settings.models.ModelCatalog.Companion.MERCURY_EDIT2
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.DEFAULT_CUSTOM_OPENAI_MAX_OUTPUT_TOKENS
@@ -189,8 +189,7 @@ private fun defaultModelDisplayName(modelId: String): String {
 
         // Inception
         Mercury2.id, MERCURY2 -> "Mercury 2"
-        MERCURY_CODER -> "Mercury Coder 2"
-        LEGACY_MERCURY_CODER -> "Mercury Coder"
+        MERCURY_EDIT2 -> "Mercury Edit 2"
 
         else -> modelId
     }
@@ -384,15 +383,15 @@ private class ProxyAIModelProvider : ModelProvider {
             )
 
             FeatureType.AUTO_APPLY -> listOf(
-                defaultModel(MERCURY_CODER, Icons.Inception),
+                defaultModel(MERCURY_EDIT2, Icons.Inception),
             )
 
             FeatureType.CODE_COMPLETION -> listOf(
-                defaultModel(MERCURY_CODER, Icons.Inception)
+                defaultModel(MERCURY_EDIT2, Icons.Inception)
             )
 
             FeatureType.NEXT_EDIT -> listOf(
-                defaultModel(MERCURY_CODER)
+                defaultModel(MERCURY_EDIT2)
             )
 
             else -> emptyList()
@@ -628,10 +627,10 @@ private class InceptionModelProvider : ModelProvider {
             provider = serviceType,
             llmModel = virtualModel(
                 InceptionAILLMClient.Inception,
-                MERCURY_CODER,
+                MERCURY_EDIT2,
                 OPENAI_CAPABILITIES
             ),
-            displayName = defaultModelDisplayName(MERCURY_CODER),
+            displayName = defaultModelDisplayName(MERCURY_EDIT2),
         )
     }
 }

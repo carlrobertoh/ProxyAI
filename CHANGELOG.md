@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable subagent runtimes with per-subagent model selection and ACP-specific runtime options
 - Diagnostics tool call rendering in the agent UI
 - Custom OpenAI Responses API support with configurable context window and output size
+- New Mercury Edit 2 Model
 
 ### Fixed
 

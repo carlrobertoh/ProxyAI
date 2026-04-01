@@ -23,5 +23,5 @@ class CodeGPTServiceChatCompletionSettingsState : BaseState() {
 
 class CodeGPTServiceCodeCompletionSettingsState : BaseState() {
     var codeCompletionsEnabled by property(true)
-    var model by string(ModelCatalog.MERCURY_CODER)
+    var model by string(ModelCatalog.MERCURY_EDIT2)
 }

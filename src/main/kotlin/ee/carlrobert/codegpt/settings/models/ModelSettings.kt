@@ -228,8 +228,8 @@ class ModelSettings : SimplePersistentStateComponent<ModelSettingsState>(ModelSe
     private fun migrateProxyAIModels() {
         listOf(FeatureType.AUTO_APPLY, FeatureType.CODE_COMPLETION, FeatureType.NEXT_EDIT).forEach {
             val modelSelection = state.getModelSelection(it)
-            if (modelSelection?.provider == PROXYAI && modelSelection.model != ModelCatalog.MERCURY_CODER) {
-                setModelWithProvider(it, ModelCatalog.MERCURY_CODER, PROXYAI)
+            if (modelSelection?.provider == PROXYAI && modelSelection.model != ModelCatalog.MERCURY_EDIT2) {
+                setModelWithProvider(it, ModelCatalog.MERCURY_EDIT2, PROXYAI)
             }
         }
         listOf(

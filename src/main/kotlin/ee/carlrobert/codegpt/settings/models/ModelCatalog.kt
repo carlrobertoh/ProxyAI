@@ -43,12 +43,12 @@ class ModelCatalog {
     private val defaultModelRefs = mapOf(
         FeatureType.AGENT to DefaultModelRef(ServiceType.PROXYAI, PROXYAI_AUTO),
         FeatureType.CHAT to DefaultModelRef(ServiceType.PROXYAI, PROXYAI_AUTO),
-        FeatureType.AUTO_APPLY to DefaultModelRef(ServiceType.PROXYAI, MERCURY_CODER),
+        FeatureType.AUTO_APPLY to DefaultModelRef(ServiceType.PROXYAI, MERCURY_EDIT2),
         FeatureType.COMMIT_MESSAGE to DefaultModelRef(ServiceType.PROXYAI, Haiku_4_5.id),
         FeatureType.INLINE_EDIT to DefaultModelRef(ServiceType.PROXYAI, Haiku_4_5.id),
         FeatureType.LOOKUP to DefaultModelRef(ServiceType.PROXYAI, Haiku_4_5.id),
-        FeatureType.CODE_COMPLETION to DefaultModelRef(ServiceType.PROXYAI, MERCURY_CODER),
-        FeatureType.NEXT_EDIT to DefaultModelRef(ServiceType.PROXYAI, MERCURY_CODER),
+        FeatureType.CODE_COMPLETION to DefaultModelRef(ServiceType.PROXYAI, MERCURY_EDIT2),
+        FeatureType.NEXT_EDIT to DefaultModelRef(ServiceType.PROXYAI, MERCURY_EDIT2),
     )
 
     fun getAllModelsForFeature(featureType: FeatureType): List<ModelSelection> {
@@ -106,6 +106,6 @@ class ModelCatalog {
         const val LLAMA_3_2 = "llama3.2"
 
         const val MERCURY2 = "mercury-2"
-        const val MERCURY_CODER = "mercury-edit-2"
+        const val MERCURY_EDIT2 = "mercury-edit-2"
     }
 }

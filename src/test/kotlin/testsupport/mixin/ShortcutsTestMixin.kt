@@ -25,7 +25,7 @@ interface ShortcutsTestMixin {
         modelSettings.setModel(FeatureType.CHAT, "gpt-5-mini", ServiceType.PROXYAI)
         modelSettings.setModel(
             FeatureType.CODE_COMPLETION,
-            ModelCatalog.MERCURY_CODER,
+            ModelCatalog.MERCURY_EDIT2,
             ServiceType.PROXYAI
         )
         service<CodeGPTServiceSettings>().state.run {
@@ -185,7 +185,7 @@ interface ShortcutsTestMixin {
             FeatureType.CODE_COMPLETION -> {
                 modelSettings.setModel(
                     FeatureType.CODE_COMPLETION,
-                    ModelCatalog.MERCURY_CODER,
+                    ModelCatalog.MERCURY_EDIT2,
                     ServiceType.INCEPTION
                 )
             }
@@ -194,7 +194,7 @@ interface ShortcutsTestMixin {
                 modelSettings.setModel(role, ModelCatalog.MERCURY2, ServiceType.INCEPTION)
                 modelSettings.setModel(
                     FeatureType.CODE_COMPLETION,
-                    ModelCatalog.MERCURY_CODER,
+                    ModelCatalog.MERCURY_EDIT2,
                     ServiceType.INCEPTION
                 )
             }

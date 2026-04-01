@@ -63,7 +63,7 @@ object LegacySettingsMigration {
             setModelSelection(FeatureType.CODE_COMPLETION, codeModel, selectedService)
 
             val nextEditModel = if (selectedService == ServiceType.PROXYAI) {
-                ModelCatalog.MERCURY_CODER
+                ModelCatalog.MERCURY_EDIT2
             } else {
                 resolveAvailableModel(
                     serviceType = selectedService,
@@ -190,7 +190,7 @@ object LegacySettingsMigration {
                         serviceType = serviceType,
                         featureType = FeatureType.CODE_COMPLETION,
                         preferredModel = service<CodeGPTServiceSettings>().state.codeCompletionSettings.model,
-                        fallbackModel = ModelCatalog.MERCURY_CODER
+                        fallbackModel = ModelCatalog.MERCURY_EDIT2
                     )
                 }
 
@@ -246,7 +246,7 @@ object LegacySettingsMigration {
                     resolveAvailableModel(
                         serviceType = serviceType,
                         featureType = FeatureType.CODE_COMPLETION,
-                        fallbackModel = ModelCatalog.MERCURY_CODER
+                        fallbackModel = ModelCatalog.MERCURY_EDIT2
                     )
                 }
             }
