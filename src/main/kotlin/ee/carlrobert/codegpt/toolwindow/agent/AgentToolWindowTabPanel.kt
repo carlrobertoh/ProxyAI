@@ -1,7 +1,6 @@
 package ee.carlrobert.codegpt.toolwindow.agent
 
 import com.intellij.notification.NotificationType
-import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
@@ -17,9 +16,9 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.agent.*
-import ee.carlrobert.codegpt.agent.external.ExternalAcpAgents
-import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentService
 import ee.carlrobert.codegpt.agent.ProxyAIAgent.loadProjectInstructions
+import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentService
+import ee.carlrobert.codegpt.agent.external.ExternalAcpAgents
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointTurnSequencer
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
@@ -27,15 +26,12 @@ import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.conversations.message.QueuedMessage
+import ee.carlrobert.codegpt.mcp.McpTagStatusUpdater
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
-import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.models.ModelSettings
-import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentToolWindowLandingPanel
-import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentModelComboBoxAction
-import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentRuntimeOptionsComboBoxAction
-import ee.carlrobert.codegpt.toolwindow.agent.ui.RollbackPanel
-import ee.carlrobert.codegpt.toolwindow.agent.ui.TodoListPanel
-import ee.carlrobert.codegpt.toolwindow.agent.ui.ToolCallCard
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState
+import ee.carlrobert.codegpt.toolwindow.agent.ui.*
 import ee.carlrobert.codegpt.toolwindow.chat.MessageBuilder
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository
@@ -44,12 +40,13 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel
 import ee.carlrobert.codegpt.toolwindow.ui.UserMessagePanel
+import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.ui.UIUtil.createScrollPaneWithSmartScroller
 import ee.carlrobert.codegpt.ui.components.TokenUsageCounterPanel
 import ee.carlrobert.codegpt.ui.queue.QueuedMessagePanel
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
-import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.StringUtil.stripThinkingBlocks
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
@@ -65,7 +62,7 @@ import javax.swing.JPanel
 class AgentToolWindowTabPanel(
     private val project: Project,
     private val agentSession: AgentSession,
-    private val draftSubmitHandler: ((MessageWithContext) -> Unit)? = null
+    private val initialMessageSubmitHandler: ((MessageWithContext) -> Unit)? = null
 ) : BorderLayoutPanel(), Disposable {
     companion object {
         private const val RECOVERED_CONVERSATION_RENDER_BATCH_SIZE = 6
@@ -206,6 +203,7 @@ class AgentToolWindowTabPanel(
     )
 
     init {
+        project.service<McpTagStatusUpdater>().registerTagManager(conversation.id, tagManager)
         setupMessageBusSubscriptions()
         rollbackPanel = RollbackPanel(project, sessionId) {
             rollbackPanel.refreshOperations()
@@ -290,8 +288,8 @@ class AgentToolWindowTabPanel(
     private fun handleSubmit(text: String) {
         if (text.isBlank()) return
         val message = MessageWithContext(text, userInputPanel.getSelectedTags())
-        if (draftSubmitHandler != null) {
-            draftSubmitHandler.invoke(message)
+        if (initialMessageSubmitHandler != null) {
+            initialMessageSubmitHandler.invoke(message)
             return
         }
         submitMessage(message)
@@ -301,7 +299,8 @@ class AgentToolWindowTabPanel(
         if (message.text.isBlank()) return
         disposeLandingPanelIfPresent()
         scrollablePanel.clearLandingViewIfVisible()
-        val agentModelSelection = service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
+        val agentModelSelection =
+            service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
         agentSession.serviceType = agentModelSelection.provider
         agentSession.modelCode = agentModelSelection.selectionId
 
@@ -483,7 +482,9 @@ class AgentToolWindowTabPanel(
                                 .setSessionConfigOption(agentSession, optionId, value)
                         }.onFailure { ex ->
                             OverlayUtil.showNotification(
-                                "${displayExternalAgentName(agentSession.externalAgentId ?: "agent")} option update failed. ${buildExternalAgentConfigFailureMessage(ex)}",
+                                "${displayExternalAgentName(agentSession.externalAgentId ?: "agent")} option update failed. ${
+                                    buildExternalAgentConfigFailureMessage(ex)
+                                }",
                                 NotificationType.ERROR
                             )
                         }
@@ -757,6 +758,13 @@ class AgentToolWindowTabPanel(
     fun getAgentSession(): AgentSession = agentSession
 
     fun getConversation(): Conversation = conversation
+
+    fun getSelectedTags(): List<TagDetails> = userInputPanel.getSelectedTags()
+
+    fun restoreDraftState(state: ToolWindowInitialState) {
+        tagManager.clear()
+        state.tags.forEach(userInputPanel::addTag)
+    }
 
     fun requestFocusForTextArea() {
         userInputPanel.requestFocus()

@@ -17,6 +17,7 @@ import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
@@ -67,7 +68,8 @@ public final class ChatToolWindowContentManager {
         .ifPresentOrElse(
             title -> chatPanel.getChatTabbedPane()
                 .setSelectedIndex(chatPanel.getChatTabbedPane().indexOfTab(title)),
-            () -> chatPanel.createAndSelectConversationTab(conversation)));
+            () -> chatPanel.createAndSelectConversationTab(
+                new ToolWindowInitialState(conversation))));
   }
 
   public ChatToolWindowTabPanel createNewTabPanel() {

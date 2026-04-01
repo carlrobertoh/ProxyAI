@@ -13,7 +13,6 @@ import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.DumbAwareAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.ui.components.ActionLink;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.JBUI.CurrentTheme.Link;
@@ -23,18 +22,18 @@ import ee.carlrobert.codegpt.actions.toolwindow.ClearChatWindowAction;
 import ee.carlrobert.codegpt.actions.toolwindow.CreateNewConversationAction;
 import ee.carlrobert.codegpt.actions.toolwindow.OpenInEditorAction;
 import ee.carlrobert.codegpt.completions.ConversationType;
-import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
-import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.settings.prompts.PersonaPromptDetailsState;
 import ee.carlrobert.codegpt.settings.prompts.PromptsConfigurable;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
+import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ProviderChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier;
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ToolWindowFooterNotification;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier;
 import java.awt.CardLayout;
@@ -55,7 +54,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
   private final JPanel centerPanel;
   private final CardLayout centerLayout;
   private final Project project;
-  private ChatToolWindowTabPanel landingPanel;
+  private final ChatLandingPanel landingPanel;
 
   public ChatToolWindowPanel(
       @NotNull Project project,
@@ -71,16 +70,17 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     upgradePlanLink.setExternalLinkIcon();
     upgradePlanLink.setVisible(false);
 
+    landingPanel = new ChatLandingPanel(project, this::submitInitialMessage);
     tabbedPane = new ChatToolWindowTabbedPane(parentDisposable);
     tabbedPane.setTabLifecycleCallbacks(this::showTabsView, this::showLandingView);
     centerLayout = new CardLayout();
     centerPanel = new JPanel(centerLayout);
     centerPanel.add(tabbedPane, TABS_CARD);
+    centerPanel.add(landingPanel, LANDING_CARD);
+    centerLayout.show(centerPanel, LANDING_CARD);
 
     initToolWindowPanel(project);
     initializeEventListeners(project);
-    showLandingView();
-    Disposer.register(parentDisposable, this::disposeLandingPanel);
   }
 
   private void initializeEventListeners(Project project) {
@@ -112,12 +112,17 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     return tabbedPane;
   }
 
-  public ChatToolWindowTabPanel createAndSelectNewTabPanel() {
-    return createAndSelectConversationTab(ConversationService.getInstance().startConversation(project));
+  public ChatToolWindowTabPanel createAndSelectNewTabPanel(@NotNull ToolWindowInitialState initialState) {
+    return createAndSelectConversationTab(initialState);
   }
 
-  public ChatToolWindowTabPanel createAndSelectConversationTab(Conversation conversation) {
-    var panel = new ChatToolWindowTabPanel(project, conversation);
+  public ChatToolWindowTabPanel createAndSelectNewTabPanel() {
+    var conversation = ConversationService.getInstance().startConversation(project);
+    return createAndSelectConversationTab(new ToolWindowInitialState(conversation));
+  }
+
+  public ChatToolWindowTabPanel createAndSelectConversationTab(ToolWindowInitialState initialState) {
+    var panel = new ChatToolWindowTabPanel(project, initialState);
     tabbedPane.addNewTab(panel);
     showTabsView();
     return panel;
@@ -139,34 +144,25 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
   }
 
   public void showLandingView() {
-    disposeLandingPanel();
-    landingPanel = createLandingPanel();
-    centerPanel.add(landingPanel.getContent(), LANDING_CARD);
+    centerPanel.add(landingPanel, LANDING_CARD);
     centerLayout.show(centerPanel, LANDING_CARD);
     landingPanel.requestFocusForTextArea();
     centerPanel.revalidate();
     centerPanel.repaint();
   }
 
-  private ChatToolWindowTabPanel createLandingPanel() {
-    var conversation = ConversationService.getInstance().createConversation();
-    conversation.setProjectPath(project.getBasePath());
-    return new ChatToolWindowTabPanel(project, conversation, this::promoteLandingDraftToTab);
-  }
-
-  private void promoteLandingDraftToTab(Message message, Set<ClassStructure> psiStructure) {
-    var tabPanel = createAndSelectNewTabPanel();
-    tabPanel.sendMessage(message, ConversationType.DEFAULT, psiStructure);
-  }
-
-  private void disposeLandingPanel() {
+  private void submitInitialMessage(
+      Message message,
+      Set<ClassStructure> psiStructure,
+      ToolWindowInitialState initialState
+  ) {
     if (landingPanel == null) {
       return;
     }
 
-    centerPanel.remove(landingPanel.getContent());
-    Disposer.dispose(landingPanel);
-    landingPanel = null;
+    var tabPanel = createAndSelectNewTabPanel(initialState);
+    tabPanel.restoreDraftState(initialState);
+    tabPanel.sendMessage(message, ConversationType.DEFAULT, psiStructure);
   }
 
   public void clearImageNotifications(Project project) {
@@ -210,7 +206,7 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     toolbar.setTargetComponent(this);
     return toolbar;
   }
-  
+
   private static class SelectedPersonaActionLink extends DumbAwareAction implements
       CustomComponentAction {
 

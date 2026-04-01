@@ -9,65 +9,65 @@ import java.awt.event.ActionEvent
 
 class ChatToolWindowTabbedPaneTest : BasePlatformTestCase() {
 
-  fun testClearAllTabs() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
-    tabbedPane.addNewTab(createNewTabPanel())
+    fun testClearAllTabs() {
+        val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+        tabbedPane.addNewTab(createNewTabPanel())
 
-    tabbedPane.clearAll()
+        tabbedPane.clearAll()
 
-    assertThat(tabbedPane.activeTabMapping).isEmpty()
-  }
+        assertThat(tabbedPane.activeTabMapping).isEmpty()
+    }
 
-  fun testAddingNewTabs() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+    fun testAddingNewTabs() {
+        val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
 
-    tabbedPane.addNewTab(createNewTabPanel())
-    tabbedPane.addNewTab(createNewTabPanel())
-    tabbedPane.addNewTab(createNewTabPanel())
+        tabbedPane.addNewTab(createNewTabPanel())
+        tabbedPane.addNewTab(createNewTabPanel())
+        tabbedPane.addNewTab(createNewTabPanel())
 
-    assertThat(tabbedPane.activeTabMapping.keys)
-      .containsExactly("Chat 1", "Chat 2", "Chat 3")
-  }
+        assertThat(tabbedPane.activeTabMapping.keys)
+            .containsExactly("Chat 1", "Chat 2", "Chat 3")
+    }
 
-  fun testResetCurrentlyActiveTabPanel() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
-    val conversation = ConversationService.getInstance().startConversation(project)
-    conversation.addMessage(Message("TEST_PROMPT", "TEST_RESPONSE"))
-    tabbedPane.addNewTab(ChatToolWindowTabPanel(project, conversation))
+    fun testResetCurrentlyActiveTabPanel() {
+        val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+        val conversation = ConversationService.getInstance().startConversation(project)
+        conversation.addMessage(Message("TEST_PROMPT", "TEST_RESPONSE"))
+        tabbedPane.addNewTab(ChatToolWindowTabPanel(project, ToolWindowInitialState(conversation)))
 
-    tabbedPane.resetCurrentlyActiveTabPanel(project)
+        tabbedPane.resetCurrentlyActiveTabPanel(project)
 
-    val tabPanel = tabbedPane.activeTabMapping["Chat 1"]
-    assertThat(tabPanel!!.conversation.messages).isEmpty()
-  }
+        val tabPanel = tabbedPane.activeTabMapping["Chat 1"]
+        assertThat(tabPanel!!.conversation.messages).isEmpty()
+    }
 
-  fun testCanCloseFirstTabWhenMultipleTabsExist() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
-    tabbedPane.addNewTab(createNewTabPanel())
-    tabbedPane.addNewTab(createNewTabPanel())
+    fun testCanCloseFirstTabWhenMultipleTabsExist() {
+        val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+        tabbedPane.addNewTab(createNewTabPanel())
+        tabbedPane.addNewTab(createNewTabPanel())
 
-    tabbedPane.CloseActionListener("Chat 1")
-      .actionPerformed(ActionEvent(tabbedPane, ActionEvent.ACTION_PERFORMED, "close"))
+        tabbedPane.CloseActionListener("Chat 1")
+            .actionPerformed(ActionEvent(tabbedPane, ActionEvent.ACTION_PERFORMED, "close"))
 
-    assertThat(tabbedPane.activeTabMapping.keys).containsExactly("Chat 2")
-    assertThat(tabbedPane.tabCount).isEqualTo(1)
-  }
+        assertThat(tabbedPane.activeTabMapping.keys).containsExactly("Chat 2")
+        assertThat(tabbedPane.tabCount).isEqualTo(1)
+    }
 
-  fun testCanCloseLastRemainingTab() {
-    val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
-    tabbedPane.addNewTab(createNewTabPanel())
+    fun testCanCloseLastRemainingTab() {
+        val tabbedPane = ChatToolWindowTabbedPane(Disposer.newDisposable())
+        tabbedPane.addNewTab(createNewTabPanel())
 
-    tabbedPane.CloseActionListener("Chat 1")
-      .actionPerformed(ActionEvent(tabbedPane, ActionEvent.ACTION_PERFORMED, "close"))
+        tabbedPane.CloseActionListener("Chat 1")
+            .actionPerformed(ActionEvent(tabbedPane, ActionEvent.ACTION_PERFORMED, "close"))
 
-    assertThat(tabbedPane.activeTabMapping).isEmpty()
-    assertThat(tabbedPane.tabCount).isZero()
-  }
+        assertThat(tabbedPane.activeTabMapping).isEmpty()
+        assertThat(tabbedPane.tabCount).isZero()
+    }
 
-  private fun createNewTabPanel(): ChatToolWindowTabPanel {
-    return ChatToolWindowTabPanel(
-      project,
-      ConversationService.getInstance().startConversation(project)
-    )
-  }
+    private fun createNewTabPanel(): ChatToolWindowTabPanel {
+        return ChatToolWindowTabPanel(
+            project,
+            ToolWindowInitialState(ConversationService.getInstance().startConversation(project))
+        )
+    }
 }

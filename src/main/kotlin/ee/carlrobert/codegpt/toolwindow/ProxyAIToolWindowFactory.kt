@@ -7,10 +7,19 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
+import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowPanel
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowPanel
 import ee.carlrobert.codegpt.toolwindow.history.ChatHistoryToolWindow
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import javax.swing.JComponent
+
+data class ToolWindowInitialState @JvmOverloads constructor(
+    val conversation: Conversation,
+    val tags: List<TagDetails> = emptyList(),
+    val chatMode: ChatMode? = null,
+)
 
 class ProxyAIToolWindowFactory : ToolWindowFactory, DumbAware {
 

@@ -7,11 +7,12 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.Disposer
-import ee.carlrobert.codegpt.conversations.Conversation
 import com.intellij.util.ui.components.BorderLayoutPanel
+import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState
 import ee.carlrobert.codegpt.toolwindow.agent.ui.AgentCreditsToolbarLabel
 import java.awt.CardLayout
-import java.util.UUID
+import java.util.*
 import javax.swing.JComponent
 import javax.swing.JPanel
 
@@ -92,10 +93,11 @@ class AgentToolWindowPanel(
 
     private fun showLandingView() {
         disposeLandingPanel()
-        landingPanel = createLandingPanel()
-        centerPanel.add(landingPanel, LANDING_CARD)
+        val panel = createLandingPanel()
+        landingPanel = panel
+        centerPanel.add(panel, LANDING_CARD)
         centerLayout.show(centerPanel, LANDING_CARD)
-        landingPanel?.requestFocusForTextArea()
+        panel.requestFocusForTextArea()
         centerPanel.revalidate()
         centerPanel.repaint()
         creditsLabel.refresh()
@@ -109,9 +111,14 @@ class AgentToolWindowPanel(
         return AgentToolWindowTabPanel(
             project = project,
             agentSession = draftSession,
-            draftSubmitHandler = { message ->
+            initialMessageSubmitHandler = { message ->
+                val initialState = ToolWindowInitialState(
+                    conversation = draftSession.conversation,
+                    tags = message.tags
+                )
                 disposeLandingPanel()
                 val panel = contentManager.createNewAgentTab(draftSession)
+                panel.restoreDraftState(initialState)
                 panel.submitMessage(message)
             }
         )

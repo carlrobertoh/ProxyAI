@@ -20,6 +20,12 @@ class TagManager {
 
     fun getTags(): Set<TagDetails> = synchronized(this) { tags.toSet() }
 
+    fun getEffectiveTags(): Set<TagDetails> = synchronized(this) {
+        tags
+            .filterEffectiveFileTags()
+            .toSet()
+    }
+
     fun containsTag(file: VirtualFile): Boolean = tags.any {
         // TODO: refactor
         if (it is SelectionTagDetails) {
@@ -138,6 +144,16 @@ class TagManager {
         removedTags.forEach { tag ->
             listeners.forEach { it.onTagRemoved(tag) }
         }
+    }
+}
+
+private fun Collection<TagDetails>.filterEffectiveFileTags(): List<TagDetails> {
+    val fileVirtualFiles = filterIsInstance<FileTagDetails>()
+        .map { it.virtualFile }
+        .toSet()
+
+    return filter { tag ->
+        tag !is EditorTagDetails || tag.virtualFile !in fileVirtualFiles
     }
 }
 

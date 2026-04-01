@@ -12,7 +12,6 @@ import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import testsupport.http.RequestEntity
@@ -36,7 +35,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
 
         val message = Message("Hello!")
         val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
+        val panel = ChatToolWindowTabPanel(project, ToolWindowInitialState(conversation))
         expectOpenAIStreamingHello { promptText ->
             assertThat(promptText).contains("TEST_SYSTEM_PROMPT")
             assertThat(promptText).contains("Hello!")
@@ -55,7 +54,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
     fun testSendingMessageWithReferencedFilesAddsFileContextToPrompt() {
         val message = Message("Explain referenced files")
         val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
+        val panel = ChatToolWindowTabPanel(project, ToolWindowInitialState(conversation))
         panel.includeFiles(
             listOf(
                 LightVirtualFile("A.kt", "fun a() = 1"),
@@ -82,7 +81,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
 
         val message = Message("Fix compile errors in this class")
         val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
+        val panel = ChatToolWindowTabPanel(project, ToolWindowInitialState(conversation))
         expectOpenAIStreamingHello { promptText ->
             assertThat(promptText).contains("FIX_ERRORS_SYSTEM_PROMPT")
             assertThat(promptText).contains("Fix compile errors in this class")
@@ -102,7 +101,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
 
         val message = Message("What is in this image?")
         val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
+        val panel = ChatToolWindowTabPanel(project, ToolWindowInitialState(conversation))
         expectOpenAIStreamingHello { promptText ->
             assertThat(promptText).contains("What is in this image?")
         }
@@ -121,7 +120,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         }
         val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(tempFile)
         val conversation = ConversationService.getInstance().startConversation(project)
-        val panel = ChatToolWindowTabPanel(project, conversation)
+        val panel = ChatToolWindowTabPanel(project, ToolWindowInitialState(conversation))
 
         panel.includeFiles(listOf(virtualFile))
 

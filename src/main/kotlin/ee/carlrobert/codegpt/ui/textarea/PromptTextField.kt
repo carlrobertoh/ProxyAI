@@ -13,7 +13,9 @@ import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Caret
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.actionSystem.EditorActionHandler
 import com.intellij.openapi.editor.actionSystem.EditorActionManager
 import com.intellij.openapi.editor.colors.EditorColorsManager
@@ -60,7 +62,10 @@ class PromptTextField(
     private val onSubmit: (String) -> Unit,
     private val onFilesDropped: (List<VirtualFile>) -> Unit = {},
     featureType: FeatureType? = null,
-) : EditorTextField(project, FileTypes.PLAIN_TEXT), Disposable {
+    document: Document = EditorFactory.getInstance().createDocument("").apply {
+        IS_PROMPT_TEXT_FIELD_DOCUMENT.set(this, true)
+    },
+) : EditorTextField(document, project, FileTypes.PLAIN_TEXT, false, false), Disposable {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val lookupManager = PromptTextFieldLookupManager(project, onLookupAdded)
@@ -80,7 +85,6 @@ class PromptTextField(
 
     init {
         isOneLineMode = false
-        IS_PROMPT_TEXT_FIELD_DOCUMENT.set(document, true)
         document.putUserData(PROMPT_FIELD_KEY, this)
         setPlaceholder(CodeGPTBundle.get("toolwindow.chat.textArea.emptyText"))
 

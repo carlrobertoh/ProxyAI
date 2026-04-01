@@ -41,6 +41,7 @@ import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureRepository;
 import ee.carlrobert.codegpt.toolwindow.chat.structure.data.PsiStructureState;
@@ -52,13 +53,11 @@ import ee.carlrobert.codegpt.toolwindow.ui.ChatToolWindowLandingPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
 import ee.carlrobert.codegpt.toolwindow.ui.UserMessagePanel;
 import ee.carlrobert.codegpt.ui.OverlayUtil;
-import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor;
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.EditorTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.GitCommitTagDetails;
-import ee.carlrobert.codegpt.ui.textarea.header.tag.HistoryTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.PersonaTagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
@@ -103,23 +102,13 @@ public class ChatToolWindowTabPanel implements Disposable {
   private final PsiStructureRepository psiStructureRepository;
   private final TagManager tagManager;
   private final JPanel mcpApprovalContainer;
-  private final DraftSubmitHandler draftSubmitHandler;
   private @Nullable ToolwindowChatCompletionRequestHandler requestHandler;
   private final JBLabel loadingLabel;
   private final JPanel queuedMessageContainer;
 
-  public ChatToolWindowTabPanel(@NotNull Project project, @NotNull Conversation conversation) {
-    this(project, conversation, null);
-  }
-
-  public ChatToolWindowTabPanel(
-      @NotNull Project project,
-      @NotNull Conversation conversation,
-      @Nullable DraftSubmitHandler draftSubmitHandler
-  ) {
+  public ChatToolWindowTabPanel(@NotNull Project project, ToolWindowInitialState initialState) {
     this.project = project;
-    this.conversation = conversation;
-    this.draftSubmitHandler = draftSubmitHandler;
+    this.conversation = initialState.getConversation();
     this.chatSession = new ChatSession();
     conversationService = ConversationService.getInstance();
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
@@ -200,6 +189,15 @@ public class ChatToolWindowTabPanel implements Disposable {
     totalTokensPanel.updateConversationTokens(conversation);
   }
 
+  public void restoreDraftState(@NotNull ToolWindowInitialState initialState) {
+    tagManager.clear();
+    initialState.getTags().forEach(userInputPanel::addTag);
+
+    if (initialState.getChatMode() != null) {
+      userInputPanel.setChatMode(initialState.getChatMode());
+    }
+  }
+
   public void addSelection(VirtualFile editorFile, SelectionModel selectionModel) {
     userInputPanel.addSelection(editorFile, selectionModel);
   }
@@ -267,8 +265,8 @@ public class ChatToolWindowTabPanel implements Disposable {
         .sessionId(chatSession.getId())
         .conversationType(conversationType)
         .imageDetailsFromPath(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project))
-        .referencedFiles(getReferencedFiles(selectedTags))
-        .history(getHistory(getSelectedTags()))
+        .referencedFiles(ChatContextSupport.getReferencedFiles(project, selectedTags))
+        .history(ChatContextSupport.getHistory(getSelectedTags()))
         .psiStructure(psiStructure)
         .project(project)
         .chatMode(userInputPanel.getChatMode());
@@ -300,19 +298,17 @@ public class ChatToolWindowTabPanel implements Disposable {
     return builder.build();
   }
 
-  private List<ReferencedFile> getReferencedFiles(List<? extends TagDetails> tags) {
-    var settingsService = project.getService(ProxyAISettingsService.class);
-    var visibleFiles = collectVisibleFiles(
-        tags.stream()
-            .map(this::getVirtualFile)
-            .filter(Objects::nonNull)
-            .toList(),
-        settingsService
-    );
+  private <T extends TagDetails> Optional<T> findTagOfType(
+      List<? extends TagDetails> tags,
+      Class<T> tagClass) {
+    return tags.stream()
+        .filter(tagClass::isInstance)
+        .map(tagClass::cast)
+        .findFirst();
+  }
 
-    return visibleFiles.stream()
-        .map(ReferencedFile::from)
-        .toList();
+  private ToolApprovalMode getToolApprovalMode() {
+    return ToolApprovalMode.REQUIRE_APPROVAL;
   }
 
   private List<VirtualFile> collectVisibleFiles(
@@ -334,62 +330,9 @@ public class ChatToolWindowTabPanel implements Disposable {
       output.add(file);
       return;
     }
+
     Arrays.stream(file.getChildren())
         .forEach(child -> appendVisibleFiles(child, settingsService, output));
-  }
-
-  private List<UUID> getConversationHistoryIds(List<? extends TagDetails> tags) {
-    return tags.stream()
-        .map(it -> {
-          if (it instanceof HistoryTagDetails tagDetails) {
-            return tagDetails.getConversationId();
-          }
-          return null;
-        })
-        .filter(Objects::nonNull)
-        .toList();
-  }
-
-  private List<Conversation> getHistory(List<? extends TagDetails> tags) {
-    return tags.stream()
-        .map(it -> {
-          if (it instanceof HistoryTagDetails tagDetails) {
-            return ConversationTagProcessor.Companion.getConversation(
-                tagDetails.getConversationId());
-          }
-          return null;
-        })
-        .filter(Objects::nonNull)
-        .distinct()
-        .toList();
-  }
-
-  private VirtualFile getVirtualFile(TagDetails tag) {
-    VirtualFile virtualFile = null;
-    if (tag.getSelected()) {
-      if (tag instanceof FileTagDetails) {
-        virtualFile = ((FileTagDetails) tag).getVirtualFile();
-      } else if (tag instanceof EditorTagDetails) {
-        virtualFile = ((EditorTagDetails) tag).getVirtualFile();
-      } else if (tag instanceof FolderTagDetails) {
-        virtualFile = ((FolderTagDetails) tag).getFolder();
-      }
-
-    }
-    return virtualFile;
-  }
-
-  private <T extends TagDetails> Optional<T> findTagOfType(
-      List<? extends TagDetails> tags,
-      Class<T> tagClass) {
-    return tags.stream()
-        .filter(tagClass::isInstance)
-        .map(tagClass::cast)
-        .findFirst();
-  }
-
-  private ToolApprovalMode getToolApprovalMode() {
-    return ToolApprovalMode.REQUIRE_APPROVAL;
   }
 
   private void initializeConversationAttachedFiles() {
@@ -397,21 +340,24 @@ public class ChatToolWindowTabPanel implements Disposable {
 
     tagManager.addListener(new TagManagerListener() {
       @Override
-      public void onTagAdded(TagDetails tag) {
+      public void onTagAdded(@NotNull TagDetails tag) {
         syncConversationAttachedFiles();
       }
 
       @Override
-      public void onTagRemoved(TagDetails tag) {
+      public void onTagRemoved(@NotNull TagDetails tag) {
         syncConversationAttachedFiles();
       }
 
       @Override
-      public void onTagSelectionChanged(TagDetails tag, SelectionModel selectionModel) {
+      public void onTagSelectionChanged(
+          @NotNull TagDetails tag,
+          @NotNull SelectionModel selectionModel) {
+        syncConversationAttachedFiles();
       }
 
       @Override
-      public void onTagUpdated(TagDetails tag) {
+      public void onTagUpdated(@NotNull TagDetails tag) {
         syncConversationAttachedFiles();
       }
     });
@@ -439,10 +385,6 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private void syncConversationAttachedFiles() {
-    if (draftSubmitHandler != null) {
-      return;
-    }
-
     var attachedFiles = collectConversationAttachedFiles();
 
     if (Objects.equals(conversation.getAttachedFiles(), attachedFiles)) {
@@ -454,8 +396,7 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private List<ConversationAttachedFile> collectConversationAttachedFiles() {
-    return tagManager.getTags().stream()
-        .filter(tag -> tag instanceof FileTagDetails || tag instanceof FolderTagDetails)
+    return userInputPanel.getSelectedTags().stream()
         .sorted(Comparator.comparingLong(TagDetails::getCreatedOn))
         .map(this::toConversationAttachedFile)
         .filter(Objects::nonNull)
@@ -463,11 +404,20 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private ConversationAttachedFile toConversationAttachedFile(TagDetails tag) {
+    if (tag instanceof EditorTagDetails editorTagDetails) {
+      return new ConversationAttachedFile(
+          editorTagDetails.getVirtualFile().getPath(),
+          tag.getSelected());
+    }
     if (tag instanceof FileTagDetails fileTagDetails) {
-      return new ConversationAttachedFile(fileTagDetails.getVirtualFile().getPath(), tag.getSelected());
+      return new ConversationAttachedFile(
+          fileTagDetails.getVirtualFile().getPath(),
+          tag.getSelected());
     }
     if (tag instanceof FolderTagDetails folderTagDetails) {
-      return new ConversationAttachedFile(folderTagDetails.getFolder().getPath(), tag.getSelected());
+      return new ConversationAttachedFile(
+          folderTagDetails.getFolder().getPath(),
+          tag.getSelected());
     }
     return null;
   }
@@ -691,30 +641,9 @@ public class ChatToolWindowTabPanel implements Disposable {
           .filter(TagDetails::getSelected)
           .collect(Collectors.toList());
 
-      var messageBuilder = new MessageBuilder(project, text).withTags(appliedTags);
-
-      List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
-      if (!referencedFiles.isEmpty()) {
-        messageBuilder.withReferencedFiles(referencedFiles);
-      }
-
-      List<UUID> conversationHistoryIds = getConversationHistoryIds(appliedTags);
-      if (!conversationHistoryIds.isEmpty()) {
-        messageBuilder.withConversationHistoryIds(conversationHistoryIds);
-      }
-
-      String attachedImagePath = CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project);
-      if (attachedImagePath != null) {
-        messageBuilder.withImage(attachedImagePath);
-      }
-
       application.invokeLater(() -> {
-        var message = messageBuilder.build();
-        if (draftSubmitHandler != null) {
-          draftSubmitHandler.onDraftSubmit(message, psiStructure);
-        } else {
-          sendMessage(message, ConversationType.DEFAULT, psiStructure);
-        }
+        var message = ChatContextSupport.buildMessage(project, text, appliedTags);
+        sendMessage(message, ConversationType.DEFAULT, psiStructure);
       });
     });
     return Unit.INSTANCE;
@@ -811,26 +740,6 @@ public class ChatToolWindowTabPanel implements Disposable {
     }
   }
 
-  private JComponent getLandingView() {
-    return new ChatToolWindowLandingPanel((action, locationOnScreen) -> {
-      var editor = EditorUtil.getSelectedEditor(project);
-      if (editor == null || !editor.getSelectionModel().hasSelection()) {
-        OverlayUtil.showWarningBalloon(
-            editor == null ? "Unable to locate a selected editor"
-                : "Please select a target code before proceeding",
-            locationOnScreen);
-        return Unit.INSTANCE;
-      }
-
-      var formattedCode = CompletionRequestUtil.formatCode(
-          editor.getSelectionModel().getSelectedText(),
-          editor.getVirtualFile().getPath());
-      var message = new Message(action.getPrompt().replace("{SELECTION}", formattedCode));
-      sendMessage(message, ConversationType.DEFAULT);
-      return Unit.INSTANCE;
-    });
-  }
-
   private void displayConversation() {
     clearWindow();
     conversation.getMessages().forEach(message -> {
@@ -873,9 +782,23 @@ public class ChatToolWindowTabPanel implements Disposable {
     return rootPanel;
   }
 
-  @FunctionalInterface
-  public interface DraftSubmitHandler {
+  private JComponent getLandingView() {
+    return new ChatToolWindowLandingPanel((action, locationOnScreen) -> {
+      var editor = EditorUtil.getSelectedEditor(project);
+      if (editor == null || !editor.getSelectionModel().hasSelection()) {
+        OverlayUtil.showWarningBalloon(
+            editor == null ? "Unable to locate a selected editor"
+                : "Please select a target code before proceeding",
+            locationOnScreen);
+        return Unit.INSTANCE;
+      }
 
-    void onDraftSubmit(Message message, Set<ClassStructure> psiStructure);
+      var formattedCode = CompletionRequestUtil.formatCode(
+          editor.getSelectionModel().getSelectedText(),
+          editor.getVirtualFile().getPath());
+      var message = new Message(action.getPrompt().replace("{SELECTION}", formattedCode));
+      sendMessage(message, ConversationType.DEFAULT);
+      return Unit.INSTANCE;
+    });
   }
 }

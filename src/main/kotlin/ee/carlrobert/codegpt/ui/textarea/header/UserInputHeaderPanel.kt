@@ -118,7 +118,6 @@ class UserInputHeaderPanel(
 
     private val backgroundScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val settingsService = project.service<ProxyAISettingsService>()
-    private var purgingHiddenTags = false
 
     init {
         tagManager.addListener(this)
@@ -127,10 +126,10 @@ class UserInputHeaderPanel(
     }
 
     fun getSelectedTags(): List<TagDetails> =
-        tagManager.getTags().filter { it.selected }.toMutableList()
+        tagManager.getEffectiveTags().filter { it.selected }.toMutableList()
 
     fun getLastTag(): TagDetails? {
-        return tagManager.getTags()
+        return tagManager.getEffectiveTags()
             .sortedWith(TagDetailsComparator())
             .lastOrNull()
     }
@@ -239,36 +238,9 @@ class UserInputHeaderPanel(
     }
 
     private fun onTagsChanged() {
-        if (!purgingHiddenTags) {
-            val hiddenTags = tagManager.getTags().filterNot(::isTagVisible)
-            if (hiddenTags.isNotEmpty()) {
-                purgingHiddenTags = true
-                hiddenTags.forEach { tagManager.remove(it) }
-                purgingHiddenTags = false
-                return
-            }
-        }
-
         components.filterIsInstance<TagPanel>().forEach { remove(it) }
 
-        val allTags = tagManager.getTags()
-
-        val filesVirtualFilesSet = allTags
-            .filterIsInstance<FileTagDetails>()
-            .map { it.virtualFile }
-            .toSet()
-
-        /**
-         * Filter the tags collection to prioritize FileTagDetails over EditorTagDetails
-         * Keep all tags except EditorTagDetails that have a corresponding FileTagDetails
-         */
-        val tags = allTags.filter { tag ->
-            if (tag is EditorTagDetails) {
-                !filesVirtualFilesSet.contains(tag.virtualFile)
-            } else {
-                true
-            }
-        }
+        val tags = tagManager.getEffectiveTags()
             .sortedWith(TagDetailsComparator())
             .toSet()
 

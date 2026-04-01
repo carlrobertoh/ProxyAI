@@ -11,6 +11,7 @@ import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.actions.toolwindow.RenameSessionAction;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.ConversationsState;
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
@@ -203,9 +204,8 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
   public void resetCurrentlyActiveTabPanel(Project project) {
     tryFindActiveTabPanel().ifPresent(tabPanel -> {
       closeTabAt(getSelectedIndex());
-      addNewTab(new ChatToolWindowTabPanel(
-          project,
-          ConversationService.getInstance().startConversation(project)));
+      var conversation = ConversationService.getInstance().startConversation(project);
+      addNewTab(new ChatToolWindowTabPanel(project, new ToolWindowInitialState(conversation)));
       repaint();
       revalidate();
     });
