@@ -29,7 +29,11 @@ class GitGroupItem(private val project: Project) : AbstractLookupGroupItem(), Dy
                         || commit.fullMessage.contains(searchText, true)
                     ) {
                         runInEdt {
-                            LookupUtil.addLookupItem(lookup, GitCommitActionItem(commit))
+                            LookupUtil.addLookupItem(
+                                lookup,
+                                GitCommitActionItem(commit),
+                                searchText = searchText
+                            )
                         }
                     }
                 }

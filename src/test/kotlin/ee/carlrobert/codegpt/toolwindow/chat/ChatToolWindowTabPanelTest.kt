@@ -12,6 +12,7 @@ import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import testsupport.http.RequestEntity

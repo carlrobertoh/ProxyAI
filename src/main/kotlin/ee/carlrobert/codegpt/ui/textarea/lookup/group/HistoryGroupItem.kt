@@ -48,7 +48,7 @@ class HistoryGroupItem : AbstractLookupGroupItem(), DynamicLookupGroupItem {
                     addedItems.add(itemKey)
                     runInEdt {
                         if (!lookup.isLookupDisposed) {
-                            LookupUtil.addLookupItem(lookup, item)
+                            LookupUtil.addLookupItem(lookup, item, searchText = searchText)
                         }
                     }
                 }

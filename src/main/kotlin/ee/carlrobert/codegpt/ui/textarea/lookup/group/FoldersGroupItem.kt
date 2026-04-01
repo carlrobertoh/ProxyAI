@@ -35,7 +35,11 @@ class FoldersGroupItem(
                     !tagManager.containsTag(it)
                 ) {
                     runInEdt {
-                        LookupUtil.addLookupItem(lookup, FolderActionItem(project, it))
+                        LookupUtil.addLookupItem(
+                            lookup,
+                            FolderActionItem(project, it),
+                            searchText = searchText
+                        )
                     }
                 }
                 true

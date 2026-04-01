@@ -78,7 +78,6 @@ class PromptTextField(
 
     private var showSuggestionsJob: Job? = null
     private var searchState = SearchState()
-    private var lastSearchResults: List<LookupActionItem>? = null
 
     val dispatcherId: UUID = UUID.randomUUID()
     var lookup: LookupImpl? = null
@@ -213,6 +212,15 @@ class PromptTextField(
     ) {
         editor?.let { editor ->
             try {
+                val existingLookup = lookup
+                val currentSearchText = searchManager.getSearchTextAfterAt(editor.document.text, editor.caretModel.offset)
+                if (existingLookup != null && existingLookup.isShown && !existingLookup.isLookupDisposed) {
+                    if (currentSearchText == searchText) {
+                        lookupManager.updateSearchResultsLookup(existingLookup, results)
+                        return
+                    }
+                }
+
                 hideLookupIfShown()
                 lookup = lookupManager.showSearchResultsLookup(editor, results, searchText)
             } catch (e: Exception) {
@@ -234,7 +242,7 @@ class PromptTextField(
             return
         }
 
-        val lookupElements = suggestions.map { it.createLookupElement() }.toTypedArray()
+        val lookupElements = suggestions.map { it.createLookupElement(filterText) }.toTypedArray()
 
         withContext(Dispatchers.Main) {
             showSuggestionLookup(lookupElements, group, filterText)
@@ -311,7 +319,6 @@ class PromptTextField(
     override fun dispose() {
         isFieldDisposed = true
         showSuggestionsJob?.cancel()
-        lastSearchResults = null
         clearPlaceholders()
         val ed = this.editor
         mouseClickListener?.let { l -> ed?.contentComponent?.removeMouseListener(l) }
@@ -577,18 +584,17 @@ class PromptTextField(
 
     private fun handleNonEmptySearch(searchText: String) {
         if (!searchState.isInGroupLookupContext) {
-            if (!searchManager.matchesAnyDefaultGroup(searchText)) {
-                if (!searchState.isInSearchContext || searchState.lastSearchText != searchText) {
-                    searchState = searchState.copy(
-                        isInSearchContext = true,
-                        lastSearchText = searchText
-                    )
+            if (!searchState.isInSearchContext || searchState.lastSearchText != searchText) {
+                searchState = searchState.copy(
+                    isInSearchContext = true,
+                    lastSearchText = searchText,
+                    isInGroupLookupContext = false
+                )
 
-                    showSuggestionsJob?.cancel()
-                    showSuggestionsJob = coroutineScope.launch {
-                        delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
-                        updateLookupWithSearchResults(searchText)
-                    }
+                showSuggestionsJob?.cancel()
+                showSuggestionsJob = coroutineScope.launch {
+                    delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
+                    updateLookupWithSearchResults(searchText)
                 }
             }
         }
@@ -641,7 +647,6 @@ class PromptTextField(
     }
 
     private suspend fun updateLookupWithSearchResults(searchText: String) {
-        // Phase 1: Show instant results (builtins, history, personas, MCP) immediately
         val instantResults = searchManager.performInstantSearch(searchText)
         if (instantResults.isNotEmpty()) {
             withContext(Dispatchers.Main) {
@@ -649,16 +654,20 @@ class PromptTextField(
             }
         }
 
-        // Phase 2: Get heavy results (files, folders, git) and merge
-        val heavyResults = searchManager.performHeavySearch(searchText)
-        if (heavyResults.isNotEmpty()) {
-            val allResults = searchManager.mergeResults(instantResults, heavyResults, searchText)
-            lastSearchResults = allResults
+        val fileResults = searchManager.performFileSearch(searchText)
+        val earlyResults = searchManager.mergeResults(fileResults, instantResults, searchText)
+        if (earlyResults.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                showGlobalSearchResults(earlyResults, searchText)
+            }
+        }
+
+        val deferredHeavyResults = searchManager.performDeferredHeavySearch(searchText)
+        if (deferredHeavyResults.isNotEmpty()) {
+            val allResults = searchManager.mergeResults(earlyResults, deferredHeavyResults, searchText)
             withContext(Dispatchers.Main) {
                 showGlobalSearchResults(allResults, searchText)
             }
-        } else {
-            lastSearchResults = instantResults
         }
     }
 

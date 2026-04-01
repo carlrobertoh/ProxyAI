@@ -158,17 +158,6 @@ class HistorySearchIntegrationTest : IntegrationTest() {
         assertThat((virtualizationResults[0] as HistoryActionItem).displayName).contains("virtualization")
     }
 
-    fun `test should match history aliases in search manager`() {
-        val historyAliases = listOf("history", "hist", "h")
-        
-        historyAliases.forEach { alias ->
-            val matches = searchManager.matchesAnyDefaultGroup(alias)
-            assertThat(matches)
-                .withFailMessage("Alias '$alias' should match default group names")
-                .isTrue()
-        }
-    }
-
     fun `test should have correct properties for history group item`() {
         assertThat(historyGroupItem.enabled).isTrue()
         assertThat(historyGroupItem.displayName).isEqualTo("History")

@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.ui.textarea
 import com.intellij.codeInsight.lookup.*
 import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.codeInsight.lookup.impl.PrefixChangeListener
+import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.Editor
@@ -11,10 +12,12 @@ import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
+import ee.carlrobert.codegpt.ui.textarea.FileSearchSource
 import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.LookupUtil
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.InsertsDisplayNameLookupItem
@@ -74,7 +77,7 @@ class PromptTextFieldLookupManager(
         results: List<LookupActionItem>,
         searchText: String
     ): LookupImpl {
-        val lookupElements = results.map { it.createLookupElement() }.toTypedArray()
+        val lookupElements = results.toPrioritizedLookupElements(searchText)
         val lookup = createLookup(editor, lookupElements, "")
 
         lookup.addLookupListener(object : LookupListener {
@@ -99,6 +102,29 @@ class PromptTextFieldLookupManager(
         lookup.refreshUi(false, true)
         lookup.showLookup()
         return lookup
+    }
+
+    fun updateSearchResultsLookup(
+        lookup: LookupImpl,
+        results: List<LookupActionItem>
+    ): Int {
+        val existingKeys = lookup.items.mapNotNull { element ->
+            (element.getUserData(LookupItem.KEY) as? LookupActionItem)?.let(::resultKey)
+        }.toMutableSet()
+        val newResults = results.filter { result -> existingKeys.add(resultKey(result)) }
+        if (newResults.isEmpty()) {
+            lookup.refreshUi(false, true)
+            return 0
+        }
+
+        LookupUtil.addLookupItems(
+            lookup,
+            newResults.mapIndexed { index, result ->
+                result to resultPriority(result, index, newResults.size)
+            },
+            getSearchTextFromLookup(lookup)
+        )
+        return newResults.size
     }
 
     fun showSuggestionLookup(
@@ -216,6 +242,41 @@ class PromptTextFieldLookupManager(
         return lookupItem is FileActionItem
                 || lookupItem is FolderActionItem
                 || lookupItem is InsertsDisplayNameLookupItem
+    }
+
+    private fun List<LookupActionItem>.toPrioritizedLookupElements(
+        searchText: String
+    ): Array<LookupElement> {
+        return mapIndexed<LookupActionItem, LookupElement> { index, result ->
+            PrioritizedLookupElement.withPriority(
+                result.createLookupElement(searchText),
+                resultPriority(result, index, size)
+            )
+        }.toTypedArray()
+    }
+
+    private fun resultPriority(
+        result: LookupActionItem,
+        index: Int,
+        total: Int
+    ): Double {
+        val sourcePriority = when (result) {
+            is FileActionItem -> when (result.source) {
+                FileSearchSource.NATIVE -> 3_000.0
+                FileSearchSource.OPEN -> 2_500.0
+                FileSearchSource.RECENT -> 2_000.0
+            }
+
+            else -> 1_000.0
+        }
+        return sourcePriority - index.toDouble() / maxOf(total, 1)
+    }
+
+    private fun resultKey(result: LookupActionItem): String {
+        return when (result) {
+            is FileActionItem -> "file:${result.file.path}"
+            else -> "${result::class.qualifiedName}:${result.displayName}"
+        }
     }
 
     private fun insertWithHighlight(editor: Editor, position: Int, text: String) {

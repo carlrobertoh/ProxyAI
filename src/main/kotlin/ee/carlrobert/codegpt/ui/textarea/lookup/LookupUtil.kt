@@ -6,12 +6,30 @@ import com.intellij.codeInsight.lookup.impl.LookupImpl
 
 object LookupUtil {
 
-    fun addLookupItem(lookup: LookupImpl, lookupItem: LookupItem, priority: Double = 5.0) {
+    fun addLookupItem(
+        lookup: LookupImpl,
+        lookupItem: LookupItem,
+        priority: Double = 5.0,
+        searchText: String = ""
+    ) {
+        addLookupItems(lookup, listOf(lookupItem to priority), searchText)
+    }
+
+    fun addLookupItems(
+        lookup: LookupImpl,
+        lookupItems: List<Pair<LookupItem, Double>>,
+        searchText: String = ""
+    ) {
         if (!lookup.isLookupDisposed) {
-            lookup.addItem(
-                PrioritizedLookupElement.withPriority(lookupItem.createLookupElement(), priority),
-                PrefixMatcher.ALWAYS_TRUE
-            )
+            lookupItems.forEach { (lookupItem, priority) ->
+                lookup.addItem(
+                    PrioritizedLookupElement.withPriority(
+                        lookupItem.createLookupElement(searchText),
+                        priority
+                    ),
+                    PrefixMatcher.ALWAYS_TRUE
+                )
+            }
             lookup.refreshUi(true, true)
         }
     }

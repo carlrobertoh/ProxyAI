@@ -4,6 +4,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState
 import org.assertj.core.api.Assertions.assertThat
 import java.awt.event.ActionEvent
 

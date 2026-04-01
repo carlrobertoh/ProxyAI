@@ -18,7 +18,7 @@ interface LookupItem {
     val enabled: Boolean
         get() = true
 
-    fun createLookupElement(): LookupElement
+    fun createLookupElement(searchText: String = ""): LookupElement
     fun setPresentation(element: LookupElement, presentation: LookupElementPresentation)
 }
 

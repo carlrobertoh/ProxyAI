@@ -7,6 +7,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.FilesGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.FoldersGroupItem
 import kotlinx.coroutines.runBlocking
@@ -20,8 +21,12 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
 
     fun `test files group should not suggest ignored files`() {
         myFixture.addFileToProject("app/src/main/Hidden.kt", "class Hidden")
-        myFixture.addFileToProject("app/src/test/Visible.kt", "class Visible")
+        val visibleFile = myFixture.addFileToProject("app/src/test/Visible.kt", "class Visible")
+            .virtualFile
         writeSettings(ignoreEntries = listOf("app/src/main/**"))
+        ApplicationManager.getApplication().invokeAndWait {
+            FileEditorManager.getInstance(project).openFile(visibleFile, true)
+        }
         val filesGroupItem = FilesGroupItem(project, TagManager())
 
         val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("kt") }
@@ -36,10 +41,13 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
         val ignoredOpenFile =
             myFixture.addFileToProject("app/src/main/OpenHidden.kt", "class OpenHidden")
                 .virtualFile
-        myFixture.addFileToProject("app/src/test/OpenVisible.kt", "class OpenVisible")
+        val visibleOpenFile =
+            myFixture.addFileToProject("app/src/test/OpenVisible.kt", "class OpenVisible")
+                .virtualFile
         writeSettings(ignoreEntries = listOf("app/src/main/**"))
         ApplicationManager.getApplication().invokeAndWait {
             FileEditorManager.getInstance(project).openFile(ignoredOpenFile, true)
+            FileEditorManager.getInstance(project).openFile(visibleOpenFile, true)
         }
         val filesGroupItem = FilesGroupItem(project, TagManager())
 
@@ -48,6 +56,86 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
 
         assertThat(fileSuggestions.map { it.file.path })
             .noneMatch { it.contains("/app/src/main/OpenHidden.kt") }
+            .anyMatch { it.contains("/app/src/test/OpenVisible.kt") }
+    }
+
+    fun `test files group should only suggest open files`() {
+        val openFile = myFixture.addFileToProject("app/src/test/Open.kt", "class Open").virtualFile
+        myFixture.addFileToProject("app/src/test/Closed.kt", "class Closed")
+        ApplicationManager.getApplication().invokeAndWait {
+            FileEditorManager.getInstance(project).openFile(openFile, true)
+        }
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("") }
+            .filterIsInstance<FileActionItem>()
+
+        assertThat(fileSuggestions.map { it.file.path })
+            .anyMatch { it.endsWith("/app/src/test/Open.kt") }
+            .noneMatch { it.endsWith("/app/src/test/Closed.kt") }
+    }
+
+    fun `test files group typed search should include closed project files even when files are open`() {
+        val openFile =
+            myFixture.addFileToProject("app/src/test/OpenDocument.kt", "class OpenDocument")
+                .virtualFile
+        myFixture.addFileToProject("app/src/test/NeedleMatch.kt", "class NeedleMatch")
+        ApplicationManager.getApplication().invokeAndWait {
+            FileEditorManager.getInstance(project).openFile(openFile, true)
+        }
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("Needle") }
+            .filterIsInstance<FileActionItem>()
+
+        assertThat(fileSuggestions.map { it.file.path })
+            .anyMatch { it.endsWith("/app/src/test/NeedleMatch.kt") }
+    }
+
+    fun `test files group should show include open files action first without icon`() {
+        val openFile = myFixture.addFileToProject("app/src/test/Open.kt", "class Open").virtualFile
+        ApplicationManager.getApplication().invokeAndWait {
+            FileEditorManager.getInstance(project).openFile(openFile, true)
+        }
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val suggestions = runBlocking { filesGroupItem.getLookupItems("") }
+
+        assertThat(suggestions.first()).isInstanceOf(IncludeOpenFilesActionItem::class.java)
+        assertThat(suggestions.first().icon).isNull()
+    }
+
+    fun `test include open files should stay in files group but not unrelated global search`() {
+        val openFile = myFixture.addFileToProject("app/src/test/Open.kt", "class Open").virtualFile
+        ApplicationManager.getApplication().invokeAndWait {
+            FileEditorManager.getInstance(project).openFile(openFile, true)
+        }
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+        val searchManager = SearchManager(project, TagManager())
+
+        val fileGroupSuggestions = runBlocking { filesGroupItem.getLookupItems("needle") }
+        val globalSearchResults = runBlocking { searchManager.performGlobalSearch("needle") }
+
+        assertThat(fileGroupSuggestions.first()).isInstanceOf(IncludeOpenFilesActionItem::class.java)
+        assertThat(globalSearchResults)
+            .noneMatch { it is IncludeOpenFilesActionItem }
+    }
+
+    fun `test files group should fall back to recent files when no files are open`() {
+        val recentFile =
+            myFixture.addFileToProject("app/src/test/Recent.kt", "class Recent").virtualFile
+        ApplicationManager.getApplication().invokeAndWait {
+            val fileEditorManager = FileEditorManager.getInstance(project)
+            fileEditorManager.openFile(recentFile, true)
+            fileEditorManager.closeFile(recentFile)
+        }
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("Recent") }
+            .filterIsInstance<FileActionItem>()
+
+        assertThat(fileSuggestions.map { it.file.path })
+            .anyMatch { it.endsWith("/app/src/test/Recent.kt") }
     }
 
     fun `test folders group should not suggest ignored folders`() {

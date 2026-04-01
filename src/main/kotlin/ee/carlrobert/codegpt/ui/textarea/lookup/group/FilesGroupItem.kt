@@ -6,15 +6,22 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.codeStyle.MinusculeMatcher
 import com.intellij.psi.codeStyle.NameUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowContentManager
+import ee.carlrobert.codegpt.ui.textarea.FileSearchCandidate
+import ee.carlrobert.codegpt.ui.textarea.FileSearchProvider
+import ee.carlrobert.codegpt.ui.textarea.FileSearchSource
+import ee.carlrobert.codegpt.ui.textarea.NativeFileSearchProvider
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagUtil
 import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupUtil
@@ -25,7 +32,8 @@ import kotlinx.coroutines.withContext
 
 class FilesGroupItem(
     private val project: Project,
-    private val tagManager: TagManager
+    private val tagManager: TagManager,
+    private val fileSearchProvider: FileSearchProvider = NativeFileSearchProvider(project)
 ) : AbstractLookupGroupItem(), DynamicLookupGroupItem {
     private val settingsService = project.service<ProxyAISettingsService>()
 
@@ -33,64 +41,134 @@ class FilesGroupItem(
     override val icon = AllIcons.FileTypes.Any_type
 
     override suspend fun updateLookupList(lookup: LookupImpl, searchText: String) {
+        val lookupItems = getLookupItems(searchText)
+            .filterIsInstance<FileActionItem>()
+
         withContext(Dispatchers.Default) {
-            project.service<ProjectFileIndex>().iterateContent {
-                if (!it.isDirectory && settingsService.isVirtualFileVisible(it) && !containsTag(it)) {
-                    val actionItem = FileActionItem(project, it)
-                    runInEdt {
-                        LookupUtil.addLookupItem(lookup, actionItem)
-                    }
+            lookupItems.forEach { actionItem ->
+                runInEdt {
+                    LookupUtil.addLookupItem(lookup, actionItem, searchText = searchText)
                 }
-                true
             }
         }
     }
 
     override suspend fun getLookupItems(searchText: String): List<LookupActionItem> {
-        return readAction {
+        val normalizedSearchText = searchText.trim()
+        val openFiles = getOpenFileCandidates(normalizedSearchText)
+        val recentFiles = getRecentFileCandidates(normalizedSearchText, openFiles.isEmpty())
+        val providerMatches = fileSearchProvider.search(normalizedSearchText, MAX_SEARCH_FILES)
+        val providerFiles = readAction {
             val projectFileIndex = project.service<ProjectFileIndex>()
-            val matcher = NameUtil.buildMatcher("*$searchText").build()
-            val matchingFiles = mutableListOf<VirtualFile>()
-            val maxFiles = if (searchText.isNotEmpty()) MAX_SEARCH_FILES else Int.MAX_VALUE
-
-            projectFileIndex.iterateContent { file ->
-                if (matchingFiles.size >= maxFiles) {
-                    false
-                } else {
-                    if (!file.isDirectory &&
-                        settingsService.isVirtualFileVisible(file) &&
-                        !containsTag(file) &&
-                        (searchText.isEmpty() || matcher.matchingDegree(file.name) != Int.MIN_VALUE)
-                    ) {
-                        matchingFiles.add(file)
-                    }
-                    true
-                }
+            providerMatches.filter { candidate ->
+                isVisibleProjectFile(candidate.file, projectFileIndex)
             }
-
-            val openFiles = project.service<FileEditorManager>().openFiles
-                .filter {
-                    projectFileIndex.isInContent(it) &&
-                            settingsService.isVirtualFileVisible(it) &&
-                            !containsTag(it) &&
-                            (searchText.isEmpty() || matcher.matchingDegree(it.name) != Int.MIN_VALUE)
-                }
-
-            (matchingFiles + openFiles).distinctBy { it.path }.toFileSuggestions()
         }
+
+        val orderedCandidates = buildList {
+            if (normalizedSearchText.isEmpty()) {
+                addAll(openFiles)
+                addAll(recentFiles)
+            } else {
+                addAll(providerFiles)
+                addAll(openFiles)
+                addAll(recentFiles)
+            }
+        }.distinctBy { it.file.path }
+
+        return orderedCandidates.toFileSuggestions()
     }
 
     companion object {
         private const val MAX_SEARCH_FILES = 200
     }
 
+    private fun createMatcher(searchText: String): MinusculeMatcher {
+        return if (searchText.isEmpty()) {
+            NameUtil.buildMatcher("*").build()
+        } else {
+            NameUtil.buildMatcher("*$searchText").build()
+        }
+    }
+
+    private suspend fun getOpenFileCandidates(searchText: String): List<FileSearchCandidate> {
+        val matcher = createMatcher(searchText)
+        return readAction {
+            val projectFileIndex = project.service<ProjectFileIndex>()
+            project.service<FileEditorManager>().openFiles
+                .filter { file ->
+                    isVisibleProjectFile(file, projectFileIndex) && matcher.matches(file.name)
+                }
+                .map { file ->
+                    FileSearchCandidate(
+                        file = file,
+                        source = FileSearchSource.OPEN
+                    )
+                }
+        }
+    }
+
+    private suspend fun getRecentFileCandidates(
+        searchText: String,
+        onlyWhenNoOpenFiles: Boolean
+    ): List<FileSearchCandidate> {
+        if (!onlyWhenNoOpenFiles) {
+            return emptyList()
+        }
+
+        val matcher = createMatcher(searchText)
+        return readAction {
+            val projectFileIndex = project.service<ProjectFileIndex>()
+            EditorHistoryManager.getInstance(project).fileList
+                .asReversed()
+                .asSequence()
+                .filter { file ->
+                    isVisibleProjectFile(file, projectFileIndex) && matcher.matches(file.name)
+                }
+                .take(MAX_SEARCH_FILES)
+                .map { file ->
+                    FileSearchCandidate(
+                        file = file,
+                        source = FileSearchSource.RECENT
+                    )
+                }
+                .toList()
+        }
+    }
+
     private fun containsTag(file: VirtualFile): Boolean {
         return tagManager.containsTag(file)
     }
 
-    private fun Iterable<VirtualFile>.toFileSuggestions(): List<LookupActionItem> {
-        val selectedFileTags = TagUtil.getExistingTags(project, FileTagDetails::class.java)
-        return filter { file -> selectedFileTags.none { it.virtualFile == file } }
-            .map { FileActionItem(project, it) } + listOf(IncludeOpenFilesActionItem())
+    private fun isVisibleProjectFile(
+        file: VirtualFile,
+        projectFileIndex: ProjectFileIndex
+    ): Boolean {
+        return !file.isDirectory &&
+            projectFileIndex.isInContent(file) &&
+            settingsService.isVirtualFileVisible(file) &&
+            !containsTag(file)
+    }
+
+    private fun Iterable<FileSearchCandidate>.toFileSuggestions(): List<LookupActionItem> {
+        val selectedFileTags = getExistingTags(project, FileTagDetails::class.java)
+        val fileItems = filter { candidate ->
+            selectedFileTags.none { it.virtualFile == candidate.file }
+        }.map { candidate ->
+            FileActionItem(project, candidate.file, candidate.source)
+        }
+
+        return listOf(IncludeOpenFilesActionItem()) + fileItems
+    }
+
+    fun <T : TagDetails> getExistingTags(
+        project: Project,
+        tagClass: Class<T>
+    ): List<T> {
+        return project.service<ChatToolWindowContentManager>()
+            .tryFindActiveChatTabPanel()
+            .map { it.selectedTags }
+            .orElse(emptyList())
+            .filterIsInstance(tagClass)
     }
 }
