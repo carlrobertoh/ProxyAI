@@ -29,6 +29,7 @@ class SearchManager(
     private val featureType: FeatureType? = null,
 ) {
     private val fileSearchProvider = NativeFileSearchProvider(project)
+    private val foldersGroupItem = FoldersGroupItem(project, tagManager)
 
     companion object {
         private val logger = thisLogger()
@@ -42,7 +43,7 @@ class SearchManager(
 
     private fun getInlineEditGroups() = listOfNotNull(
         FilesGroupItem(project, tagManager, fileSearchProvider),
-        FoldersGroupItem(project, tagManager),
+        foldersGroupItem,
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
         DiagnosticsGroupItem(tagManager)
@@ -50,7 +51,7 @@ class SearchManager(
 
     private fun getAgentGroups() = listOfNotNull(
         FilesGroupItem(project, tagManager, fileSearchProvider),
-        FoldersGroupItem(project, tagManager),
+        foldersGroupItem,
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         MCPGroupItem(tagManager, FeatureType.AGENT),
         DiagnosticsGroupItem(tagManager),
@@ -59,7 +60,7 @@ class SearchManager(
 
     private fun getAllGroups() = listOfNotNull(
         FilesGroupItem(project, tagManager, fileSearchProvider),
-        FoldersGroupItem(project, tagManager),
+        foldersGroupItem,
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
@@ -227,6 +228,8 @@ class SearchManager(
         return when (result) {
             is ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem ->
                 "file:${result.file.path}"
+            is ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem ->
+                "folder:${result.folder.path}"
 
             else -> "${result::class.qualifiedName}:${result.displayName}"
         }
@@ -243,6 +246,12 @@ class SearchManager(
             null
         } else {
             searchText
+        }
+    }
+
+    fun matchesAnyDefaultGroup(searchText: String): Boolean {
+        return PromptTextFieldConstants.DEFAULT_GROUP_NAMES.any { groupName ->
+            groupName.startsWith(searchText, ignoreCase = true)
         }
     }
 

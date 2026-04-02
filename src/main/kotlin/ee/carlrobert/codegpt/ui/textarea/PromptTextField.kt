@@ -8,6 +8,7 @@ import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.components.service
@@ -70,6 +71,7 @@ class PromptTextField(
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val lookupManager = PromptTextFieldLookupManager(project, onLookupAdded)
     private val searchManager = SearchManager(project, tagManager, featureType)
+
     @Volatile
     private var isFieldDisposed = false
 
@@ -78,6 +80,7 @@ class PromptTextField(
 
     private var showSuggestionsJob: Job? = null
     private var searchState = SearchState()
+    private var activeLookupGroup: LookupGroupItem? = null
 
     val dispatcherId: UUID = UUID.randomUUID()
     var lookup: LookupImpl? = null
@@ -192,8 +195,8 @@ class PromptTextField(
                 lookup = lookupManager.showGroupLookup(
                     editor = editor,
                     lookupElements = lookupItems,
-                    onGroupSelected = { group, selectedText ->
-                        handleGroupSelected(group, selectedText)
+                    onGroupSelected = { group ->
+                        handleGroupSelected(group)
                     },
                     onWebActionSelected = { webAction ->
                         onLookupAdded(webAction)
@@ -213,7 +216,12 @@ class PromptTextField(
         editor?.let { editor ->
             try {
                 val existingLookup = lookup
-                val currentSearchText = searchManager.getSearchTextAfterAt(editor.document.text, editor.caretModel.offset)
+                val currentSearchText = runReadAction {
+                    searchManager.getSearchTextAfterAt(
+                        editor.document.text,
+                        editor.caretModel.offset
+                    )
+                }
                 if (existingLookup != null && existingLookup.isShown && !existingLookup.isLookupDisposed) {
                     if (currentSearchText == searchText) {
                         lookupManager.updateSearchResultsLookup(existingLookup, results)
@@ -229,30 +237,38 @@ class PromptTextField(
         }
     }
 
-    private fun handleGroupSelected(group: LookupGroupItem, searchText: String) {
+    private fun handleGroupSelected(group: LookupGroupItem) {
+        activeLookupGroup = group
+        searchState = searchState.copy(
+            isInSearchContext = true,
+            isInGroupLookupContext = true,
+            lastSearchText = ""
+        )
         showSuggestionsJob?.cancel()
         showSuggestionsJob = coroutineScope.launch {
-            showGroupSuggestions(group, searchText)
+            showGroupSuggestions(group)
         }
     }
 
-    private suspend fun showGroupSuggestions(group: LookupGroupItem, filterText: String = "") {
-        val suggestions = group.getLookupItems()
+    private suspend fun showGroupSuggestions(
+        group: LookupGroupItem,
+        searchText: String = ""
+    ) {
+        val suggestions = group.getLookupItems(searchText)
         if (suggestions.isEmpty()) {
             return
         }
 
-        val lookupElements = suggestions.map { it.createLookupElement(filterText) }.toTypedArray()
+        val lookupElements = suggestions.map { it.createLookupElement(searchText) }.toTypedArray()
 
         withContext(Dispatchers.Main) {
-            showSuggestionLookup(lookupElements, group, filterText)
+            showSuggestionLookup(lookupElements, group)
         }
     }
 
     private fun showSuggestionLookup(
         lookupElements: Array<LookupElement>,
         parentGroup: LookupGroupItem,
-        filterText: String = "",
     ) {
         editor?.let { editor ->
             searchState = searchState.copy(isInGroupLookupContext = true)
@@ -262,9 +278,8 @@ class PromptTextField(
                 lookupElements = lookupElements,
                 parentGroup = parentGroup,
                 onDynamicUpdate = { searchText ->
-                    handleDynamicUpdate(parentGroup, lookupElements, searchText, filterText)
-                },
-                filterText = filterText
+                    handleDynamicUpdate(parentGroup, lookupElements, searchText)
+                }
             )
 
             lookup?.addLookupListener(object : LookupListener {
@@ -278,8 +293,7 @@ class PromptTextField(
     private fun handleDynamicUpdate(
         parentGroup: LookupGroupItem,
         lookupElements: Array<LookupElement>,
-        searchText: String,
-        filterText: String
+        searchText: String
     ) {
         showSuggestionsJob?.cancel()
         showSuggestionsJob = coroutineScope.launch {
@@ -288,7 +302,7 @@ class PromptTextField(
                     parentGroup.updateLookupList(lookup!!, searchText)
                 } else if (searchText.isEmpty()) {
                     withContext(Dispatchers.Main) {
-                        showSuggestionLookup(lookupElements, parentGroup, filterText)
+                        showSuggestionLookup(lookupElements, parentGroup)
                     }
                 }
             }
@@ -561,9 +575,32 @@ class PromptTextField(
         val searchText = searchManager.getSearchTextAfterAt(text, caretOffset)
 
         when {
+            searchText != null && activeLookupGroup != null -> handleActiveGroupSearch(searchText)
             searchText != null && searchText.isEmpty() -> handleEmptySearch()
             !searchText.isNullOrEmpty() -> handleNonEmptySearch(searchText)
             searchText == null -> handleNoSearch()
+        }
+    }
+
+    private fun handleActiveGroupSearch(searchText: String) {
+        val group = activeLookupGroup ?: return
+        if (!searchState.isInSearchContext ||
+            !searchState.isInGroupLookupContext ||
+            searchState.lastSearchText != searchText
+        ) {
+            searchState = searchState.copy(
+                isInSearchContext = true,
+                isInGroupLookupContext = true,
+                lastSearchText = searchText
+            )
+
+            showSuggestionsJob?.cancel()
+            showSuggestionsJob = coroutineScope.launch {
+                if (searchText.isNotEmpty()) {
+                    delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
+                }
+                updateLookupWithGroupResults(group, searchText)
+            }
         }
     }
 
@@ -584,17 +621,19 @@ class PromptTextField(
 
     private fun handleNonEmptySearch(searchText: String) {
         if (!searchState.isInGroupLookupContext) {
-            if (!searchState.isInSearchContext || searchState.lastSearchText != searchText) {
-                searchState = searchState.copy(
-                    isInSearchContext = true,
-                    lastSearchText = searchText,
-                    isInGroupLookupContext = false
-                )
+            if (!searchManager.matchesAnyDefaultGroup(searchText)) {
+                if (!searchState.isInSearchContext || searchState.lastSearchText != searchText) {
+                    searchState = searchState.copy(
+                        isInSearchContext = true,
+                        lastSearchText = searchText,
+                        isInGroupLookupContext = false
+                    )
 
-                showSuggestionsJob?.cancel()
-                showSuggestionsJob = coroutineScope.launch {
-                    delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
-                    updateLookupWithSearchResults(searchText)
+                    showSuggestionsJob?.cancel()
+                    showSuggestionsJob = coroutineScope.launch {
+                        delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
+                        updateLookupWithSearchResults(searchText)
+                    }
                 }
             }
         }
@@ -603,6 +642,7 @@ class PromptTextField(
     private fun handleNoSearch() {
         if (searchState.isInSearchContext) {
             searchState = SearchState()
+            activeLookupGroup = null
             showSuggestionsJob?.cancel()
             hideLookupIfShown()
         }
@@ -617,6 +657,7 @@ class PromptTextField(
     }
 
     private suspend fun updateLookupWithGroups() {
+        activeLookupGroup = null
         val lookupItems = searchManager.getDefaultGroups()
             .map { it.createLookupElement() }
             .toTypedArray()
@@ -632,15 +673,9 @@ class PromptTextField(
                 lookup = lookupManager.showGroupLookup(
                     editor = editor,
                     lookupElements = lookupItems,
-                    onGroupSelected = { group, currentSearchText ->
-                        handleGroupSelected(
-                            group,
-                            currentSearchText
-                        )
-                    },
+                    onGroupSelected = { group -> handleGroupSelected(group) },
                     onWebActionSelected = { webAction -> onLookupAdded(webAction) },
                     onCodeAnalyzeSelected = { codeAnalyzeAction -> onLookupAdded(codeAnalyzeAction) },
-                    searchText = ""
                 )
             }
         }
@@ -664,10 +699,30 @@ class PromptTextField(
 
         val deferredHeavyResults = searchManager.performDeferredHeavySearch(searchText)
         if (deferredHeavyResults.isNotEmpty()) {
-            val allResults = searchManager.mergeResults(earlyResults, deferredHeavyResults, searchText)
+            val allResults =
+                searchManager.mergeResults(earlyResults, deferredHeavyResults, searchText)
             withContext(Dispatchers.Main) {
                 showGlobalSearchResults(allResults, searchText)
             }
+        }
+    }
+
+    private suspend fun updateLookupWithGroupResults(
+        group: LookupGroupItem,
+        searchText: String
+    ) {
+        val suggestions = group.getLookupItems(searchText)
+        if (suggestions.isEmpty()) {
+            withContext(Dispatchers.Main) {
+                hideLookupIfShown()
+            }
+            return
+        }
+
+        val lookupElements = suggestions.map { it.createLookupElement(searchText) }.toTypedArray()
+        withContext(Dispatchers.Main) {
+            hideLookupIfShown()
+            showSuggestionLookup(lookupElements, group)
         }
     }
 

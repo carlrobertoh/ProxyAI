@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.ui.textarea
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
@@ -59,20 +60,49 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
             .anyMatch { it.contains("/app/src/test/OpenVisible.kt") }
     }
 
-    fun `test files group should only suggest open files`() {
+    fun `test files group should prioritize open files and backfill with recent files`() {
+        val recentFile =
+            myFixture.addFileToProject("app/src/test/Recent.kt", "class Recent").virtualFile
         val openFile = myFixture.addFileToProject("app/src/test/Open.kt", "class Open").virtualFile
-        myFixture.addFileToProject("app/src/test/Closed.kt", "class Closed")
-        ApplicationManager.getApplication().invokeAndWait {
-            FileEditorManager.getInstance(project).openFile(openFile, true)
-        }
+        openThenCloseFiles(recentFile)
+        openFiles(openFile)
         val filesGroupItem = FilesGroupItem(project, TagManager())
 
         val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("") }
             .filterIsInstance<FileActionItem>()
 
         assertThat(fileSuggestions.map { it.file.path })
-            .anyMatch { it.endsWith("/app/src/test/Open.kt") }
-            .noneMatch { it.endsWith("/app/src/test/Closed.kt") }
+            .containsSequence(
+                openFile.path,
+                recentFile.path
+            )
+        assertThat(fileSuggestions.first().source).isEqualTo(FileSearchSource.OPEN)
+        assertThat(fileSuggestions[1].source).isEqualTo(FileSearchSource.RECENT)
+    }
+
+    fun `test files group should cap blank suggestions at 15 open files and backfill to 25 with recent files`() {
+        val openProjectFiles = (1..20).map { index ->
+            myFixture.addFileToProject("app/src/test/Open$index.kt", "class Open$index").virtualFile
+        }
+        val recentFiles = (1..20).map { index ->
+            myFixture.addFileToProject(
+                "app/src/test/Recent$index.kt",
+                "class Recent$index"
+            ).virtualFile
+        }
+
+        recentFiles.forEach { file -> openThenCloseFiles(file) }
+        openFiles(*openProjectFiles.toTypedArray())
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("") }
+            .filterIsInstance<FileActionItem>()
+
+        assertThat(fileSuggestions).hasSize(25)
+        assertThat(fileSuggestions.take(15).map { it.source })
+            .allMatch { it == FileSearchSource.OPEN }
+        assertThat(fileSuggestions.drop(15).map { it.source })
+            .allMatch { it == FileSearchSource.RECENT }
     }
 
     fun `test files group typed search should include closed project files even when files are open`() {
@@ -146,11 +176,52 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
 
         val folderSuggestions = runBlocking { foldersGroupItem.getLookupItems("src") }
             .filterIsInstance<FolderActionItem>()
-            .mapNotNull { extractFolderPath(it) }
+            .map { it.folder.path }
 
         assertThat(folderSuggestions)
             .noneMatch { it.endsWith("/app/src/main") }
             .anyMatch { it.endsWith("/app/src/test") }
+    }
+
+    fun `test folders group should include folders added after the first lookup`() {
+        myFixture.addFileToProject("app/src/main/Existing.kt", "class Existing")
+        val foldersGroupItem = FoldersGroupItem(project, TagManager())
+
+        runBlocking { foldersGroupItem.getLookupItems("src") }
+        myFixture.addFileToProject("app/docs/NewDoc.kt", "class NewDoc")
+
+        val folderSuggestions = runBlocking { foldersGroupItem.getLookupItems("docs") }
+            .filterIsInstance<FolderActionItem>()
+            .map { it.folder.path }
+
+        assertThat(folderSuggestions)
+            .anyMatch { it.endsWith("/app/docs") }
+    }
+
+    fun `test merge results should keep folders with the same display name`() {
+        val appResourcesFolder =
+            myFixture.addFileToProject("app/src/main/resources/Config.kt", "class Config")
+                .virtualFile.parent
+        val libResourcesFolder =
+            myFixture.addFileToProject("lib/src/test/resources/TestConfig.kt", "class TestConfig")
+                .virtualFile.parent
+        val searchManager = SearchManager(project, TagManager())
+
+        val mergedResults = searchManager.mergeResults(
+            primaryResults = emptyList(),
+            secondaryResults = listOf(
+                FolderActionItem(project, appResourcesFolder),
+                FolderActionItem(project, libResourcesFolder)
+            ),
+            searchText = "resources"
+        )
+
+        val folderSuggestions = mergedResults.filterIsInstance<FolderActionItem>()
+            .map { it.folder.path }
+
+        assertThat(folderSuggestions)
+            .anyMatch { it.endsWith("/app/src/main/resources") }
+            .anyMatch { it.endsWith("/lib/src/test/resources") }
     }
 
     fun `test folder tag processor should skip ignored child files`() {
@@ -171,12 +242,21 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
             .anyMatch { it.endsWith("/app/src/test/Visible.kt") }
     }
 
-    private fun extractFolderPath(item: FolderActionItem): String? {
-        return runCatching {
-            val field = FolderActionItem::class.java.getDeclaredField("folder")
-            field.isAccessible = true
-            (field.get(item) as? com.intellij.openapi.vfs.VirtualFile)?.path
-        }.getOrNull()
+    private fun openFiles(vararg files: VirtualFile) {
+        ApplicationManager.getApplication().invokeAndWait {
+            val fileEditorManager = FileEditorManager.getInstance(project)
+            files.forEach { file -> fileEditorManager.openFile(file, true) }
+        }
+    }
+
+    private fun openThenCloseFiles(vararg files: VirtualFile) {
+        ApplicationManager.getApplication().invokeAndWait {
+            val fileEditorManager = FileEditorManager.getInstance(project)
+            files.forEach { file ->
+                fileEditorManager.openFile(file, true)
+                fileEditorManager.closeFile(file)
+            }
+        }
     }
 
     private fun writeSettings(ignoreEntries: List<String>): File {

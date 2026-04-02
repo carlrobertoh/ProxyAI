@@ -56,7 +56,6 @@ class FilesGroupItem(
     override suspend fun getLookupItems(searchText: String): List<LookupActionItem> {
         val normalizedSearchText = searchText.trim()
         val openFiles = getOpenFileCandidates(normalizedSearchText)
-        val recentFiles = getRecentFileCandidates(normalizedSearchText, openFiles.isEmpty())
         val providerMatches = fileSearchProvider.search(normalizedSearchText, MAX_SEARCH_FILES)
         val providerFiles = readAction {
             val projectFileIndex = project.service<ProjectFileIndex>()
@@ -65,22 +64,31 @@ class FilesGroupItem(
             }
         }
 
-        val orderedCandidates = buildList {
-            if (normalizedSearchText.isEmpty()) {
-                addAll(openFiles)
-                addAll(recentFiles)
+        val orderedCandidates = if (normalizedSearchText.isEmpty()) {
+            buildDefaultCandidates(
+                openFiles = openFiles,
+                recentFiles = getRecentFileCandidates(normalizedSearchText)
+            )
+        } else {
+            val recentFiles = if (openFiles.isEmpty()) {
+                getRecentFileCandidates(normalizedSearchText)
             } else {
+                emptyList()
+            }
+            buildList {
                 addAll(providerFiles)
                 addAll(openFiles)
                 addAll(recentFiles)
-            }
-        }.distinctBy { it.file.path }
+            }.distinctBy { it.file.path }
+        }
 
         return orderedCandidates.toFileSuggestions()
     }
 
     companion object {
         private const val MAX_SEARCH_FILES = 200
+        private const val MAX_DEFAULT_FILE_SUGGESTIONS = 25
+        private const val MAX_OPEN_FILE_SUGGESTIONS = 15
     }
 
     private fun createMatcher(searchText: String): MinusculeMatcher {
@@ -108,14 +116,7 @@ class FilesGroupItem(
         }
     }
 
-    private suspend fun getRecentFileCandidates(
-        searchText: String,
-        onlyWhenNoOpenFiles: Boolean
-    ): List<FileSearchCandidate> {
-        if (!onlyWhenNoOpenFiles) {
-            return emptyList()
-        }
-
+    private suspend fun getRecentFileCandidates(searchText: String): List<FileSearchCandidate> {
         val matcher = createMatcher(searchText)
         return readAction {
             val projectFileIndex = project.service<ProjectFileIndex>()
@@ -134,6 +135,19 @@ class FilesGroupItem(
                 }
                 .toList()
         }
+    }
+
+    private fun buildDefaultCandidates(
+        openFiles: List<FileSearchCandidate>,
+        recentFiles: List<FileSearchCandidate>
+    ): List<FileSearchCandidate> {
+        val prioritizedOpenFiles = openFiles.take(MAX_OPEN_FILE_SUGGESTIONS)
+        val openFilePaths = prioritizedOpenFiles.mapTo(mutableSetOf()) { it.file.path }
+        val recentBackfill = recentFiles
+            .filterNot { it.file.path in openFilePaths }
+            .take(MAX_DEFAULT_FILE_SUGGESTIONS - prioritizedOpenFiles.size)
+
+        return prioritizedOpenFiles + recentBackfill
     }
 
     private fun containsTag(file: VirtualFile): Boolean {

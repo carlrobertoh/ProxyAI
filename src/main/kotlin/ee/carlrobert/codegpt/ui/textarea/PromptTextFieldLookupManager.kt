@@ -1,9 +1,9 @@
 package ee.carlrobert.codegpt.ui.textarea
 
+import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.codeInsight.lookup.*
 import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.codeInsight.lookup.impl.PrefixChangeListener
-import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.Editor
@@ -12,10 +12,7 @@ import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
-import ee.carlrobert.codegpt.ui.textarea.FileSearchSource
-import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupUtil
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
@@ -34,21 +31,32 @@ class PromptTextFieldLookupManager(
         lookupElements: Array<LookupElement>,
         searchText: String
     ): LookupImpl = runReadAction {
-        LookupManager.getInstance(project).createLookup(
+        val lookup = LookupManager.getInstance(project).createLookup(
             editor,
             lookupElements,
             searchText,
             LookupArranger.DefaultArranger()
         ) as LookupImpl
+
+        lookup.addLookupListener(object : LookupListener {
+            override fun itemSelected(event: LookupEvent) {
+                val suggestion =
+                    event.item?.getUserData(LookupItem.KEY) as? LookupActionItem ?: return
+
+                replaceAtSymbolWithSearch(editor, suggestion)
+                onLookupAdded(suggestion)
+            }
+        })
+
+        lookup
     }
 
     fun showGroupLookup(
         editor: Editor,
         lookupElements: Array<LookupElement>,
-        onGroupSelected: (group: LookupGroupItem, searchText: String) -> Unit,
+        onGroupSelected: (group: LookupGroupItem) -> Unit,
         onWebActionSelected: (WebActionItem) -> Unit,
         onCodeAnalyzeSelected: (CodeAnalyzeActionItem) -> Unit,
-        searchText: String = ""
     ): LookupImpl {
         val lookup = createLookup(editor, lookupElements, "")
 
@@ -61,7 +69,7 @@ class PromptTextFieldLookupManager(
                 when (suggestion) {
                     is WebActionItem -> onWebActionSelected(suggestion)
                     is CodeAnalyzeActionItem -> onCodeAnalyzeSelected(suggestion)
-                    is LookupGroupItem -> onGroupSelected(suggestion, searchText)
+                    is LookupGroupItem -> onGroupSelected(suggestion)
                     is LookupActionItem -> onLookupAdded(suggestion)
                 }
             }
@@ -79,26 +87,6 @@ class PromptTextFieldLookupManager(
     ): LookupImpl {
         val lookupElements = results.toPrioritizedLookupElements(searchText)
         val lookup = createLookup(editor, lookupElements, "")
-
-        lookup.addLookupListener(object : LookupListener {
-            override fun itemSelected(event: LookupEvent) {
-                val lookupString = event.item?.lookupString ?: return
-                val suggestion =
-                    event.item?.getUserData(LookupItem.KEY) as? LookupActionItem ?: return
-
-                val offset = editor.caretModel.offset
-                val start = offset - lookupString.length
-                if (start >= 0) {
-                    runUndoTransparentWriteAction {
-                        editor.document.deleteString(start, offset)
-                    }
-                }
-
-                replaceAtSymbolWithSearch(editor, suggestion, searchText)
-                onLookupAdded(suggestion)
-            }
-        })
-
         lookup.refreshUi(false, true)
         lookup.showLookup()
         return lookup
@@ -131,30 +119,9 @@ class PromptTextFieldLookupManager(
         editor: Editor,
         lookupElements: Array<LookupElement>,
         parentGroup: LookupGroupItem,
-        onDynamicUpdate: (String) -> Unit,
-        filterText: String = ""
+        onDynamicUpdate: (String) -> Unit
     ): LookupImpl {
-        val lookup = createLookup(editor, lookupElements, filterText)
-
-        lookup.addLookupListener(object : LookupListener {
-            override fun itemSelected(event: LookupEvent) {
-                val lookupString = event.item?.lookupString ?: return
-                val suggestion =
-                    event.item?.getUserData(LookupItem.KEY) as? LookupActionItem ?: return
-
-                val offset = editor.caretModel.offset
-                val start = offset - lookupString.length
-                if (start >= 0) {
-                    runUndoTransparentWriteAction {
-                        editor.document.deleteString(start, offset)
-                    }
-                }
-
-                replaceAtSymbolWithSearch(editor, suggestion, filterText)
-                onLookupAdded(suggestion)
-            }
-        })
-
+        val lookup = createLookup(editor, lookupElements, "")
         if (parentGroup is DynamicLookupGroupItem) {
             setupDynamicLookupListener(lookup, onDynamicUpdate)
         }
@@ -196,7 +163,7 @@ class PromptTextFieldLookupManager(
         val text = editor.document.text
         val caretOffset = editor.caretModel.offset
         val atIndex = text.lastIndexOf(PromptTextFieldConstants.AT_SYMBOL)
-        return if (atIndex >= 0 && atIndex < caretOffset) {
+        return if (atIndex in 0..<caretOffset) {
             text.substring(atIndex + 1, caretOffset)
         } else {
             ""
@@ -205,8 +172,7 @@ class PromptTextFieldLookupManager(
 
     private fun replaceAtSymbolWithSearch(
         editor: Editor,
-        lookupItem: LookupItem,
-        searchText: String
+        lookupItem: LookupItem
     ) {
         val atPos = findAtSymbolPosition(editor)
         if (atPos >= 0) {
@@ -247,7 +213,7 @@ class PromptTextFieldLookupManager(
     private fun List<LookupActionItem>.toPrioritizedLookupElements(
         searchText: String
     ): Array<LookupElement> {
-        return mapIndexed<LookupActionItem, LookupElement> { index, result ->
+        return mapIndexed { index, result ->
             PrioritizedLookupElement.withPriority(
                 result.createLookupElement(searchText),
                 resultPriority(result, index, size)
@@ -275,6 +241,7 @@ class PromptTextFieldLookupManager(
     private fun resultKey(result: LookupActionItem): String {
         return when (result) {
             is FileActionItem -> "file:${result.file.path}"
+            is FolderActionItem -> "folder:${result.folder.path}"
             else -> "${result::class.qualifiedName}:${result.displayName}"
         }
     }
