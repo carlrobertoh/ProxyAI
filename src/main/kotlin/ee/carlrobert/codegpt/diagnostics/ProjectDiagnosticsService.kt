@@ -1,10 +1,11 @@
 package ee.carlrobert.codegpt.diagnostics
 
-import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
+import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerEx
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
@@ -101,14 +102,8 @@ class ProjectDiagnosticsService(
                                 error = "No PSI file found for: ${virtualFile.path}"
                             )
 
-                        val rangeHighlights = DaemonCodeAnalyzerImpl.getHighlights(
-                            document,
-                            filter.minimumSeverity(),
-                            project
-                        )
-
-                        val fileLevel = getFileLevelHighlights(psiFile)
-                        val highlights = (rangeHighlights.asSequence() + fileLevel.asSequence())
+                        val highlights = collectHighlights(document, filter.minimumSeverity())
+                            .asSequence()
                             .filter { filter.includes(it.severity) }
                             .mapNotNull { highlight ->
                                 extractMessage(highlight)?.let { message ->
@@ -181,20 +176,22 @@ class ProjectDiagnosticsService(
         }
     }
 
-    private fun getFileLevelHighlights(psiFile: com.intellij.psi.PsiFile): List<HighlightInfo> {
-        return try {
-            val method = DaemonCodeAnalyzerImpl::class.java.methods.firstOrNull {
-                it.name == "getFileLevelHighlights" && it.parameterCount == 2
-            }
-            if (method != null) {
-                @Suppress("UNCHECKED_CAST")
-                method.invoke(null, project, psiFile) as? List<HighlightInfo> ?: emptyList()
-            } else {
-                emptyList()
-            }
-        } catch (_: Throwable) {
-            emptyList()
+    private fun collectHighlights(
+        document: Document,
+        minimumSeverity: HighlightSeverity
+    ): List<HighlightInfo> {
+        val highlights = mutableListOf<HighlightInfo>()
+        DaemonCodeAnalyzerEx.processHighlights(
+            document,
+            project,
+            minimumSeverity,
+            0,
+            document.textLength
+        ) { highlight ->
+            highlights.add(highlight)
+            true
         }
+        return highlights
     }
 
     private fun extractMessage(info: HighlightInfo): String? {

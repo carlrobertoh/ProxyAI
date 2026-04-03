@@ -3,22 +3,11 @@ package ee.carlrobert.codegpt.inlineedit
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.editor.Editor
 import ee.carlrobert.codegpt.CodeGPTKeys
-import java.awt.event.InputEvent
-import java.awt.event.KeyEvent
-import javax.swing.KeyStroke
 
 /**
  * Keyboard shortcuts for Inline Edit diff feature.
  */
 class AcceptAllInlineEditAction : AnAction() {
-    init {
-        val keyStroke = KeyStroke.getKeyStroke(
-            KeyEvent.VK_ENTER,
-            InputEvent.META_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
-        )
-        shortcutSet = CustomShortcutSet(KeyboardShortcut(keyStroke, null))
-    }
-
     override fun actionPerformed(e: AnActionEvent) {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         val session =
@@ -53,14 +42,6 @@ class AcceptAllInlineEditAction : AnAction() {
 }
 
 class RejectAllInlineEditAction : AnAction() {
-    init {
-        val keyStroke = KeyStroke.getKeyStroke(
-            KeyEvent.VK_BACK_SPACE,
-            InputEvent.META_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
-        )
-        shortcutSet = CustomShortcutSet(KeyboardShortcut(keyStroke, null))
-    }
-
     override fun actionPerformed(e: AnActionEvent) {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         val session =
@@ -89,11 +70,6 @@ class RejectAllInlineEditAction : AnAction() {
 }
 
 class RejectInlineEditAction : AnAction() {
-    init {
-        val keyStroke = KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0)
-        shortcutSet = CustomShortcutSet(KeyboardShortcut(keyStroke, null))
-    }
-
     override fun actionPerformed(e: AnActionEvent) {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER)?.rejectNext()
@@ -110,14 +86,6 @@ class RejectInlineEditAction : AnAction() {
 }
 
 class AcceptCurrentInlineEditAction : AnAction() {
-    init {
-        val keyStroke = KeyStroke.getKeyStroke(
-            KeyEvent.VK_ENTER,
-            InputEvent.META_DOWN_MASK
-        )
-        shortcutSet = CustomShortcutSet(KeyboardShortcut(keyStroke, null))
-    }
-
     override fun actionPerformed(e: AnActionEvent) {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER)?.acceptNext()
@@ -134,14 +102,6 @@ class AcceptCurrentInlineEditAction : AnAction() {
 }
 
 class RejectCurrentInlineEditAction : AnAction() {
-    init {
-        val keyStroke = KeyStroke.getKeyStroke(
-            KeyEvent.VK_BACK_SPACE,
-            InputEvent.META_DOWN_MASK
-        )
-        shortcutSet = CustomShortcutSet(KeyboardShortcut(keyStroke, null))
-    }
-
     override fun actionPerformed(e: AnActionEvent) {
         val editor = e.getData(CommonDataKeys.EDITOR) ?: return
         editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_RENDERER)?.rejectNext()

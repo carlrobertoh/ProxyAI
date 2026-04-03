@@ -4,7 +4,6 @@ import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.codeInsight.lookup.LookupElementPresentation
-import com.intellij.openapi.util.TextRange
 import com.intellij.psi.codeStyle.NameUtil
 import com.intellij.codeInsight.lookup.LookupElementRenderer
 
@@ -19,7 +18,7 @@ abstract class AbstractLookupItem : LookupItem {
                     presentation: LookupElementPresentation
                 ) {
                     setPresentation(element, presentation)
-                    highlightMatches(presentation, searchText)
+                    emphasizeMatch(presentation, searchText)
                 }
             })
             .apply {
@@ -28,7 +27,7 @@ abstract class AbstractLookupItem : LookupItem {
         return PrioritizedLookupElement.withPriority(lookupElement, 1.0)
     }
 
-    private fun highlightMatches(
+    private fun emphasizeMatch(
         presentation: LookupElementPresentation,
         searchText: String
     ) {
@@ -38,14 +37,9 @@ abstract class AbstractLookupItem : LookupItem {
         }
 
         val matcher = NameUtil.buildMatcher("*$normalizedSearchText").build()
-        matcher.matchingFragments(displayName)
-            ?.asReversed()
-            ?.forEach { range: TextRange ->
-                presentation.decorateItemTextRange(
-                    range,
-                    LookupElementPresentation.LookupItemDecoration.HIGHLIGHT_MATCHED
-                )
-            }
+        if (matcher.matchingFragments(displayName) != null) {
+            presentation.isItemTextBold = true
+        }
     }
 
     abstract fun getLookupString(): String

@@ -1,17 +1,16 @@
 package ee.carlrobert.codegpt.toolwindow.chat.editor.header
 
-import com.intellij.codeInsight.documentation.DocumentationHintEditorPane
-import com.intellij.lang.documentation.DocumentationImageResolver
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
-import com.intellij.ui.popup.PopupFactoryImpl
+import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
-import java.awt.Image
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
+import javax.swing.JEditorPane
 import javax.swing.Timer
 
 class ErrorPopoverHandler(
@@ -54,24 +53,23 @@ class ErrorPopoverHandler(
         if (errorContent == null) return
         if (errorPopup?.isVisible == true) return
 
-        val documentationHint = DocumentationHintEditorPane(
-            project,
-            emptyMap(),
-            object : DocumentationImageResolver {
-                override fun resolveImage(url: String): Image? = null
-            }
-        ).apply {
-            setText(errorContent)
+        val contentPane = JEditorPane("text/html", formatContent(errorContent)).apply {
             isEditable = false
             isOpaque = true
             border = JBUI.Borders.emptyTop(10)
             foreground = UIUtil.getToolTipForeground()
             background = UIUtil.getToolTipActionBackground()
             font = UIUtil.getToolTipFont()
+            putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, true)
+        }
+        val scrollPane = JBScrollPane(contentPane).apply {
+            border = JBUI.Borders.empty()
+            viewport.background = UIUtil.getToolTipActionBackground()
+            background = UIUtil.getToolTipActionBackground()
         }
 
-        val popup = PopupFactoryImpl.getInstance()
-            .createComponentPopupBuilder(documentationHint, null)
+        val popup = JBPopupFactory.getInstance()
+            .createComponentPopupBuilder(scrollPane, null)
             .setRequestFocus(false)
             .setResizable(true)
             .setMovable(true)
@@ -80,9 +78,7 @@ class ErrorPopoverHandler(
             .setCancelOnClickOutside(true)
             .createPopup()
 
-        documentationHint.setHint(popup)
-
-        documentationHint.addMouseListener(object : MouseAdapter() {
+        val popupHoverListener = object : MouseAdapter() {
             override fun mouseEntered(e: MouseEvent) {
                 errorLabel.putClientProperty("popupMouseInside", true)
             }
@@ -91,9 +87,33 @@ class ErrorPopoverHandler(
                 errorLabel.putClientProperty("popupMouseInside", false)
                 schedulePopupCloseIfNeeded()
             }
-        })
+        }
+        contentPane.addMouseListener(popupHoverListener)
+        scrollPane.addMouseListener(popupHoverListener)
 
         errorPopup = popup
         popup.showUnderneathOf(errorLabel)
+    }
+
+    private fun formatContent(content: String): String {
+        return if (content.trimStart().startsWith("<html", ignoreCase = true)) {
+            content
+        } else {
+            val escaped = buildString(content.length) {
+                content.forEach { ch ->
+                    append(
+                        when (ch) {
+                            '<' -> "&lt;"
+                            '>' -> "&gt;"
+                            '&' -> "&amp;"
+                            '"' -> "&quot;"
+                            else -> ch
+                        }
+                    )
+                }
+            }.replace("\n", "<br/>")
+
+            "<html><body>$escaped</body></html>"
+        }
     }
 }

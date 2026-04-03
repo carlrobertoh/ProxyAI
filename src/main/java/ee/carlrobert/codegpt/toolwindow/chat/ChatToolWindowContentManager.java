@@ -6,7 +6,6 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComponentContainer;
-import com.intellij.openapi.wm.RegisterToolWindowTask;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowAnchor;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -17,6 +16,7 @@ import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings;
+import ee.carlrobert.codegpt.toolwindow.ProxyAIToolWindowFactory;
 import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState;
 import java.util.Arrays;
 import java.util.Objects;
@@ -113,13 +113,18 @@ public final class ChatToolWindowContentManager {
   public @NotNull ToolWindow getToolWindow() {
     var toolWindowManager = ToolWindowManager.getInstance(project);
     var toolWindow = toolWindowManager.getToolWindow("ProxyAI");
-    // https://intellij-support.jetbrains.com/hc/en-us/community/posts/11533368171026/comments/11538403084562
-    return Objects.requireNonNullElseGet(toolWindow, () -> toolWindowManager
-        .registerToolWindow(RegisterToolWindowTask.closable(
-            "ProxyAI",
-            () -> CodeGPTBundle.get("project.label"),
-            Icons.DefaultSmall,
-            ToolWindowAnchor.RIGHT)));
+    if (toolWindow != null) {
+      return toolWindow;
+    }
+
+    var registeredToolWindow = toolWindowManager.registerToolWindow(
+        "ProxyAI",
+        true,
+        ToolWindowAnchor.RIGHT);
+    registeredToolWindow.setIcon(Icons.DefaultSmall);
+    registeredToolWindow.setStripeTitle(CodeGPTBundle.get("project.label"));
+    new ProxyAIToolWindowFactory().createToolWindowContent(project, registeredToolWindow);
+    return registeredToolWindow;
   }
 
   private Optional<Content> tryFindFirstChatTabContent() {

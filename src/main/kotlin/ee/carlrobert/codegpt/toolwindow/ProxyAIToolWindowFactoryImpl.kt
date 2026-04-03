@@ -7,26 +7,14 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
-import ee.carlrobert.codegpt.conversations.Conversation
-import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowPanel
 import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowPanel
 import ee.carlrobert.codegpt.toolwindow.history.ChatHistoryToolWindow
-import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import javax.swing.JComponent
-
-data class ToolWindowInitialState @JvmOverloads constructor(
-    val conversation: Conversation,
-    val tags: List<TagDetails> = emptyList(),
-    val chatMode: ChatMode? = null,
-)
 
 class ProxyAIToolWindowFactory : ToolWindowFactory, DumbAware {
 
-    override fun createToolWindowContent(
-        project: Project,
-        toolWindow: ToolWindow
-    ) {
+    override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val agentToolWindowPanel = AgentToolWindowPanel(project).also {
             Disposer.register(toolWindow.disposable, it)
         }
@@ -51,8 +39,7 @@ class ProxyAIToolWindowFactory : ToolWindowFactory, DumbAware {
     }
 
     private fun addContent(toolWindow: ToolWindow, panel: JComponent, displayName: String) {
-        toolWindow.contentManager.let {
-            it.addContent(it.factory.createContent(panel, displayName, false))
-        }
+        val contentManager = toolWindow.contentManager
+        contentManager.addContent(contentManager.factory.createContent(panel, displayName, false))
     }
 }

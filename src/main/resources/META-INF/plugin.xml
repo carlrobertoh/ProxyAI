@@ -7,7 +7,6 @@
   <depends optional="true" config-file="plugin-kotlin.xml">org.jetbrains.kotlin</depends>
   <depends optional="true" config-file="plugin-java.xml">com.intellij.modules.java</depends>
   <depends optional="true" config-file="plugin-javascript.xml">JavaScript</depends>
-  <depends optional="true" config-file="plugin-cpp.xml">com.intellij.modules.cpp</depends>
   <!--    <depends optional="true" config-file="plugin-go.xml">org.jetbrains.plugins.go</depends>-->
   <!--    <depends optional="true" config-file="plugin-ruby.xml">com.intellij.modules.ruby</depends>-->
   <!--    <depends optional="true" config-file="plugin-php.xml">com.jetbrains.php</depends>-->
