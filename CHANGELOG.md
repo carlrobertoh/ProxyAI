@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.0-241.1] - 2026-04-02
+
 ### Added
 
 - Agent Client Protocol (ACP) support for external coding agents
@@ -1312,7 +1314,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.5-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.8.0-241.1...HEAD
+[3.8.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.5-241.1...v3.8.0-241.1
 [3.7.5-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.4-241.1...v3.7.5-241.1
 [3.7.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.3-241.1...v3.7.4-241.1
 [3.7.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.7.2-241.1...v3.7.3-241.1
