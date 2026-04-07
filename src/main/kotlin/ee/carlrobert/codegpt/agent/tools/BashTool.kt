@@ -565,7 +565,7 @@ class BashTool(
                     ?: "C:\\Windows"
                 listOf("$systemRoot\\System32\\cmd.exe", "/c", command)
             }
-
+            osName.contains("bsd") -> listOf("sh", "-c", command)
             else -> listOf("bash", "-c", command)
         }
     }
