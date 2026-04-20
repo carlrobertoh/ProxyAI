@@ -46,6 +46,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 @Service(Service.Level.PROJECT)
 class ExternalAcpAgentService(private val project: Project) {
@@ -134,7 +135,11 @@ class ExternalAcpAgentService(private val project: Project) {
     }
 
     fun closeSession(sessionId: String) {
-        states.remove(sessionId)?.close()
+        states.remove(sessionId)?.let { state ->
+            scope.launch {
+                state.close()
+            }
+        }
         sessionSetupMutexes.remove(sessionId)
     }
 
@@ -850,8 +855,23 @@ class ExternalAcpAgentService(private val project: Project) {
         }
 
         fun close() {
-            protocol.close()
-            process.destroy()
+            shutdownProcess()
+            runCatching {
+                protocol.close()
+            }.onFailure { throwable ->
+                logger.warn("Failed to close ACP protocol for ${preset.displayName}", throwable)
+            }
+        }
+
+        private fun shutdownProcess() {
+            runCatching {
+                process.destroy()
+                if (!process.waitFor(500, TimeUnit.MILLISECONDS)) {
+                    process.destroyForcibly()
+                }
+            }.onFailure { throwable ->
+                logger.warn("Failed to stop ACP process for ${preset.displayName}", throwable)
+            }
         }
     }
 
