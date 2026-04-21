@@ -53,7 +53,7 @@ class SearchManager(
         FilesGroupItem(project, tagManager, fileSearchProvider),
         foldersGroupItem,
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
-        MCPGroupItem(tagManager, FeatureType.AGENT),
+        MCPGroupItem(tagManager),
         DiagnosticsGroupItem(tagManager),
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
@@ -64,7 +64,7 @@ class SearchManager(
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
-        MCPGroupItem(tagManager, featureType ?: FeatureType.CHAT),
+        MCPGroupItem(tagManager),
         DiagnosticsGroupItem(tagManager),
         WebActionItem(tagManager),
         ImageActionItem(project, tagManager)
@@ -118,9 +118,12 @@ class SearchManager(
 
         return try {
             fileGroup.getLookupItems(searchText)
-                .filterIsInstance<LookupActionItem>()
                 .filter { result ->
-                    result !is IncludeOpenFilesActionItem || matchesSearchText(result, searchText, matcher)
+                    result !is IncludeOpenFilesActionItem || matchesSearchText(
+                        result,
+                        searchText,
+                        matcher
+                    )
                 }
         } catch (e: CancellationException) {
             throw e
@@ -130,27 +133,31 @@ class SearchManager(
         }
     }
 
-    suspend fun performDeferredHeavySearch(searchText: String): List<LookupActionItem> = coroutineScope {
-        val deferredGroups = getDefaultGroups()
-            .filter { it is FoldersGroupItem || it is GitGroupItem }
+    suspend fun performDeferredHeavySearch(searchText: String): List<LookupActionItem> =
+        coroutineScope {
+            val deferredGroups = getDefaultGroups()
+                .filter { it is FoldersGroupItem || it is GitGroupItem }
 
-        deferredGroups.map { group ->
-            async {
-                try {
-                    if (group is LookupGroupItem) {
-                        group.getLookupItems(searchText).filterIsInstance<LookupActionItem>()
-                    } else {
+            deferredGroups.map { group ->
+                async {
+                    try {
+                        if (group is LookupGroupItem) {
+                            group.getLookupItems(searchText).filterIsInstance<LookupActionItem>()
+                        } else {
+                            emptyList()
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        logger.error(
+                            "Error getting deferred results from ${group::class.simpleName}",
+                            e
+                        )
                         emptyList()
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    logger.error("Error getting deferred results from ${group::class.simpleName}", e)
-                    emptyList()
                 }
-            }
-        }.flatMap { it.await() }
-    }
+            }.flatMap { it.await() }
+        }
 
     fun mergeResults(
         primaryResults: List<LookupActionItem>,
@@ -228,6 +235,7 @@ class SearchManager(
         return when (result) {
             is ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem ->
                 "file:${result.file.path}"
+
             is ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem ->
                 "folder:${result.folder.path}"
 
