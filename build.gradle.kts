@@ -59,7 +59,7 @@ changelog {
 
 dependencies {
     intellijPlatform {
-        intellijIdeaCommunity(properties("platformVersion"))
+        intellijIdea(properties("platformVersion"))
 
         bundledPlugin("com.intellij.java")
         bundledPlugin("org.jetbrains.kotlin")
@@ -98,6 +98,7 @@ dependencies {
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
         exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-jdk8")
     }
+    implementation(libs.koog.serialization.jackson)
     implementation(libs.jsoup)
     implementation(libs.commons.text)
     implementation(libs.jtokkit)

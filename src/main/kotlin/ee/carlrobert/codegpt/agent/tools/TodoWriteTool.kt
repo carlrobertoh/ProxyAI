@@ -14,9 +14,7 @@ class TodoWriteTool(
     hookManager: HookManager
 ) : BaseTool<TodoWriteTool.Args, String>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = String.serializer(),
-    name = "TodoWrite",
+    name = NAME,
     description = """
 Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
 It also helps the user understand the progress of the task and overall progress of their requests.
@@ -47,6 +45,10 @@ NOTE that you should not use this tool if there is only one trivial task to do. 
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
+
+    companion object {
+        const val NAME = "TodoWrite"
+    }
 
     private val agentTabTitlePublisher =
         project.messageBus.syncPublisher(AgentTabTitleNotifier.AGENT_TAB_TITLE_TOPIC)

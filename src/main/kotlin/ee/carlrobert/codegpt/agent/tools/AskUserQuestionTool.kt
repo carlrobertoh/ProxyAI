@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import ee.carlrobert.codegpt.agent.AgentEvents
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import kotlinx.serialization.Serializable
@@ -12,9 +13,7 @@ class AskUserQuestionTool(
     private val events: AgentEvents,
 ) : BaseTool<AskUserQuestionTool.Args, AskUserQuestionTool.Result>(
     workingDirectory = workingDirectory,
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "AskUserQuestion",
+    name = NAME,
     description = """
         Use this tool when you need to ask the user questions during execution. This allows you to:
         1. Gather user preferences or requirements
@@ -32,6 +31,10 @@ class AskUserQuestionTool(
     hookManager = hookManager,
     sessionId = sessionId
 ) {
+
+    companion object {
+        const val NAME = "AskUserQuestion"
+    }
 
     @Serializable
     data class Option(
@@ -106,7 +109,7 @@ class AskUserQuestionTool(
         return Result.Error(deniedReason)
     }
 
-    override fun encodeResultToString(result: Result): String = when (result) {
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String = when (result) {
         is Result.Success -> buildString {
             append("User answered:\n")
             result.answers.forEach { (k, v) ->

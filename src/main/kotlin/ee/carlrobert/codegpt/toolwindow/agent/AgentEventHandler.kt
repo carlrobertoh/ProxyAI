@@ -7,7 +7,7 @@ import com.agentclientprotocol.model.PlanEntryStatus
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.thisLogger
@@ -20,9 +20,8 @@ import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.settings.agents.SubagentRuntimeResolver
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
 import ee.carlrobert.codegpt.toolwindow.agent.ui.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.Badge
@@ -32,11 +31,14 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatToolWindowScrollablePanel
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import java.awt.Component
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.JPanel
+import kotlin.time.Duration.Companion.milliseconds
 
 class AgentEventHandler(
     private val project: Project,
@@ -50,7 +52,7 @@ class AgentEventHandler(
     private val onHideLoading: () -> Unit,
     private val onRunFinishedCallback: () -> Unit = {},
     private val onRunCheckpointUpdatedCallback: (UUID, CheckpointRef?) -> Unit = { _, _ -> },
-    private val onQueuedMessagesResolved: (MessageWithContext) -> Unit = {}
+    private val onQueuedMessagePromoted: (MessageWithContext) -> Unit = {}
 ) : AgentEvents, Disposable {
 
     companion object {
@@ -58,6 +60,10 @@ class AgentEventHandler(
     }
 
     private val mainToolCards = ConcurrentHashMap<String, ToolCallCard>()
+    private val pendingToolOutput = ConcurrentHashMap<String, MutableList<ToolOutputLine>>()
+    private val scheduledToolOutputFlushes =
+        Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val uiRefreshLock = Any()
 
     private val toolOutputPublisher = ApplicationManager.getApplication()
         .messageBus
@@ -99,13 +105,26 @@ class AgentEventHandler(
     private val subagentViewHolders = ConcurrentHashMap<String, RunViewHolder>()
     private val serviceScope = DisposableCoroutineScope(Dispatchers.Default)
 
+    @Volatile
+    private var uiRefreshScheduled = false
+
+    @Volatile
+    private var uiScrollRequested = false
+
     data class ApprovalRequest(
         var model: ToolApprovalRequest,
         val deferred: CompletableDeferred<Boolean>
     )
 
+    private data class ToolOutputLine(
+        val text: String,
+        val isError: Boolean
+    )
+
     fun resetForNewSubmission() {
         mainToolCards.clear()
+        pendingToolOutput.clear()
+        scheduledToolOutputFlushes.clear()
         currentResponseBody = null
         lastWriteArgs = null
         lastEditArgs = null
@@ -162,7 +181,7 @@ class AgentEventHandler(
                         errPos = stderr.length
                     }
                     if (po.isComplete) break
-                    delay(300)
+                    delay(300.milliseconds)
                 }
             } catch (ex: Exception) {
                 logger.warn("Failed to monitor background process output", ex)
@@ -252,7 +271,9 @@ class AgentEventHandler(
         val message = causes.firstNotNullOfOrNull { cause ->
             when (cause) {
                 is CodeGPTApiException -> cause.detail?.takeIf { it.isNotBlank() } ?: cause.title
-                is KoogHttpClientException -> cause.errorBody?.takeIf { it.isNotBlank() } ?: cause.message
+                is KoogHttpClientException -> cause.errorBody?.takeIf { it.isNotBlank() }
+                    ?: cause.message
+
                 else -> cause.message
             }?.trim()?.takeIf { it.isNotEmpty() }
         } ?: CodeGPTBundle.get("toolwindow.agent.error.generic")
@@ -270,8 +291,7 @@ class AgentEventHandler(
             onRunFinishedCallback()
             onHideLoading()
             userInputPanel.setStopEnabled(false)
-            scrollablePanel.update()
-            scrollablePanel.scrollToBottom()
+            requestUiRefresh()
             todoListPanel.clearTodos()
             runCatching {
                 project.service<AgentToolWindowContentManager>()
@@ -303,9 +323,6 @@ class AgentEventHandler(
             logger.debug(
                 "Enqueueing agent approval for session=$sessionId type=${resolvedRequest.type} title=${resolvedRequest.title.logPreview()} payload=${resolvedRequest.payload.logSummary()}"
             )
-            approvalTrace(
-                "approval/enqueue session=$sessionId type=${resolvedRequest.type} title=${resolvedRequest.title.logPreview()} payload=${resolvedRequest.payload.logSummary()}"
-            )
             runInEdt {
                 approvalQueue.addLast(ApprovalRequest(resolvedRequest, deferred))
                 maybeShowNextApproval()
@@ -330,9 +347,6 @@ class AgentEventHandler(
         logger.debug(
             "Enqueueing agent approval for session=$sessionId type=${request.type} title=${request.title.logPreview()} payload=${request.payload.logSummary()}"
         )
-        approvalTrace(
-            "approval/enqueue session=$sessionId type=${request.type} title=${request.title.logPreview()} payload=${request.payload.logSummary()}"
-        )
         runInEdt {
             approvalQueue.addLast(ApprovalRequest(request, decision))
             maybeShowNextApproval()
@@ -354,16 +368,14 @@ class AgentEventHandler(
     override fun onTextReceived(text: String) {
         runInEdt {
             currentResponseBody?.updateMessage(text)
-            scrollablePanel.update()
-            scrollablePanel.scrollToBottom()
+            requestUiRefresh()
         }
     }
 
     override fun onThinkingReceived(text: String) {
         runInEdt {
             currentResponseBody?.appendThinking(text)
-            scrollablePanel.update()
-            scrollablePanel.scrollToBottom()
+            requestUiRefresh()
         }
     }
 
@@ -371,56 +383,70 @@ class AgentEventHandler(
         runInEdt {
             todoListPanel.updateTodos(entries.toTodoItems())
             todoListPanel.isVisible = entries.isNotEmpty()
-            scrollablePanel.update()
-            scrollablePanel.scrollToBottom()
+            requestUiRefresh()
         }
     }
 
     override fun onToolStarting(id: String, toolName: String, args: Any?) {
-        when (args) {
+        val uiArgs = ToolSpecs.coerceArgsForUi(toolName, args)
+        if (toolName == "Tool" && uiArgs == null) {
+            logger.debug("Deferring placeholder tool card session=$sessionId toolId=$id toolName=$toolName")
+            return
+        }
+
+        when (uiArgs) {
             is TodoWriteTool.Args -> {
                 runInEdt {
                     val inProgressTask =
-                        args.todos.find { it.status == TodoWriteTool.TodoStatus.IN_PROGRESS }
+                        uiArgs.todos.find { it.status == TodoWriteTool.TodoStatus.IN_PROGRESS }
                     if (inProgressTask != null) {
                         onShowLoading(inProgressTask.activeForm)
                     }
-                    todoListPanel.updateTodos(args.todos)
+                    todoListPanel.updateTodos(uiArgs.todos)
                     todoListPanel.isVisible = true
-                    scrollablePanel.update()
-                    scrollablePanel.scrollToBottom()
+                    requestUiRefresh()
                 }
             }
 
             is TaskTool.Args -> {
                 runInEdt {
                     val host = ensureRunViewForSubagent(id)
-                    host.addEntry(createTaskEntry(id, null, args))
+                    host.addEntry(createTaskEntry(id, null, uiArgs))
                     host.refresh()
-                    scrollablePanel.update()
-                    scrollablePanel.scrollToBottom()
+                    requestUiRefresh()
                 }
             }
 
             else -> {
-                when (args) {
+                when (uiArgs) {
                     is EditTool.Args -> {
-                        trackEditOperation(args)
+                        trackEditOperation(uiArgs)
                     }
 
                     is WriteTool.Args -> {
-                        trackWriteOperation(args)
+                        trackWriteOperation(uiArgs)
                     }
                 }
 
                 runInEdt {
                     val key = keyFor(id)
-                    if (!mainToolCards.containsKey(key)) {
-                        val card = ToolCallCard(project, toolName, args)
+                    val existingCard = mainToolCards[key]
+                    if (existingCard == null) {
+                        val card = ToolCallCard(project, toolName, uiArgs)
+                        val descriptor = card.getDescriptor()
+                        if (descriptor.kind == ToolKind.OTHER || descriptor.titleMain.isBlank()) {
+                            logger.warn(
+                                "Created generic tool card session=$sessionId toolId=$id toolName=$toolName argsType=${uiArgs?.javaClass?.name ?: "null"} title=${descriptor.titleMain}"
+                            )
+                        }
                         mainToolCards[key] = card
                         currentResponseBody?.addToolStatusPanel(card)
-                        scrollablePanel.update()
-                        scrollablePanel.scrollToBottom()
+                        requestUiRefresh()
+                    } else {
+                        logger.debug(
+                            "Updated tool card session=$sessionId toolId=$id toolName=$toolName argsType=${uiArgs?.javaClass?.name ?: "null"} title=${existingCard.getDescriptor().titleMain}"
+                        )
+                        requestUiRefresh(false)
                     }
                 }
             }
@@ -428,18 +454,26 @@ class AgentEventHandler(
     }
 
     override fun onToolCompleted(id: String?, toolName: String, result: Any?) {
+        val uiResult = ToolSpecs.coerceResultForUi(toolName, result)
         runInEdt {
-            if (id != null && (toolName == "Task" || result is TaskTool.Result)) {
+            if (id != null && (toolName == "Task" || uiResult is TaskTool.Result)) {
                 val holder = runViewHolder ?: subagentViewHolders.values.firstOrNull { viewHolder ->
                     viewHolder.getItems().any { entry -> entry.id == id }
                 }
-                holder?.completeEntry(id, result)
+                holder?.completeEntry(id, uiResult)
                 holder?.refresh()
             } else if (id != null && mainToolCards.containsKey(keyFor(id))) {
-                val success = result !is ToolError && result != null
-                mainToolCards[keyFor(id)]?.complete(success, result)
+                val success = uiResult !is ToolError && uiResult != null
+                mainToolCards[keyFor(id)]?.complete(success, uiResult)
+                mainToolCards[keyFor(id)]?.getDescriptor()?.let { descriptor ->
+                    if (descriptor.kind == ToolKind.OTHER || descriptor.titleMain.isBlank()) {
+                        logger.warn(
+                            "Completed generic tool card session=$sessionId toolId=$id toolName=$toolName resultType=${uiResult?.javaClass?.name ?: "null"} title=${descriptor.titleMain}"
+                        )
+                    }
+                }
 
-                val bgId = (result as? BashTool.Result)?.bashId
+                val bgId = (uiResult as? BashTool.Result)?.bashId
                 if (bgId == null) {
                     mainToolCards.remove(keyFor(id))
                 } else {
@@ -450,8 +484,7 @@ class AgentEventHandler(
                     }
                 }
             }
-            scrollablePanel.update()
-            scrollablePanel.scrollToBottom()
+            requestUiRefresh()
         }
     }
 
@@ -513,8 +546,7 @@ class AgentEventHandler(
             }
             host.addEntry(entry)
             host.refresh()
-            scrollablePanel.update()
-            scrollablePanel.scrollToBottom()
+            requestUiRefresh()
         }
         return cid
     }
@@ -538,8 +570,7 @@ class AgentEventHandler(
                     monitorBackgroundProcessOutput(bgId, childId)
                 }
             }
-            scrollablePanel.update()
-            scrollablePanel.scrollToBottom()
+            requestUiRefresh()
         }
     }
 
@@ -566,7 +597,7 @@ class AgentEventHandler(
         logger.debug(
             "Resolving queued message in UI for session=$sessionId messageId=${pendingMessage.id} uiVisible=${pendingMessage.uiVisible} preview=${pendingMessage.text.logPreview()}"
         )
-        onQueuedMessagesResolved(pendingMessage)
+        onQueuedMessagePromoted(pendingMessage)
     }
 
     override fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {
@@ -611,8 +642,8 @@ class AgentEventHandler(
         session.externalAgentSessionTitle = normalizedTitle
 
         val shouldRename = session.displayName.isBlank() ||
-            session.displayName == previousExternalTitle ||
-            session.displayName.matches(Regex("""Agent \d+( \(\d+\))?"""))
+                session.displayName == previousExternalTitle ||
+                session.displayName.matches(Regex("""Agent \d+( \(\d+\))?"""))
 
         if (shouldRename) {
             project.messageBus.syncPublisher(AgentTabTitleNotifier.AGENT_TAB_TITLE_TOPIC)
@@ -675,9 +706,6 @@ class AgentEventHandler(
 
         val contentManager = project.service<AgentToolWindowContentManager>()
         if (contentManager.isSessionAutoApproved(sessionId)) {
-            approvalTrace(
-                "approval/auto-approve session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
-            )
             logger.debug(
                 "Auto-approving queued agent approval for session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
             )
@@ -712,9 +740,6 @@ class AgentEventHandler(
         logger.debug(
             "Showing agent approval for session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()} payload=${next.model.payload.logSummary()} queueRemaining=${approvalQueue.size}"
         )
-        approvalTrace(
-            "approval/show session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()} payload=${next.model.payload.logSummary()} queueRemaining=${approvalQueue.size}"
-        )
 
         runCatching {
             project.service<AgentToolWindowContentManager>()
@@ -733,9 +758,6 @@ class AgentEventHandler(
                 logger.debug(
                     "Approved agent approval for session=$sessionId type=${next.model.type} auto=$auto title=${next.model.title.logPreview()}"
                 )
-                approvalTrace(
-                    "approval/approved session=$sessionId type=${next.model.type} auto=$auto title=${next.model.title.logPreview()}"
-                )
                 next.deferred.complete(true)
                 currentApproval = null
                 clearApprovalContainer()
@@ -748,9 +770,6 @@ class AgentEventHandler(
             onReject = {
                 logger.debug(
                     "Rejected agent approval for session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
-                )
-                approvalTrace(
-                    "approval/rejected session=$sessionId type=${next.model.type} title=${next.model.title.logPreview()}"
                 )
                 next.deferred.complete(false)
                 currentApproval = null
@@ -887,12 +906,6 @@ class AgentEventHandler(
         }
     }
 
-    private fun approvalTrace(message: String) {
-        if (ConfigurationSettings.getState().debugModeEnabled) {
-            logger.info("[APPROVAL TRACE] $message")
-        }
-    }
-
     class RunViewHolder(
         private val vm: AgentRunViewModel,
         private val view: AgentRunDslPanel,
@@ -919,28 +932,75 @@ class AgentEventHandler(
     }
 
     fun handleToolOutput(toolId: String, text: String, isError: Boolean) {
-        runInEdt {
-            var handled = false
-            mainToolCards[toolId]?.let {
-                it.appendStreamingLine(text, isError)
-                handled = true
-            }
-            if (!handled) {
-                val rawId =
-                    if (toolId.startsWith("$sessionId:")) toolId.substringAfter(":") else toolId
-                subagentViewHolders.values.firstOrNull { holder ->
-                    holder.appendStreamingLine(rawId, text, isError)
-                }
-            }
+        val lines = pendingToolOutput.computeIfAbsent(toolId) {
+            Collections.synchronizedList(mutableListOf())
         }
+        lines.add(ToolOutputLine(text, isError))
+        if (!scheduledToolOutputFlushes.add(toolId)) {
+            return
+        }
+        runInEdt { flushToolOutput(toolId) }
     }
 
     override fun dispose() {
         serviceScope.dispose()
         agentApprovalManager.dispose()
         mainToolCards.clear()
+        pendingToolOutput.clear()
+        scheduledToolOutputFlushes.clear()
         approvalQueue.clear()
         subagentViewHolders.clear()
+    }
+
+    private fun flushToolOutput(toolId: String) {
+        scheduledToolOutputFlushes.remove(toolId)
+        val lines = pendingToolOutput.remove(toolId).orEmpty()
+        if (lines.isEmpty()) {
+            return
+        }
+        var handled = false
+        mainToolCards[toolId]?.let { card ->
+            lines.forEach { line -> card.appendStreamingLine(line.text, line.isError) }
+            handled = true
+        }
+        if (!handled) {
+            val rawId =
+                if (toolId.startsWith("$sessionId:")) toolId.substringAfter(":") else toolId
+            subagentViewHolders.values.firstOrNull { holder ->
+                var appended = false
+                lines.forEach { line ->
+                    appended =
+                        holder.appendStreamingLine(rawId, line.text, line.isError) || appended
+                }
+                appended
+            }
+        }
+        requestUiRefresh()
+    }
+
+    private fun requestUiRefresh(scrollToBottom: Boolean = true) {
+        val shouldSchedule = synchronized(uiRefreshLock) {
+            uiScrollRequested = uiScrollRequested || scrollToBottom
+            if (uiRefreshScheduled) {
+                false
+            } else {
+                uiRefreshScheduled = true
+                true
+            }
+        }
+        if (!shouldSchedule) {
+            return
+        }
+        ApplicationManager.getApplication().invokeLater {
+            val shouldScroll = synchronized(uiRefreshLock) {
+                uiRefreshScheduled = false
+                uiScrollRequested.also { uiScrollRequested = false }
+            }
+            scrollablePanel.update()
+            if (shouldScroll) {
+                scrollablePanel.scrollToBottom()
+            }
+        }
     }
 
     private fun trackEditOperation(args: EditTool.Args) {
@@ -949,7 +1009,7 @@ class AgentEventHandler(
         val originalContent = runCatching {
             val vf = LocalFileSystem.getInstance().findFileByPath(normalizedPath)
             val documentText = vf?.let { file ->
-                runReadAction { FileDocumentManager.getInstance().getDocument(file)?.text }
+                runReadActionBlocking { FileDocumentManager.getInstance().getDocument(file)?.text }
             }
             documentText ?: java.io.File(normalizedPath).readText(Charsets.UTF_8)
         }.getOrNull() ?: ""

@@ -5,6 +5,7 @@ import com.agentclientprotocol.model.McpServer
 import com.agentclientprotocol.model.NewSessionRequest
 import com.agentclientprotocol.rpc.JsonRpcMessage
 import com.agentclientprotocol.transport.Transport
+import ee.carlrobert.codegpt.agent.agentJson
 import ee.carlrobert.codegpt.agent.external.acpcompat.vendor.AcpCompatibilityRegistry
 import ee.carlrobert.codegpt.agent.external.acpcompat.vendor.AcpPeerProfile
 import kotlinx.coroutines.CoroutineScope
@@ -13,13 +14,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.junit.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class AcpProtocolJsonTest {
-    private val parser = Json { ignoreUnknownKeys = true }
     private val compatibilityRegistry = AcpCompatibilityRegistry()
 
     @Test
@@ -49,7 +48,7 @@ class AcpProtocolJsonTest {
 
     @Test
     fun normalizesEnvVarAuthMethodFromVarsArray() {
-        val payload = parser.parseToJsonElement(
+        val payload = agentJson.parseToJsonElement(
             """
             {
               "protocolVersion": 1,

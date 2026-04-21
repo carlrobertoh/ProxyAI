@@ -3,16 +3,16 @@ package ee.carlrobert.codegpt.toolwindow.agent.ui
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.ui.JBUI
+import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallDescriptor
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallDescriptorFactory
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallView
 import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolKind
-import ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor.ToolCallDescriptor
 import java.awt.BorderLayout
 
 class ToolCallCard(
     private val project: Project,
-    private val toolName: String,
-    private val args: Any?,
+    private var toolName: String,
+    private var args: Any?,
     private val overrideKind: ToolKind? = null
 ) : JBPanel<ToolCallCard>() {
 

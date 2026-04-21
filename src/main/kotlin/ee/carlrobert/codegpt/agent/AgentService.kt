@@ -21,12 +21,8 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.serialization.json.JsonNull
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.io.path.Path
-import kotlin.time.Clock
-import ai.koog.prompt.message.Message as PromptMessage
 
 internal fun interface AgentRuntimeFactory {
     fun create(
@@ -36,6 +32,7 @@ internal fun interface AgentRuntimeFactory {
         events: AgentEvents,
         sessionId: String,
         pendingMessages: ConcurrentHashMap<String, ArrayDeque<MessageWithContext>>,
+        pendingRunContinuations: ConcurrentHashMap<String, PendingRunContinuation>,
     ): AIAgentService<MessageWithContext, String, out AIAgent<MessageWithContext, String>>
 }
 
@@ -64,22 +61,23 @@ class AgentService(private val project: Project) {
 
     private val sessionJobs = ConcurrentHashMap<String, Job>()
     private val pendingMessages = ConcurrentHashMap<String, ArrayDeque<MessageWithContext>>()
+    private val pendingRunContinuations = ConcurrentHashMap<String, PendingRunContinuation>()
     private val sessionAgents = ConcurrentHashMap<String, AIAgent<MessageWithContext, String>>()
     private val sessionRuntimes = ConcurrentHashMap<String, SessionRuntime>()
     internal var runtimeFactory: AgentRuntimeFactory =
-        AgentRuntimeFactory { p, storage, provider, events, sid, pending ->
+        AgentRuntimeFactory { p, storage, provider, events, sid, pending, continuations ->
             ProxyAIAgent.createService(
                 project = p,
                 checkpointStorage = storage,
                 provider = provider,
                 events = events,
                 sessionId = sid,
-                pendingMessages = pending
+                pendingMessages = pending,
+                pendingRunContinuations = continuations
             )
         }
-    private val checkpointStorage =
-        JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
     private val historyService = project.service<AgentCheckpointHistoryService>()
+    private val checkpointStorage = historyService.checkpointStorage
 
     private val _queuedMessageProcessed = MutableSharedFlow<String>()
     val queuedMessageProcessed = _queuedMessageProcessed.asSharedFlow()
@@ -95,8 +93,22 @@ class AgentService(private val project: Project) {
     suspend fun getCheckpoint(sessionId: String): AgentCheckpointData? {
         val session =
             project.service<AgentToolWindowContentManager>().getSession(sessionId) ?: return null
-        val ref = session.resumeCheckpointRef
+        val agentId = session.agentId
+        if (agentId != null) {
+            val latest = runCatching { historyService.loadLatestResumeCheckpoint(agentId) }
+                .onFailure { ex -> logCheckpointLoadFailure(sessionId, agentId, ex) }
+                .getOrNull()
+            if (latest != null) {
+                project.service<AgentToolWindowContentManager>()
+                    .setResumeCheckpointRef(
+                        sessionId,
+                        CheckpointRef(agentId, latest.checkpointId)
+                    )
+                return latest
+            }
+        }
 
+        val ref = session.resumeCheckpointRef
         if (ref != null) {
             val checkpoint = runCatching { historyService.loadResumeCheckpoint(ref) }
                 .onFailure { ex -> logCheckpointLoadFailure(sessionId, ref.agentId, ex) }
@@ -106,14 +118,14 @@ class AgentService(private val project: Project) {
             }
         }
 
-        val runtimeAgentId = session.runtimeAgentId ?: return null
-        val latest = runCatching { historyService.loadLatestResumeCheckpoint(runtimeAgentId) }
-            .onFailure { ex -> logCheckpointLoadFailure(sessionId, runtimeAgentId, ex) }
+        val activeAgentId = agentId ?: return null
+        val latest = runCatching { historyService.loadLatestResumeCheckpoint(activeAgentId) }
+            .onFailure { ex -> logCheckpointLoadFailure(sessionId, activeAgentId, ex) }
             .getOrNull()
             ?: return null
 
         project.service<AgentToolWindowContentManager>()
-            .setResumeCheckpointRef(sessionId, CheckpointRef(runtimeAgentId, latest.checkpointId))
+            .setResumeCheckpointRef(sessionId, CheckpointRef(activeAgentId, latest.checkpointId))
         return latest
     }
 
@@ -138,7 +150,7 @@ class AgentService(private val project: Project) {
             return
         }
 
-        val runtimeAgentId = contentManager.getSession(sessionId)?.runtimeAgentId
+        val agentId = contentManager.getSession(sessionId)?.agentId
         val runtime = runCatching {
             ensureSessionRuntime(sessionId, provider, events)
         }.onFailure { ex ->
@@ -148,35 +160,43 @@ class AgentService(private val project: Project) {
 
         val agent = runCatching {
             runBlocking {
-                runtime.service.createAgent(id = runtimeAgentId)
+                runtime.service.createAgent(id = agentId)
             }
         }.onFailure { ex ->
             logger.warn("Failed to create managed agent for session=$sessionId", ex)
             events.onAgentException(provider, ex)
         }.getOrNull() ?: return
 
-        contentManager.setRuntimeAgentId(sessionId, agent.id)
+        contentManager.setAgentId(sessionId, agent.id)
         sessionAgents[sessionId] = agent
+        runBlocking {
+            prepareContinuationForRun(sessionId, agent.id, message)
+        }
+        val koogRunId = stableKoogRunId(session, agent)
         sessionJobs[sessionId] = CoroutineScope(Dispatchers.IO).launch {
             try {
-                agent.run(message)
+                agent.run(message, koogRunId)
             } catch (_: CancellationException) {
                 return@launch
             } catch (ex: Throwable) {
                 logger.error(ex)
                 events.onAgentException(provider, ex)
             } finally {
-                val ref = refreshSessionResumeCheckpoint(sessionId, agent.id)
-                events.onRunCheckpointUpdated(message.id, ref)
-                sessionAgents.remove(sessionId, agent)
-                runCatching { runtime.service.removeAgentWithId(agent.id) }
-                    .onFailure { ex ->
-                        logger.warn(
-                            "Failed removing managed agent for session=$sessionId agentId=${agent.id}",
-                            ex
-                        )
-                    }
-                sessionJobs.remove(sessionId)
+                withContext(NonCancellable) {
+                    clearPendingRunContinuation(sessionId)
+                    val ref = refreshSessionResumeCheckpoint(sessionId, agent.id)
+                    events.onRunCheckpointUpdated(message.id, ref)
+                    sessionAgents.remove(sessionId, agent)
+                    runCatching { runtime.service.removeAgentWithId(agent.id) }
+                        .onFailure { ex ->
+                            logger.warn(
+                                "Failed removing managed agent for session=$sessionId agentId=${agent.id}",
+                                ex
+                            )
+                        }
+                    sessionJobs.remove(sessionId)
+                    startNextQueuedMessage(sessionId, events)
+                }
             }
         }
     }
@@ -194,20 +214,15 @@ class AgentService(private val project: Project) {
             }
         }
         sessionJobs[sessionId]?.cancel()
-        sessionJobs.remove(sessionId)
     }
 
     fun removeSession(sessionId: String) {
         cancelCurrentRun(sessionId)
+        sessionJobs.remove(sessionId)
         pendingMessages.remove(sessionId)
+        pendingRunContinuations.remove(sessionId)
         sessionAgents.remove(sessionId)
-        sessionRuntimes.remove(sessionId)?.let { runtime ->
-            runCatching {
-                runBlocking { runtime.service.closeAll() }
-            }.onFailure { ex ->
-                logger.warn("Failed closing managed agent service for session=$sessionId", ex)
-            }
-        }
+        sessionRuntimes.remove(sessionId)
         project.service<ExternalAcpAgentService>().closeSession(sessionId)
         project.service<AgentToolWindowContentManager>()
             .getSession(sessionId)
@@ -219,7 +234,7 @@ class AgentService(private val project: Project) {
     }
 
     fun isSessionRunning(sessionId: String): Boolean {
-        return sessionJobs[sessionId]?.isActive == true
+        return sessionJobs[sessionId]?.isCompleted == false
     }
 
     fun getPendingMessages(sessionId: String): List<MessageWithContext> {
@@ -273,6 +288,7 @@ class AgentService(private val project: Project) {
             } finally {
                 events.onRunCheckpointUpdated(message.id, null)
                 sessionJobs.remove(session.sessionId)
+                startNextQueuedMessage(session.sessionId, events)
             }
         }
     }
@@ -298,35 +314,6 @@ class AgentService(private val project: Project) {
         return selectedServerIds
     }
 
-    suspend fun createSeedCheckpointFromHistory(history: List<PromptMessage>): CheckpointRef? =
-        withContext(Dispatchers.IO) {
-            if (history.isEmpty()) {
-                return@withContext null
-            }
-
-            val agentId = UUID.randomUUID().toString()
-            val checkpointId = UUID.randomUUID().toString()
-            val checkpoint = AgentCheckpointData(
-                checkpointId = checkpointId,
-                createdAt = Clock.System.now(),
-                nodePath = "$agentId/single_run/nodeExecuteTool",
-                lastInput = JsonNull,
-                messageHistory = history,
-                version = 0
-            )
-
-            runCatching {
-                checkpointStorage.saveCheckpoint(agentId, checkpoint)
-                CheckpointRef(agentId, checkpointId)
-            }.onFailure { ex ->
-                logger.warn(
-                    "Agent checkpoints: failed to create seed checkpoint from history " +
-                            "agentId=$agentId error=${ex.message}",
-                    ex
-                )
-            }.getOrNull()
-        }
-
     private suspend fun refreshSessionResumeCheckpoint(
         sessionId: String,
         agentId: String
@@ -334,9 +321,69 @@ class AgentService(private val project: Project) {
         val ref = historyService.loadLatestResumeCheckpoint(agentId)
             ?.let { CheckpointRef(agentId, it.checkpointId) }
         if (ref != null) {
-            project.service<AgentToolWindowContentManager>().setResumeCheckpointRef(sessionId, ref)
+            project.service<AgentToolWindowContentManager>().apply {
+                setResumeCheckpointRef(sessionId, ref)
+                setSeededMessageHistory(sessionId, null)
+            }
         }
         return ref
+    }
+
+    private fun clearPendingRunContinuation(sessionId: String) {
+        pendingRunContinuations.remove(sessionId)
+    }
+
+    private suspend fun prepareContinuationForRun(
+        sessionId: String,
+        agentId: String,
+        message: MessageWithContext
+    ) {
+        val session =
+            project.service<AgentToolWindowContentManager>().getSession(sessionId)
+                ?: return clearPendingRunContinuation(sessionId)
+        val contentManager = project.service<AgentToolWindowContentManager>()
+        val resumeSource = session.resumeCheckpointRef
+            ?.let { historyService.loadResumeCheckpoint(it) }
+            ?: historyService.loadLatestResumeCheckpoint(agentId)
+        val messageHistory = resumeSource?.messageHistory
+            ?: session.seededMessageHistory
+            ?: return clearPendingRunContinuation(sessionId)
+
+        pendingRunContinuations[sessionId] = PendingRunContinuation(
+            messageHistory = messageHistory,
+            input = message
+        )
+        if (resumeSource != null) {
+            contentManager.setResumeCheckpointRef(
+                sessionId,
+                CheckpointRef(agentId, resumeSource.checkpointId)
+            )
+        }
+    }
+
+    private fun stableKoogRunId(
+        session: AgentSession,
+        agent: AIAgent<MessageWithContext, String>
+    ): String {
+        return session.resumeCheckpointRef?.agentId
+            ?: session.agentId
+            ?: agent.id
+    }
+
+    private fun startNextQueuedMessage(sessionId: String, events: AgentEvents) {
+        val queue = pendingMessages[sessionId] ?: return
+        if (queue.isEmpty()) {
+            return
+        }
+        val next = queue.removeFirst()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            if (next.uiVisible) {
+                events.onQueuedMessagesResolved(next)
+            }
+
+            submitMessage(next, events, sessionId)
+        }
     }
 
     private fun ensureSessionRuntime(
@@ -345,9 +392,9 @@ class AgentService(private val project: Project) {
         events: AgentEvents
     ): SessionRuntime {
         val modelSignature = currentModelSignature()
-        val selectedServerIds = project.service<AgentMcpContextService>()
-            .get(sessionId)
-            ?.selectedServerIds ?: emptySet()
+        val selectedServerIds =
+            project.service<AgentMcpContextService>().get(sessionId)?.selectedServerIds
+                ?: emptySet()
         val existing = sessionRuntimes[sessionId]
         if (existing != null &&
             existing.provider == provider &&
@@ -358,12 +405,7 @@ class AgentService(private val project: Project) {
             return existing
         }
 
-        existing?.let { stale ->
-            runCatching { runBlocking { stale.service.closeAll() } }
-                .onFailure { ex ->
-                    logger.warn("Failed closing stale managed service for session=$sessionId", ex)
-                }
-        }
+        sessionRuntimes.remove(sessionId)
 
         val created = SessionRuntime(
             service = runtimeFactory.create(
@@ -372,7 +414,8 @@ class AgentService(private val project: Project) {
                 provider = provider,
                 events = events,
                 sessionId = sessionId,
-                pendingMessages = pendingMessages
+                pendingMessages = pendingMessages,
+                pendingRunContinuations = pendingRunContinuations
             ),
             provider = provider,
             modelSignature = modelSignature,

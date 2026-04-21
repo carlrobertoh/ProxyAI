@@ -43,89 +43,69 @@ import kotlin.time.Clock
 /**
  * Configuration settings for connecting to the ProxyAI API.
  */
-public class ProxyAIClientSettings(
+class ProxyAIClientSettings(
     baseUrl: String = DEFAULT_BASE_URL,
     chatCompletionsPath: String = DEFAULT_CHAT_COMPLETIONS_PATH,
     timeoutConfig: ConnectionTimeoutConfig = ConnectionTimeoutConfig()
 ) : OpenAIBaseSettings(baseUrl, chatCompletionsPath, timeoutConfig) {
-    public companion object {
-        public const val DEFAULT_BASE_URL: String = "https://codegpt-api.carlrobert.ee"
-        public const val DEFAULT_CHAT_COMPLETIONS_PATH: String = "/v2/chat/completions"
-        public const val DEFAULT_AUTO_APPLY_PATH: String = "/v1/code/apply"
-        public const val DEFAULT_USER_DETAILS_PATH: String = "/v1/users/details"
+    companion object {
+        const val DEFAULT_BASE_URL: String = "https://codegpt-api.carlrobert.ee"
+        const val DEFAULT_CHAT_COMPLETIONS_PATH: String = "/v2/chat/completions"
+        const val DEFAULT_AUTO_APPLY_PATH: String = "/v1/code/apply"
+        const val DEFAULT_USER_DETAILS_PATH: String = "/v1/users/details"
     }
 }
 
 /**
  * Implementation of [LLMClient] for ProxyAI API.
  */
-public class ProxyAILLMClient(
+class ProxyAILLMClient(
     private val apiKey: String,
     private val settings: ProxyAIClientSettings = ProxyAIClientSettings(),
     private val baseClient: HttpClient = HttpClientProvider.createHttpClient(),
     clock: Clock = Clock.System
 ) : AbstractOpenAILLMClient<ProxyAIChatCompletionResponse, ProxyAIChatCompletionStreamResponse>(
-    apiKey,
-    settings,
-    baseClient,
-    clock,
-    staticLogger,
-    OpenAICompatibleToolDescriptorSchemaGenerator()
+    apiKey = apiKey,
+    settings = settings,
+    baseClient = baseClient,
+    clock = clock,
+    logger = staticLogger,
+    toolsConverter = OpenAICompatibleToolDescriptorSchemaGenerator()
 ) {
-    public data object ProxyAI : LLMProvider("proxyai", "ProxyAI")
+    data object ProxyAI : LLMProvider("proxyai", "ProxyAI")
 
     companion object {
         private val staticLogger = KotlinLogging.logger { }
-
-        init {
-            registerOpenAIJsonSchemaGenerators(ProxyAI)
-        }
     }
 
     override fun llmProvider(): LLMProvider = ProxyAI
 
     fun getApplyEditCompletion(request: AutoApplyRequest): AutoApplyResponse {
-        return runBlocking {
-            val response = baseClient.post("${settings.baseUrl}$DEFAULT_AUTO_APPLY_PATH") {
+        val response = runBlocking {
+            baseClient.post("${settings.baseUrl}$DEFAULT_AUTO_APPLY_PATH") {
                 contentType(ContentType.Application.Json)
                 header(HttpHeaders.Authorization, "Bearer $apiKey")
                 setBody(JsonMapper.mapper.writeValueAsString(request))
             }
-            val body = response.bodyAsText()
-            if (!response.status.isSuccess()) {
-                throw toApiException(response.status.value, body)
-            }
-            JsonMapper.mapper.readValue(body, AutoApplyResponse::class.java)
         }
+        val body = runBlocking { response.bodyAsText() }
+        if (!response.status.isSuccess()) {
+            throw toApiException(response.status.value, body)
+        }
+        return JsonMapper.mapper.readValue(body, AutoApplyResponse::class.java)
     }
 
     fun getUserDetails(requestApiKey: String = apiKey): CodeGPTUserDetails {
-        return runBlocking {
-            val response = baseClient.get("${settings.baseUrl}$DEFAULT_USER_DETAILS_PATH") {
+        val response = runBlocking {
+            baseClient.get("${settings.baseUrl}$DEFAULT_USER_DETAILS_PATH") {
                 header(HttpHeaders.Authorization, "Bearer $requestApiKey")
             }
-            val body = response.bodyAsText()
-            if (!response.status.isSuccess()) {
-                throw toApiException(response.status.value, body)
-            }
-            JsonMapper.mapper.readValue(body, CodeGPTUserDetails::class.java)
         }
-    }
-
-    private fun toApiException(status: Int, body: String): CodeGPTApiException {
-        return runCatching {
-            JsonMapper.mapper.readValue(body, CodeGPTApiException::class.java).apply {
-                this.status = status
-                if (detail.isNullOrBlank()) {
-                    detail = body
-                }
-            }
-        }.getOrElse {
-            CodeGPTApiException(
-                status = status,
-                detail = body.ifBlank { "Request failed with status $status" }
-            )
+        val body = runBlocking { response.bodyAsText() }
+        if (!response.status.isSuccess()) {
+            throw toApiException(response.status.value, body)
         }
+        return JsonMapper.mapper.readValue(body, CodeGPTUserDetails::class.java)
     }
 
     override fun serializeProviderChatRequest(
@@ -247,7 +227,7 @@ public class ProxyAILLMClient(
                         )
                     )
                 }
-                return result
+                result
             }
 
             this is OpenAIMessage.Assistant && this.reasoningContent != null && this.content != null -> listOf(
@@ -308,6 +288,22 @@ public class ProxyAILLMClient(
     private fun JsonObjectBuilder.putIfNotNull(key: String, value: Long?) {
         if (value != null) {
             put(key, JsonPrimitive(value))
+        }
+    }
+
+    private fun toApiException(status: Int, body: String): CodeGPTApiException {
+        return runCatching {
+            JsonMapper.mapper.readValue(body, CodeGPTApiException::class.java).apply {
+                this.status = status
+                if (detail.isNullOrBlank()) {
+                    detail = body
+                }
+            }
+        }.getOrElse {
+            CodeGPTApiException(
+                status = status,
+                detail = body.ifBlank { "Request failed with status $status" }
+            )
         }
     }
 }

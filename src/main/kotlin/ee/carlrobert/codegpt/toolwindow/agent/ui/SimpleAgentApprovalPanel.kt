@@ -5,6 +5,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -17,7 +18,7 @@ class SimpleAgentApprovalPanel(
     details: String?,
     private val onApprove: (autoApproveSession: Boolean) -> Unit,
     private val onReject: () -> Unit,
-) : JBPanel<SimpleAgentApprovalPanel>() {
+) : BorderLayoutPanel() {
 
     init {
         layout = BorderLayout()

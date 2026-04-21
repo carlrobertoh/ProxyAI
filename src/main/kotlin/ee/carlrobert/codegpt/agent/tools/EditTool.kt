@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
@@ -26,9 +27,7 @@ class EditTool(
     private val hookManager: HookManager,
 ) : BaseTool<EditTool.Args, EditTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "Edit",
+    name = NAME,
     description = """
         Performs an exact string replacement in a file.
 
@@ -55,6 +54,10 @@ class EditTool(
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
+
+    companion object {
+        const val NAME = "Edit"
+    }
 
     private fun getLineAndColumn(document: Document, offset: Int): Pair<Int, Int> {
         val line = document.getLineNumber(offset)
@@ -139,6 +142,14 @@ class EditTool(
                     error = "File not found: ${args.filePath}"
                 )
             }
+
+            if (args.oldString == args.newString) {
+                return Result.Error(
+                    filePath = args.filePath,
+                    error = "old_string and new_string are identical. No replacement would be made."
+                )
+            }
+
             val normalizedPath = args.filePath.replace("\\", "/")
             val file = File(normalizedPath)
 
@@ -322,40 +333,41 @@ class EditTool(
         )
     }
 
-    override fun encodeResultToString(result: Result): String = when (result) {
-        is Result.Success -> {
-            val raw = buildString {
-                appendLine("Successfully edited file '${result.filePath}'")
-                appendLine("Made ${result.replacementsMade} replacement${if (result.replacementsMade != 1) "s" else ""}")
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
+        when (result) {
+            is Result.Success -> {
+                val raw = buildString {
+                    appendLine("Successfully edited file '${result.filePath}'")
+                    appendLine("Made ${result.replacementsMade} replacement${if (result.replacementsMade != 1) "s" else ""}")
 
-                if (result.replacementsMade > 0) {
-                    appendLine()
-                    appendLine("Changes made:")
-                    appendLine("- File: ${result.filePath}")
-                    appendLine("- Replacements: ${result.replacementsMade}")
-
-                    if (result.oldStringPreview != null || result.newStringPreview != null) {
+                    if (result.replacementsMade > 0) {
                         appendLine()
-                        if (result.oldStringPreview != null) {
-                            val oldPreview = if (result.oldStringPreview.length > 100) {
-                                result.oldStringPreview.take(97) + "..."
-                            } else result.oldStringPreview
-                            appendLine("- Old text: \"$oldPreview\"")
-                        }
-                        if (result.newStringPreview != null) {
-                            val newPreview = if (result.newStringPreview.length > 100) {
-                                result.newStringPreview.take(97) + "..."
-                            } else result.newStringPreview
-                            appendLine("- New text: \"$newPreview\"")
+                        appendLine("Changes made:")
+                        appendLine("- File: ${result.filePath}")
+                        appendLine("- Replacements: ${result.replacementsMade}")
+
+                        if (result.oldStringPreview != null || result.newStringPreview != null) {
+                            appendLine()
+                            if (result.oldStringPreview != null) {
+                                val oldPreview = if (result.oldStringPreview.length > 100) {
+                                    result.oldStringPreview.take(97) + "..."
+                                } else result.oldStringPreview
+                                appendLine("- Old text: \"$oldPreview\"")
+                            }
+                            if (result.newStringPreview != null) {
+                                val newPreview = if (result.newStringPreview.length > 100) {
+                                    result.newStringPreview.take(97) + "..."
+                                } else result.newStringPreview
+                                appendLine("- New text: \"$newPreview\"")
+                            }
                         }
                     }
-                }
-            }.trimEnd()
-            raw.truncateToolResult()
-        }
+                }.trimEnd()
+                raw.truncateToolResult()
+            }
 
-        is Result.Error -> {
-            ("Error editing file '${result.filePath}': ${result.error}").truncateToolResult()
+            is Result.Error -> {
+                ("Error editing file '${result.filePath}': ${result.error}").truncateToolResult()
+            }
         }
-    }
 }

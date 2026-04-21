@@ -18,6 +18,7 @@ import java.util.*
 interface CompletionParameters
 
 class ChatCompletionParameters private constructor(
+    var project: Project,
     val conversation: Conversation,
     val conversationType: ConversationType,
     val message: Message,
@@ -32,14 +33,13 @@ class ChatCompletionParameters private constructor(
     var mcpTools: List<McpTool>?,
     var toolApprovalMode: ToolApprovalMode,
     var toolResults: List<Pair<ChatToolCall, String>>? = null,
-    var project: Project?,
     var chatMode: ChatMode = ChatMode.ASK,
     var featureType: FeatureType = FeatureType.CHAT,
     var requestType: RequestType = RequestType.NORMAL_REQUEST
 ) : CompletionParameters {
 
     fun toBuilder(): Builder {
-        return Builder(conversation, message).apply {
+        return Builder(project, conversation, message).apply {
             sessionId(this@ChatCompletionParameters.sessionId)
             conversationType(this@ChatCompletionParameters.conversationType)
             retry(this@ChatCompletionParameters.retry)
@@ -51,14 +51,17 @@ class ChatCompletionParameters private constructor(
             mcpTools(this@ChatCompletionParameters.mcpTools)
             toolApprovalMode(this@ChatCompletionParameters.toolApprovalMode)
             toolResults(this@ChatCompletionParameters.toolResults)
-            project(this@ChatCompletionParameters.project)
             chatMode(this@ChatCompletionParameters.chatMode)
             featureType(this@ChatCompletionParameters.featureType)
             requestType(this@ChatCompletionParameters.requestType)
         }
     }
 
-    class Builder(private val conversation: Conversation, private val message: Message) {
+    class Builder(
+        private val project: Project,
+        private val conversation: Conversation,
+        private val message: Message
+    ) {
         private var sessionId: UUID? = null
         private var conversationType: ConversationType = ConversationType.DEFAULT
         private var retry: Boolean = false
@@ -72,7 +75,6 @@ class ChatCompletionParameters private constructor(
         private var mcpTools: List<McpTool>? = null
         private var toolApprovalMode: ToolApprovalMode = ToolApprovalMode.AUTO_APPROVE
         private var toolResults: List<Pair<ChatToolCall, String>>? = null
-        private var project: Project? = null
         private var chatMode: ChatMode = ChatMode.ASK
         private var featureType: FeatureType = FeatureType.CHAT
         private var requestType: RequestType = RequestType.NORMAL_REQUEST
@@ -113,8 +115,6 @@ class ChatCompletionParameters private constructor(
         fun toolResults(results: List<Pair<ChatToolCall, String>>?) =
             apply { this.toolResults = results }
 
-        fun project(project: Project?) = apply { this.project = project }
-
         fun chatMode(chatMode: ChatMode) = apply { this.chatMode = chatMode }
 
         fun featureType(featureType: FeatureType) = apply { this.featureType = featureType }
@@ -123,6 +123,7 @@ class ChatCompletionParameters private constructor(
 
         fun build(): ChatCompletionParameters {
             return ChatCompletionParameters(
+                project,
                 conversation,
                 conversationType,
                 message,
@@ -137,7 +138,6 @@ class ChatCompletionParameters private constructor(
                 mcpTools,
                 toolApprovalMode,
                 toolResults,
-                project,
                 chatMode,
                 featureType,
                 requestType
@@ -147,7 +147,8 @@ class ChatCompletionParameters private constructor(
 
     companion object {
         @JvmStatic
-        fun builder(conversation: Conversation, message: Message) = Builder(conversation, message)
+        fun builder(project: Project, conversation: Conversation, message: Message) =
+            Builder(project, conversation, message)
     }
 }
 

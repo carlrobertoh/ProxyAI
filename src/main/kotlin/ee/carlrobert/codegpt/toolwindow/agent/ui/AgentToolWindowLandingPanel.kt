@@ -335,14 +335,12 @@ class AgentToolWindowLandingPanel(private val project: Project) : BorderLayoutPa
         onResult: (List<AgentHistoryThreadSummary>, Boolean, Int) -> Unit
     ) {
         if (disposed || project.isDisposed) return
-        val shouldRefresh = offset == 0 && refreshHistory
         backgroundScope.launch {
             val page = try {
                 historyService.listThreadsPage(
                     query = query,
                     offset = offset,
                     limit = limit,
-                    refresh = shouldRefresh
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -390,7 +388,7 @@ class AgentToolWindowLandingPanel(private val project: Project) : BorderLayoutPa
             runInEdt {
                 if (disposed || project.isDisposed) return@runInEdt
                 project.service<AgentToolWindowContentManager>()
-                    .openCheckpointConversation(thread, conversation)
+                    .openCheckpointConversation(thread, conversation, thread.latest)
             }
         }
     }

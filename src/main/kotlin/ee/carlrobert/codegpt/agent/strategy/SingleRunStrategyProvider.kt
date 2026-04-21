@@ -5,7 +5,7 @@ import ai.koog.agents.core.agent.entity.AIAgentGraphStrategy
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
 import ai.koog.agents.core.dsl.builder.AIAgentEdgeBuilderIntermediate
 import ai.koog.agents.core.dsl.builder.EdgeTransformationDslMarker
-import ai.koog.agents.core.dsl.builder.forwardTo
+import ai.koog.agents.core.dsl.builder.node
 import ai.koog.agents.core.dsl.builder.strategy
 import ai.koog.agents.core.dsl.extension.*
 import ai.koog.agents.core.environment.ReceivedToolResult
@@ -23,8 +23,8 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.agent.AgentEvents
 import ee.carlrobert.codegpt.agent.MessageWithContext
-import ee.carlrobert.codegpt.agent.normalizeToolArgumentsJson
 import ee.carlrobert.codegpt.agent.credits.extractCreditsSnapshot
+import ee.carlrobert.codegpt.agent.normalizeToolArgumentsJson
 import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
@@ -51,6 +51,8 @@ data class HistoryCompressionConfig(
     val compressionStrategy: HistoryCompressionStrategy
 )
 
+internal const val SINGLE_RUN_NODE_CALL_LLM = "call_llm"
+
 internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
     override fun build(
         project: Project,
@@ -61,114 +63,120 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
         sessionId: String,
         provider: ServiceType,
         stream: Boolean
-    ): AIAgentGraphStrategy<MessageWithContext, String> = strategy("single_run") {
-        val nodeCallLLM by node<MessageWithContext, List<Message.Response>> { message ->
-            llm.writeSession {
-                if (message.tags.isNotEmpty()) {
-                    val context = buildTagContext(project, message.tags)
-                    if (context.isNotBlank()) {
-                        appendPrompt { user(context) }
+    ): AIAgentGraphStrategy<MessageWithContext, String> =
+        strategy<MessageWithContext, String>("single_run") {
+            val nodeCallLLM by node<MessageWithContext, List<Message.Response>>(SINGLE_RUN_NODE_CALL_LLM) { message ->
+                llm.writeSession {
+                    if (message.tags.isNotEmpty()) {
+                        val context = buildTagContext(project, message.tags)
+                        if (context.isNotBlank()) {
+                            appendPrompt { user(context) }
+                        }
                     }
+
+                    appendPrompt { user(message.text) }
+
+                    requestAndPublish(
+                        executor,
+                        config,
+                        tokenizer(),
+                        events,
+                        sessionId,
+                        provider,
+                        stream
+                    )
                 }
-
-                appendPrompt { user(message.text) }
-
-                requestAndPublish(
-                    executor,
-                    config,
-                    tokenizer(),
-                    events,
-                    sessionId,
-                    provider,
-                    stream
-                )
             }
-        }
 
-        val nodeExecuteTool by nodeExecuteMultipleTools(parallelTools = true)
+            val nodeExecuteTool by nodeExecuteMultipleTools(parallelTools = true)
 
-        val nodeSendToolResult by node<List<ReceivedToolResult>, List<Message.Response>> { results ->
-            llm.writeSession {
-                appendPrompt {
-                    results.forEach { tool { result(it) } }
-                }
-
-                val messages = prompt.messages
-                val toolCallMessages = messages.count { it is Message.Tool.Call }
-                val todoWriteToolUsed = messages.any { msg ->
-                    msg is Message.Tool.Call && msg.tool == "TodoWrite"
-                }
-
-                if (toolCallMessages >= 3 && !todoWriteToolUsed) {
+            val nodeSendToolResult by node<List<ReceivedToolResult>, List<Message.Response>>("send_tool_results") { results ->
+                llm.writeSession {
                     appendPrompt {
-                        user("It seems that you haven't created a todo list yet. If the task on hand requires multiple steps then create a todo list to track your changes.")
+                        results.forEach { tool { result(it) } }
                     }
-                }
 
-                if (pendingMessageQueue.isNotEmpty()) {
-                    pendingMessageQueue.forEach {
-                        appendPrompt { user(it.text) }
+                    val messages = prompt.messages
+                    val toolCallMessages = messages.count { it is Message.Tool.Call }
+                    val todoWriteToolUsed = messages.any { msg ->
+                        msg is Message.Tool.Call && msg.tool == "TodoWrite"
                     }
-                    events.onQueuedMessagesResolved()
-                    pendingMessageQueue.clear()
+
+                    if (toolCallMessages >= 3 && !todoWriteToolUsed) {
+                        appendPrompt {
+                            user("It seems that you haven't created a todo list yet. If the task on hand requires multiple steps then create a todo list to track your changes.")
+                        }
+                    }
+
+                    if (pendingMessageQueue.isNotEmpty()) {
+                        pendingMessageQueue.forEach {
+                            appendPrompt { user(it.text) }
+                        }
+                        events.onQueuedMessagesResolved()
+                        pendingMessageQueue.clear()
+                    }
+
+                    requestAndPublish(
+                        executor,
+                        config,
+                        tokenizer(),
+                        events,
+                        sessionId,
+                        provider,
+                        stream
+                    )
                 }
+            }
+            val nodeShowCompressionLoading by node<List<ReceivedToolResult>, List<ReceivedToolResult>>(
+                "show_compression_loading"
+            ) {
+                events.onHistoryCompressionStateChanged(true)
+                it
+            }
+            val nodeCompressHistory by nodeLLMCompressHistory<List<ReceivedToolResult>>(strategy = historyCompressionConfig.compressionStrategy)
+            val nodeResetCompressionLoading by node<List<ReceivedToolResult>, List<ReceivedToolResult>>(
+                "reset_compression_loading"
+            ) {
+                events.onHistoryCompressionStateChanged(false)
+                it
+            }
+            val nodeSendCompressedHistory by node<List<ReceivedToolResult>, List<Message.Response>>(
+                "send_compressed_history"
+            ) {
+                llm.writeSession {
+                    requestAndPublish(
+                        executor,
+                        config,
+                        tokenizer(),
+                        events,
+                        sessionId,
+                        provider,
+                        stream
+                    )
+                }
+            }
 
-                requestAndPublish(
-                    executor,
-                    config,
-                    tokenizer(),
-                    events,
-                    sessionId,
-                    provider,
-                    stream
-                )
-            }
+            edge(nodeStart forwardTo nodeCallLLM)
+            edge(nodeCallLLM forwardTo nodeExecuteTool onMultipleToolCalls { true })
+            edge(nodeCallLLM forwardTo nodeFinish onSingleAssistantResponse { true })
+            edge(nodeExecuteTool forwardTo nodeSendToolResult onCondition {
+                llm.readSession {
+                    !historyCompressionConfig.isLimitExceeded(prompt, tokenizer())
+                }
+            })
+            edge(nodeExecuteTool forwardTo nodeShowCompressionLoading onCondition {
+                llm.readSession {
+                    historyCompressionConfig.isLimitExceeded(prompt, tokenizer())
+                }
+            })
+            edge(nodeShowCompressionLoading forwardTo nodeCompressHistory)
+            edge(nodeCompressHistory forwardTo nodeResetCompressionLoading)
+            edge(nodeResetCompressionLoading forwardTo nodeSendCompressedHistory)
+            edge(nodeSendToolResult forwardTo nodeFinish onSingleAssistantResponse { true })
+            edge(nodeSendToolResult forwardTo nodeExecuteTool onMultipleToolCalls { true })
+            edge(nodeSendCompressedHistory forwardTo nodeFinish onSingleAssistantResponse { true })
+            edge(nodeSendCompressedHistory forwardTo nodeExecuteTool onMultipleToolCalls { true })
         }
-        val nodeShowCompressionLoading by node<List<ReceivedToolResult>, List<ReceivedToolResult>> {
-            events.onHistoryCompressionStateChanged(true)
-            it
-        }
-        val nodeCompressHistory by nodeLLMCompressHistory<List<ReceivedToolResult>>(strategy = historyCompressionConfig.compressionStrategy)
-        val nodeResetCompressionLoading by node<List<ReceivedToolResult>, List<ReceivedToolResult>> {
-            events.onHistoryCompressionStateChanged(false)
-            it
-        }
-        val nodeSendCompressedHistory by node<List<ReceivedToolResult>, List<Message.Response>> {
-            llm.writeSession {
-                requestAndPublish(
-                    executor,
-                    config,
-                    tokenizer(),
-                    events,
-                    sessionId,
-                    provider,
-                    stream
-                )
-            }
-        }
-
-        edge(nodeStart forwardTo nodeCallLLM)
-        edge(nodeCallLLM forwardTo nodeExecuteTool onMultipleToolCalls { true })
-        edge(nodeCallLLM forwardTo nodeFinish onSingleAssistantResponse { true })
-        edge(nodeExecuteTool forwardTo nodeSendToolResult onCondition {
-            llm.readSession {
-                !historyCompressionConfig.isLimitExceeded(prompt, tokenizer())
-            }
-        })
-        edge(nodeExecuteTool forwardTo nodeShowCompressionLoading onCondition {
-            llm.readSession {
-                historyCompressionConfig.isLimitExceeded(prompt, tokenizer())
-            }
-        })
-        edge(nodeShowCompressionLoading forwardTo nodeCompressHistory)
-        edge(nodeCompressHistory forwardTo nodeResetCompressionLoading)
-        edge(nodeResetCompressionLoading forwardTo nodeSendCompressedHistory)
-        edge(nodeSendToolResult forwardTo nodeFinish onSingleAssistantResponse { true })
-        edge(nodeSendToolResult forwardTo nodeExecuteTool onMultipleToolCalls { true })
-
-        edge(nodeSendCompressedHistory forwardTo nodeFinish onSingleAssistantResponse { true })
-        edge(nodeSendCompressedHistory forwardTo nodeExecuteTool onMultipleToolCalls { true })
-    }
 }
 
 private suspend fun AIAgentLLMWriteSession.requestResponses(
@@ -198,8 +206,7 @@ private suspend fun AIAgentLLMWriteSession.requestResponses(
         val preparedPrompt = config.missingToolsConversionStrategy.convertPrompt(prompt, tools)
         executor.execute(preparedPrompt, model, tools)
     }
-    val appendableResponses = appendableResponses(responses, model.provider)
-    appendableResponses.forEach(appendResponse)
+    appendableResponses(responses, model.provider).forEach(appendResponse)
     return responses
 }
 
@@ -243,10 +250,10 @@ internal fun appendableResponses(
     }
 
     // Keep reasoning when it is the only non-empty model output.
-    val reasoningFallback = sortedResponses
+    return sortedResponses
         .filterIsInstance<Message.Reasoning>()
         .filter { it.content.isNotBlank() }
-    return if (reasoningFallback.isNotEmpty()) reasoningFallback else nonReasoningResponses
+        .ifEmpty { nonReasoningResponses }
 }
 
 internal fun extractAssistantOutput(responses: List<Message.Response>): String {

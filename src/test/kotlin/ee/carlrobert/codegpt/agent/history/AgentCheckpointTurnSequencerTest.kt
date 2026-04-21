@@ -4,7 +4,7 @@ import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
-import kotlinx.serialization.json.JsonNull
+import ai.koog.serialization.JSONObject
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.assertj.core.api.Assertions.assertThat
@@ -152,7 +152,7 @@ class AgentCheckpointTurnSequencerTest {
                 checkpointId = "checkpoint-1",
                 createdAt = Instant.parse("2026-02-04T00:00:00Z"),
                 nodePath = "agent/single_run/nodeExecuteTool",
-                lastInput = JsonNull,
+                lastOutput = JSONObject(emptyMap()),
                 messageHistory = history,
                 version = 0
             ),

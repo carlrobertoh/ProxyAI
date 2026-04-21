@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.diagnostics.DiagnosticsFilter
@@ -18,9 +19,7 @@ class DiagnosticsTool(
     private val hookManager: HookManager,
 ) : BaseTool<DiagnosticsTool.Args, DiagnosticsTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "Diagnostics",
+    name = NAME,
     description = """
         Reads the IDE's current diagnostics for a specific file.
 
@@ -35,6 +34,10 @@ class DiagnosticsTool(
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
+
+    companion object {
+        const val NAME = "Diagnostics"
+    }
 
     @Serializable
     data class Args(
@@ -113,7 +116,7 @@ class DiagnosticsTool(
         )
     }
 
-    override fun encodeResultToString(result: Result): String {
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String {
         if (result.error != null) {
             return "Failed to read diagnostics for '${result.filePath}': ${result.error}"
                 .truncateToolResult()

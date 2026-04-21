@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.Tool
+import ai.koog.serialization.typeToken
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
@@ -9,8 +10,8 @@ class ConfirmingWriteTool(
     private val delegate: WriteTool,
     private val approve: suspend (name: String, details: String) -> Boolean
 ) : Tool<WriteTool.Args, WriteTool.Result>(
-    argsSerializer = WriteTool.Args.serializer(),
-    resultSerializer = WriteTool.Result.serializer(),
+    argsType = typeToken<WriteTool.Args>(),
+    resultType = typeToken<WriteTool.Result>(),
     name = delegate.name,
     description = delegate.descriptor.description
 ) {
@@ -39,8 +40,8 @@ class ConfirmingLoadSkillTool(
     private val project: Project,
     private val approve: suspend (name: String, details: String) -> Boolean
 ) : Tool<LoadSkillTool.Args, LoadSkillTool.Result>(
-    argsSerializer = LoadSkillTool.Args.serializer(),
-    resultSerializer = LoadSkillTool.Result.serializer(),
+    argsType = typeToken<LoadSkillTool.Args>(),
+    resultType = typeToken<LoadSkillTool.Result>(),
     name = delegate.name,
     description = delegate.descriptor.description
 ) {
@@ -66,8 +67,8 @@ class ConfirmingEditTool(
     private val delegate: EditTool,
     private val approve: suspend (name: String, details: String) -> Boolean
 ) : Tool<EditTool.Args, EditTool.Result>(
-    argsSerializer = EditTool.Args.serializer(),
-    resultSerializer = EditTool.Result.serializer(),
+    argsType = typeToken<EditTool.Args>(),
+    resultType = typeToken<EditTool.Result>(),
     name = delegate.name,
     description = delegate.descriptor.description
 ) {

@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.agents.ext.tool.shell.ShellCommandConfirmation
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.runInEdt
@@ -9,8 +10,8 @@ import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFileManager
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.ToolRunContext
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
@@ -41,9 +42,7 @@ class BashTool(
     private val hookManager: HookManager
 ) : BaseTool<BashTool.Args, BashTool.Result>(
     workingDirectory = project.basePath ?: "",
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "Bash",
+    name = NAME,
     description = $$"""
     Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
     
@@ -180,6 +179,11 @@ class BashTool(
     sessionId = sessionId,
 ) {
 
+    companion object {
+        const val NAME = "Bash"
+    }
+
+
     @Serializable
     data class Args(
         @property:LLMDescription(
@@ -285,7 +289,8 @@ class BashTool(
                             bashId
                         )
                     } else {
-                        val result = runForegroundWithStreaming(resolvedToolId, args, workingDirectory)
+                        val result =
+                            runForegroundWithStreaming(resolvedToolId, args, workingDirectory)
 
                         val postPayload = mapOf(
                             "command" to args.command,
@@ -527,20 +532,21 @@ class BashTool(
         closeProcessStreams(process)
     }
 
-    override fun encodeResultToString(result: Result): String = with(result) {
-        val raw = buildString {
-            appendLine("Command: $command")
-            if (output.isNotEmpty()) {
-                appendLine(output)
-            } else if (exitCode != null) {
-                appendLine("(no output)")
-            }
-            exitCode?.let {
-                appendLine("Exit code: $it")
-            }
-        }.trimEnd()
-        raw.truncateToolResult()
-    }
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
+        with(result) {
+            val raw = buildString {
+                appendLine("Command: $command")
+                if (output.isNotEmpty()) {
+                    appendLine(output)
+                } else if (exitCode != null) {
+                    appendLine("(no output)")
+                }
+                exitCode?.let {
+                    appendLine("Exit code: $it")
+                }
+            }.trimEnd()
+            raw.truncateToolResult()
+        }
 
     private fun executeBackground(workingDirectory: String, command: String): String {
         val bashId = UUID.randomUUID().toString()

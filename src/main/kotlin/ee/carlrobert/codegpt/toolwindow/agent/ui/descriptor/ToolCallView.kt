@@ -20,6 +20,7 @@ import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
+import javax.swing.SwingUtilities
 import javax.swing.*
 
 class ToolCallView(
@@ -57,7 +58,9 @@ class ToolCallView(
     }
 
     fun appendStreamingLine(text: String, isError: Boolean) {
-        streamingPanel.appendLine(text, isError)
+        if (descriptor.supportsStreaming) {
+            streamingPanel.appendLine(text, isError)
+        }
     }
 
     fun getDescriptor(): ToolCallDescriptor = descriptor
@@ -174,7 +177,7 @@ private class ToolCallHeaderPanel(
             val leftGap = if (isDiff && prevWasDiff) 0 else 4
             if (badge.action != null) {
                 val link = ActionLink(badge.text) {
-                    badge.action?.invoke()
+                    badge.action.invoke()
                 }.apply {
                     font = JBUI.Fonts.smallFont()
                 }
@@ -326,6 +329,7 @@ private class ToolCallStreamingPanel : JBPanel<ToolCallStreamingPanel>() {
 
     private val streamingTail: ArrayDeque<Pair<String, Boolean>> = ArrayDeque()
     private val streamingAllLines: ArrayDeque<Pair<String, Boolean>> = ArrayDeque()
+    private var updateScheduled = false
 
     companion object {
         private const val MAX_TAIL_LINES = 3
@@ -378,16 +382,24 @@ private class ToolCallStreamingPanel : JBPanel<ToolCallStreamingPanel>() {
             streamingAllLines.removeFirst()
         }
 
-        updateDisplay()
+        scheduleDisplayUpdate()
     }
 
     fun onCompletion() {
         contentPanel.isVisible = streamingTail.isNotEmpty()
-        revalidate()
-        repaint()
+        scheduleDisplayUpdate()
     }
 
     private fun updateDisplay() {
+        if (streamingTail.isEmpty()) {
+            contentPanel.removeAll()
+            contentPanel.isVisible = false
+            actionsPanel.isVisible = false
+            revalidate()
+            repaint()
+            return
+        }
+
         val html = buildTailHtml()
         val font = JBFont.create(Font(Font.MONOSPACED, Font.PLAIN, JBUI.Fonts.smallFont().size))
 
@@ -401,6 +413,17 @@ private class ToolCallStreamingPanel : JBPanel<ToolCallStreamingPanel>() {
 
         revalidate()
         repaint()
+    }
+
+    private fun scheduleDisplayUpdate() {
+        if (updateScheduled) {
+            return
+        }
+        updateScheduled = true
+        SwingUtilities.invokeLater {
+            updateScheduled = false
+            updateDisplay()
+        }
     }
 
     private fun buildTailHtml(): String {

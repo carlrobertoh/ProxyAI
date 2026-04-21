@@ -1,13 +1,14 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
+import ee.carlrobert.codegpt.agent.agentJson
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import org.jsoup.Jsoup
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -21,9 +22,7 @@ class ResolveLibraryIdTool(
     hookManager: HookManager,
 ) : BaseTool<ResolveLibraryIdTool.Args, ResolveLibraryIdTool.Result>(
     workingDirectory = workingDirectory,
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "ResolveLibraryId",
+    name = NAME,
     description = """
         Use to resolve a library/package name into a Context7-compatible ID before fetching docs. Prefer this when the user asks about libraries, best practices, APIs, or configuration, unless they already provided a valid '/org/project[/version]' ID.
     """.trimIndent(),
@@ -32,6 +31,10 @@ class ResolveLibraryIdTool(
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
+
+    companion object {
+        const val NAME = "ResolveLibraryId"
+    }
 
     @Serializable
     data class Args(
@@ -65,11 +68,6 @@ class ResolveLibraryIdTool(
         ) : Result()
     }
 
-    override val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
-
     override suspend fun doExecute(args: Args): Result = withContext(Dispatchers.IO) {
         try {
             val encodedQuery =
@@ -88,7 +86,8 @@ class ResolveLibraryIdTool(
             }
 
             try {
-                val searchResponse = json.decodeFromString<Context7SearchResponse>(jsonResponse)
+                val searchResponse =
+                    agentJson.decodeFromString<Context7SearchResponse>(jsonResponse)
                 val libraries = searchResponse.results.map { result ->
                     LibraryInfo(
                         id = result.id,
@@ -145,69 +144,70 @@ class ResolveLibraryIdTool(
         return Result.Error(deniedReason)
     }
 
-    override fun encodeResultToString(result: Result): String = when (result) {
-        is Result.Success -> {
-            val s = if (result.libraries.isEmpty()) {
-                "No libraries found for '${result.libraryName}'. Please try with different search terms or check the library name spelling."
-            } else {
-                buildString {
-                    appendLine("Available Libraries:")
-                    appendLine()
-                    appendLine("Each result includes:")
-                    appendLine("- Library ID: Context7-compatible identifier (format: /org/project)")
-                    appendLine("- Name: Library or package name")
-                    appendLine("- Description: Short summary")
-                    appendLine("- Code Snippets: Number of available code examples")
-                    appendLine("- Source Reputation: Authority indicator (High, Medium, Low, or Unknown)")
-                    appendLine("- Benchmark Score: Quality indicator (100 is the highest score)")
-                    appendLine("- Versions: List of versions if available. Use one of those versions if the user provides a version in their query. The format of the version is /org/project/version.")
-                    appendLine()
-                    appendLine("For best results, select libraries based on name match, source reputation, snippet coverage, benchmark score, and relevance to your use case.")
-                    appendLine()
-                    appendLine("----------")
-                    appendLine()
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
+        when (result) {
+            is Result.Success -> {
+                val s = if (result.libraries.isEmpty()) {
+                    "No libraries found for '${result.libraryName}'. Please try with different search terms or check the library name spelling."
+                } else {
+                    buildString {
+                        appendLine("Available Libraries:")
+                        appendLine()
+                        appendLine("Each result includes:")
+                        appendLine("- Library ID: Context7-compatible identifier (format: /org/project)")
+                        appendLine("- Name: Library or package name")
+                        appendLine("- Description: Short summary")
+                        appendLine("- Code Snippets: Number of available code examples")
+                        appendLine("- Source Reputation: Authority indicator (High, Medium, Low, or Unknown)")
+                        appendLine("- Benchmark Score: Quality indicator (100 is the highest score)")
+                        appendLine("- Versions: List of versions if available. Use one of those versions if the user provides a version in their query. The format of the version is /org/project/version.")
+                        appendLine()
+                        appendLine("For best results, select libraries based on name match, source reputation, snippet coverage, benchmark score, and relevance to your use case.")
+                        appendLine()
+                        appendLine("----------")
+                        appendLine()
 
-                    result.libraries.forEach { library ->
-                        appendLine("**${library.name}**")
-                        appendLine()
-                        appendLine("Library ID: `${library.id}`")
-                        if (library.description.isNotBlank()) {
-                            appendLine("Description: ${library.description}")
+                        result.libraries.forEach { library ->
+                            appendLine("**${library.name}**")
+                            appendLine()
+                            appendLine("Library ID: `${library.id}`")
+                            if (library.description.isNotBlank()) {
+                                appendLine("Description: ${library.description}")
+                            }
+                            appendLine("Code Snippets: ${library.codeSnippets}")
+                            appendLine("Source Reputation: ${library.sourceReputation}")
+                            appendLine("Benchmark Score: ${library.benchmarkScore}")
+                            if (!library.versions.isNullOrEmpty()) {
+                                appendLine("Available Versions: ${library.versions.joinToString(", ")}")
+                            }
+                            appendLine()
                         }
-                        appendLine("Code Snippets: ${library.codeSnippets}")
-                        appendLine("Source Reputation: ${library.sourceReputation}")
-                        appendLine("Benchmark Score: ${library.benchmarkScore}")
-                        if (!library.versions.isNullOrEmpty()) {
-                            appendLine("Available Versions: ${library.versions.joinToString(", ")}")
-                        }
-                        appendLine()
-                    }
 
-                    appendLine("**Recommended Selection:**")
-                    val topLibrary = result.libraries.maxByOrNull {
-                        (it.benchmarkScore * 0.4 + it.codeSnippets * 0.3 + when (it.sourceReputation.lowercase()) {
-                            "high" -> 30
-                            "medium" -> 20
-                            "low" -> 10
-                            else -> 0
-                        } * 0.3).toInt()
-                    }
-                    if (topLibrary != null) {
-                        appendLine("Based on the search results for '${result.libraryName}', the most relevant library is:")
-                        appendLine()
-                        appendLine("Library ID: `${topLibrary.id}`")
-                        appendLine("Name: ${topLibrary.name}")
-                        appendLine("Reasoning: Highest combined score of benchmark (${topLibrary.benchmarkScore}), code snippets (${topLibrary.codeSnippets}), and source reputation (${topLibrary.sourceReputation})")
-                    }
-                }.trimEnd()
+                        appendLine("**Recommended Selection:**")
+                        val topLibrary = result.libraries.maxByOrNull {
+                            (it.benchmarkScore * 0.4 + it.codeSnippets * 0.3 + when (it.sourceReputation.lowercase()) {
+                                "high" -> 30
+                                "medium" -> 20
+                                "low" -> 10
+                                else -> 0
+                            } * 0.3).toInt()
+                        }
+                        if (topLibrary != null) {
+                            appendLine("Based on the search results for '${result.libraryName}', the most relevant library is:")
+                            appendLine()
+                            appendLine("Library ID: `${topLibrary.id}`")
+                            appendLine("Name: ${topLibrary.name}")
+                            appendLine("Reasoning: Highest combined score of benchmark (${topLibrary.benchmarkScore}), code snippets (${topLibrary.codeSnippets}), and source reputation (${topLibrary.sourceReputation})")
+                        }
+                    }.trimEnd()
+                }
+                s.truncateToolResult()
             }
-            s.truncateToolResult()
-        }
 
-        is Result.Error -> {
-            ("Failed to resolve library ID: ${result.error}").truncateToolResult()
+            is Result.Error -> {
+                ("Failed to resolve library ID: ${result.error}").truncateToolResult()
+            }
         }
-    }
 
     @Serializable
     private data class Context7SearchResponse(

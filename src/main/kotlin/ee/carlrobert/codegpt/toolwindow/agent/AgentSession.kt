@@ -6,6 +6,7 @@ import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import kotlinx.serialization.json.JsonElement
+import ai.koog.prompt.message.Message as PromptMessage
 
 data class AcpConfigOptionChoice(
     val value: String,
@@ -112,20 +113,23 @@ object AcpConfigOptions {
 data class AgentSession(
     val sessionId: String,
     val conversation: Conversation,
+    var agentId: String? = null,
     var displayName: String = "",
     var serviceType: ServiceType? = null,
     var modelCode: String? = null,
+    var resumeCheckpointRef: CheckpointRef? = null,
+    var seededMessageHistory: List<PromptMessage>? = null,
+    val referencedFiles: List<VirtualFile> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
+    var lastActiveAt: Long = System.currentTimeMillis(),
+
+    // ACP
     var externalAgentId: String? = null,
     var externalAgentSessionId: String? = null,
     var externalAgentMcpServerIds: Set<String> = emptySet(),
     var externalAgentConfigOptions: List<AcpConfigOption> = emptyList(),
     var externalAgentConfigSelections: Map<String, String> = emptyMap(),
     var externalAgentConfigLoading: Boolean = false,
-    var runtimeAgentId: String? = null,
-    var resumeCheckpointRef: CheckpointRef? = null,
-    val referencedFiles: List<VirtualFile> = emptyList(),
-    val createdAt: Long = System.currentTimeMillis(),
-    var lastActiveAt: Long = System.currentTimeMillis()
 ) {
     var externalAgentErrorMessage: String? = null
     var externalAgentPeerProfileId: String? = null

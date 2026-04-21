@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
@@ -23,9 +24,7 @@ class GetLibraryDocsTool(
     hookManager: HookManager
 ) : BaseTool<GetLibraryDocsTool.Args, GetLibraryDocsTool.Result>(
     workingDirectory = workingDirectory,
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "GetLibraryDocs",
+    name = NAME,
     description = """
         Use when the user asks how to use a library, best practices, APIs, configuration, or conventions. Resolve the library first with ResolveLibraryId unless the user provided a Context7-compatible ID. Use mode='code' for API/code, or mode='info' for guides.
     """.trimIndent(),
@@ -34,7 +33,6 @@ class GetLibraryDocsTool(
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
-
     @Serializable
     data class Args(
         @property:LLMDescription(
@@ -177,12 +175,15 @@ class GetLibraryDocsTool(
         return Result.Error(error = deniedReason)
     }
 
-    override fun encodeResultToString(result: Result): String = when (result) {
-        is Result.Success -> result.documentation.truncateToolResult()
-        is Result.Error -> ("Failed to retrieve library documentation: ${result.error}").truncateToolResult()
-    }
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
+        when (result) {
+            is Result.Success -> result.documentation.truncateToolResult()
+            is Result.Error -> ("Failed to retrieve library documentation: ${result.error}").truncateToolResult()
+        }
 
     companion object {
+        const val NAME = "GetLibraryDocs"
+
         fun parseLibraryId(libraryId: String): LibraryComponents {
             val cleaned = libraryId.removePrefix("/")
             val parts = cleaned.split("/")

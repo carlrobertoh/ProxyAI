@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION", "DEPRECATION_ERROR")
+
 package ee.carlrobert.codegpt.psistructure
 
 import com.intellij.openapi.application.ApplicationManager

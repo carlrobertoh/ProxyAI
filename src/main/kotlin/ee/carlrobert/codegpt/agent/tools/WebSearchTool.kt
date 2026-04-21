@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
@@ -22,9 +23,7 @@ class WebSearchTool(
     private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)",
 ) : BaseTool<WebSearchTool.Args, WebSearchTool.Result>(
     workingDirectory = workingDirectory,
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "WebSearch",
+    name = NAME,
     description = """
 IMPORTANT - When NOT to use this tool:
   - DO NOT use WebSearch for library, framework, or technical documentation queries
@@ -184,6 +183,8 @@ IMPORTANT - Use the correct year in search queries:
     }
 
     companion object {
+        const val NAME = "WebSearch"
+
         internal fun normalizeSearchResultUrl(url: String): String {
             if (url.isBlank()) return url
 
@@ -221,7 +222,7 @@ IMPORTANT - Use the correct year in search queries:
         }
     }
 
-    override fun encodeResultToString(result: Result): String =
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
         buildString {
             if (result.results.isEmpty()) {
                 appendLine("No search results found for query: ${result.query}")

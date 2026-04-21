@@ -1,14 +1,9 @@
 package ee.carlrobert.codegpt.agent
 
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-
-private val toolArgumentsJson = Json {
-    ignoreUnknownKeys = true
-}
 
 internal fun normalizeToolArgumentsJson(rawArgs: String?): String? {
     val payload = rawArgs?.trim().orEmpty()
@@ -17,13 +12,13 @@ internal fun normalizeToolArgumentsJson(rawArgs: String?): String? {
     }
 
     val element = runCatching {
-        toolArgumentsJson.parseToJsonElement(payload)
+        agentJson.parseToJsonElement(payload)
     }.getOrNull() ?: return null
 
     return normalizeToolArgumentsElement(element)?.toString()
 }
 
-private tailrec fun normalizeToolArgumentsElement(element: JsonElement): JsonObject? {
+private fun normalizeToolArgumentsElement(element: JsonElement): JsonObject? {
     return when (element) {
         is JsonObject -> element
         is JsonPrimitive -> {
@@ -35,7 +30,7 @@ private tailrec fun normalizeToolArgumentsElement(element: JsonElement): JsonObj
                     null
                 } else {
                     val nested = runCatching {
-                        toolArgumentsJson.parseToJsonElement(nestedPayload)
+                        agentJson.parseToJsonElement(nestedPayload)
                     }.getOrNull() ?: return null
                     normalizeToolArgumentsElement(nested)
                 }

@@ -18,6 +18,7 @@ class ReasoningFrameTextAdapterTest {
         assertThat(
             adapter.consume(
                 StreamFrame.ReasoningComplete(
+                    id = "1",
                     text = listOf("step 1 step 2"),
                     summary = emptyList(),
                     encrypted = null,
@@ -34,6 +35,7 @@ class ReasoningFrameTextAdapterTest {
         assertThat(
             adapter.consume(
                 StreamFrame.ReasoningComplete(
+                    id = "1",
                     text = listOf("full reasoning"),
                     summary = emptyList(),
                     encrypted = null,
@@ -53,6 +55,7 @@ class ReasoningFrameTextAdapterTest {
         assertThat(
             adapter.consume(
                 StreamFrame.ReasoningComplete(
+                    id = "1",
                     text = listOf("delta"),
                     summary = emptyList(),
                     encrypted = null,

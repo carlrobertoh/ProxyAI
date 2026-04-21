@@ -27,9 +27,13 @@ repositories {
 dependencies {
   if (project.name != rootProject.name) {
     intellijPlatform {
-      val type = providers.gradleProperty("platformType")
+      val type = providers.gradleProperty("platformType").get()
       val version = providers.gradleProperty("platformVersion")
-      create(type, version)
+      if (type == "IC") {
+        intellijIdea(version)
+      } else {
+        create(type, version)
+      }
 
       testFramework(TestFrameworkType.Platform)
     }

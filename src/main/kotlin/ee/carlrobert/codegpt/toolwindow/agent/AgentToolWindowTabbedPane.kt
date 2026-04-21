@@ -205,6 +205,18 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         return Optional.ofNullable(activeTabMapping[getTitleAt(selectedIndex)])
     }
 
+    fun selectSession(sessionId: String): Optional<AgentToolWindowTabPanel> {
+        val title = tryFindTabTitle(sessionId).orElse(null) ?: return Optional.empty()
+        val index = indexOfTab(title)
+        if (index < 0) {
+            return Optional.empty()
+        }
+        selectedIndex = index
+        val panel = activeTabMapping[title] ?: return Optional.empty()
+        panel.requestFocusForTextArea()
+        return Optional.of(panel)
+    }
+
     fun clearAll() {
         if (activeTabMapping.isEmpty()) {
             return
@@ -217,6 +229,21 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
         removeAll()
         activeTabMapping.clear()
         onAllTabsClosed()
+    }
+
+    fun closeOtherTabsExcept(sessionId: String) {
+        val titlesToClose = activeTabMapping.entries
+            .asSequence()
+            .filter { it.value.getSessionId() != sessionId }
+            .map { it.key }
+            .toList()
+        val indicesToClose = titlesToClose
+            .map { indexOfTab(it) }
+            .filter { it >= 0 }
+            .sortedDescending()
+
+        indicesToClose.forEach(::closeTabAt)
+        selectSession(sessionId)
     }
 
     fun renameTab(tabIndex: Int, newName: String) {
@@ -406,20 +433,7 @@ class AgentToolWindowTabbedPane(private val project: Project) : JBTabbedPane(), 
                 if (selectedPopupTabIndex < 0) return@createPopupMenuItem
                 val selectedPopupTabTitle = getTitleAt(selectedPopupTabIndex)
                 val tabPanel = activeTabMapping[selectedPopupTabTitle] ?: return@createPopupMenuItem
-                val keepSessionId = tabPanel.getSessionId()
-                sessionStates.keys.toList()
-                    .filter { it != keepSessionId }
-                    .forEach { sessionStates.remove(it) }
-                activeTabMapping.entries
-                    .filter { it.key != selectedPopupTabTitle }
-                    .forEach { entry ->
-                        project.service<AgentToolWindowContentManager>()
-                            .removeSession(entry.value.getSessionId())
-                        Disposer.dispose(entry.value)
-                    }
-                removeAll()
-                activeTabMapping.clear()
-                addNewTab(tabPanel)
+                closeOtherTabsExcept(tabPanel.getSessionId())
             })
         }
 

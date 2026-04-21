@@ -1,11 +1,13 @@
 package ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.agent.ToolName
 import ee.carlrobert.codegpt.agent.external.events.AcpBashPreviewArgs
 import ee.carlrobert.codegpt.agent.external.events.AcpSearchPreviewArgs
 import ee.carlrobert.codegpt.agent.tools.*
@@ -32,6 +34,8 @@ import kotlin.math.absoluteValue
 
 object ToolCallDescriptorFactory {
 
+    private val logger = thisLogger()
+
     fun create(
         project: Project,
         toolName: String,
@@ -40,9 +44,13 @@ object ToolCallDescriptorFactory {
         overrideKind: ToolKind? = null,
         summary: String? = null
     ): ToolCallDescriptor {
-        val kind = overrideKind ?: detectToolKind(toolName, args, result)
-        val projectId = project.locationHash
+        val name = ToolName.entries.find { it.id == toolName || it.aliases.contains(toolName) }
+        val kind = overrideKind ?: detectToolKind(name, args, result)
+        if (kind == ToolKind.OTHER) {
+            logger.warn("Unrecognized tool descriptor toolName=$toolName}")
+        }
 
+        val projectId = project.locationHash
         return when (kind) {
             ToolKind.SEARCH -> createSearchDescriptor(args, result, projectId)
             ToolKind.READ -> createReadDescriptor(args, result, projectId)
@@ -56,6 +64,7 @@ object ToolCallDescriptorFactory {
             ToolKind.WEB -> createWebDescriptor(args, result, projectId)
             ToolKind.TASK -> createTaskDescriptor(args, result, projectId, summary)
             ToolKind.MCP -> createMcpDescriptor(toolName, args, result, projectId)
+
             ToolKind.LIBRARY_RESOLVE -> createLibraryResolveDescriptor(args, result, projectId)
             ToolKind.LIBRARY_DOCS -> createLibraryDocsDescriptor(args, result, projectId)
             ToolKind.SKILL -> createSkillDescriptor(args, result, projectId)
@@ -66,26 +75,26 @@ object ToolCallDescriptorFactory {
         }
     }
 
-    private fun detectToolKind(toolName: String, args: Any, result: Any?): ToolKind {
+    private fun detectToolKind(toolName: ToolName?, args: Any, result: Any?): ToolKind {
         return when {
-            toolName == "IntelliJSearch" || args is IntelliJSearchTool.Args || args is AcpSearchPreviewArgs -> ToolKind.SEARCH
-            toolName == "Read" || args is ReadTool.Args -> ToolKind.READ
-            toolName == "Write" || args is WriteTool.Args -> ToolKind.WRITE
-            toolName == "Edit" || args is EditTool.Args -> ToolKind.EDIT
-            toolName == "Bash" || args is BashTool.Args || args is AcpBashPreviewArgs -> ToolKind.BASH
-            toolName == "BashOutput" || args is BashOutputTool.Args -> ToolKind.BASH_OUTPUT
-            toolName == "KillShell" || args is KillShellTool.Args -> ToolKind.KILL_SHELL
-            toolName == "WebSearch" || args is WebSearchTool.Args || result is WebSearchTool.Result -> ToolKind.WEB
-            toolName == "WebFetch" || args is WebFetchTool.Args || result is WebFetchTool.Result -> ToolKind.WEB
+            toolName == ToolName.INTELLIJ_SEARCH || args is IntelliJSearchTool.Args || args is AcpSearchPreviewArgs -> ToolKind.SEARCH
+            toolName == ToolName.READ || args is ReadTool.Args -> ToolKind.READ
+            toolName == ToolName.WRITE || args is WriteTool.Args -> ToolKind.WRITE
+            toolName == ToolName.EDIT || args is EditTool.Args -> ToolKind.EDIT
+            toolName == ToolName.BASH || args is BashTool.Args || args is AcpBashPreviewArgs -> ToolKind.BASH
+            toolName == ToolName.BASH_OUTPUT || args is BashOutputTool.Args -> ToolKind.BASH_OUTPUT
+            toolName == ToolName.KILL_SHELL || args is KillShellTool.Args -> ToolKind.KILL_SHELL
+            toolName == ToolName.WEB_SEARCH || args is WebSearchTool.Args || result is WebSearchTool.Result -> ToolKind.WEB
+            toolName == ToolName.WEB_FETCH || args is WebFetchTool.Args || result is WebFetchTool.Result -> ToolKind.WEB
             looksLikeWebPayload(args) -> ToolKind.WEB
-            toolName == "Task" || args is TaskTool.Args -> ToolKind.TASK
-            toolName == "MCP" || args is McpTool.Args || result is McpTool.Result -> ToolKind.MCP
-            toolName == "ResolveLibraryId" || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
-            toolName == "GetLibraryDocs" || args is GetLibraryDocsTool.Args -> ToolKind.LIBRARY_DOCS
-            toolName == "LoadSkill" || args is LoadSkillTool.Args -> ToolKind.SKILL
-            toolName == "AskUserQuestion" || args is AskUserQuestionTool.Args -> ToolKind.ASK_QUESTION
-            toolName == "Exit" -> ToolKind.EXIT
-            toolName == "Diagnostics" || args is DiagnosticsTool.Args -> ToolKind.DIAGNOSTICS
+            toolName == ToolName.TASK || args is TaskTool.Args -> ToolKind.TASK
+            toolName == ToolName.MCP || args is McpTool.Args || result is McpTool.Result -> ToolKind.MCP
+            toolName == ToolName.RESOLVE_LIBRARY_ID || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
+            toolName == ToolName.GET_LIBRARY_DOCS || args is GetLibraryDocsTool.Args -> ToolKind.LIBRARY_DOCS
+            toolName == ToolName.LOAD_SKILL || args is LoadSkillTool.Args -> ToolKind.SKILL
+            toolName == ToolName.ASK_USER_QUESTION || args is AskUserQuestionTool.Args -> ToolKind.ASK_QUESTION
+            toolName == ToolName.EXIT -> ToolKind.EXIT
+            toolName == ToolName.DIAGNOSTICS || args is DiagnosticsTool.Args -> ToolKind.DIAGNOSTICS
             else -> ToolKind.OTHER
         }
     }
@@ -470,14 +479,14 @@ object ToolCallDescriptorFactory {
             is AcpBashPreviewArgs -> args.command ?: args.title
             is BashOutputTool.Args -> args.bashId
             is KillShellTool.Args -> "kill_shell"
-            else -> "Unknown"
+            else -> null
         }
         val isGenericBashPreview = args is AcpBashPreviewArgs &&
-            args.command == null &&
-            args.title.equals("Run shell command", ignoreCase = true)
-        val titleMain = if (isGenericBashPreview) "Pending command" else truncateCommand(command)
+                args.command == null &&
+                args.title.equals("Run shell command", ignoreCase = true)
+        val titleMain = if (command == null || isGenericBashPreview)
+            "Pending command" else truncateCommand(command)
         val tooltip = if (isGenericBashPreview) "Command pending approval" else "Command: $command"
-
 
         return ToolCallDescriptor(
             kind = ToolKind.BASH,
@@ -496,10 +505,10 @@ object ToolCallDescriptorFactory {
         return if (result is IntelliJSearchTool.Result) {
             listOf(
                 Badge(
-                "[${result.totalMatches} matches]",
-                JBColor.BLUE,
-                action = { showTextDialog(result.output, "Search Results") }
-            ))
+                    "[${result.totalMatches} matches]",
+                    JBColor.BLUE,
+                    action = { showTextDialog(result.output, "Search Results") }
+                ))
         } else {
             emptyList()
         }
@@ -520,7 +529,7 @@ object ToolCallDescriptorFactory {
             scopeOrPath.ifBlank {
                 searchPreviewArgs?.title?.takeIf {
                     it.isNotBlank() && !it.equals("search", ignoreCase = true)
-                } ?: "Search"
+                } ?: "Pending query"
             }
         } else {
             buildSearchDisplay(truncatePattern(pattern), scopeOrPath)
@@ -532,7 +541,14 @@ object ToolCallDescriptorFactory {
             titlePrefix = "Search:",
             titleMain = titleMain,
             tooltip = if (pattern.isBlank()) {
-                searchPreviewArgs?.path?.let { "Search in $it" } ?: "Search"
+                searchPreviewArgs?.path?.let { "Search in $it" }
+                    ?: searchPreviewArgs?.title?.takeIf {
+                        it.isNotBlank() && !it.equals(
+                            "search",
+                            ignoreCase = true
+                        )
+                    }
+                    ?: "Search query pending"
             } else if (scopeOrPath.isBlank()) {
                 "Search: \"$pattern\""
             } else {
@@ -614,7 +630,16 @@ object ToolCallDescriptorFactory {
 
     private fun looksLikeWebPayload(args: Any): Boolean {
         return when (args) {
-            is JsonObject -> jsonObjectString(args, "url", "uri", "href", "link", "query", "q") != null
+            is JsonObject -> jsonObjectString(
+                args,
+                "url",
+                "uri",
+                "href",
+                "link",
+                "query",
+                "q"
+            ) != null
+
             is Map<*, *> -> mapString(args, "url", "uri", "href", "link", "query", "q") != null
             is String -> extractFirstUrl(args) != null
             else -> false
@@ -963,15 +988,15 @@ object ToolCallDescriptorFactory {
         return if (result is GetLibraryDocsTool.Result.Success) {
             listOf(
                 Badge(
-                "[View Results]",
-                JBColor.BLUE,
-                action = {
-                    showTextDialog(
-                        result.documentation,
-                        "Documentation: ${result.libraryId}"
-                    )
-                }
-            ))
+                    "[View Results]",
+                    JBColor.BLUE,
+                    action = {
+                        showTextDialog(
+                            result.documentation,
+                            "Documentation: ${result.libraryId}"
+                        )
+                    }
+                ))
         } else {
             emptyList()
         }
@@ -983,10 +1008,10 @@ object ToolCallDescriptorFactory {
                 val argsObj = args as? WebSearchTool.Args
                 val badges = mutableListOf(
                     Badge(
-                    "[${result.results.size} results]",
-                    JBColor.BLUE,
-                    action = { showWebResultsDialog(result) }
-                ))
+                        "[${result.results.size} results]",
+                        JBColor.BLUE,
+                        action = { showWebResultsDialog(result) }
+                    ))
                 if (argsObj != null && !argsObj.allowedDomains.isNullOrEmpty()) {
                     badges.add(Badge("[${argsObj.allowedDomains.size} domains]", JBColor.GRAY))
                 }

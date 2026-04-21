@@ -52,12 +52,12 @@ import ee.carlrobert.codegpt.util.StringUtil.stripThinkingBlocks
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import kotlinx.coroutines.*
-import kotlinx.serialization.json.Json
 import java.util.*
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
+import ai.koog.prompt.message.Message as PromptMessage
 
 class AgentToolWindowTabPanel(
     private val project: Project,
@@ -66,12 +66,6 @@ class AgentToolWindowTabPanel(
 ) : BorderLayoutPanel(), Disposable {
     companion object {
         private const val RECOVERED_CONVERSATION_RENDER_BATCH_SIZE = 6
-    }
-
-    private val replayJson = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        explicitNulls = false
     }
 
     private val scrollablePanel = ChatToolWindowScrollablePanel()
@@ -193,11 +187,9 @@ class AgentToolWindowTabPanel(
         onRunCheckpointUpdatedCallback = { runMessageId, ref ->
             updateRunCheckpoint(runMessageId, ref)
         },
-        onQueuedMessagesResolved = { message ->
+        onQueuedMessagePromoted = { message ->
             runInEdt {
-                clearQueuedMessagesAndCreateNewResponse(
-                    message.uiText
-                )
+                promoteQueuedMessageToActiveRun(message)
             }
         }
     )
@@ -297,15 +289,14 @@ class AgentToolWindowTabPanel(
 
     fun submitMessage(message: MessageWithContext) {
         if (message.text.isBlank()) return
-        disposeLandingPanelIfPresent()
-        scrollablePanel.clearLandingViewIfVisible()
-        val agentModelSelection =
-            service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
-        agentSession.serviceType = agentModelSelection.provider
-        agentSession.modelCode = agentModelSelection.selectionId
+        clearLandingView()
+
+        service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT).let {
+            agentSession.serviceType = it.provider
+            agentSession.modelCode = it.selectionId
+        }
 
         val agentService = project.service<AgentService>()
-
         if (agentService.isSessionRunning(sessionId)) {
             addQueuedMessage(message.text)
             userInputPanel.clearText()
@@ -468,46 +459,43 @@ class AgentToolWindowTabPanel(
     }
 
     private fun createAgentRuntimeOptionsSelector(inputPanel: UserInputPanel): JComponent {
-        return AgentRuntimeOptionsComboBoxAction(
-            agentSession,
-            { optionId, value ->
-                backgroundScope.launch {
-                    agentSession.externalAgentConfigLoading = true
-                    withContext(Dispatchers.EDT) {
-                        inputPanel.refreshModelDependentState()
+        return AgentRuntimeOptionsComboBoxAction(agentSession) { optionId, value ->
+            backgroundScope.launch {
+                agentSession.externalAgentConfigLoading = true
+                withContext(Dispatchers.EDT) {
+                    inputPanel.refreshModelDependentState()
+                }
+                try {
+                    runCatching {
+                        project.service<ExternalAcpAgentService>()
+                            .setSessionConfigOption(agentSession, optionId, value)
+                    }.onFailure { ex ->
+                        OverlayUtil.showNotification(
+                            "${displayExternalAgentName(agentSession.externalAgentId ?: "agent")} option update failed. ${
+                                buildExternalAgentConfigFailureMessage(ex)
+                            }",
+                            NotificationType.ERROR
+                        )
                     }
-                    try {
-                        runCatching {
-                            project.service<ExternalAcpAgentService>()
-                                .setSessionConfigOption(agentSession, optionId, value)
-                        }.onFailure { ex ->
-                            OverlayUtil.showNotification(
-                                "${displayExternalAgentName(agentSession.externalAgentId ?: "agent")} option update failed. ${
-                                    buildExternalAgentConfigFailureMessage(ex)
-                                }",
-                                NotificationType.ERROR
-                            )
-                        }
-                    } finally {
-                        agentSession.externalAgentConfigLoading = false
-                    }
-                    withContext(Dispatchers.EDT) {
-                        inputPanel.refreshModelDependentState()
-                    }
+                } finally {
+                    agentSession.externalAgentConfigLoading = false
+                }
+                withContext(Dispatchers.EDT) {
+                    inputPanel.refreshModelDependentState()
                 }
             }
-        ).createCustomComponent(com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN)
+        }.createCustomComponent(com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN)
     }
 
     private fun displayLandingView() {
-        disposeLandingPanelIfPresent()
+        clearLandingView()
         val landingPanel = createLandingView()
         activeLandingPanel = landingPanel
         scrollablePanel.displayLandingView(landingPanel)
     }
 
     private fun displayRecoveredConversation() {
-        disposeLandingPanelIfPresent()
+        clearLandingView()
         scrollablePanel.clearAll()
         recoveredConversationJob?.cancel()
         recoveredConversationJob = backgroundScope.launch {
@@ -719,7 +707,6 @@ class AgentToolWindowTabPanel(
         if (payload.isBlank()) return ""
 
         return ToolSpecs.decodeArgsOrNull(
-            json = replayJson,
             toolName = toolName,
             payload = payload
         ) ?: payload
@@ -730,7 +717,6 @@ class AgentToolWindowTabPanel(
         if (payload.isBlank()) return null
 
         return ToolSpecs.decodeResultOrNull(
-            json = replayJson,
             toolName = toolName,
             payload = payload
         ) ?: payload
@@ -748,7 +734,8 @@ class AgentToolWindowTabPanel(
         return AgentToolWindowLandingPanel(project)
     }
 
-    private fun disposeLandingPanelIfPresent() {
+    private fun clearLandingView() {
+        scrollablePanel.clearLandingViewIfVisible()
         activeLandingPanel?.let { Disposer.dispose(it) }
         activeLandingPanel = null
     }
@@ -810,13 +797,23 @@ class AgentToolWindowTabPanel(
         queuedMessageContainer.repaint()
     }
 
-    private fun clearQueuedMessagesAndCreateNewResponse(messageText: String) {
-        clearQueuedMessages()
+    private fun promoteQueuedMessageToActiveRun(message: MessageWithContext) {
+        removeQueuedMessage(message.uiText)
+        runCatching {
+            project.service<AgentToolWindowContentManager>()
+                .setTabStatus(sessionId, AgentToolWindowTabbedPane.TabStatus.RUNNING)
+        }
 
-        val message = Message(messageText)
+        val rollbackRunId = rollbackService.startSession(sessionId)
+        rollbackPanel.refreshOperations()
+
         val messagePanel = scrollablePanel.addMessage(message.id)
-        val userPanel = UserMessagePanel(project, message, this)
-        userPanel.addCopyAction { CopyAction.copyToClipboard(message.prompt) }
+        val userPanel = UserMessagePanel(
+            project,
+            MessageBuilder(project, message.text).withTags(message.tags).build(),
+            this
+        )
+        userPanel.addCopyAction { CopyAction.copyToClipboard(message.text) }
         messagePanel.add(userPanel)
 
         val responseBody = ChatMessageResponseBody(project, false, false, false, false, true, this)
@@ -824,19 +821,19 @@ class AgentToolWindowTabPanel(
         responsePanel.setResponseContent(responseBody)
         messagePanel.add(responsePanel)
 
-        val rollbackRunId = activeRunMessageId
-            ?.let { runCardsByMessageId[it] }
-            ?.rollbackRunId
+        registerRunCard(
+            runMessageId = message.id,
+            rollbackRunId = rollbackRunId,
+            responsePanel = responsePanel,
+            prompt = message.text
+        )
 
         eventHandler.resetForNewSubmission()
         eventHandler.setCurrentResponseBody(responseBody)
         eventHandler.setCurrentRollbackRunId(rollbackRunId)
-
-        activeRunMessageId?.let { runMessageId ->
-            runCardsByMessageId[runMessageId]?.let { state ->
-                state.responsePanel = responsePanel
-            }
-        }
+        loadingLabel.text = CodeGPTBundle.get("toolwindow.chat.loading")
+        loadingLabel.isVisible = true
+        userInputPanel.setStopEnabled(true)
 
         scrollablePanel.update()
     }
@@ -933,18 +930,23 @@ class AgentToolWindowTabPanel(
         )
     }
 
-    private fun applySeededSessionState(seededConversation: Conversation, seedRef: CheckpointRef) {
+    private fun applySeededSessionState(
+        seededConversation: Conversation,
+        seededMessageHistory: List<PromptMessage>
+    ) {
         conversation.messages = seededConversation.messages
         runCardsByMessageId.clear()
         activeRunMessageId = null
         timelineController.invalidateTimelineCache()
 
-        agentSession.runtimeAgentId = seedRef.agentId
-        agentSession.resumeCheckpointRef = seedRef
+        agentSession.agentId = null
+        agentSession.resumeCheckpointRef = null
+        agentSession.seededMessageHistory = seededMessageHistory
 
         val contentManager = project.service<AgentToolWindowContentManager>()
-        contentManager.setRuntimeAgentId(sessionId, seedRef.agentId)
-        contentManager.setResumeCheckpointRef(sessionId, seedRef)
+        contentManager.setAgentId(sessionId, null)
+        contentManager.setResumeCheckpointRef(sessionId, null)
+        contentManager.setSeededMessageHistory(sessionId, seededMessageHistory)
 
         project.service<AgentService>().clearPendingMessages(sessionId)
         loadingLabel.isVisible = false
@@ -978,7 +980,7 @@ class AgentToolWindowTabPanel(
 
     override fun dispose() {
         recoveredConversationJob?.cancel()
-        disposeLandingPanelIfPresent()
+        clearLandingView()
         ToolRunContext.cleanupSession(sessionId)
         runCardsByMessageId.clear()
         activeRunMessageId = null

@@ -36,6 +36,8 @@ class CodeGPTService private constructor(val project: Project) {
                     if (apiKey.isNullOrEmpty()) null
                     else ProxyAILLMClient(apiKey).use { client -> client.getUserDetails() }
                 }
+                if (project.isDisposed) return@launch
+
                 if (userDetails != null) {
                     if (!userDetails.fullName.isNullOrEmpty()) {
                         service<GeneralSettings>().state.run {
@@ -57,6 +59,7 @@ class CodeGPTService private constructor(val project: Project) {
                     .syncPublisher<CodeGPTUserDetailsNotifier>(CODEGPT_USER_DETAILS_TOPIC)
                     .userDetailsObtained(userDetails)
             } catch (ex: Exception) {
+                if (project.isDisposed) return@launch
                 logger.warn(ex)
             }
         }

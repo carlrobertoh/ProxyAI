@@ -1,9 +1,11 @@
 package ee.carlrobert.codegpt.agent
 
+import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.models.ModelCatalog
 import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.service.ServiceType
-import ee.carlrobert.codegpt.settings.skills.SkillDescriptor
+import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.settings.skills.SkillPromptFormatter
 import ee.carlrobert.codegpt.util.file.FileUtil
 import java.time.LocalDate
@@ -22,18 +24,18 @@ internal object AgentSystemPrompts {
     private val anthropicPrompt: String by lazy { loadPrompt("/prompts/agent/anthropic.txt") }
 
     fun createSystemPrompt(
+        project: Project,
         provider: ServiceType,
         modelSelection: ModelSelection?,
-        projectPath: String? = null,
-        skills: List<SkillDescriptor> = emptyList()
     ): String {
+        val projectPath = project.basePath
         val base = when (provider) {
             ServiceType.PROXYAI -> createProxyAiSystemPrompt(modelSelection, projectPath)
             ServiceType.OPENAI -> createOpenAiSystemPrompt(projectPath)
             ServiceType.GOOGLE -> createGeminiSystemPrompt(projectPath)
             else -> createAnthropicSystemPrompt(projectPath)
         }
-        val skillsSection = buildSkillsSection(skills)
+        val skillsSection = buildSkillsSection(project)
         return if (skillsSection.isBlank()) base else "$base\n\n$skillsSection"
     }
 
@@ -82,7 +84,8 @@ internal object AgentSystemPrompts {
         return FileUtil.getResourceContent(path).trimEnd()
     }
 
-    private fun buildSkillsSection(skills: List<SkillDescriptor>): String {
+    private fun buildSkillsSection(project: Project): String {
+        val skills = project.service<SkillDiscoveryService>().listSkills()
         if (skills.isEmpty()) return ""
         return SkillPromptFormatter.formatForSystemPrompt(skills)
     }

@@ -1,17 +1,16 @@
 package ee.carlrobert.codegpt.agent.external.events
 
 import com.agentclientprotocol.model.*
+import ee.carlrobert.codegpt.agent.agentJson
 import ee.carlrobert.codegpt.agent.external.AcpToolCallDecoder
 import ee.carlrobert.codegpt.agent.external.AcpToolCallStatus
 import ee.carlrobert.codegpt.agent.external.AcpToolEventFlavor
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.*
 
 class AcpToolCallDecoderTest {
 
-    private val json = Json { ignoreUnknownKeys = true }
-    private val decoder = AcpToolCallDecoder(json)
+    private val decoder = AcpToolCallDecoder(agentJson)
 
     @Test
     fun decodeToolCallStartedProducesTypedTerminalContent() {
@@ -22,7 +21,7 @@ class AcpToolCallDecoderTest {
             status = ToolCallStatus.IN_PROGRESS,
             content = listOf(ToolCallContent.Terminal("terminal-1")),
             locations = listOf(ToolCallLocation("src/Main.kt")),
-            rawInput = json.parseToJsonElement("""{"command":"npm test"}""")
+            rawInput = agentJson.parseToJsonElement("""{"command":"npm test"}""")
         )
 
         val event = decoder.decodeExternalEvent(AcpToolEventFlavor.STANDARD, update)
@@ -47,7 +46,7 @@ class AcpToolCallDecoderTest {
             kind = ToolKind.EDIT,
             status = ToolCallStatus.COMPLETED,
             content = listOf(ToolCallContent.Diff("src/Main.kt", "old", "new")),
-            rawInput = json.parseToJsonElement(
+            rawInput = agentJson.parseToJsonElement(
                 """{"file_path":"src/Main.kt","old_string":"old","new_string":"new"}"""
             )
         )
@@ -75,7 +74,7 @@ class AcpToolCallDecoderTest {
                 status = ToolCallStatus.IN_PROGRESS,
                 content = listOf(ToolCallContent.Diff("src/Main.kt", "old", "new")),
                 locations = listOf(ToolCallLocation("src/Main.kt")),
-                rawInput = json.parseToJsonElement(
+                rawInput = agentJson.parseToJsonElement(
                     """{"file_path":"src/Main.kt","old_string":"old","new_string":"new"}"""
                 )
             ),
@@ -162,7 +161,7 @@ class AcpToolCallDecoderTest {
 
     @Test
     fun decodeUnknownSessionUpdatePreservesRawPayload() {
-        val rawJson = json.parseToJsonElement(
+        val rawJson = agentJson.parseToJsonElement(
             """{"sessionUpdate":"future_update","flag":true,"count":3}"""
         ).jsonObject
         val update = SessionUpdate.UnknownSessionUpdate(
@@ -298,7 +297,7 @@ class AcpToolCallDecoderTest {
             kind = ToolKind.SEARCH,
             status = ToolCallStatus.IN_PROGRESS,
             locations = listOf(ToolCallLocation("/tmp/src")),
-            rawInput = json.parseToJsonElement("""{"parsed_cmd":[{"type":"search","path":"/tmp/src"}]}""")
+            rawInput = agentJson.parseToJsonElement("""{"parsed_cmd":[{"type":"search","path":"/tmp/src"}]}""")
         )
 
         val event = decoder.decodeExternalEvent(AcpToolEventFlavor.ZED_ADAPTER, update)

@@ -261,14 +261,13 @@ public class ChatToolWindowTabPanel implements Disposable {
         .filter(TagDetails::getSelected)
         .collect(Collectors.toList());
 
-    var builder = ChatCompletionParameters.builder(conversation, message)
+    var builder = ChatCompletionParameters.builder(project, conversation, message)
         .sessionId(chatSession.getId())
         .conversationType(conversationType)
         .imageDetailsFromPath(CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project))
         .referencedFiles(ChatContextSupport.getReferencedFiles(project, selectedTags))
         .history(ChatContextSupport.getHistory(getSelectedTags()))
         .psiStructure(psiStructure)
-        .project(project)
         .chatMode(userInputPanel.getChatMode());
 
     findTagOfType(selectedTags, PersonaTagDetails.class)
@@ -753,9 +752,8 @@ public class ChatToolWindowTabPanel implements Disposable {
     var userMessagePanel = new UserMessagePanel(project, message, this);
     userMessagePanel.addCopyAction(() -> CopyAction.copyToClipboard(message.getPrompt()));
     userMessagePanel.addReloadAction(() -> reloadMessage(
-        ChatCompletionParameters.builder(conversation, message)
+        ChatCompletionParameters.builder(project, conversation, message)
             .conversationType(ConversationType.DEFAULT)
-            .project(project)
             .chatMode(userInputPanel.getChatMode())
             .build(),
         userMessagePanel));

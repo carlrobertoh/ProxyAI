@@ -1,6 +1,8 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.Tool
+import ai.koog.serialization.TypeToken
+import ai.koog.serialization.typeToken
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
@@ -24,8 +26,6 @@ import kotlin.reflect.KClass
  * @param sessionId Optional session identifier for tracking
  */
 abstract class BaseTool<Args : Any, Result : Any>(
-    argsSerializer: kotlinx.serialization.KSerializer<Args>,
-    resultSerializer: kotlinx.serialization.KSerializer<Result>,
     name: String,
     description: String,
     protected val workingDirectory: String,
@@ -34,8 +34,8 @@ abstract class BaseTool<Args : Any, Result : Any>(
     private val argsClass: KClass<Args>,
     private val resultClass: KClass<Result>
 ) : Tool<Args, Result>(
-    argsSerializer = argsSerializer,
-    resultSerializer = resultSerializer,
+    argsType = typeToken(argsClass),
+    resultType = typeToken(resultClass),
     name = name,
     description = description
 ) {

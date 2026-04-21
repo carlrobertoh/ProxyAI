@@ -4,6 +4,7 @@ import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
+import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import javax.swing.JPanel
 
@@ -28,6 +29,7 @@ internal sealed interface CompletionRunnerRequest {
     ) : CompletionRunnerRequest
 
     data class Chat(
+        val project: Project,
         val serviceType: ServiceType,
         val executor: PromptExecutor,
         val model: LLModel,

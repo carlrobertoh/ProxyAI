@@ -94,11 +94,26 @@ internal class AcpSessionUpdateBridge(
         val effectiveToolCall = mergeToolCallSnapshots(currentToolCall, toolCall)
         val status = effectiveToolCall.status ?: return
 
+        if (currentToolCall != null &&
+            (currentToolCall.toolName != effectiveToolCall.toolName ||
+                (currentToolCall.args == null && effectiveToolCall.args != null))
+        ) {
+            trace(
+                "tool-call/refined session=$proxySessionId id=${toolCall.id} oldTool=${currentToolCall.toolName} newTool=${effectiveToolCall.toolName} oldArgs=${currentToolCall.args?.javaClass?.simpleName ?: "null"} newArgs=${effectiveToolCall.args?.javaClass?.simpleName ?: "null"}"
+            )
+        }
+
         toolCallsById[effectiveToolCall.id] = effectiveToolCall
 
-        if ((currentToolCall?.args == null && effectiveToolCall.args != null) ||
-            (currentToolCall == null && !shouldDeferToolStart(effectiveToolCall))
-        ) {
+        if (currentToolCall == null) {
+            if (!shouldDeferToolStart(effectiveToolCall)) {
+                events.onToolStarting(
+                    effectiveToolCall.id,
+                    effectiveToolCall.toolName,
+                    effectiveToolCall.args.toUiArgs()
+                )
+            }
+        } else if (toolPresentationChanged(currentToolCall, effectiveToolCall)) {
             events.onToolStarting(
                 effectiveToolCall.id,
                 effectiveToolCall.toolName,
@@ -111,6 +126,14 @@ internal class AcpSessionUpdateBridge(
         }
 
         completeToolCall(effectiveToolCall, events)
+    }
+
+    private fun toolPresentationChanged(
+        currentToolCall: AcpToolCallSnapshot,
+        effectiveToolCall: AcpToolCallSnapshot
+    ): Boolean {
+        return currentToolCall.toolName != effectiveToolCall.toolName ||
+            currentToolCall.args != effectiveToolCall.args
     }
 
     private fun completeToolCall(

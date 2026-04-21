@@ -40,8 +40,8 @@ internal class ZedAdapterToolCallNormalizer : AcpToolCallNormalizer {
                         defaultTitle = "Search",
                         toolName = "IntelliJSearch",
                         typedArgs = support.decodeSearchArgsOrPreview(
-                            context.rawTitle,
-                            context.rawInput,
+                            context.rawTitle.ifBlank { "Search" },
+                            null,
                             context.locations
                         )
                     )

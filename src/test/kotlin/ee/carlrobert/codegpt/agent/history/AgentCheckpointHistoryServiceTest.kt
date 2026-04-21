@@ -7,16 +7,16 @@ import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import com.intellij.openapi.components.service
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.groups.Tuple.tuple
 import testsupport.IntegrationTest
+import java.util.*
 import kotlin.io.path.Path
 import kotlin.time.Clock
 import kotlin.time.Instant
-import java.util.UUID
 
 class AgentCheckpointHistoryServiceTest : IntegrationTest() {
 
@@ -253,7 +253,9 @@ class AgentCheckpointHistoryServiceTest : IntegrationTest() {
                             "Project-level instruction payload",
                             RequestMetaInfo(
                                 timestamp = Clock.System.now(),
-                                metadata = JsonObject(mapOf("cacheable" to JsonPrimitive(true)))
+                                metadata = JsonObject(
+                                    mapOf("cacheable" to JsonPrimitive(true))
+                                )
                             )
                         ),
                         Message.User("Real user request", RequestMetaInfo.Empty)
@@ -283,7 +285,7 @@ class AgentCheckpointHistoryServiceTest : IntegrationTest() {
         tombstone: Boolean = false
     ): AgentCheckpointData {
         val properties = if (tombstone) {
-            mapOf("tombstone" to JsonPrimitive(true))
+            JsonObject(mapOf("tombstone" to JsonPrimitive(true)))
         } else {
             null
         }
@@ -292,9 +294,12 @@ class AgentCheckpointHistoryServiceTest : IntegrationTest() {
             checkpointId = checkpointId,
             createdAt = createdAt,
             nodePath = nodePath,
-            lastInput = JsonNull,
+            lastInput = null,
+            lastOutput = buildJsonObject {
+                put("history_size", JsonPrimitive(history.size))
+            },
             messageHistory = history,
-            version = 0,
+            version = 0L,
             properties = properties
         )
     }

@@ -11,6 +11,7 @@ import ee.carlrobert.codegpt.agent.history.AgentHistoryThreadSummary
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.conversations.Conversation
 import java.util.*
+import ai.koog.prompt.message.Message as PromptMessage
 
 @Service(Service.Level.PROJECT)
 class AgentToolWindowContentManager(private val project: Project) : Disposable {
@@ -40,25 +41,28 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
         activeSessions[session.sessionId] = session
         tabPanels[session.sessionId] = tabPanel
         tabbedPane.addNewTab(tabPanel, select)
-
         return tabPanel
     }
 
     fun openCheckpointConversation(
         thread: AgentHistoryThreadSummary,
-        conversation: Conversation
+        conversation: Conversation,
+        checkpointRef: CheckpointRef
     ): AgentToolWindowTabPanel {
         selectAgentTab()
+        findOpenTabByAgentId(thread.agentId)?.let { existing ->
+            tabbedPane.selectSession(existing.getSessionId())
+            return existing
+        }
         val recoveredName = thread.title.ifBlank { "Recovered ${thread.agentId.take(8)}" }
         val session = AgentSession(
             sessionId = UUID.randomUUID().toString(),
             conversation = conversation,
             displayName = recoveredName,
-            runtimeAgentId = thread.agentId,
-            resumeCheckpointRef = thread.latest
+            agentId = checkpointRef.agentId,
+            resumeCheckpointRef = checkpointRef
         )
-        val panel = createNewAgentTab(session, select = true)
-        return panel
+        return createNewAgentTab(session, select = true)
     }
 
     private fun selectAgentTab() {
@@ -115,13 +119,26 @@ class AgentToolWindowContentManager(private val project: Project) : Disposable {
     fun getSession(sessionId: String): AgentSession? = activeSessions[sessionId]
 
     @Synchronized
-    fun setRuntimeAgentId(sessionId: String, agentId: String?) {
-        activeSessions[sessionId]?.runtimeAgentId = agentId
+    fun findOpenTabByAgentId(agentId: String): AgentToolWindowTabPanel? {
+        val sessionId = activeSessions.values.firstOrNull { session ->
+            session.agentId == agentId || session.resumeCheckpointRef?.agentId == agentId
+        }?.sessionId ?: return null
+        return tabPanels[sessionId]
+    }
+
+    @Synchronized
+    fun setAgentId(sessionId: String, agentId: String?) {
+        activeSessions[sessionId]?.agentId = agentId
     }
 
     @Synchronized
     fun setResumeCheckpointRef(sessionId: String, ref: CheckpointRef?) {
         activeSessions[sessionId]?.resumeCheckpointRef = ref
+    }
+
+    @Synchronized
+    fun setSeededMessageHistory(sessionId: String, history: List<PromptMessage>?) {
+        activeSessions[sessionId]?.seededMessageHistory = history
     }
 
     companion object {

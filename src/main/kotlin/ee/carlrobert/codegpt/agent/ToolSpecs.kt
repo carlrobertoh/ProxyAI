@@ -1,40 +1,49 @@
 package ee.carlrobert.codegpt.agent
 
+import ai.koog.serialization.JSONElement
+import ai.koog.serialization.JSONObject
+import ai.koog.serialization.TypeToken
+import ai.koog.serialization.typeToken
 import ee.carlrobert.codegpt.agent.tools.*
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 
 enum class ToolName(val id: String, val aliases: Set<String> = emptySet()) {
-    READ("Read"),
-    WRITE("Write"),
-    EDIT("Edit"),
-    BASH("Bash"),
-    BASH_OUTPUT("BashOutput"),
-    KILL_SHELL("KillShell"),
-    INTELLIJ_SEARCH("IntelliJSearch"),
-    DIAGNOSTICS("Diagnostics"),
-    WEB_SEARCH("WebSearch"),
-    WEB_FETCH("WebFetch"),
-    MCP("MCP"),
-    RESOLVE_LIBRARY_ID("ResolveLibraryId"),
-    GET_LIBRARY_DOCS("GetLibraryDocs"),
-    LOAD_SKILL("LoadSkill"),
-    TASK("Task"),
-    ASK_USER_QUESTION("AskUserQuestion"),
-    TODO_WRITE("TodoWrite", setOf("TodoWriteTool")),
+    READ(ReadTool.NAME, setOf("ReadFile")),
+    WRITE(WriteTool.NAME, setOf("WriteFile")),
+    EDIT(EditTool.NAME, setOf("Replace", "ReplaceText")),
+    BASH(BashTool.NAME, setOf("Execute", "Terminal", "RunShellCommand")),
+    BASH_OUTPUT(BashOutputTool.NAME),
+    KILL_SHELL(KillShellTool.NAME),
+    INTELLIJ_SEARCH(
+        IntelliJSearchTool.NAME,
+        setOf("Search", "ListDirectory", "Glob", "Grep", "GrepSearch")
+    ),
+    DIAGNOSTICS(DiagnosticsTool.NAME),
+    WEB_SEARCH(WebSearchTool.NAME, setOf("GoogleWebSearch")),
+    WEB_FETCH(WebFetchTool.NAME),
+    MCP(McpTool.NAME),
+    RESOLVE_LIBRARY_ID(ResolveLibraryIdTool.NAME),
+    GET_LIBRARY_DOCS(GetLibraryDocsTool.NAME),
+    LOAD_SKILL(LoadSkillTool.NAME),
+    TASK(TaskTool.NAME),
+    ASK_USER_QUESTION(AskUserQuestionTool.NAME),
+    TODO_WRITE(TodoWriteTool.NAME, setOf("TodoWriteTool")),
     EXIT("Exit");
 }
 
 data class ToolSpec<TArgs, TResult>(
     val name: ToolName,
-    val argsSerializer: KSerializer<TArgs>,
-    val resultSerializer: KSerializer<TResult>,
+    val argsType: TypeToken,
+    val resultType: TypeToken,
     val approvalType: ToolApprovalType = ToolApprovalType.GENERIC
 )
 
 object ToolSpecs {
+    fun coerceArgsForUi(toolName: String, args: Any?): Any? = args
+
+    fun coerceResultForUi(toolName: String, result: Any?): Any? = result
+
     private val specsByName: Map<String, ToolSpec<*, *>> = buildMap {
         fun register(spec: ToolSpec<*, *>) {
             put(spec.name.id.lowercase(), spec)
@@ -44,169 +53,189 @@ object ToolSpecs {
         }
 
         register(
-            ToolSpec(
+            ToolSpec<ReadTool.Args, ReadTool.Result>(
                 ToolName.READ,
-                ReadTool.Args.serializer(),
-                ReadTool.Result.serializer()
+                typeToken<ReadTool.Args>(),
+                typeToken<ReadTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<WriteTool.Args, WriteTool.Result>(
                 ToolName.WRITE,
-                WriteTool.Args.serializer(),
-                WriteTool.Result.serializer(),
+                typeToken<WriteTool.Args>(),
+                typeToken<WriteTool.Result>(),
                 ToolApprovalType.WRITE
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<EditTool.Args, EditTool.Result>(
                 ToolName.EDIT,
-                EditTool.Args.serializer(),
-                EditTool.Result.serializer(),
+                typeToken<EditTool.Args>(),
+                typeToken<EditTool.Result>(),
                 ToolApprovalType.EDIT
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<BashTool.Args, BashTool.Result>(
                 ToolName.BASH,
-                BashTool.Args.serializer(),
-                BashTool.Result.serializer(),
+                typeToken<BashTool.Args>(),
+                typeToken<BashTool.Result>(),
                 ToolApprovalType.BASH
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<BashOutputTool.Args, BashOutputTool.Result>(
                 ToolName.BASH_OUTPUT,
-                BashOutputTool.Args.serializer(),
-                BashOutputTool.Result.serializer()
+                typeToken<BashOutputTool.Args>(),
+                typeToken<BashOutputTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<KillShellTool.Args, KillShellTool.Result>(
                 ToolName.KILL_SHELL,
-                KillShellTool.Args.serializer(),
-                KillShellTool.Result.serializer()
+                typeToken<KillShellTool.Args>(),
+                typeToken<KillShellTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<IntelliJSearchTool.Args, IntelliJSearchTool.Result>(
                 ToolName.INTELLIJ_SEARCH,
-                IntelliJSearchTool.Args.serializer(),
-                IntelliJSearchTool.Result.serializer()
+                typeToken<IntelliJSearchTool.Args>(),
+                typeToken<IntelliJSearchTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<DiagnosticsTool.Args, DiagnosticsTool.Result>(
                 ToolName.DIAGNOSTICS,
-                DiagnosticsTool.Args.serializer(),
-                DiagnosticsTool.Result.serializer()
+                typeToken<DiagnosticsTool.Args>(),
+                typeToken<DiagnosticsTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<WebSearchTool.Args, WebSearchTool.Result>(
                 ToolName.WEB_SEARCH,
-                WebSearchTool.Args.serializer(),
-                WebSearchTool.Result.serializer()
+                typeToken<WebSearchTool.Args>(),
+                typeToken<WebSearchTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<WebFetchTool.Args, WebFetchTool.Result>(
                 ToolName.WEB_FETCH,
-                WebFetchTool.Args.serializer(),
-                WebFetchTool.Result.serializer()
+                typeToken<WebFetchTool.Args>(),
+                typeToken<WebFetchTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<McpTool.Args, McpTool.Result>(
                 ToolName.MCP,
-                McpTool.Args.serializer(),
-                McpTool.Result.serializer()
+                typeToken<McpTool.Args>(),
+                typeToken<McpTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<ResolveLibraryIdTool.Args, ResolveLibraryIdTool.Result>(
                 ToolName.RESOLVE_LIBRARY_ID,
-                ResolveLibraryIdTool.Args.serializer(),
-                ResolveLibraryIdTool.Result.serializer()
+                typeToken<ResolveLibraryIdTool.Args>(),
+                typeToken<ResolveLibraryIdTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<GetLibraryDocsTool.Args, GetLibraryDocsTool.Result>(
                 ToolName.GET_LIBRARY_DOCS,
-                GetLibraryDocsTool.Args.serializer(),
-                GetLibraryDocsTool.Result.serializer()
+                typeToken<GetLibraryDocsTool.Args>(),
+                typeToken<GetLibraryDocsTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<LoadSkillTool.Args, LoadSkillTool.Result>(
                 ToolName.LOAD_SKILL,
-                LoadSkillTool.Args.serializer(),
-                LoadSkillTool.Result.serializer(),
+                typeToken<LoadSkillTool.Args>(),
+                typeToken<LoadSkillTool.Result>(),
                 ToolApprovalType.GENERIC
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<TaskTool.Args, TaskTool.Result>(
                 ToolName.TASK,
-                TaskTool.Args.serializer(),
-                TaskTool.Result.serializer()
+                typeToken<TaskTool.Args>(),
+                typeToken<TaskTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<AskUserQuestionTool.Args, AskUserQuestionTool.Result>(
                 ToolName.ASK_USER_QUESTION,
-                AskUserQuestionTool.Args.serializer(),
-                AskUserQuestionTool.Result.serializer()
+                typeToken<AskUserQuestionTool.Args>(),
+                typeToken<AskUserQuestionTool.Result>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<TodoWriteTool.Args, String>(
                 ToolName.TODO_WRITE,
-                TodoWriteTool.Args.serializer(),
-                String.serializer()
+                typeToken<TodoWriteTool.Args>(),
+                typeToken<String>()
             )
         )
         register(
-            ToolSpec(
+            ToolSpec<Unit, Unit>(
                 ToolName.EXIT,
-                Unit.serializer(),
-                Unit.serializer()
+                typeToken<Unit>(),
+                typeToken<Unit>()
             )
         )
     }
 
     fun find(toolName: String): ToolSpec<*, *>? = specsByName[toolName.lowercase()]
 
+    fun findName(toolName: String): ToolName? = find(toolName)?.name
+
     fun approvalTypeFor(toolName: String): ToolApprovalType =
         find(toolName)?.approvalType ?: ToolApprovalType.GENERIC
 
     fun decodeArgsOrNull(
-        json: Json,
         toolName: String,
-        payload: String
-    ) = decodeOrNull(json, find(toolName)?.argsSerializer, payload)
+        payload: JSONObject,
+    ) = decodeElementOrNull(find(toolName)?.argsType, payload)
+
+    fun decodeArgsOrNull(
+        toolName: String,
+        payload: String,
+    ) = decodeStringOrNull(find(toolName)?.argsType, payload)
 
     fun decodeResultOrNull(
-        json: Json,
         toolName: String,
-        payload: String
-    ) = decodeOrNull(json, find(toolName)?.resultSerializer, payload)
+        payload: JSONElement,
+    ) = decodeElementOrNull(find(toolName)?.resultType, payload)
 
-    @Suppress("UNCHECKED_CAST")
-    private fun decodeOrNull(
-        json: Json,
-        serializer: KSerializer<*>?,
-        payload: String
+    fun decodeResultOrNull(
+        toolName: String,
+        payload: String,
+    ) = decodeStringOrNull(find(toolName)?.resultType, payload)
+
+    private fun decodeElementOrNull(
+        type: TypeToken?,
+        rawPayload: JSONElement,
     ): Any? {
-        if (serializer == null || payload.isBlank()) {
+        if (type == null) {
             return null
         }
-        val typedSerializer = serializer as KSerializer<Any>
+
         return runCatching {
-            json.decodeFromString(typedSerializer, payload)
+            koogJsonSerializer.decodeFromJSONElement<Any>(rawPayload, type)
+        }.getOrNull()
+    }
+
+    private fun decodeStringOrNull(
+        type: TypeToken?,
+        rawPayload: String,
+    ): Any? {
+        if (type == null || rawPayload.isBlank()) {
+            return null
+        }
+        return runCatching {
+            koogJsonSerializer.decodeFromString<Any>(rawPayload, type)
         }.recoverCatching {
-            val normalized = normalizeToolArgumentsJson(payload) ?: throw it
-            json.decodeFromString(typedSerializer, normalized)
+            val normalizedPayload = normalizeToolArgumentsJson(rawPayload) ?: throw it
+            koogJsonSerializer.decodeFromString<Any>(normalizedPayload, type)
         }.getOrNull()
     }
 }

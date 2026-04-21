@@ -33,7 +33,7 @@ class RetryingPromptExecutor(
     private val delegate: PromptExecutor,
     private val retryPolicy: RetryPolicy,
     private val events: AgentEvents?
-) : PromptExecutor {
+) : PromptExecutor() {
 
     companion object {
         private val logger = KotlinLogging.logger { }
@@ -127,7 +127,7 @@ class RetryingPromptExecutor(
                         val jitteredDelay =
                             delayMs + (if (jitterMs > 0) Random.nextInt(jitterMs.toInt()) else 0)
 
-                        delay(jitteredDelay)
+                        delay(jitteredDelay.milliseconds)
                         throw RetryStreamingRequestException(error)
                     } else {
                         logger.error { "Streaming failed: $error" }
@@ -193,7 +193,7 @@ class RetryingPromptExecutor(
                 val jitter = (delay.inWholeMilliseconds * retryPolicy.jitterFactor).toLong()
                 val jitteredMs =
                     delay.inWholeMilliseconds + (if (jitter > 0) (0..jitter).random() else 0)
-                delay(jitteredMs)
+                delay(jitteredMs.milliseconds)
 
                 val nextMs = (delay.inWholeMilliseconds * retryPolicy.backoffMultiplier).toLong()
                 delay = nextMs.milliseconds.coerceAtMost(retryPolicy.maxDelay)

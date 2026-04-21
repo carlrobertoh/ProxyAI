@@ -13,9 +13,16 @@ object AgentCheckpointConversationMapper {
         checkpoint: AgentCheckpointData,
         projectInstructions: String?
     ): Conversation {
+        return toConversation(checkpoint.messageHistory, projectInstructions)
+    }
+
+    fun toConversation(
+        history: List<ai.koog.prompt.message.Message>,
+        projectInstructions: String?
+    ): Conversation {
         val conversation = Conversation()
         val turns = AgentCheckpointTurnSequencer.toVisibleTurns(
-            history = checkpoint.messageHistory,
+            history = history,
             projectInstructions = projectInstructions,
             preserveSyntheticContinuation = true
         )

@@ -205,7 +205,7 @@ internal class AgentSessionTimelineHistoricalRollbackSupport(
     }
 
     private fun decodeReadArgs(rawToolName: String, rawArgs: String): ReadTool.Args? {
-        val typed = ToolSpecs.decodeArgsOrNull(replayJson, rawToolName, rawArgs) as? ReadTool.Args
+        val typed = ToolSpecs.decodeArgsOrNull(rawToolName, rawArgs) as? ReadTool.Args
         if (typed != null) return typed
 
         val args = parseToolArgs(rawArgs) ?: return null
@@ -217,7 +217,7 @@ internal class AgentSessionTimelineHistoricalRollbackSupport(
     }
 
     private fun decodeEditArgs(rawToolName: String, rawArgs: String): EditTool.Args? {
-        val typed = ToolSpecs.decodeArgsOrNull(replayJson, rawToolName, rawArgs) as? EditTool.Args
+        val typed = ToolSpecs.decodeArgsOrNull(rawToolName, rawArgs) as? EditTool.Args
         if (typed != null) return typed
 
         val args = parseToolArgs(rawArgs) ?: return null
@@ -237,7 +237,7 @@ internal class AgentSessionTimelineHistoricalRollbackSupport(
     }
 
     private fun decodeWriteArgs(rawToolName: String, rawArgs: String): WriteTool.Args? {
-        val typed = ToolSpecs.decodeArgsOrNull(replayJson, rawToolName, rawArgs) as? WriteTool.Args
+        val typed = ToolSpecs.decodeArgsOrNull(rawToolName, rawArgs) as? WriteTool.Args
         if (typed != null) return typed
 
         val args = parseToolArgs(rawArgs) ?: return null

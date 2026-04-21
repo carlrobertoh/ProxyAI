@@ -340,11 +340,11 @@ class InlineEditSearchReplaceListener(
 
             val statusComponent = (editor.scrollPane as JBScrollPane).statusComponent
             editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP)
-                ?.let { statusComponent.remove(it) }
+                ?.let { statusComponent?.remove(it) }
             editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP)
-                ?.let { statusComponent.remove(it) }
+                ?.let { statusComponent?.remove(it) }
             editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK)
-                ?.let { statusComponent.remove(it) }
+                ?.let { statusComponent?.remove(it) }
 
             if (hadChanges) {
                 val acceptChip = InlineEditChips.acceptAll {
@@ -368,11 +368,11 @@ class InlineEditSearchReplaceListener(
                 editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP, rejectChip)
                 editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK, compareLink)
 
-                statusComponent.revalidate()
-                statusComponent.repaint()
+                statusComponent?.revalidate()
+                statusComponent?.repaint()
             } else {
-                statusComponent.revalidate()
-                statusComponent.repaint()
+                statusComponent?.revalidate()
+                statusComponent?.repaint()
             }
             stopLoading()
         }

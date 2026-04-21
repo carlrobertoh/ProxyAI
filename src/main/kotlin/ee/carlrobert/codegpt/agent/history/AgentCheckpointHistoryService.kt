@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.agent.history
 import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.agents.snapshot.feature.isTombstone
 import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
+import ai.koog.agents.snapshot.providers.filters.AgentCheckpointPredicateFilter
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
@@ -25,10 +26,7 @@ class AgentCheckpointHistoryService(project: Project) {
 
     private val root = Path(project.basePath ?: "", ".proxyai")
     private val checkpointsRoot = root.resolve("checkpoints")
-    private val storage = JVMFilePersistenceStorageProvider(root)
-
-    @Volatile
-    private var cachedSummaries: List<AgentHistoryThreadSummary>? = null
+    internal val checkpointStorage = JVMFilePersistenceStorageProvider(root)
 
     suspend fun listThreads(limit: Int? = null): List<AgentHistoryThreadSummary> =
         withContext(Dispatchers.IO) {
@@ -41,11 +39,10 @@ class AgentCheckpointHistoryService(project: Project) {
         query: String,
         offset: Int,
         limit: Int,
-        refresh: Boolean = false
     ): AgentHistoryPage = withContext(Dispatchers.IO) {
         val safeOffset = offset.coerceAtLeast(0)
         val safeLimit = limit.coerceAtLeast(1)
-        val summaries = getCachedSummaries(refresh)
+        val summaries = loadThreadSummaries()
         val filtered = filterSummaries(summaries, query)
         if (safeOffset >= filtered.size) {
             return@withContext AgentHistoryPage(emptyList(), false, filtered.size)
@@ -60,15 +57,13 @@ class AgentCheckpointHistoryService(project: Project) {
 
     suspend fun loadCheckpoint(ref: CheckpointRef): AgentCheckpointData? =
         withContext(Dispatchers.IO) {
-            val checkpoints = storage.getCheckpoints(ref.agentId)
-                .filterNot { it.isTombstone() }
+            val checkpoints = getCheckpoints(ref.agentId)
             checkpoints.firstOrNull { it.checkpointId == ref.checkpointId }
         }
 
     suspend fun loadResumeCheckpoint(ref: CheckpointRef): AgentCheckpointData? =
         withContext(Dispatchers.IO) {
-            val checkpoints = storage.getCheckpoints(ref.agentId)
-                .filterNot { it.isTombstone() }
+            val checkpoints = getCheckpoints(ref.agentId)
                 .sortedByDescending { it.createdAt }
             if (checkpoints.isEmpty()) return@withContext null
 
@@ -89,8 +84,7 @@ class AgentCheckpointHistoryService(project: Project) {
 
     suspend fun loadLatestResumeCheckpoint(agentId: String): AgentCheckpointData? =
         withContext(Dispatchers.IO) {
-            val checkpoints = storage.getCheckpoints(agentId)
-                .filterNot { it.isTombstone() }
+            val checkpoints = getCheckpoints(agentId)
             checkpoints
                 .filter { it.isResumableNode() }
                 .maxByOrNull { it.createdAt }
@@ -99,14 +93,12 @@ class AgentCheckpointHistoryService(project: Project) {
 
     suspend fun listCheckpoints(agentId: String): List<AgentCheckpointData> =
         withContext(Dispatchers.IO) {
-            storage.getCheckpoints(agentId)
-                .filterNot { it.isTombstone() }
+            getCheckpoints(agentId)
                 .sortedByDescending { it.createdAt }
         }
 
     private suspend fun buildSummary(agentId: String): AgentHistoryThreadSummary? {
-        val checkpoints = storage.getCheckpoints(agentId)
-            .filterNot { it.isTombstone() }
+        val checkpoints = getCheckpoints(agentId)
         if (checkpoints.isEmpty()) {
             return null
         }
@@ -189,6 +181,11 @@ class AgentCheckpointHistoryService(project: Project) {
         return nodePath.substringAfterLast('/') != "__finish__"
     }
 
+    private suspend fun getCheckpoints(agentId: String): List<AgentCheckpointData> =
+        checkpointStorage.getCheckpoints(agentId, object : AgentCheckpointPredicateFilter {
+            override fun check(checkpointData: AgentCheckpointData) = !checkpointData.isTombstone()
+        })
+
     private suspend fun loadThreadSummaries(): List<AgentHistoryThreadSummary> {
         if (!Files.exists(checkpointsRoot)) {
             return emptyList()
@@ -213,22 +210,6 @@ class AgentCheckpointHistoryService(project: Project) {
                 null
             }
         }.sortedByDescending { it.latestCreatedAt }
-    }
-
-    private suspend fun getCachedSummaries(refresh: Boolean): List<AgentHistoryThreadSummary> {
-        if (!refresh) {
-            synchronized(this) {
-                cachedSummaries?.let { return it }
-            }
-        }
-
-        val loaded = loadThreadSummaries()
-        synchronized(this) {
-            if (refresh || cachedSummaries == null) {
-                cachedSummaries = loaded
-            }
-            return cachedSummaries ?: loaded
-        }
     }
 
     private fun filterSummaries(

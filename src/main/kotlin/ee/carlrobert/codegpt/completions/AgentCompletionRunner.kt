@@ -7,13 +7,14 @@ import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.features.eventHandler.feature.handleEvents
 import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.message.Message
 import ai.koog.prompt.tokenizer.Tokenizer
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.AgentEvents
 import ee.carlrobert.codegpt.agent.MessageWithContext
 import ee.carlrobert.codegpt.agent.clients.shouldStream
+import ee.carlrobert.codegpt.agent.koogJsonSerializer
 import ee.carlrobert.codegpt.agent.strategy.CODE_AGENT_COMPRESSION
 import ee.carlrobert.codegpt.agent.strategy.HistoryCompressionConfig
 import ee.carlrobert.codegpt.agent.strategy.SingleRunStrategyProvider
@@ -24,10 +25,11 @@ import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.util.ReasoningFrameTextAdapter
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.*
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
+import javax.swing.JPanel
 
 internal object AgentCompletionRunner : CompletionRunner {
 
@@ -46,14 +48,10 @@ internal object AgentCompletionRunner : CompletionRunner {
             }
             ?: emptyList()
 
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val cancelled = AtomicBoolean(false)
-        val jobRef = AtomicReference<Job?>()
         val messageBuilder = StringBuilder()
-        val project = request.callParameters.project!!
-        val stream = shouldStreamAgentToolLoop(project, request)
-        val toolCallHandler = project.let { McpToolCallHandler.getInstance(it) }
-        val toolRegistry = createChatToolRegistry(
+        val stream = shouldStreamAgentToolLoop(request)
+        val toolCallHandler = request.project.let { McpToolCallHandler.getInstance(it) }
+        val toolRegistry = createToolRegistry(
             callParameters = request.callParameters,
             mcpTools = availableTools,
             toolCallHandler = toolCallHandler,
@@ -71,22 +69,21 @@ internal object AgentCompletionRunner : CompletionRunner {
             override fun onQueuedMessagesResolved(message: MessageWithContext?) = Unit
         }
 
-        val cancellableRequest = CancellableRequest {
-            cancelled.set(true)
+        val asyncRequest = AsyncRequestContext {
             val conversationId = request.callParameters.conversation.id
             toolCallHandler.cancelPendingApprovals(conversationId)
             toolCallHandler.cancelExecutions(conversationId)
-            jobRef.get()?.cancel(CancellationException("Cancelled by user"))
         }
+        val scope = asyncRequest.scope
         request.eventListener.onOpen()
 
         val job = scope.launch {
-            var service: GraphAIAgentService<MessageWithContext, String>? = null
+            var service: GraphAIAgentService<MessageWithContext, String>?
             try {
                 service = AIAgentService<MessageWithContext, String>(
                     promptExecutor = request.executor,
                     strategy = SingleRunStrategyProvider().build(
-                        project = project,
+                        project = request.project,
                         executor = request.executor,
                         pendingMessageQueue = ArrayDeque<MessageWithContext>(),
                         historyCompressionConfig = HistoryCompressionConfig(
@@ -104,7 +101,8 @@ internal object AgentCompletionRunner : CompletionRunner {
                             request.prompt.messages.forEach { message(it) }
                         },
                         model = request.model,
-                        maxAgentIterations = MAX_CHAT_AGENT_ITERATIONS
+                        maxAgentIterations = MAX_CHAT_AGENT_ITERATIONS,
+                        serializer = koogJsonSerializer
                     ),
                     toolRegistry = toolRegistry
                 ) {
@@ -132,10 +130,10 @@ internal object AgentCompletionRunner : CompletionRunner {
                             if (stream) return@onNodeExecutionCompleted
 
                             (ctx.output as? List<*>)?.forEach { msg ->
-                                (msg as? ai.koog.prompt.message.Message.Assistant)?.let {
+                                (msg as? Message.Assistant)?.let {
                                     events.onTextReceived(it.content)
                                 }
-                                (msg as? ai.koog.prompt.message.Message.Reasoning)?.let {
+                                (msg as? Message.Reasoning)?.let {
                                     if (it.content.isNotBlank()) {
                                         events.onThinkingReceived(it.content)
                                     }
@@ -148,7 +146,7 @@ internal object AgentCompletionRunner : CompletionRunner {
                 val agent = service.createAgent()
                 agent.run(MessageWithContext(""))
 
-                if (cancelled.get()) {
+                if (asyncRequest.isCancelled()) {
                     request.eventListener.onCancelled(StringBuilder(messageBuilder))
                     return@launch
                 }
@@ -163,22 +161,18 @@ internal object AgentCompletionRunner : CompletionRunner {
                 )
             } finally {
                 runCatching {
-                    service?.closeAll()
                     request.executor.close()
                     toolCallHandler.clearConversationState(request.callParameters.conversation.id)
                     scope.cancel()
                 }
             }
         }
-        jobRef.set(job)
+        asyncRequest.attach(job)
 
-        return cancellableRequest
+        return asyncRequest.cancellableRequest
     }
 
-    internal fun shouldStreamAgentToolLoop(
-        project: Project,
-        request: CompletionRunnerRequest.Chat,
-    ): Boolean {
+    internal fun shouldStreamAgentToolLoop(request: CompletionRunnerRequest.Chat): Boolean {
         val provider = request.serviceType
         return when (provider) {
             ServiceType.CUSTOM_OPENAI -> {
@@ -198,11 +192,11 @@ internal object AgentCompletionRunner : CompletionRunner {
         }
     }
 
-    private fun createChatToolRegistry(
+    private fun createToolRegistry(
         callParameters: ChatCompletionParameters,
         mcpTools: List<McpTool>,
         toolCallHandler: McpToolCallHandler?,
-        onToolCallUIUpdate: (javax.swing.JPanel) -> Unit
+        onToolCallUIUpdate: (JPanel) -> Unit
     ): ToolRegistry {
         if (mcpTools.isEmpty() || toolCallHandler == null) {
             return ToolRegistry {}

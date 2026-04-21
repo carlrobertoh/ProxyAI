@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
@@ -14,9 +15,7 @@ class KillShellTool(
     hookManager: HookManager,
 ) : BaseTool<KillShellTool.Args, KillShellTool.Result>(
     workingDirectory = workingDirectory,
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "KillShell",
+    name = NAME,
     description = """
 - Kills a running background bash shell by its ID
 - Takes a shell_id parameter identifying the shell to kill
@@ -29,6 +28,10 @@ class KillShellTool(
     hookManager = hookManager,
     sessionId = sessionId
 ) {
+
+    companion object {
+        const val NAME = "KillShell"
+    }
 
     @Serializable
     data class Args(
@@ -98,7 +101,7 @@ class KillShellTool(
         )
     }
 
-    override fun encodeResultToString(result: Result): String =
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
         buildString {
             appendLine("Shell ID: ${result.bashId}")
 

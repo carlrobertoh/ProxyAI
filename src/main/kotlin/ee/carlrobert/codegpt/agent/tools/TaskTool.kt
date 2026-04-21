@@ -8,30 +8,43 @@ import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.http.client.KoogHttpClientException
 import ai.koog.prompt.executor.clients.LLMClientException
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.agent.*
 import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentService
+import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.ProxyAISubagent
 import ee.carlrobert.codegpt.settings.agents.ResolvedSubagentRuntime
 import ee.carlrobert.codegpt.settings.agents.SubagentDefaults
 import ee.carlrobert.codegpt.settings.agents.SubagentRuntimeResolver
-import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.settings.hooks.HookEventType
 import ee.carlrobert.codegpt.settings.hooks.HookManager
+import ee.carlrobert.codegpt.settings.models.ModelSelection
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
-import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
-import ee.carlrobert.codegpt.conversations.Conversation
+import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.collections.ArrayDeque
+import kotlin.collections.filter
+import kotlin.collections.filterIsInstance
+import kotlin.collections.filterNot
+import kotlin.collections.firstOrNull
+import kotlin.collections.forEach
+import kotlin.collections.isNotEmpty
+import kotlin.collections.lastOrNull
+import kotlin.collections.mapOf
+import kotlin.collections.set
+import kotlin.collections.setOf
+import kotlin.collections.toSet
 
 class TaskTool(
     private val project: Project,
@@ -41,15 +54,17 @@ class TaskTool(
     private val hookManager: HookManager,
 ) : BaseTool<TaskTool.Args, TaskTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "Task",
+    name = NAME,
     description = buildTaskDescription(project),
     argsClass = Args::class,
     resultClass = Result::class,
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
+
+    companion object {
+        const val NAME = "Task"
+    }
 
     @Serializable
     data class Args(
@@ -350,7 +365,7 @@ class TaskTool(
         )
     }
 
-    override fun encodeResultToString(result: Result): String {
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String {
         val summary = buildString {
             appendLine("Agent: ${result.agentType}")
             appendLine("Description: ${result.description}")
@@ -554,7 +569,12 @@ private class SubagentToolCallBridge(
 
     fun onToolCallStarting(ctx: ToolCallStartingContext) {
         val tool = toolRegistry?.getToolOrNull(ctx.toolName) ?: return
-        val decodedArgs = runCatching { tool.decodeArgs(ctx.toolArgs) }.getOrElse { ctx.toolArgs }
+        val decodedArgs = runCatching {
+            tool.decodeArgs(
+                ctx.toolArgs,
+                koogJsonSerializer
+            )
+        }.getOrElse { ctx.toolArgs }
         val uiArgs = if (tool is McpAgentToolMarker && decodedArgs is JsonObject) {
             tool.toDisplayArgs(decodedArgs)
         } else {
@@ -571,7 +591,9 @@ private class SubagentToolCallBridge(
         val tool = toolRegistry?.getToolOrNull(ctx.toolName) ?: return
         val toolResult = ctx.toolResult ?: return
         val childId = if (pendingChildIds.isEmpty()) null else pendingChildIds.removeFirst()
-        val decodedResult = runCatching { tool.decodeResult(toolResult) }.getOrElse { toolResult }
+        val decodedResult = runCatching {
+            tool.decodeResult(toolResult, koogJsonSerializer)
+        }.getOrElse { toolResult }
         events.onSubAgentToolCompleted(
             parentId,
             childId,

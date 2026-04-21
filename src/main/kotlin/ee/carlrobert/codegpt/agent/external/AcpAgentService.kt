@@ -11,6 +11,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.AgentEvents
 import ee.carlrobert.codegpt.agent.MessageWithContext
+import ee.carlrobert.codegpt.agent.agentJson
 import ee.carlrobert.codegpt.agent.external.acpcompat.AcpProtocol
 import ee.carlrobert.codegpt.agent.external.acpcompat.JsonRpcException
 import ee.carlrobert.codegpt.agent.external.acpcompat.ProtocolOptions
@@ -39,7 +40,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.io.asSink
 import kotlinx.io.asSource
 import kotlinx.io.buffered
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import java.io.File
 import java.nio.file.Path
@@ -62,8 +62,7 @@ class ExternalAcpAgentService(private val project: Project) {
     }
 
     private val logger = thisLogger()
-    private val json = Json { ignoreUnknownKeys = true }
-    private val toolCallDecoder = AcpToolCallDecoder(json)
+    private val toolCallDecoder = AcpToolCallDecoder(agentJson)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sessionRoot: Path =
         Paths.get(project.basePath ?: System.getProperty("user.dir")).toAbsolutePath().normalize()

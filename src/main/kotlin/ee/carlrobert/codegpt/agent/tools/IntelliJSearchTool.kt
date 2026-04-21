@@ -1,13 +1,15 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.intellij.ide.util.gotoByName.ChooseByNameModel
 import com.intellij.ide.util.gotoByName.GotoClassModel2
 import com.intellij.ide.util.gotoByName.GotoFileModel
 import com.intellij.ide.util.gotoByName.GotoSymbolModel2
-import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.roots.ProjectRootManager
@@ -18,6 +20,7 @@ import com.intellij.psi.*
 import com.intellij.psi.codeStyle.NameUtil
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
+import com.intellij.util.concurrency.AppExecutorUtil
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
@@ -27,6 +30,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import java.nio.file.Paths
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Enhanced search tool using IntelliJ's native SearchService and FindModel.
@@ -37,9 +41,9 @@ class IntelliJSearchTool(
     hookManager: HookManager,
 ) : BaseTool<IntelliJSearchTool.Args, IntelliJSearchTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "IntelliJSearch",
+    argsClass = Args::class,
+    resultClass = Result::class,
+    name = NAME,
     description = """
         Search Everywhere-style name search (files, classes, symbols).
         
@@ -52,13 +56,12 @@ class IntelliJSearchTool(
         - This is a name-oriented search, not content search
         - For content search, use the Grep tool instead
     """.trimIndent(),
-    argsClass = Args::class,
-    resultClass = Result::class,
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
 
     companion object {
+        const val NAME = "IntelliJSearch"
         const val MAX_CONTEXT_CHARS = 200
         const val MAX_OUTPUT_LINES = 100
         const val MAX_OUTPUT_CHARS = 6000
@@ -138,12 +141,19 @@ class IntelliJSearchTool(
     override suspend fun doExecute(args: Args): Result {
         try {
             val maxResults = (args.limit ?: 10).coerceIn(1, 50)
-            val matches = withTimeout(5000) {
-                withContext(Dispatchers.Default) {
-                    runReadAction {
-                        val scope = createSearchScope(args, project)
-                        searchEverywhere(args.pattern, scope, maxResults)
-                    }
+            val matches = withTimeout(5.seconds) {
+                withContext(Dispatchers.IO) {
+                    ProgressManager.checkCanceled()
+                    val scope = createSearchScope(args, project)
+                    ReadAction
+                        .nonBlocking<List<SearchMatch>> {
+                            ProgressManager.checkCanceled()
+                            searchEverywhere(args.pattern, scope, maxResults)
+                        }
+                        .inSmartMode(project)
+                        .expireWith(project)
+                        .submit(AppExecutorUtil.getAppExecutorService())
+                        .get()
                 }
             }
             val output = formatOutput(matches, args)
@@ -374,7 +384,7 @@ class IntelliJSearchTool(
         }
     }
 
-    override fun encodeResultToString(result: Result): String {
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String {
         val raw = result.output
         val lines = if (raw.isEmpty()) emptyList() else raw.lines()
         val limitedLines = lines.take(MAX_OUTPUT_LINES)

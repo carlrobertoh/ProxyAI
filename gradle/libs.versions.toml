@@ -13,9 +13,9 @@ mcp = "0.8.0"
 jsoup = "1.21.2"
 jtokkit = "1.1.0"
 junit = "5.13.4"
-kotlin = "2.2.20"
+kotlin = "2.3.10"
 kotlinx-serialization = "1.6.3"
-koog = "0.6.3"
+koog = "0.8.0"
 slf4j = "2.0.17"
 tree-sitter = "0.24.5"
 grpc = "1.73.0"
@@ -43,6 +43,7 @@ junit4 = { module = "junit:junit", version = "4.13.2" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
 koog-agents = { module = "ai.koog:koog-agents", version.ref = "koog" }
+koog-serialization-jackson = { module = "ai.koog:serialization-jackson", version.ref = "koog" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 slf4j-bom = { module = "org.slf4j:slf4j-bom", version.ref = "slf4j" }

@@ -163,7 +163,7 @@ class ChatLandingPanel(
                 editor.selectionModel.selectedText ?: return@ChatToolWindowLandingPanel
             val formattedCode = CompletionRequestUtil.formatCode(
                 selectedText,
-                editor.virtualFile.path
+                editor.virtualFile?.path ?: ""
             )
             submitInitialMessage(action.prompt.replace("{SELECTION}", formattedCode))
         }

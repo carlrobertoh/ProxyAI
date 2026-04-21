@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 object McpTool {
+    const val NAME = "MCP"
 
     @Serializable
     data class Args(

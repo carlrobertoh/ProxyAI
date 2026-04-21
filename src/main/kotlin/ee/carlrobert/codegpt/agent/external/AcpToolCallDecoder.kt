@@ -178,7 +178,7 @@ internal class AcpToolCallDecoder(
         rawOutput: JsonElement?
     ): Any? {
         val payload = rawOutput.toPayloadString()
-        ToolSpecs.decodeResultOrNull(json, toolName, payload)?.let { return it }
+        ToolSpecs.decodeResultOrNull(toolName, payload)?.let { return it }
 
         if (status == AcpToolCallStatus.COMPLETED) {
             when (args) {

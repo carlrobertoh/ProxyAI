@@ -11,6 +11,7 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.ReferencedFile
@@ -94,7 +95,7 @@ class InlineEditSubmissionHandler(
         conversationHistory: List<Conversation>?,
         editorEx: EditorEx,
         inlay: InlineEditInlay,
-        file: com.intellij.openapi.vfs.VirtualFile?,
+        file: VirtualFile?,
         selectedService: ServiceType
     ) {
         val message = Message(userPrompt)
@@ -105,8 +106,7 @@ class InlineEditSubmissionHandler(
         val withCurrentFile = buildReferencedFilesWithCurrent(file, referencedFiles)
 
         val params = ChatCompletionParameters
-            .builder(sessionConversation, message)
-            .project(editor.project)
+            .builder(editor.project!!, sessionConversation, message)
             .referencedFiles(withCurrentFile)
             .history(conversationHistory)
             .chatMode(ChatMode.ASK)
@@ -117,7 +117,7 @@ class InlineEditSubmissionHandler(
     }
 
     private fun buildReferencedFilesWithCurrent(
-        file: com.intellij.openapi.vfs.VirtualFile?,
+        file: VirtualFile?,
         referencedFiles: List<ReferencedFile>?
     ): List<ReferencedFile> {
         val list = referencedFiles?.toMutableList() ?: mutableListOf()
@@ -151,6 +151,7 @@ class InlineEditSubmissionHandler(
             )
 
             val request = CompletionRequestService.getChatCompletionAsync(
+                project = project,
                 serviceType = selectedService,
                 prompt = prompt,
                 modelSelection = modelSelection,
@@ -181,7 +182,7 @@ class InlineEditSubmissionHandler(
         diagnosticsInfo: String?,
         editorEx: EditorEx,
         inlay: InlineEditInlay,
-        file: com.intellij.openapi.vfs.VirtualFile?
+        file: VirtualFile?
     ) {
         sessionConversation.addMessage(Message(userPrompt))
 

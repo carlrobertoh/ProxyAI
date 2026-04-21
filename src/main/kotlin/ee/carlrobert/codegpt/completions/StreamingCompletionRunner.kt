@@ -1,16 +1,9 @@
 package ee.carlrobert.codegpt.completions
 
-import ai.koog.prompt.streaming.StreamFrame
 import ee.carlrobert.codegpt.util.ReasoningFrameTextAdapter
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 
 internal object StreamingCompletionRunner : CompletionRunner {
 
@@ -21,13 +14,8 @@ internal object StreamingCompletionRunner : CompletionRunner {
     }
 
     private fun executeAsync(request: CompletionRunnerRequest.Streaming): CancellableRequest {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val cancelled = AtomicBoolean(false)
-        val jobRef = AtomicReference<Job?>()
-        val cancellableRequest = CancellableRequest {
-            cancelled.set(true)
-            jobRef.get()?.cancel(CancellationException("Cancelled by user"))
-        }
+        val asyncRequest = AsyncRequestContext()
+        val scope = asyncRequest.scope
 
         request.eventListener.onOpen()
         val job = scope.launch {
@@ -60,7 +48,7 @@ internal object StreamingCompletionRunner : CompletionRunner {
                     }
                 }
 
-                if (cancelled.get()) {
+                if (asyncRequest.isCancelled()) {
                     request.eventListener.onCancelled(StringBuilder(messageBuilder))
                     return@launch
                 }
@@ -78,8 +66,8 @@ internal object StreamingCompletionRunner : CompletionRunner {
                 scope.cancel()
             }
         }
-        jobRef.set(job)
+        asyncRequest.attach(job)
 
-        return cancellableRequest
+        return asyncRequest.cancellableRequest
     }
 }

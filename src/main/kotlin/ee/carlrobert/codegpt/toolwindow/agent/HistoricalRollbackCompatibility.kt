@@ -23,7 +23,7 @@ internal object HistoricalRollbackCompatibility {
         if (toolName !in supportedTools) return false
 
         val normalized = content.trim()
-        val decoded = ToolSpecs.decodeResultOrNull(replayJson, toolName.id, normalized)
+        val decoded = ToolSpecs.decodeResultOrNull(toolName.id, normalized)
         if (decoded != null) {
             return when (toolName) {
                 ToolName.READ -> decoded is ReadTool.Result.Success

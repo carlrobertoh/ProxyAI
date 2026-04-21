@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.AgentService
@@ -17,9 +18,7 @@ class LoadSkillTool(
     hookManager: HookManager,
 ) : BaseTool<LoadSkillTool.Args, LoadSkillTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "LoadSkill",
+    name = NAME,
     description = """
         Load a skill within the main conversation
         
@@ -48,7 +47,6 @@ class LoadSkillTool(
     hookManager = hookManager,
     sessionId = sessionId
 ) {
-
     @Serializable
     data class Args(
         @property:LLMDescription("Exact title of the skill to load.")
@@ -78,7 +76,10 @@ class LoadSkillTool(
         val skills = project.service<SkillDiscoveryService>().listSkills()
         val requested = args.skillName.trim()
         val skill = skills.firstOrNull {
-            it.name.equals(requested, ignoreCase = true) || it.title.equals(requested, ignoreCase = true)
+            it.name.equals(requested, ignoreCase = true) || it.title.equals(
+                requested,
+                ignoreCase = true
+            )
         }
         if (skill == null) {
             val available = skills.map { "${it.name} (${it.title})" }.sorted()
@@ -118,7 +119,7 @@ class LoadSkillTool(
         return Result.Error(deniedReason)
     }
 
-    override fun encodeResultToString(result: Result): String {
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String {
         return when (result) {
             is Result.Success -> "Loaded skill '${result.name}' from ${result.sourcePath}. Its content was queued as a user message."
             is Result.Error -> "LoadSkill failed: ${result.message}"
@@ -126,6 +127,8 @@ class LoadSkillTool(
     }
 
     companion object {
+        const val NAME = "LoadSkill"
+
         internal fun buildLoadedSkillMessage(skill: SkillDescriptor): String {
             return buildString {
                 appendLine("<loaded_skill>")

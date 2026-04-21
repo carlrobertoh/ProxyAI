@@ -276,20 +276,20 @@ class InlineEditSession(
         val statusComponent = (editor.scrollPane as JBScrollPane).statusComponent
 
         editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP)?.let {
-            statusComponent.remove(it)
+            statusComponent?.remove(it)
             editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_ACCEPT_ALL_CHIP, null)
         }
         editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP)?.let {
-            statusComponent.remove(it)
+            statusComponent?.remove(it)
             editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_REJECT_ALL_CHIP, null)
         }
         editor.getUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK)?.let {
-            statusComponent.remove(it)
+            statusComponent?.remove(it)
             editor.putUserData(CodeGPTKeys.EDITOR_INLINE_EDIT_COMPARE_LINK, null)
         }
 
-        statusComponent.revalidate()
-        statusComponent.repaint()
+        statusComponent?.revalidate()
+        statusComponent?.repaint()
     }
 
     private fun computeLineStartOffsets(text: String): IntArray {

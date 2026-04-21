@@ -18,6 +18,7 @@ import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import ee.carlrobert.codegpt.agent.agentJson
 import ee.carlrobert.codegpt.codecompletions.InfillPromptTemplate
 import ee.carlrobert.codegpt.codecompletions.InfillRequest
 import ee.carlrobert.codegpt.settings.Placeholder
@@ -64,10 +65,6 @@ class CustomOpenAILLMClient(
     data object CustomOpenAI : LLMProvider("custom-openai", "Custom OpenAI")
 
     companion object {
-        init {
-            registerOpenAIJsonSchemaGenerators(CustomOpenAI)
-        }
-
         fun fromSettingsState(
             apiKey: String,
             state: CustomServiceChatCompletionSettingsState,
@@ -521,12 +518,6 @@ internal fun renderCustomOpenAIPrompt(messages: List<OpenAIMessage>, json: Json)
     }
 }
 
-private val customOpenAIRequestTransformJson = Json {
-    ignoreUnknownKeys = true
-    isLenient = true
-    explicitNulls = false
-}
-
 private val FlattenCustomOpenAIAdditionalPropertiesPlugin = createClientPlugin(
     "FlattenCustomOpenAIAdditionalProperties"
 ) {
@@ -534,7 +525,7 @@ private val FlattenCustomOpenAIAdditionalPropertiesPlugin = createClientPlugin(
         val requestBody = content as? String ?: return@transformRequestBody null
         val flattened = flattenSerializedAdditionalProperties(
             requestBody,
-            customOpenAIRequestTransformJson
+            agentJson
         )
         if (flattened == requestBody) {
             null

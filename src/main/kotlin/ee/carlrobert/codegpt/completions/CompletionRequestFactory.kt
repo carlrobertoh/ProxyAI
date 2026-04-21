@@ -12,13 +12,10 @@ import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.MAX_
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.RECENTLY_VIEWED_LINES
 import ee.carlrobert.codegpt.completions.factory.*
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.mcp.McpToolPromptFormatter
 import ee.carlrobert.codegpt.nextedit.NextEditPromptUtil
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
-import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
-import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
-import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
-import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
-import ee.carlrobert.codegpt.settings.prompts.addProjectPath
+import ee.carlrobert.codegpt.settings.prompts.*
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
@@ -26,7 +23,6 @@ import ee.carlrobert.codegpt.util.EditWindowFormatter.FormatResult
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.GitUtil
 import ee.carlrobert.codegpt.util.file.FileUtil
-import ee.carlrobert.codegpt.mcp.McpToolPromptFormatter
 
 interface CompletionRequestFactory {
     fun createChatCompletionPrompt(callParameters: ChatCompletionParameters): Prompt
@@ -194,11 +190,13 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
             ConversationType.DEFAULT -> {
                 val selectedPersona = promptsSettings.personas.selectedPersona
                 if (!selectedPersona.disabled) {
-                    val baseInstructions = callParameters.personaDetails?.instructions?.addProjectPath()
-                        ?: filteredPrompts
-                            .getFilteredPersonaPrompt(callParameters.chatMode)
-                            .addProjectPath()
-                    val clickableInstructions = filteredPrompts.applyClickableLinks(baseInstructions)
+                    val baseInstructions =
+                        callParameters.personaDetails?.instructions?.addProjectPath()
+                            ?: filteredPrompts
+                                .getFilteredPersonaPrompt(callParameters.chatMode)
+                                .addProjectPath()
+                    val clickableInstructions =
+                        filteredPrompts.applyClickableLinks(baseInstructions)
                     if (clickableInstructions.isNotBlank()) {
                         systemParts.add(clickableInstructions)
                     }
@@ -231,7 +229,8 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         if (!callParameters.mcpTools.isNullOrEmpty() &&
             callParameters.toolApprovalMode != ToolApprovalMode.BLOCK_ALL
         ) {
-            val toolsPrompt = McpToolPromptFormatter().formatToolsForSystemPrompt(callParameters.mcpTools!!)
+            val toolsPrompt =
+                McpToolPromptFormatter().formatToolsForSystemPrompt(callParameters.mcpTools!!)
             if (toolsPrompt.isNotBlank()) {
                 systemParts.add(toolsPrompt)
             }
@@ -266,7 +265,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         val userPrompt = getPromptWithFilesContext(parameters)
 
         val newParams = ChatCompletionParameters
-            .builder(parameters.conversation, Message(userPrompt))
+            .builder(parameters.project, parameters.conversation, Message(userPrompt))
             .sessionId(parameters.sessionId)
             .conversationType(parameters.conversationType)
             .retry(parameters.retry)
@@ -275,7 +274,6 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
             .referencedFiles(parameters.referencedFiles)
             .personaDetails(PersonaDetails(-1L, "Inline Edit Guidance", systemPrompt))
             .psiStructure(parameters.psiStructure)
-            .project(parameters.project)
             .chatMode(ChatMode.ASK)
             .featureType(FeatureType.INLINE_EDIT)
             .build()
@@ -452,7 +450,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                     callParameters.psiStructure,
                 )
             }
-        } ?: return callParameters.message.prompt
+        } ?: callParameters.message.prompt
     }
 
     protected fun composeNextEditMessage(

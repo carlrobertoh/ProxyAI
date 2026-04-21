@@ -36,12 +36,13 @@ import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
-import ee.carlrobert.codegpt.settings.skills.SkillDiscoveryService
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.BashPayload
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalRequest
 import ee.carlrobert.codegpt.toolwindow.agent.ui.approval.ToolApprovalType
 import ee.carlrobert.codegpt.util.ReasoningFrameTextAdapter
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.nio.file.Files
@@ -79,22 +80,23 @@ object ProxyAIAgent {
         return null
     }
 
-    fun createService(
+    internal fun createService(
         project: Project,
         checkpointStorage: JVMFilePersistenceStorageProvider,
         provider: ServiceType,
         events: AgentEvents,
         sessionId: String,
         pendingMessages: ConcurrentHashMap<String, ArrayDeque<MessageWithContext>>,
+        pendingRunContinuations: ConcurrentHashMap<String, PendingRunContinuation>,
     ): GraphAIAgentService<MessageWithContext, String> {
         val modelSelection =
             service<ModelSettings>().getModelSelectionForFeature(FeatureType.AGENT)
-        val skills = project.service<SkillDiscoveryService>().listSkills()
         val stream = shouldStreamAgentToolLoop(provider)
         val projectInstructions = loadProjectInstructions(project.basePath)
-        val executor = AgentFactory.createExecutor(provider, events)
         val pendingMessageQueue = pendingMessages.getOrPut(sessionId) { ArrayDeque() }
         val hookManager = HookManager(project)
+        val agentModel = service<ModelSettings>().getAgentModel()
+        val executor = AgentFactory.createExecutor(provider, events)
         val toolRegistry = createToolRegistry(
             project = project,
             events = events,
@@ -102,7 +104,6 @@ object ProxyAIAgent {
             parentModelSelection = modelSelection,
             hookManager = hookManager
         )
-        val agentModel = service<ModelSettings>().getAgentModel()
         return AIAgentService<MessageWithContext, String>(
             promptExecutor = executor,
             strategy = SingleRunStrategyProvider().build(
@@ -120,14 +121,7 @@ object ProxyAIAgent {
             ),
             agentConfig = AIAgentConfig(
                 prompt = prompt("proxyai-agent") {
-                    system(
-                        AgentSystemPrompts.createSystemPrompt(
-                            provider,
-                            modelSelection,
-                            project.basePath,
-                            skills
-                        )
-                    )
+                    system(AgentSystemPrompts.createSystemPrompt(project, provider, modelSelection))
 
                     projectInstructions?.let {
                         message(
@@ -144,9 +138,10 @@ object ProxyAIAgent {
                     }
                 },
                 model = agentModel,
-                maxAgentIterations = MAX_AGENT_ITERATIONS
+                maxAgentIterations = MAX_AGENT_ITERATIONS,
+                serializer = koogJsonSerializer
             ),
-            toolRegistry = toolRegistry,
+            toolRegistry = toolRegistry
         ) {
             if (ConfigurationSettings.getState().debugModeEnabled) {
                 install(Tracing) {
@@ -157,6 +152,10 @@ object ProxyAIAgent {
                 storage = checkpointStorage
                 enableAutomaticPersistence = true
                 rollbackStrategy = RollbackStrategy.MessageHistoryOnly
+            }
+            install(PendingRunContinuationFeature) {
+                this.sessionId = sessionId
+                this.pendingContinuations = pendingRunContinuations
             }
             install(MessageTokenizer) {
                 tokenizer = object : Tokenizer {
@@ -234,7 +233,10 @@ object ProxyAIAgent {
                         anonymousToolIds.addLast(id)
                     }
                     val decodedArgs =
-                        runCatching { tool.decodeArgs(ctx.toolArgs) }.getOrElse { ctx.toolArgs }
+                        ToolSpecs.decodeArgsOrNull(ctx.toolName, ctx.toolArgs)
+                            ?: runCatching {
+                                tool.decodeArgs(ctx.toolArgs, koogJsonSerializer)
+                            }.getOrElse { ctx.toolArgs }
                     val uiArgs = if (tool is McpAgentToolMarker && decodedArgs is JsonObject) {
                         tool.toDisplayArgs(decodedArgs)
                     } else {
@@ -262,9 +264,14 @@ object ProxyAIAgent {
                         anonymousToolIds.isNotEmpty() -> anonymousToolIds.removeFirst()
                         else -> null
                     }
-                    val decodedResult =
-                        runCatching { tool.decodeResult(toolResult) }.getOrElse { toolResult }
-                    events.onToolCompleted(uiId, ctx.toolName, decodedResult)
+                    val result = ToolSpecs.decodeResultOrNull(
+                        ctx.toolName,
+                        toolResult
+                    )
+                        ?: runCatching {
+                            tool.decodeResult(toolResult, koogJsonSerializer)
+                        }.getOrElse { toolResult }
+                    events.onToolCompleted(uiId, ctx.toolName, result)
                 }
 
                 onAgentCompleted { context ->
@@ -280,6 +287,17 @@ object ProxyAIAgent {
                 }
 
                 onAgentExecutionFailed {
+                    val isCancellationError =
+                        generateSequence(it.throwable as Throwable?) { cause -> cause.cause }
+                            .take(10)
+                            .any { cause ->
+                                cause is CancellationException && cause !is TimeoutCancellationException
+                            }
+                    if (isCancellationError) {
+                        logger.debug { "Agent execution cancelled: $it" }
+                        return@onAgentExecutionFailed
+                    }
+
                     logger.error(it.throwable) { "Agent execution failed: $it" }
                     hookManager.executeHooksForEvent(
                         HookEventType.STOP,
@@ -307,7 +325,9 @@ object ProxyAIAgent {
                 selectedService?.chatCompletionSettings?.shouldStream() == true
             }
 
+            ServiceType.OLLAMA,
             ServiceType.GOOGLE -> false
+
             else -> true
         }
     }

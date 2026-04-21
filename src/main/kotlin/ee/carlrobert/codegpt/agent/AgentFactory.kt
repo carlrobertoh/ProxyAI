@@ -4,7 +4,7 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.GraphAIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
-import ai.koog.agents.core.dsl.builder.forwardTo
+import ai.koog.agents.core.dsl.builder.node
 import ai.koog.agents.core.dsl.builder.strategy
 import ai.koog.agents.core.dsl.extension.nodeExecuteMultipleTools
 import ai.koog.agents.core.dsl.extension.onMultipleAssistantMessages
@@ -22,9 +22,9 @@ import ai.koog.agents.features.tokenizer.feature.MessageTokenizer
 import ai.koog.agents.features.tokenizer.feature.tokenizer
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
 import ai.koog.prompt.executor.clients.anthropic.models.AnthropicThinking
-import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
@@ -169,7 +169,8 @@ object AgentFactory {
                     )
                 },
                 model = agentModel,
-                maxAgentIterations = MAX_AGENT_ITERATIONS
+                maxAgentIterations = MAX_AGENT_ITERATIONS,
+                serializer = koogJsonSerializer
             ),
             toolRegistry = registry,
             installFeatures = {
@@ -207,7 +208,7 @@ object AgentFactory {
         events: AgentEvents?
     ): PromptExecutor {
         val executor = RetryingPromptExecutor.fromClient(client, policy, events)
-        return object : PromptExecutor {
+        return object : PromptExecutor() {
             override fun executeStreaming(
                 prompt: Prompt,
                 model: LLModel,
@@ -239,6 +240,7 @@ object AgentFactory {
                     params
                 }
             }
+
             LLMProvider.Anthropic -> params.withAnthropicReasoning()
             else -> params
         }
@@ -356,7 +358,8 @@ object AgentFactory {
                     )
                 },
                 model = agentModel,
-                maxAgentIterations = MAX_AGENT_ITERATIONS
+                maxAgentIterations = MAX_AGENT_ITERATIONS,
+                serializer = koogJsonSerializer
             ),
             toolRegistry = createToolRegistry(
                 project,
@@ -430,7 +433,8 @@ object AgentFactory {
                     )
                 },
                 model = agentModel,
-                maxAgentIterations = MAX_AGENT_ITERATIONS
+                maxAgentIterations = MAX_AGENT_ITERATIONS,
+                serializer = koogJsonSerializer
             ),
             toolRegistry = createToolRegistry(
                 project,
@@ -490,7 +494,7 @@ object AgentFactory {
     private fun singleRunWithParallelAbility(
         executor: PromptExecutor,
         tokenCounter: AtomicLong?
-    ) = strategy("subagent_single_run_sequential") {
+    ) = strategy<String, String>("subagent_single_run_sequential") {
         val nodeCallLLM by node<String, List<Message.Response>> { input ->
             llm.writeSession {
                 appendPrompt { user(input) }

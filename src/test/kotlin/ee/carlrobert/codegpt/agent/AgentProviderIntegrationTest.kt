@@ -1,7 +1,15 @@
 package ee.carlrobert.codegpt.agent
 
+import ai.koog.agents.snapshot.feature.AgentCheckpointData
 import ai.koog.agents.snapshot.providers.file.JVMFilePersistenceStorageProvider
+import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.RequestMetaInfo
+import ai.koog.prompt.message.ResponseMetaInfo
+import ai.koog.serialization.JSONObject
 import com.intellij.openapi.components.service
+import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
+import ee.carlrobert.codegpt.agent.history.CheckpointRef
+import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.*
 import ee.carlrobert.codegpt.credentials.CredentialsStore.setCredential
 import ee.carlrobert.codegpt.agent.clients.shouldStreamCustomOpenAI
@@ -11,6 +19,8 @@ import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
+import ee.carlrobert.codegpt.toolwindow.agent.AgentSession
+import ee.carlrobert.codegpt.toolwindow.agent.AgentToolWindowContentManager
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
@@ -24,11 +34,184 @@ import testsupport.json.JSONUtil.jsonMap
 import testsupport.json.JSONUtil.jsonMapResponse
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.createTempFile
 import kotlin.io.path.writeText
+import kotlin.time.Clock
 
 class AgentProviderIntegrationTest : IntegrationTest() {
+
+    fun testSubmitMessageContinuesArchivedThreadThroughRealRuntime() {
+        configureCustomOpenAIService()
+        val agentId = "archived-agent-${UUID.randomUUID()}"
+        val resumeCheckpointId = "checkpoint-1"
+        val finishCheckpointId = "checkpoint-2"
+        val checkpointStorage =
+            JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
+        runBlocking {
+            checkpointStorage.saveCheckpoint(
+                agentId,
+                AgentCheckpointData(
+                    checkpointId = resumeCheckpointId,
+                    createdAt = Clock.System.now(),
+                    nodePath = "$agentId/single_run/nodeExecuteTool",
+                    lastOutput = JSONObject(emptyMap()),
+                    messageHistory = listOf(
+                        Message.User("My name is Carl", RequestMetaInfo.Empty),
+                        Message.Assistant("ok", ResponseMetaInfo.Empty),
+                    ),
+                    version = 0,
+                )
+            )
+            checkpointStorage.saveCheckpoint(
+                agentId,
+                AgentCheckpointData(
+                    checkpointId = finishCheckpointId,
+                    createdAt = Clock.System.now(),
+                    nodePath = "$agentId/single_run/__finish__",
+                    lastOutput = JSONObject(emptyMap()),
+                    messageHistory = listOf(
+                        Message.User("My name is Carl", RequestMetaInfo.Empty),
+                        Message.Assistant("ok", ResponseMetaInfo.Empty),
+                    ),
+                    version = 1,
+                )
+            )
+        }
+
+        val contentManager = project.service<AgentToolWindowContentManager>()
+        val sessionId = "session-${UUID.randomUUID()}"
+        contentManager.createNewAgentTab(
+            AgentSession(
+                sessionId = sessionId,
+                conversation = Conversation(),
+                agentId = agentId,
+                resumeCheckpointRef = CheckpointRef(agentId, finishCheckpointId)
+            ),
+            select = false
+        )
+        val events = RecordingAgentEvents()
+
+        try {
+            expectCustomOpenAI(BasicHttpExchange { request ->
+                val prompt = extractPromptText(request)
+                assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
+                assertThat(request.method).isEqualTo("POST")
+                assertThat(prompt).contains("My name is Carl")
+                assertThat(prompt).contains("What's my name?")
+                ResponseEntity(customOpenAiResponse("Your name is Carl"))
+            })
+
+            project.service<AgentService>()
+                .submitMessage(MessageWithContext("What's my name?"), events, sessionId)
+            awaitSessionToFinish(sessionId)
+
+            val latestCheckpoint = runBlocking {
+                project.service<AgentCheckpointHistoryService>().loadLatestResumeCheckpoint(agentId)
+            }
+
+            assertThat(events.text.toString()).isEqualTo("Your name is Carl")
+            assertThat(latestCheckpoint).isNotNull
+            assertThat(latestCheckpoint!!.messageHistory.filterIsInstance<Message.User>().map { it.content })
+                .contains("My name is Carl", "What's my name?")
+        } finally {
+            contentManager.removeSession(sessionId)
+        }
+    }
+
+    fun testSubmitMessageUsesSeededSessionHistoryThroughRealRuntime() {
+        configureCustomOpenAIService()
+        val contentManager = project.service<AgentToolWindowContentManager>()
+        val sessionId = "session-${UUID.randomUUID()}"
+        contentManager.createNewAgentTab(
+            AgentSession(
+                sessionId = sessionId,
+                conversation = Conversation(),
+                seededMessageHistory = listOf(
+                    Message.User("My name is Carl", RequestMetaInfo.Empty),
+                    Message.Assistant("ok", ResponseMetaInfo.Empty)
+                )
+            ),
+            select = false
+        )
+        val events = RecordingAgentEvents()
+
+        try {
+            expectCustomOpenAI(BasicHttpExchange { request ->
+                val prompt = extractPromptText(request)
+                assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
+                assertThat(request.method).isEqualTo("POST")
+                assertThat(prompt).contains("My name is Carl")
+                assertThat(prompt).contains("What's my name?")
+                ResponseEntity(customOpenAiResponse("Your name is Carl"))
+            })
+
+            project.service<AgentService>()
+                .submitMessage(MessageWithContext("What's my name?"), events, sessionId)
+            awaitSessionToFinish(sessionId)
+
+            val session = requireNotNull(contentManager.getSession(sessionId))
+            val runtimeAgentId = requireNotNull(session.agentId)
+            val latestCheckpoint = runBlocking {
+                project.service<AgentCheckpointHistoryService>().loadLatestResumeCheckpoint(runtimeAgentId)
+            }
+
+            assertThat(events.text.toString()).isEqualTo("Your name is Carl")
+            assertThat(session.seededMessageHistory).isNull()
+            assertThat(latestCheckpoint).isNotNull
+            assertThat(latestCheckpoint!!.messageHistory.filterIsInstance<Message.User>().map { it.content })
+                .contains("My name is Carl", "What's my name?")
+        } finally {
+            contentManager.removeSession(sessionId)
+        }
+    }
+
+    fun testSecondFollowUpContinuesSeededSessionThroughRealRuntime() {
+        configureCustomOpenAIService()
+        val contentManager = project.service<AgentToolWindowContentManager>()
+        val sessionId = "session-${UUID.randomUUID()}"
+        contentManager.createNewAgentTab(
+            AgentSession(
+                sessionId = sessionId,
+                conversation = Conversation(),
+                seededMessageHistory = listOf(
+                    Message.User("My name is Carl", RequestMetaInfo.Empty),
+                    Message.Assistant("ok", ResponseMetaInfo.Empty)
+                )
+            ),
+            select = false
+        )
+        val events = RecordingAgentEvents()
+
+        try {
+            expectCustomOpenAI(BasicHttpExchange { request ->
+                val prompt = extractPromptText(request)
+                assertThat(prompt).contains("My name is Carl")
+                assertThat(prompt).contains("What's my name?")
+                ResponseEntity(customOpenAiResponse("Your name is Carl"))
+            })
+            project.service<AgentService>()
+                .submitMessage(MessageWithContext("What's my name?"), events, sessionId)
+            awaitSessionToFinish(sessionId)
+
+            expectCustomOpenAI(BasicHttpExchange { request ->
+                val prompt = extractPromptText(request)
+                assertThat(prompt).contains("My name is Carl")
+                assertThat(prompt).contains("What's my name?")
+                assertThat(prompt).contains("And what did I ask you?")
+                ResponseEntity(customOpenAiResponse("You asked what your name was"))
+            })
+            project.service<AgentService>()
+                .submitMessage(MessageWithContext("And what did I ask you?"), events, sessionId)
+            awaitSessionToFinish(sessionId)
+
+            assertThat(events.text.toString()).contains("Your name is Carl")
+            assertThat(events.text.toString()).contains("You asked what your name was")
+        } finally {
+            contentManager.removeSession(sessionId)
+        }
+    }
 
     fun testOpenAIAgentUsesMockHarnessThroughRealExecutor() {
         setCredential(OpenaiApiKey, "TEST_API_KEY")
@@ -330,17 +513,22 @@ class AgentProviderIntegrationTest : IntegrationTest() {
             provider = provider,
             events = events,
             sessionId = "session-${UUID.randomUUID()}",
-            pendingMessages = ConcurrentHashMap()
+            pendingMessages = ConcurrentHashMap(),
+            pendingRunContinuations = ConcurrentHashMap()
         )
 
+        var agentId: String? = null
         return try {
             val output = runBlocking {
                 val agent = service.createAgent()
+                agentId = agent.id
                 agent.run(MessageWithContext(userMessage))
             }
             AgentRunResult(output, events)
         } finally {
-            runBlocking { service.closeAll() }
+            agentId?.let { id ->
+                runBlocking { service.removeAgentWithId(id) }
+            }
         }
     }
 
@@ -837,9 +1025,8 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         )
     }
 
-    private fun customOpenAiResponse(): String {
+    private fun customOpenAiResponse(text: String = "Hello from Custom OpenAI"): String {
         val model = "custom-agent-model"
-        val text = "Hello from Custom OpenAI"
         return jsonMapResponse(
             e(
                 "choices",
@@ -965,6 +1152,15 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                 ((part as? Map<*, *>)?.get("text") as? String).orEmpty()
             }
         }
+    }
+
+    private fun awaitSessionToFinish(sessionId: String, timeoutMillis: Long = 5_000L) {
+        val agentService = project.service<AgentService>()
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (agentService.isSessionRunning(sessionId) && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+        }
+        assertThat(agentService.isSessionRunning(sessionId)).isFalse
     }
 
     private data class AgentRunResult(

@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runWriteAction
@@ -35,9 +36,7 @@ class WriteTool(
     hookManager: HookManager,
 ) : BaseTool<WriteTool.Args, WriteTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "Write",
+    name = NAME,
     description = """
         Writes content to a file, creating it if it doesn't exist or overwriting if it does.
 
@@ -61,6 +60,10 @@ class WriteTool(
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
+
+    companion object {
+        const val NAME = "Write"
+    }
 
     @Serializable
     data class Args(
@@ -231,9 +234,10 @@ class WriteTool(
         )
     }
 
-    override fun encodeResultToString(result: Result): String = when (result) {
-        is Result.Success -> ("File '${result.filePath}' ${result.message}").truncateToolResult()
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
+        when (result) {
+            is Result.Success -> ("File '${result.filePath}' ${result.message}").truncateToolResult()
 
-        is Result.Error -> ("Error writing file '${result.filePath}': ${result.error}").truncateToolResult()
-    }
+            is Result.Error -> ("Error writing file '${result.filePath}': ${result.error}").truncateToolResult()
+        }
 }

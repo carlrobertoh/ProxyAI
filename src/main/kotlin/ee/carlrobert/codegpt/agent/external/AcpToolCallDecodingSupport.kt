@@ -435,12 +435,17 @@ internal class AcpToolCallDecodingSupport(
         decodeSearchArgs(rawInput)?.let { return it }
 
         val normalizedTitle = rawTitle.trim().ifBlank { "Search" }
-        val path = locations.firstOrNull()?.path
-        val pattern = extractGeminiSearchPattern(normalizedTitle)
+        val searchPayload = decode<AcpSearchPayload>(rawInput)
+        val path = searchPayload?.resolvedPath ?: locations.firstOrNull()?.path
+        val pattern = searchPayload?.resolvedPattern ?: extractGeminiSearchPattern(normalizedTitle)
+        val title = when {
+            !pattern.isNullOrBlank() && isGenericSearchTitle(normalizedTitle) -> "Search for $pattern"
+            else -> normalizedTitle
+        }
 
         return AcpToolCallArgs.SearchPreview(
             AcpSearchPreviewArgs(
-                title = normalizedTitle,
+                title = title,
                 path = path,
                 pattern = pattern
             )
@@ -513,10 +518,11 @@ internal class AcpToolCallDecodingSupport(
         decodeBashArgs(rawInput)?.let { return it }
 
         val normalizedTitle = rawTitle.trim().ifBlank { defaultTitle }
+        val parsedCommand = decodeParsedCommand(rawInput)?.cmd?.trim()?.takeIf { it.isNotBlank() }
         return AcpToolCallArgs.BashPreview(
             AcpBashPreviewArgs(
                 title = normalizedTitle,
-                command = extractGeminiCommand(normalizedTitle)
+                command = parsedCommand ?: extractGeminiCommand(normalizedTitle)
             )
         )
     }
@@ -596,6 +602,10 @@ internal fun editOrWriteCall(rawTitle: String, args: AcpToolCallArgs?): AcpResol
 private fun extractGeminiSearchPattern(title: String): String? {
     val match = Regex("(?i)^(?:search|grep)(?:\\s+for)?\\s*:?\\s+(.+)$").find(title) ?: return null
     return match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }
+}
+
+private fun isGenericSearchTitle(title: String): Boolean {
+    return title.isBlank() || title.equals("search", ignoreCase = true)
 }
 
 private fun extractGeminiCommand(title: String): String? {

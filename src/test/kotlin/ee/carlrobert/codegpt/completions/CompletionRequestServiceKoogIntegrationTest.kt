@@ -53,7 +53,8 @@ class CompletionServiceKoogIntegrationTest : IntegrationTest() {
 
         assertThat(listener.opened).isTrue()
         assertThat(listener.error).isNull()
-        assertThat(listener.chunks).containsExactly("Hel", "lo", "!")
+        assertThat(listener.chunks).isNotEmpty()
+        assertThat(listener.chunks.joinToString("")).isEqualTo("Hello!")
     }
 
     fun testInlineEditFlowUsesKoogStreamingExecution() {
@@ -83,7 +84,8 @@ class CompletionServiceKoogIntegrationTest : IntegrationTest() {
 
         assertThat(listener.opened).isTrue()
         assertThat(listener.error).isNull()
-        assertThat(listener.chunks).containsExactly("Hel", "lo", "!")
+        assertThat(listener.chunks).isNotEmpty()
+        assertThat(listener.chunks.joinToString("")).isEqualTo("Hello!")
     }
 
     fun testAutoApplyFlowUsesKoogStreamingExecution() {
@@ -111,7 +113,8 @@ class CompletionServiceKoogIntegrationTest : IntegrationTest() {
 
         assertThat(listener.opened).isTrue()
         assertThat(listener.error).isNull()
-        assertThat(listener.chunks).containsExactly("Hel", "lo", "!")
+        assertThat(listener.chunks).isNotEmpty()
+        assertThat(listener.chunks.joinToString("")).isEqualTo("Hello!")
     }
 
     fun testAutoApplySyncFlowUsesKoogExecution() {
@@ -171,11 +174,7 @@ class CompletionServiceKoogIntegrationTest : IntegrationTest() {
             assertThat(request.uri.path).isEqualTo("/v1/responses")
             assertThat(request.method).isEqualTo("POST")
             assertPrompt(extractPromptText(request))
-            listOf(
-                streamingChunk("Hel", 1),
-                streamingChunk("lo", 2),
-                streamingChunk("!", 3)
-            )
+            openAiResponsesChunks("Hello!")
         })
     }
 
@@ -240,6 +239,64 @@ class CompletionServiceKoogIntegrationTest : IntegrationTest() {
             e("content_index", 0),
             e("delta", content),
             e("sequence_number", sequenceNumber)
+        )
+    }
+
+    private fun openAiResponsesChunks(text: String): List<String> {
+        val chunks = text.chunked(3)
+        return chunks.mapIndexed { index, chunk ->
+            streamingChunk(chunk, index + 1)
+        } + jsonMapResponse(
+            e("type", "response.output_item.done"),
+            e("item", text),
+            e("output_index", 0),
+            e("sequence_number", chunks.size + 1)
+        ) + jsonMapResponse(
+            e("type", "response.completed"),
+            e(
+                "response",
+                jsonMap(
+                    e("id", "resp-test"),
+                    e("object", "response"),
+                    e("created_at", 1),
+                    e("model", "gpt-5-mini"),
+                    e(
+                        "output",
+                        jsonArray(
+                            jsonMap(
+                                e("type", "message"),
+                                e("id", "msg_1"),
+                                e("role", "assistant"),
+                                e("status", "completed"),
+                                e(
+                                    "content",
+                                    jsonArray(
+                                        jsonMap(
+                                            e("type", "output_text"),
+                                            e("text", text),
+                                            e("annotations", jsonArray())
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    ),
+                    e("parallel_tool_calls", true),
+                    e("status", "completed"),
+                    e("text", jsonMap()),
+                    e(
+                        "usage",
+                        jsonMap(
+                            e("input_tokens", 1),
+                            e("input_tokens_details", jsonMap("cached_tokens", 0)),
+                            e("output_tokens", 1),
+                            e("output_tokens_details", jsonMap("reasoning_tokens", 0)),
+                            e("total_tokens", 2)
+                        )
+                    )
+                )
+            ),
+            e("sequence_number", chunks.size + 2)
         )
     }
 

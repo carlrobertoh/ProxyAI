@@ -2,6 +2,7 @@ package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
+import ai.koog.serialization.typeToken
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.agent.AgentMcpContext
@@ -87,8 +88,8 @@ private class SessionBoundMcpTool(
     private val exposedName: String,
     private val approve: suspend (name: String, details: String) -> Boolean
 ) : Tool<JsonObject, McpTool.Result>(
-    argsSerializer = JsonObject.serializer(),
-    resultSerializer = McpTool.Result.serializer(),
+    argsType = typeToken<JsonObject>(),
+    resultType = typeToken<McpTool.Result>(),
     descriptor = buildDescriptor(exposedName, sourceTool, serverName)
 ), McpAgentToolMarker {
     override suspend fun execute(args: JsonObject): McpTool.Result {
@@ -119,7 +120,7 @@ private class SessionBoundMcpTool(
         return runTool(client, args)
     }
 
-    override fun encodeResultToString(result: McpTool.Result): String {
+    fun encodeResultToString(result: McpTool.Result): String {
         return if (result.success || result.output.startsWith("Error:", ignoreCase = true)) {
             result.output
         } else {

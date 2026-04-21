@@ -1,7 +1,9 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.vladsch.flexmark.html2md.converter.FlexmarkHtmlConverter
+import ee.carlrobert.codegpt.agent.koogJsonSerializer
 import ee.carlrobert.codegpt.settings.hooks.HookManager
 import ee.carlrobert.codegpt.tokens.truncateToolResult
 import kotlinx.coroutines.Dispatchers
@@ -18,9 +20,7 @@ class WebFetchTool(
     private val userAgent: String = "Mozilla/5.0 (compatible; ProxyAI/1.0; +https://tryproxy.io)",
 ) : BaseTool<WebFetchTool.Args, WebFetchTool.Result>(
     workingDirectory = workingDirectory,
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "WebFetch",
+    name = NAME,
     description = """
 Use this tool when you already have a specific URL and need the page content as Markdown.
 
@@ -33,6 +33,10 @@ Use this tool when you already have a specific URL and need the page content as 
     hookManager = hookManager,
     sessionId = sessionId,
 ) {
+
+    companion object {
+        const val NAME = "WebFetch"
+    }
 
     @Serializable
     data class Args(
@@ -187,7 +191,7 @@ Use this tool when you already have a specific URL and need the page content as 
         return Result(url = originalArgs.url, error = deniedReason)
     }
 
-    override fun encodeResultToString(result: Result): String {
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String {
         if (result.error != null) {
             return "Failed to fetch web page '${result.url}': ${result.error}".truncateToolResult()
         }
@@ -209,6 +213,10 @@ Use this tool when you already have a specific URL and need the page content as 
         return content.truncateToolResult()
     }
 
+    fun encodeResultToString(result: Result): String {
+        return encodeResultToString(result, koogJsonSerializer)
+    }
+
     private data class MarkdownSlice(
         val content: String,
         val truncated: Boolean,
@@ -221,7 +229,7 @@ Use this tool when you already have a specific URL and need the page content as 
         offset: Int?,
         limit: Int?
     ): MarkdownSlice {
-        val lines = markdown.lines()
+        val lines = markdown.lines().dropWhile { it.isBlank() }.dropLastWhile { it.isBlank() }
         val totalLines = lines.size
         val hasLineSlice = offset != null || limit != null
 
@@ -265,6 +273,6 @@ Use this tool when you already have a specific URL and need the page content as 
         }
 
         val preferredRoot = document.selectFirst("main, article, [role=main]") ?: document.body()
-        return preferredRoot?.outerHtml()
+        return preferredRoot.outerHtml()
     }
 }

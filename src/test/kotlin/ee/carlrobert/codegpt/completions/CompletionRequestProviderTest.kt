@@ -27,7 +27,7 @@ class CompletionRequestProviderTest : IntegrationTest() {
         conversation.addMessage(firstMessage)
         conversation.addMessage(secondMessage)
         val callParameters = ChatCompletionParameters
-            .builder(conversation, Message("TEST_CHAT_COMPLETION_PROMPT"))
+            .builder(project, conversation, Message("TEST_CHAT_COMPLETION_PROMPT"))
             .build()
 
         val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
@@ -58,7 +58,7 @@ class CompletionRequestProviderTest : IntegrationTest() {
         val secondMessage = createDummyMessage("SECOND_TEST_PROMPT", 250)
         conversation.addMessage(firstMessage)
         conversation.addMessage(secondMessage)
-        val callParameters = ChatCompletionParameters.builder(conversation, secondMessage)
+        val callParameters = ChatCompletionParameters.builder(project, conversation, secondMessage)
             .retry(true)
             .build()
 

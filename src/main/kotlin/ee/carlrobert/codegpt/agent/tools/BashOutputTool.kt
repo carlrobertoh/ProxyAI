@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.application.ApplicationManager
 import ee.carlrobert.codegpt.agent.AgentToolOutputNotifier
 import ee.carlrobert.codegpt.agent.ToolRunContext
@@ -18,9 +19,7 @@ class BashOutputTool(
 ) :
     BaseTool<BashOutputTool.Args, BashOutputTool.Result>(
         workingDirectory = workingDirectory,
-        argsSerializer = Args.serializer(),
-        resultSerializer = Result.serializer(),
-        name = "BashOutput",
+        name = NAME,
         description = """
 - Retrieves output from a running or completed background bash shell
 - Takes a shell_id parameter identifying the shell
@@ -35,6 +34,10 @@ class BashOutputTool(
         hookManager = hookManager,
         sessionId = sessionId,
     ) {
+
+    companion object {
+        const val NAME = "BashOutput"
+    }
 
     @Serializable
     data class Args(
@@ -120,7 +123,7 @@ class BashOutputTool(
         )
     }
 
-    override fun encodeResultToString(result: Result): String =
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
         buildString {
             appendLine("Shell ID: ${result.bashId}")
             appendLine("Status: ${result.status}")

@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.completions
 
-import ai.koog.prompt.message.Message as KoogMessage
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory
@@ -11,10 +10,10 @@ import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.*
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.file.FileUtil.getResourceContent
-
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import java.io.File
+import ai.koog.prompt.message.Message as KoogMessage
 
 class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
 
@@ -23,8 +22,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
-        val callParameters = ChatCompletionParameters
-            .builder(conversation, message)
+        val callParameters = ChatCompletionParameters.builder(project, conversation, message)
             .chatMode(ChatMode.EDIT)
             .build()
 
@@ -52,11 +50,8 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             toolCalls =
                 listOf(ChatToolCall(null, "tc_1", "function", ChatToolFunction("search", "{}")))
         }
-        val callParameters = ChatCompletionParameters.builder(conversation, message)
+        val callParameters = ChatCompletionParameters.builder(project, conversation, message)
             .requestType(RequestType.TOOL_CALL_REQUEST).build()
-        val filtered =
-            service<FilteredPromptsService>().getFilteredPersonaPrompt(ChatMode.ASK)
-                .addProjectPath()
         val expected = listOf(
             mapOf("role" to "system"),
             mapOf("role" to "user", "content" to "Run tool"),
@@ -104,7 +99,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             )
             addToolCallResult("tc_curr", "curr_result")
         }
-        val callParameters = ChatCompletionParameters.builder(conversation, current)
+        val callParameters = ChatCompletionParameters.builder(project, conversation, current)
             .requestType(RequestType.TOOL_CALL_CONTINUATION).build()
         val expected = listOf(
             mapOf("role" to "system"),
@@ -113,15 +108,35 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
                 "role" to "assistant",
                 "content" to "Prev call"
             ),
-            mapOf("role" to "tool_call", "id" to "tc_prev", "tool" to "list", "args" to "{\"q\":1}"),
-            mapOf("role" to "tool_result", "id" to "tc_prev", "tool" to "list", "content" to "prev_result"),
+            mapOf(
+                "role" to "tool_call",
+                "id" to "tc_prev",
+                "tool" to "list",
+                "args" to "{\"q\":1}"
+            ),
+            mapOf(
+                "role" to "tool_result",
+                "id" to "tc_prev",
+                "tool" to "list",
+                "content" to "prev_result"
+            ),
             mapOf("role" to "user", "content" to "Run again"),
             mapOf(
                 "role" to "assistant",
                 "content" to "Curr call"
             ),
-            mapOf("role" to "tool_call", "id" to "tc_curr", "tool" to "list", "args" to "{\"q\":2}"),
-            mapOf("role" to "tool_result", "id" to "tc_curr", "tool" to "list", "content" to "curr_result"),
+            mapOf(
+                "role" to "tool_call",
+                "id" to "tc_curr",
+                "tool" to "list",
+                "args" to "{\"q\":2}"
+            ),
+            mapOf(
+                "role" to "tool_result",
+                "id" to "tc_curr",
+                "tool" to "list",
+                "content" to "curr_result"
+            ),
             mapOf("role" to "assistant", "content" to "Curr call")
         )
 
@@ -142,8 +157,9 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             ReferencedFile("A.java", "/path/A.java", "class A {}"),
             ReferencedFile("B.kt", "/path/B.kt", "class B")
         )
-        val callParameters =
-            ChatCompletionParameters.builder(conversation, message).referencedFiles(refs).build()
+        val callParameters = ChatCompletionParameters.builder(project, conversation, message)
+            .referencedFiles(refs)
+            .build()
         val filtered =
             service<FilteredPromptsService>().getFilteredPersonaPrompt(ChatMode.ASK)
                 .addProjectPath()
@@ -166,8 +182,9 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         service<PromptsSettings>().state.personas.selectedPersona = PersonasState.DEFAULT_PERSONA
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
-        val callParameters =
-            ChatCompletionParameters.builder(conversation, message).chatMode(ChatMode.ASK).build()
+        val callParameters = ChatCompletionParameters.builder(project, conversation, message)
+            .chatMode(ChatMode.ASK)
+            .build()
         val filtered =
             service<FilteredPromptsService>().getFilteredPersonaPrompt(ChatMode.ASK)
                 .addProjectPath()
@@ -175,7 +192,8 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
 
         val prompt = OpenAIRequestFactory().createChatCompletionPrompt(callParameters)
 
-        val systemMessages = prompt.messages.filterIsInstance<KoogMessage.System>().map { it.content }
+        val systemMessages =
+            prompt.messages.filterIsInstance<KoogMessage.System>().map { it.content }
         assertThat(systemMessages.first()).contains(expectedSystem.trim())
     }
 
@@ -205,7 +223,7 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
         val callParameters = ChatCompletionParameters
-            .builder(conversation, message)
+            .builder(project, conversation, message)
             .chatMode(ChatMode.ASK)
             .build()
 
@@ -228,15 +246,16 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
             You are a helpful assistant.
             For refactoring or editing an existing file, always generate a SEARCH/REPLACE block.
         """.trimIndent()
-        service<PromptsSettings>().state.personas.selectedPersona = PersonaPromptDetailsState().apply {
-            id = 999L
-            name = "Custom Test Persona"
-            instructions = personaPromptWithSearchReplace
-        }
+        service<PromptsSettings>().state.personas.selectedPersona =
+            PersonaPromptDetailsState().apply {
+                id = 999L
+                name = "Custom Test Persona"
+                instructions = personaPromptWithSearchReplace
+            }
         val conversation = ConversationService.getInstance().startConversation(project)
         val message = Message("Please refactor this code")
         val callParameters = ChatCompletionParameters
-            .builder(conversation, message)
+            .builder(project, conversation, message)
             .chatMode(ChatMode.EDIT)
             .build()
 
@@ -392,16 +411,15 @@ class OpenAIRequestFactoryIntegrationTest : IntegrationTest() {
         systemPrompt = systemPrompt.replace("{{CURRENT_FILE_CONTEXT}}", currentFileBlock)
 
         val externalContext = buildString {
-            val currentPath = filePath
             val unique = mutableSetOf<String>()
             val hasRefs = referencedFiles
-                ?.filter { it.filePath() != currentPath }
+                ?.filter { it.filePath() != filePath }
                 ?.any { !it.fileContent().isNullOrBlank() } == true
 
             if (hasRefs) {
                 append("\n\n### Referenced Files")
                 referencedFiles
-                    .filter { it.filePath() != currentPath }
+                    .filter { it.filePath() != filePath }
                     .forEach {
                         if (!it.fileContent().isNullOrBlank() && unique.add(it.filePath())) {
                             append("\n\n```${it.getFileExtension()}:${it.filePath()}\n")

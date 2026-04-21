@@ -1,6 +1,7 @@
 package ee.carlrobert.codegpt.agent.tools
 
 import ai.koog.agents.core.tools.annotations.LLMDescription
+import ai.koog.serialization.JSONSerializer
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -31,9 +32,7 @@ class ReadTool(
     private val hookManager: HookManager,
 ) : BaseTool<ReadTool.Args, ReadTool.Result>(
     workingDirectory = project.basePath ?: System.getProperty("user.dir"),
-    argsSerializer = Args.serializer(),
-    resultSerializer = Result.serializer(),
-    name = "Read",
+    name = NAME,
     description = """
         Reads a file from the local filesystem. You can access any file directly by using this tool.
         Assume this tool is able to read all files on the machine. If the user provides a path to a file, assume that path is valid.
@@ -58,6 +57,7 @@ class ReadTool(
 ) {
 
     companion object {
+        const val NAME = "Read"
         private val logger = thisLogger()
     }
 
@@ -255,22 +255,23 @@ class ReadTool(
         )
     }
 
-    override fun encodeResultToString(result: Result): String = when (result) {
-        is Result.Success -> {
-            val raw = buildString {
-                if (result.truncated) {
-                    appendLine("Note: Content truncated. Use offset parameter to read more lines.")
-                    appendLine()
-                }
-                append(result.content)
-            }.trimEnd()
-            raw.truncateToolResult()
-        }
+    override fun encodeResultToString(result: Result, serializer: JSONSerializer): String =
+        when (result) {
+            is Result.Success -> {
+                val raw = buildString {
+                    if (result.truncated) {
+                        appendLine("Note: Content truncated. Use offset parameter to read more lines.")
+                        appendLine()
+                    }
+                    append(result.content)
+                }.trimEnd()
+                raw.truncateToolResult()
+            }
 
-        is Result.Error -> {
-            ("Error reading file '${result.filePath}': ${result.error}").truncateToolResult()
+            is Result.Error -> {
+                ("Error reading file '${result.filePath}': ${result.error}").truncateToolResult()
+            }
         }
-    }
 
     private fun readFileContent(path: Path, virtualFilePath: String?): String {
         if (virtualFilePath != null) {

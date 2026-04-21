@@ -84,6 +84,7 @@ public class ToolwindowChatCompletionRequestHandler {
       var factory = CompletionRequestFactory.getFactory(serviceType);
       var prompt = factory.createChatCompletionPrompt(callParameters);
       return CompletionRequestService.getChatCompletionAsync(
+          callParameters.getProject(),
           serviceType,
           prompt,
           modelSelection,
