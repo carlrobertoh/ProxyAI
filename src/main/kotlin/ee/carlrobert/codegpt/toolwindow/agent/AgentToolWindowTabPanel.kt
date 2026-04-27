@@ -623,9 +623,6 @@ class AgentToolWindowTabPanel(
 
                 is AgentCheckpointTurnSequencer.TurnEvent.ToolCall -> {
                     val toolName = event.tool.ifBlank { "Tool" }
-                    if (AgentCheckpointTurnSequencer.isTodoWriteTool(toolName)) {
-                        return@forEach
-                    }
                     val rawArgs = event.content
                     val args = parseRecoveredToolArgs(toolName, rawArgs)
                     val card = createRecoveredToolCard(toolName, args, rawArgs)
@@ -641,9 +638,6 @@ class AgentToolWindowTabPanel(
 
                 is AgentCheckpointTurnSequencer.TurnEvent.ToolResult -> {
                     val toolName = event.tool.ifBlank { "Tool" }
-                    if (AgentCheckpointTurnSequencer.isTodoWriteTool(toolName)) {
-                        return@forEach
-                    }
                     val rawResult = event.content
                     val parsedResult = parseRecoveredToolResult(toolName, rawResult)
                     val success = inferRecoveredToolSuccess(parsedResult, rawResult)
@@ -672,10 +666,6 @@ class AgentToolWindowTabPanel(
 
         toolCalls.forEach { toolCall ->
             val toolName = toolCall.function.name ?: return@forEach
-            if (AgentCheckpointTurnSequencer.isTodoWriteTool(toolName)) {
-                return@forEach
-            }
-
             val rawArgs = toolCall.function.arguments.orEmpty()
             val args = parseRecoveredToolArgs(toolName, rawArgs)
             val card = createRecoveredToolCard(toolName, args, rawArgs)

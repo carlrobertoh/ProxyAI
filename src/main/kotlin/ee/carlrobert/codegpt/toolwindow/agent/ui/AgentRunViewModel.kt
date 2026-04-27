@@ -109,6 +109,18 @@ sealed class RunEntry {
             copy(result = result as? TaskTool.Result)
     }
 
+    data class TodoWriteEntry(
+        override val id: String,
+        override val parentId: String? = null,
+        override val args: TodoWriteTool.Args? = null,
+        override val result: String? = null,
+    ) : RunEntry() {
+        override val kind: ToolKind = ToolKind.TODO_WRITE
+        override val toolName: String = "TodoWrite"
+        override fun withAnyResult(result: Any?): RunEntry =
+            copy(result = result as? String)
+    }
+
     data class McpEntry(
         override val id: String,
         override val parentId: String? = null,

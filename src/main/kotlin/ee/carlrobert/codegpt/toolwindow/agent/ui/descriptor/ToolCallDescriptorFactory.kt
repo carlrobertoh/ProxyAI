@@ -63,6 +63,7 @@ object ToolCallDescriptorFactory {
 
             ToolKind.WEB -> createWebDescriptor(args, result, projectId)
             ToolKind.TASK -> createTaskDescriptor(args, result, projectId, summary)
+            ToolKind.TODO_WRITE -> createTodoWriteDescriptor(args, result, projectId)
             ToolKind.MCP -> createMcpDescriptor(toolName, args, result, projectId)
 
             ToolKind.LIBRARY_RESOLVE -> createLibraryResolveDescriptor(args, result, projectId)
@@ -88,6 +89,7 @@ object ToolCallDescriptorFactory {
             toolName == ToolName.WEB_FETCH || args is WebFetchTool.Args || result is WebFetchTool.Result -> ToolKind.WEB
             looksLikeWebPayload(args) -> ToolKind.WEB
             toolName == ToolName.TASK || args is TaskTool.Args -> ToolKind.TASK
+            toolName == ToolName.TODO_WRITE || args is TodoWriteTool.Args -> ToolKind.TODO_WRITE
             toolName == ToolName.MCP || args is McpTool.Args || result is McpTool.Result -> ToolKind.MCP
             toolName == ToolName.RESOLVE_LIBRARY_ID || args is ResolveLibraryIdTool.Args -> ToolKind.LIBRARY_RESOLVE
             toolName == ToolName.GET_LIBRARY_DOCS || args is GetLibraryDocsTool.Args -> ToolKind.LIBRARY_DOCS
@@ -674,8 +676,6 @@ object ToolCallDescriptorFactory {
     ): ToolCallDescriptor {
         val description = when (args) {
             is TaskTool.Args -> args.description
-            is TodoWriteTool.Args -> todoWriteLabel(args)
-            is JsonObject -> extractTodoWriteLabel(args) ?: "Unknown"
             else -> "Unknown"
         }
 
@@ -719,6 +719,35 @@ object ToolCallDescriptorFactory {
             prefixColor = prefixColor,
             summary = taskSummary,
             actions = actions
+        )
+    }
+
+    private fun createTodoWriteDescriptor(
+        args: Any,
+        result: Any?,
+        projectId: String?
+    ): ToolCallDescriptor {
+        val description = when (args) {
+            is TodoWriteTool.Args -> todoWriteLabel(args)
+            is JsonObject -> extractTodoWriteLabel(args) ?: "Updated task list"
+            else -> "Updated task list"
+        }
+        val summary = when (args) {
+            is TodoWriteTool.Args -> todoWriteSummary(args)
+            is JsonObject -> extractTodoWriteSummary(args)
+            else -> null
+        }
+
+        return ToolCallDescriptor(
+            kind = ToolKind.TODO_WRITE,
+            icon = AllIcons.Actions.Checked,
+            titlePrefix = "Tasks:",
+            titleMain = description,
+            tooltip = "Update the session task list",
+            args = args,
+            result = result,
+            projectId = projectId,
+            summary = summary
         )
     }
 
@@ -789,10 +818,10 @@ object ToolCallDescriptorFactory {
         }
         val completed = args.todos.firstOrNull { it.status == TodoWriteTool.TodoStatus.COMPLETED }
         if (completed != null && completed.content.isNotBlank()) {
-            return "Marking task done: ${completed.content}"
+            return "Marked task done: ${completed.content}"
         }
-        if (args.title.isNotBlank()) return "Updating todo list: ${args.title}"
-        return "Updating todo list"
+        if (args.title.isNotBlank()) return "Updated task list: ${args.title}"
+        return "Updated task list"
     }
 
     private fun extractTodoWriteLabel(args: JsonObject): String? {
@@ -801,13 +830,38 @@ object ToolCallDescriptorFactory {
             todos.firstOrNull { it.stringValue("status")?.equals("in_progress", true) == true }
         val inProgressLabel = inProgress?.stringValue("activeForm")?.trim().orEmpty()
         if (inProgressLabel.isNotBlank()) return inProgressLabel
-        val completed =
-            todos.firstOrNull { it.stringValue("status")?.equals("completed", true) == true }
-        val completedLabel = completed?.stringValue("content")?.trim().orEmpty()
-        if (completedLabel.isNotBlank()) return "Marking task done: $completedLabel"
         val title = args.stringValue("title")?.trim().orEmpty()
-        if (title.isNotBlank()) return "Updating todo list: $title"
-        return "Updating todo list"
+        if (title.isNotBlank()) return "Updated task list: $title"
+        return "Updated task list"
+    }
+
+    private fun todoWriteSummary(args: TodoWriteTool.Args): String {
+        val pending = args.todos.count { it.status == TodoWriteTool.TodoStatus.PENDING }
+        val inProgress = args.todos.count { it.status == TodoWriteTool.TodoStatus.IN_PROGRESS }
+        val completed = args.todos.count { it.status == TodoWriteTool.TodoStatus.COMPLETED }
+        return buildTodoWriteSummary(pending, inProgress, completed)
+    }
+
+    private fun extractTodoWriteSummary(args: JsonObject): String? {
+        val todos = args["todos"] as? JsonArray ?: return null
+        val pending = todos.count {
+            (it as? JsonObject)?.stringValue("status")?.equals("pending", true) == true
+        }
+        val inProgress = todos.count {
+            (it as? JsonObject)?.stringValue("status")?.equals("in_progress", true) == true
+        }
+        val completed = todos.count {
+            (it as? JsonObject)?.stringValue("status")?.equals("completed", true) == true
+        }
+        return buildTodoWriteSummary(pending, inProgress, completed)
+    }
+
+    private fun buildTodoWriteSummary(pending: Int, inProgress: Int, completed: Int): String {
+        return listOf(
+            "$pending pending",
+            "$inProgress active",
+            "$completed done"
+        ).joinToString(" · ")
     }
 
     private fun JsonObject.stringValue(key: String): String? =

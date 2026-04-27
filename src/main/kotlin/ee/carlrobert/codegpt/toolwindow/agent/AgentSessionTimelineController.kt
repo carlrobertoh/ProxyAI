@@ -360,7 +360,7 @@ internal class AgentSessionTimelineController(
         return nonSystemMessages.mapIndexedNotNull { index, message ->
             val nonSystemMessageCount = index + 1
             if (nonSystemMessageCount in selectableNonSystemMessageCounts) return@mapIndexedNotNull null
-            if (message is PromptMessage.Tool.Result && !isInternalTimelineTool(message.tool)) {
+            if (message is PromptMessage.Tool.Result) {
                 return@mapIndexedNotNull null
             }
             nonSystemMessageCount
@@ -514,7 +514,6 @@ internal class AgentSessionTimelineController(
 
             is AgentCheckpointTurnSequencer.TurnEvent.ToolCall -> {
                 val toolName = event.tool.ifBlank { "Tool" }
-                if (isInternalTimelineTool(toolName)) return null
                 RunTimelinePoint(
                     cacheKey = "${checkpoint.checkpointId}:${event.nonSystemMessageCount}",
                     checkpointRef = checkpointRef,
@@ -805,10 +804,6 @@ internal class AgentSessionTimelineController(
         return trimmed
     }
 
-    private fun isInternalTimelineTool(toolName: String): Boolean {
-        return AgentCheckpointTurnSequencer.isTodoWriteTool(toolName)
-    }
-
     private fun isTodoWriteTool(toolName: String): Boolean {
         return toolName.equals("TodoWrite", ignoreCase = true) ||
                 toolName.equals("TodoWriteTool", ignoreCase = true)
@@ -841,6 +836,7 @@ internal class AgentSessionTimelineController(
     private fun iconForTool(toolName: String): javax.swing.Icon {
         val normalized = toolName.lowercase()
         return when {
+            isTodoWriteTool(toolName) -> AllIcons.Actions.Checked
             normalized.contains("read") -> AllIcons.Actions.Show
             normalized.contains("bash") || normalized.contains("shell") -> AllIcons.Nodes.Console
             normalized.contains("search") -> AllIcons.Actions.Search

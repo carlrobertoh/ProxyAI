@@ -404,7 +404,7 @@ class AgentEventHandler(
                     }
                     todoListPanel.updateTodos(uiArgs.todos)
                     todoListPanel.isVisible = true
-                    requestUiRefresh()
+                    showMainToolCard(id, toolName, uiArgs)
                 }
             }
 
@@ -429,25 +429,7 @@ class AgentEventHandler(
                 }
 
                 runInEdt {
-                    val key = keyFor(id)
-                    val existingCard = mainToolCards[key]
-                    if (existingCard == null) {
-                        val card = ToolCallCard(project, toolName, uiArgs)
-                        val descriptor = card.getDescriptor()
-                        if (descriptor.kind == ToolKind.OTHER || descriptor.titleMain.isBlank()) {
-                            logger.warn(
-                                "Created generic tool card session=$sessionId toolId=$id toolName=$toolName argsType=${uiArgs?.javaClass?.name ?: "null"} title=${descriptor.titleMain}"
-                            )
-                        }
-                        mainToolCards[key] = card
-                        currentResponseBody?.addToolStatusPanel(card)
-                        requestUiRefresh()
-                    } else {
-                        logger.debug(
-                            "Updated tool card session=$sessionId toolId=$id toolName=$toolName argsType=${uiArgs?.javaClass?.name ?: "null"} title=${existingCard.getDescriptor().titleMain}"
-                        )
-                        requestUiRefresh(false)
-                    }
+                    showMainToolCard(id, toolName, uiArgs)
                 }
             }
         }
@@ -497,7 +479,6 @@ class AgentEventHandler(
             if (inProgressTask != null) {
                 onShowLoading(inProgressTask.activeForm)
             }
-            return cid
         }
 
         runInEdt {
@@ -528,6 +509,7 @@ class AgentEventHandler(
                     args,
                     null
                 )
+                is TodoWriteTool.Args -> RunEntry.TodoWriteEntry(cid, parentId, args, null)
 
                 is WriteTool.Args -> {
                     lastWriteArgs = args
@@ -585,6 +567,19 @@ class AgentEventHandler(
                 },
                 activeForm = entry.content
             )
+        }
+    }
+
+    private fun showMainToolCard(id: String, toolName: String, uiArgs: Any?) {
+        val key = keyFor(id)
+        val existingCard = mainToolCards[key]
+        if (existingCard == null) {
+            val card = ToolCallCard(project, toolName, uiArgs)
+            mainToolCards[key] = card
+            currentResponseBody?.addToolStatusPanel(card)
+            requestUiRefresh()
+        } else {
+            requestUiRefresh(false)
         }
     }
 
