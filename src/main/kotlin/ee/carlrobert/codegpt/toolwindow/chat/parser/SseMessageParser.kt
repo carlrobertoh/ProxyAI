@@ -26,6 +26,18 @@ class SseMessageParser : MessageParser {
         buffer.clear()
     }
 
+    fun startNewVisualSection() {
+        buffer.clear()
+        parserState = when (val state = parserState) {
+            is ParserState.Outside -> ParserState.Outside
+            is ParserState.CodeHeaderWaiting -> state.copy(content = "")
+            is ParserState.InCode -> state.copy(content = "")
+            is ParserState.InSearch -> state.copy(searchContent = "")
+            is ParserState.InReplace -> state.copy(searchContent = "", replaceContent = "")
+            is ParserState.InThinking -> ParserState.InThinking()
+        }
+    }
+
     override fun parse(input: String): List<Segment> {
         val segments = mutableListOf<Segment>()
         var position = 0

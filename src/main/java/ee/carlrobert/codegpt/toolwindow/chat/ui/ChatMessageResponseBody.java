@@ -153,11 +153,11 @@ public class ChatMessageResponseBody extends JPanel {
   }
 
   public void addToolStatusPanel(JComponent component) {
-    currentlyProcessedTextPane = null;
-    currentlyProcessedEditorPanel = null;
-    currentlyProcessedMermaidPanel = null;
-    streamOutputParser.clear();
+    finishCurrentStreamingSection();
+    streamOutputParser.startNewVisualSection();
     contentPanel.add(component);
+    contentPanel.revalidate();
+    contentPanel.repaint();
   }
 
   public void updateMessage(String partialMessage) {
@@ -377,6 +377,12 @@ public class ChatMessageResponseBody extends JPanel {
     if (item instanceof Text) {
       processText(item.getContent(), caretVisible);
     }
+  }
+
+  private void finishCurrentStreamingSection() {
+    currentlyProcessedTextPane = null;
+    currentlyProcessedEditorPanel = null;
+    currentlyProcessedMermaidPanel = null;
   }
 
   private void processCode(Segment item) {
