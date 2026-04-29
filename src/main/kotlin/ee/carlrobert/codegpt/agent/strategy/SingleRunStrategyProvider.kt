@@ -31,6 +31,8 @@ import ee.carlrobert.codegpt.toolwindow.agent.AgentCreditsEvent
 import ee.carlrobert.codegpt.ui.textarea.TagProcessorFactory
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails
 import java.util.*
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import ee.carlrobert.codegpt.conversations.message.Message as ChatMessage
 
 internal interface AgentRunStrategyProvider {
@@ -54,6 +56,7 @@ data class HistoryCompressionConfig(
 internal const val SINGLE_RUN_NODE_CALL_LLM = "call_llm"
 
 internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
+    @OptIn(ExperimentalAtomicApi::class)
     override fun build(
         project: Project,
         executor: PromptExecutor,
@@ -65,7 +68,10 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
         stream: Boolean
     ): AIAgentGraphStrategy<MessageWithContext, String> =
         strategy<MessageWithContext, String>("single_run") {
-            val nodeCallLLM by node<MessageWithContext, List<Message.Response>>(SINGLE_RUN_NODE_CALL_LLM) { message ->
+            val planCreated = AtomicBoolean(false)
+            val nodeCallLLM by node<MessageWithContext, List<Message.Response>>(
+                SINGLE_RUN_NODE_CALL_LLM
+            ) { message ->
                 llm.writeSession {
                     if (message.tags.isNotEmpty()) {
                         val context = buildTagContext(project, message.tags)
@@ -102,10 +108,11 @@ internal class SingleRunStrategyProvider : AgentRunStrategyProvider {
                         msg is Message.Tool.Call && msg.tool == "TodoWrite"
                     }
 
-                    if (toolCallMessages >= 3 && !todoWriteToolUsed) {
+                    if (!planCreated.load() && toolCallMessages >= 3 && !todoWriteToolUsed) {
                         appendPrompt {
                             user("It seems that you haven't created a todo list yet. If the task on hand requires multiple steps then create a todo list to track your changes.")
                         }
+                        planCreated.store(true)
                     }
 
                     if (pendingMessageQueue.isNotEmpty()) {
