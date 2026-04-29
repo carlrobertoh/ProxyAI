@@ -34,13 +34,18 @@ object ChatContextSupport {
 
     @JvmStatic
     fun getReferencedFiles(project: Project, tags: List<TagDetails>): List<ReferencedFile> {
-        val settingsService = project.getService(ProxyAISettingsService::class.java)
-        val visibleFiles = collectVisibleFiles(
-            tags.mapNotNull(::getVirtualFile),
-            settingsService
-        )
+        return getReferencedVirtualFiles(project, tags).map(ReferencedFile::from)
+    }
 
-        return visibleFiles.map(ReferencedFile::from)
+    @JvmStatic
+    fun getReferencedVirtualFiles(project: Project, tags: List<TagDetails>): List<VirtualFile> {
+        return collectVisibleFiles(project, tags.mapNotNull(::getVirtualFile))
+    }
+
+    @JvmStatic
+    fun collectVisibleFiles(project: Project, inputFiles: List<VirtualFile>): List<VirtualFile> {
+        val settingsService = project.getService(ProxyAISettingsService::class.java)
+        return collectVisibleFiles(inputFiles, settingsService)
     }
 
     @JvmStatic
