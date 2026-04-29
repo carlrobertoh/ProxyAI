@@ -28,6 +28,7 @@ import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.conversations.message.QueuedMessage
 import ee.carlrobert.codegpt.mcp.McpTagStatusUpdater
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
+import ee.carlrobert.codegpt.completions.ToolApprovalMode
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState
@@ -165,6 +166,7 @@ class AgentToolWindowTabPanel(
         project = project,
         sessionId = sessionId,
         agentApprovalManager = AgentApprovalManager(project),
+        toolApprovalMode = ToolApprovalMode.AUTO_APPROVE,
         approvalContainer = approvalContainer,
         scrollablePanel = scrollablePanel,
         todoListPanel = todoListPanel,

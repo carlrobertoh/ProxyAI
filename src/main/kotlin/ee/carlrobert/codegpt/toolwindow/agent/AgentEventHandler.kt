@@ -19,6 +19,7 @@ import ee.carlrobert.codegpt.agent.*
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.agent.rollback.RollbackService
 import ee.carlrobert.codegpt.agent.tools.*
+import ee.carlrobert.codegpt.completions.ToolApprovalMode
 import ee.carlrobert.codegpt.settings.agents.SubagentRuntimeResolver
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTApiException
@@ -44,6 +45,7 @@ class AgentEventHandler(
     private val project: Project,
     private val sessionId: String,
     private val agentApprovalManager: AgentApprovalManager,
+    private val toolApprovalMode: ToolApprovalMode,
     private val approvalContainer: JPanel,
     private val scrollablePanel: ChatToolWindowScrollablePanel,
     private val todoListPanel: TodoListPanel,
@@ -328,16 +330,18 @@ class AgentEventHandler(
                 maybeShowNextApproval()
             }
 
-            lastWriteArgs?.let {
-                if (isWrite) agentApprovalManager.openWriteApprovalDiff(it, deferred)
-            }
-            lastEditArgs?.let { args ->
-                if (isEdit) {
-                    val proposed = when (val payload = resolvedRequest.payload) {
-                        is EditPayload -> payload.proposedContent
-                        else -> null
+            if (toolApprovalMode == ToolApprovalMode.REQUIRE_APPROVAL) {
+                lastWriteArgs?.let {
+                    if (isWrite) agentApprovalManager.openWriteApprovalDiff(it, deferred)
+                }
+                lastEditArgs?.let { args ->
+                    if (isEdit) {
+                        val proposed = when (val payload = resolvedRequest.payload) {
+                            is EditPayload -> payload.proposedContent
+                            else -> null
+                        }
+                        agentApprovalManager.openEditApprovalDiff(args, deferred, proposed)
                     }
-                    agentApprovalManager.openEditApprovalDiff(args, deferred, proposed)
                 }
             }
             return deferred.await()
