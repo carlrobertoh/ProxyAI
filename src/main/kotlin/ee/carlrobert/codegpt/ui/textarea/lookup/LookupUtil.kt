@@ -5,29 +5,33 @@ import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.codeInsight.lookup.impl.LookupImpl
 
 object LookupUtil {
+    private fun keepLookupOpenMatcher(prefix: String): PrefixMatcher =
+        object : PrefixMatcher(prefix) {
+            override fun prefixMatches(name: String): Boolean = true
 
-    fun addLookupItem(
-        lookup: LookupImpl,
-        lookupItem: LookupItem,
-        priority: Double = 5.0,
-        searchText: String = ""
-    ) {
-        addLookupItems(lookup, listOf(lookupItem to priority), searchText)
-    }
+            override fun cloneWithPrefix(prefix: String): PrefixMatcher {
+                return keepLookupOpenMatcher(prefix)
+            }
+
+            override fun matchingDegree(string: String): Int = 0
+        }
 
     fun addLookupItems(
         lookup: LookupImpl,
         lookupItems: List<Pair<LookupItem, Double>>,
-        searchText: String = ""
+        searchText: String = "",
+        searchTextProvider: (() -> String)? = null,
+        matcherPrefix: String = searchText
     ) {
         if (!lookup.isLookupDisposed) {
+            val prefixMatcher = keepLookupOpenMatcher(matcherPrefix)
             lookupItems.forEach { (lookupItem, priority) ->
                 lookup.addItem(
                     PrioritizedLookupElement.withPriority(
-                        lookupItem.createLookupElement(searchText),
+                        lookupItem.createLookupElement(searchText, searchTextProvider),
                         priority
                     ),
-                    PrefixMatcher.ALWAYS_TRUE
+                    prefixMatcher
                 )
             }
             lookup.refreshUi(true, true)

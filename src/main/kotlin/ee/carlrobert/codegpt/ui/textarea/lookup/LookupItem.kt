@@ -2,7 +2,6 @@ package ee.carlrobert.codegpt.ui.textarea.lookup
 
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementPresentation
-import com.intellij.codeInsight.lookup.impl.LookupImpl
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
@@ -18,7 +17,10 @@ interface LookupItem {
     val enabled: Boolean
         get() = true
 
-    fun createLookupElement(searchText: String = ""): LookupElement
+    fun createLookupElement(
+        searchText: String = "",
+        searchTextProvider: (() -> String)? = null
+    ): LookupElement
     fun setPresentation(element: LookupElement, presentation: LookupElementPresentation)
 }
 
@@ -27,7 +29,8 @@ interface LookupGroupItem : LookupItem {
 }
 
 interface DynamicLookupGroupItem : LookupGroupItem {
-    suspend fun updateLookupList(lookup: LookupImpl, searchText: String)
+    val minimumSearchTextLength: Int
+        get() = 1
 }
 
 interface LookupActionItem : LookupItem {

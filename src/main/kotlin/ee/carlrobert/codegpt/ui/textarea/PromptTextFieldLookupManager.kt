@@ -1,54 +1,40 @@
 package ee.carlrobert.codegpt.ui.textarea
 
-import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.codeInsight.lookup.*
 import com.intellij.codeInsight.lookup.impl.LookupImpl
-import com.intellij.codeInsight.lookup.impl.PrefixChangeListener
-import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.markup.HighlighterLayer
-import com.intellij.openapi.editor.markup.HighlighterTargetArea
-import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.project.Project
-import com.intellij.ui.JBColor
 import ee.carlrobert.codegpt.ui.textarea.lookup.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupUtil
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.InsertsDisplayNameLookupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
 
 class PromptTextFieldLookupManager(
     private val project: Project,
-    private val onLookupAdded: (LookupActionItem) -> Unit
+    private val onLookupAdded: (LookupActionItem) -> Unit,
 ) {
+
+    companion object {
+        const val EMPTY_RESULTS_TEXT = "No results"
+    }
 
     fun createLookup(
         editor: Editor,
         lookupElements: Array<LookupElement>,
-        searchText: String
-    ): LookupImpl = runReadAction {
-        val lookup = LookupManager.getInstance(project).createLookup(
+        searchText: String,
+    ): LookupImpl = runReadActionBlocking {
+        LookupManager.getInstance(project).createLookup(
             editor,
             lookupElements,
             searchText,
             LookupArranger.DefaultArranger()
         ) as LookupImpl
-
-        lookup.addLookupListener(object : LookupListener {
-            override fun itemSelected(event: LookupEvent) {
-                val suggestion =
-                    event.item?.getUserData(LookupItem.KEY) as? LookupActionItem ?: return
-
-                replaceAtSymbolWithSearch(editor, suggestion)
-                onLookupAdded(suggestion)
-            }
-        })
-
-        lookup
     }
 
     fun showGroupLookup(
@@ -59,22 +45,45 @@ class PromptTextFieldLookupManager(
         onCodeAnalyzeSelected: (CodeAnalyzeActionItem) -> Unit,
     ): LookupImpl {
         val lookup = createLookup(editor, lookupElements, "")
-
         lookup.addLookupListener(object : LookupListener {
+            private var pendingCleanup: LookupSelectionCleanup? = null
+
+            override fun beforeItemSelected(event: LookupEvent): Boolean {
+                pendingCleanup = createLookupSelectionCleanup(editor, event)
+                return true
+            }
+
             override fun itemSelected(event: LookupEvent) {
                 val suggestion = event.item?.getUserData(LookupItem.KEY) ?: return
-
-                replaceAtSymbol(editor, suggestion)
+                val cleanup = pendingCleanup ?: createLookupSelectionCleanup(editor, event)
 
                 when (suggestion) {
-                    is WebActionItem -> onWebActionSelected(suggestion)
-                    is CodeAnalyzeActionItem -> onCodeAnalyzeSelected(suggestion)
-                    is LookupGroupItem -> onGroupSelected(suggestion)
-                    is LookupActionItem -> onLookupAdded(suggestion)
+                    is WebActionItem -> {
+                        removeLookupText(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
+                        onWebActionSelected(suggestion)
+                        removeLookupTextLater(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
+                    }
+
+                    is CodeAnalyzeActionItem -> {
+                        removeLookupText(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
+                        onCodeAnalyzeSelected(suggestion)
+                        removeLookupTextLater(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
+                    }
+
+                    is LookupGroupItem -> {
+                        removeLookupText(editor, cleanup, LookupCleanupMode.KEEP_AT_SYMBOL)
+                        onGroupSelected(suggestion) // suppress stays active until suggestion lookup opens
+                        removeLookupTextLater(editor, cleanup, LookupCleanupMode.KEEP_AT_SYMBOL)
+                    }
+
+                    is LookupActionItem -> {
+                        removeLookupText(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
+                        onLookupAdded(suggestion)
+                        removeLookupTextLater(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
+                    }
                 }
             }
         })
-
         lookup.refreshUi(false, true)
         lookup.showLookup()
         return lookup
@@ -82,163 +91,271 @@ class PromptTextFieldLookupManager(
 
     fun showSearchResultsLookup(
         editor: Editor,
-        results: List<LookupActionItem>,
-        searchText: String
+        results: List<LookupItem>,
+        searchText: String,
+        isCalculating: Boolean = false,
+        searchTextProvider: (() -> String)? = null,
+        lookupPrefix: String = searchText
     ): LookupImpl {
-        val lookupElements = results.toPrioritizedLookupElements(searchText)
-        val lookup = createLookup(editor, lookupElements, "")
-        lookup.refreshUi(false, true)
+        val lookup = createLookup(editor, emptyArray(), lookupPrefix)
+        updateSearchResultsLookup(
+            lookup,
+            results,
+            searchText,
+            isCalculating,
+            searchTextProvider,
+            matcherPrefix = lookupPrefix
+        )
+        addFinalActionSelectionListener(lookup, editor)
         lookup.showLookup()
         return lookup
     }
 
     fun updateSearchResultsLookup(
         lookup: LookupImpl,
-        results: List<LookupActionItem>
+        results: List<LookupItem>,
+        searchText: String,
+        isCalculating: Boolean = false,
+        searchTextProvider: (() -> String)? = null,
+        matcherPrefix: String = searchText
     ): Int {
-        val existingKeys = lookup.items.mapNotNull { element ->
-            (element.getUserData(LookupItem.KEY) as? LookupActionItem)?.let(::resultKey)
-        }.toMutableSet()
-        val newResults = results.filter { result -> existingKeys.add(resultKey(result)) }
-        if (newResults.isEmpty()) {
-            lookup.refreshUi(false, true)
-            return 0
+        return replaceLookupItems(
+            lookup,
+            results,
+            searchText,
+            isCalculating,
+            searchTextProvider,
+            matcherPrefix
+        )
+    }
+
+    fun updateSuggestionLookup(
+        lookup: LookupImpl,
+        results: List<LookupItem>,
+        searchText: String,
+        isCalculating: Boolean = false,
+        searchTextProvider: (() -> String)? = null,
+        matcherPrefix: String = searchText
+    ): Int {
+        return replaceLookupItems(
+            lookup,
+            results,
+            searchText,
+            isCalculating,
+            searchTextProvider,
+            matcherPrefix
+        )
+    }
+
+    fun getSelectedLookupItemKey(lookup: LookupImpl): String? {
+        val currentItem = lookup.currentItem ?: return null
+        val lookupItem = currentItem.getUserData(LookupItem.KEY) ?: return null
+        return resultKey(lookupItem)
+    }
+
+    fun restoreSelectedLookupItem(
+        lookup: LookupImpl,
+        selectedKey: String?
+    ) {
+        if (selectedKey == null) {
+            return
         }
 
-        LookupUtil.addLookupItems(
-            lookup,
-            newResults.mapIndexed { index, result ->
-                result to resultPriority(result, index, newResults.size)
-            },
-            getSearchTextFromLookup(lookup)
-        )
-        return newResults.size
+        val matchingItem = lookup.items.firstOrNull { element ->
+            val lookupItem = element.getUserData(LookupItem.KEY) ?: return@firstOrNull false
+            resultKey(lookupItem) == selectedKey
+        } ?: return
+
+        lookup.currentItem = matchingItem
+        lookup.ensureSelectionVisible(false)
     }
 
     fun showSuggestionLookup(
         editor: Editor,
-        lookupElements: Array<LookupElement>,
-        parentGroup: LookupGroupItem,
-        onDynamicUpdate: (String) -> Unit
+        lookupItems: List<LookupItem>,
+        searchText: String = "",
+        isCalculating: Boolean = false,
+        searchTextProvider: (() -> String)? = null,
+        lookupPrefix: String = searchText,
     ): LookupImpl {
-        val lookup = createLookup(editor, lookupElements, "")
-        if (parentGroup is DynamicLookupGroupItem) {
-            setupDynamicLookupListener(lookup, onDynamicUpdate)
-        }
-
-        lookup.refreshUi(false, true)
+        val lookup = createLookup(editor, emptyArray(), lookupPrefix)
+        updateSuggestionLookup(
+            lookup,
+            lookupItems,
+            searchText,
+            isCalculating,
+            searchTextProvider,
+            matcherPrefix = lookupPrefix
+        )
+        addFinalActionSelectionListener(lookup, editor)
         lookup.showLookup()
         return lookup
     }
 
-    private fun setupDynamicLookupListener(
+    private fun addFinalActionSelectionListener(
         lookup: LookupImpl,
-        onDynamicUpdate: (String) -> Unit
+        editor: Editor
     ) {
-        lookup.addPrefixChangeListener(object : PrefixChangeListener {
-            override fun afterAppend(c: Char) {
-                val searchText = getSearchTextFromLookup(lookup)
-                if (searchText.length >= PromptTextFieldConstants.MIN_DYNAMIC_SEARCH_LENGTH) {
-                    onDynamicUpdate(searchText)
-                }
+        lookup.addLookupListener(object : LookupListener {
+            private var pendingCleanup: LookupSelectionCleanup? = null
+
+            override fun beforeItemSelected(event: LookupEvent): Boolean {
+                pendingCleanup = createLookupSelectionCleanup(editor, event)
+                return true
             }
 
-            override fun afterTruncate() {
-                val searchText = getSearchTextFromLookup(lookup)
-                if (searchText.isEmpty()) {
-                    onDynamicUpdate("")
-                }
+            override fun itemSelected(event: LookupEvent) {
+                val suggestion =
+                    event.item?.getUserData(LookupItem.KEY) as? LookupActionItem ?: return
+                val cleanup = pendingCleanup ?: createLookupSelectionCleanup(editor, event)
+                removeLookupText(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
+                onLookupAdded(suggestion)
+                removeLookupTextLater(editor, cleanup, LookupCleanupMode.REMOVE_TOKEN)
             }
-        }, lookup)
+        })
     }
 
-    private fun getSearchTextFromLookup(lookup: LookupImpl): String {
-        val editor = lookup.editor
-        val text = editor.document.text
-        val atIndex = text.lastIndexOf(PromptTextFieldConstants.AT_SYMBOL)
-        return if (atIndex >= 0) text.substring(atIndex + 1) else ""
-    }
-
-    private fun getSearchTextFromEditor(editor: Editor): String {
-        val text = editor.document.text
-        val caretOffset = editor.caretModel.offset
-        val atIndex = text.lastIndexOf(PromptTextFieldConstants.AT_SYMBOL)
-        return if (atIndex in 0..<caretOffset) {
-            text.substring(atIndex + 1, caretOffset)
-        } else {
-            ""
-        }
-    }
-
-    private fun replaceAtSymbolWithSearch(
+    private fun createLookupSelectionCleanup(
         editor: Editor,
-        lookupItem: LookupItem
+        event: LookupEvent
+    ): LookupSelectionCleanup {
+        val token = AtLookupToken.from(editor)
+        val item = event.item
+        val lookupItem = item?.getUserData(LookupItem.KEY)
+        val lookupStrings = buildSet {
+            item?.lookupString?.let(::add)
+            item?.allLookupStrings?.let(::addAll)
+            lookupItem?.displayName?.let(::add)
+        }
+            .filter { it.isNotEmpty() }
+            .sortedByDescending { it.length }
+
+        return LookupSelectionCleanup(token?.startOffset, lookupStrings)
+    }
+
+    private fun removeLookupTextLater(
+        editor: Editor,
+        cleanup: LookupSelectionCleanup?,
+        mode: LookupCleanupMode
     ) {
-        val atPos = findAtSymbolPosition(editor)
-        if (atPos >= 0) {
-            runUndoTransparentWriteAction {
-                val actualSearchText = getSearchTextFromEditor(editor)
-                val endPos = atPos + 1 + actualSearchText.length
-                editor.document.deleteString(atPos, endPos)
-
-                if (shouldInsertDisplayName(lookupItem)) {
-                    insertWithHighlight(editor, atPos, lookupItem.displayName)
-                }
-            }
+        ApplicationManager.getApplication().invokeLater {
+            removeLookupText(editor, cleanup, mode)
         }
     }
 
-    private fun replaceAtSymbol(editor: Editor, lookupItem: LookupItem) {
-        val offset = editor.caretModel.offset
-        val start = findAtSymbolPosition(editor)
-        if (start >= 0) {
-            runUndoTransparentWriteAction {
-                val shouldInsert = shouldInsertDisplayName(lookupItem)
-                if (shouldInsert) {
-                    editor.document.deleteString(start, offset)
-                    insertWithHighlight(editor, start, lookupItem.displayName)
-                } else {
-                    editor.document.deleteString(start + 1, offset)
+    private fun removeLookupText(
+        editor: Editor,
+        cleanup: LookupSelectionCleanup?,
+        mode: LookupCleanupMode
+    ) {
+        runUndoTransparentWriteAction {
+            val token = AtLookupToken.from(editor)
+            val anchorOffset = token?.startOffset ?: cleanup?.startOffset ?: editor.caretModel.offset
+            if (token != null) {
+                when (mode) {
+                    LookupCleanupMode.REMOVE_TOKEN -> {
+                        editor.document.deleteString(token.startOffset, token.endOffset)
+                        editor.caretModel.moveToOffset(token.startOffset)
+                    }
+
+                    LookupCleanupMode.KEEP_AT_SYMBOL -> {
+                        editor.document.deleteString(token.startOffset + 1, token.endOffset)
+                        editor.caretModel.moveToOffset(token.startOffset + 1)
+                    }
                 }
             }
+
+            val labelOffset = when (mode) {
+                LookupCleanupMode.REMOVE_TOKEN -> anchorOffset
+                LookupCleanupMode.KEEP_AT_SYMBOL -> (anchorOffset + 1).coerceAtMost(editor.document.textLength)
+            }
+            cleanup?.lookupStrings.orEmpty().firstOrNull {
+                removeLookupStringAt(editor, labelOffset, it)
+            } ?: removeLookupStringBeforeCaret(editor, cleanup?.lookupStrings.orEmpty())
         }
     }
 
-    private fun shouldInsertDisplayName(lookupItem: LookupItem): Boolean {
-        return lookupItem is FileActionItem
-                || lookupItem is FolderActionItem
-                || lookupItem is InsertsDisplayNameLookupItem
+    private fun removeLookupStringAt(
+        editor: Editor,
+        offset: Int,
+        lookupString: String
+    ): Boolean {
+        val document = editor.document
+        if (offset < 0 || offset + lookupString.length > document.textLength) {
+            return false
+        }
+
+        if (document.charsSequence.substring(offset, offset + lookupString.length) != lookupString) {
+            return false
+        }
+
+        document.deleteString(offset, offset + lookupString.length)
+        editor.caretModel.moveToOffset(offset)
+        return true
     }
 
-    private fun List<LookupActionItem>.toPrioritizedLookupElements(
-        searchText: String
-    ): Array<LookupElement> {
-        return mapIndexed { index, result ->
-            PrioritizedLookupElement.withPriority(
-                result.createLookupElement(searchText),
-                resultPriority(result, index, size)
-            )
-        }.toTypedArray()
+    private fun removeLookupStringBeforeCaret(
+        editor: Editor,
+        lookupStrings: List<String>
+    ) {
+        val caretOffset = editor.caretModel.offset
+        lookupStrings.firstOrNull { lookupString ->
+            val startOffset = caretOffset - lookupString.length
+            removeLookupStringAt(editor, startOffset, lookupString)
+        }
+    }
+
+    fun replaceLookupItems(
+        lookup: LookupImpl,
+        results: List<LookupItem>,
+        searchText: String,
+        isCalculating: Boolean,
+        searchTextProvider: (() -> String)?,
+        matcherPrefix: String
+    ): Int {
+        if (lookup.isLookupDisposed) {
+            return 0
+        }
+
+        val selectedKey = getSelectedLookupItemKey(lookup)
+        lookup.arranger = LookupArranger.DefaultArranger()
+        LookupUtil.addLookupItems(
+            lookup,
+            results.mapIndexed { index, result ->
+                result to resultPriority(result, index, results.size)
+            },
+            searchText,
+            searchTextProvider,
+            matcherPrefix
+        )
+        configureLookup(lookup, isCalculating)
+        restoreSelectedLookupItem(lookup, selectedKey)
+        return results.size
+    }
+
+    private fun configureLookup(
+        lookup: LookupImpl,
+        isCalculating: Boolean
+    ) {
+        lookup.isStartCompletionWhenNothingMatches = true
+        lookup.dummyItemCount = 0
+        lookup.isCalculating = isCalculating
+        lookup.refreshUi(false, true)
     }
 
     private fun resultPriority(
-        result: LookupActionItem,
+        result: LookupItem,
         index: Int,
         total: Int
     ): Double {
-        val sourcePriority = when (result) {
-            is FileActionItem -> when (result.source) {
-                FileSearchSource.NATIVE -> 3_000.0
-                FileSearchSource.OPEN -> 2_500.0
-                FileSearchSource.RECENT -> 2_000.0
-            }
-
-            else -> 1_000.0
+        return if (result is StatusLookupItem || result is LoadingLookupItem) {
+            0.0
+        } else {
+            (total - index).toDouble()
         }
-        return sourcePriority - index.toDouble() / maxOf(total, 1)
     }
 
-    private fun resultKey(result: LookupActionItem): String {
+    private fun resultKey(result: LookupItem): String {
         return when (result) {
             is FileActionItem -> "file:${result.file.path}"
             is FolderActionItem -> "folder:${result.folder.path}"
@@ -246,25 +363,13 @@ class PromptTextFieldLookupManager(
         }
     }
 
-    private fun insertWithHighlight(editor: Editor, position: Int, text: String) {
-        editor.document.insertString(position, text)
-        editor.caretModel.moveToOffset(position + text.length)
-        editor.markupModel.addRangeHighlighter(
-            position,
-            position + text.length,
-            HighlighterLayer.SELECTION,
-            TextAttributes().apply {
-                foregroundColor = JBColor(
-                    PromptTextFieldConstants.LIGHT_THEME_COLOR,
-                    PromptTextFieldConstants.DARK_THEME_COLOR
-                )
-            },
-            HighlighterTargetArea.EXACT_RANGE
-        )
-    }
+    private data class LookupSelectionCleanup(
+        val startOffset: Int?,
+        val lookupStrings: List<String>
+    )
 
-    private fun findAtSymbolPosition(editor: Editor): Int {
-        val atPos = editor.document.text.lastIndexOf(PromptTextFieldConstants.AT_SYMBOL)
-        return if (atPos >= 0) atPos else -1
+    private enum class LookupCleanupMode {
+        REMOVE_TOKEN,
+        KEEP_AT_SYMBOL
     }
 }

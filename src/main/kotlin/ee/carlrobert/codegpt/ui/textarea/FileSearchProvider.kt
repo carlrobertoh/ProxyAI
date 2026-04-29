@@ -1,15 +1,11 @@
 package ee.carlrobert.codegpt.ui.textarea
 
-import com.intellij.ide.actions.searcheverywhere.FoundItemDescriptor
-import com.intellij.ide.util.gotoByName.ChooseByNameInScopeItemProvider
-import com.intellij.ide.util.gotoByName.ChooseByNamePopup
-import com.intellij.ide.util.gotoByName.ChooseByNameViewModel
-import com.intellij.ide.util.gotoByName.ChooseByNameWeightedItemProvider
-import com.intellij.ide.util.gotoByName.GotoFileModel
+import com.intellij.ide.util.gotoByName.*
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VFileProperty
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFileSystemItem
 import com.intellij.psi.search.GlobalSearchScope
@@ -28,6 +24,17 @@ data class FileSearchCandidate(
     val file: VirtualFile,
     val source: FileSearchSource
 )
+
+internal fun VirtualFile.isHiddenFileOrInHiddenDirectory(): Boolean {
+    var current: VirtualFile? = this
+    while (current != null) {
+        if (current.name.startsWith(".") || current.`is`(VFileProperty.HIDDEN)) {
+            return true
+        }
+        current = current.parent
+    }
+    return false
+}
 
 interface FileSearchProvider {
     suspend fun search(searchText: String, limit: Int): List<FileSearchCandidate>
@@ -65,7 +72,7 @@ class NativeFileSearchProvider(private val project: Project) : FileSearchProvide
                 val matches = mutableListOf<FileSearchCandidate>()
 
                 fun appendCandidate(file: VirtualFile): Boolean {
-                    if (file.isDirectory || !seenPaths.add(file.path)) {
+                    if (!seenPaths.add(file.path)) {
                         return true
                     }
                     matches.add(
@@ -83,7 +90,7 @@ class NativeFileSearchProvider(private val project: Project) : FileSearchProvide
                             viewModel,
                             parameters,
                             progressIndicator,
-                            Processor<FoundItemDescriptor<*>> { descriptor ->
+                            Processor { descriptor ->
                                 ProgressManager.checkCanceled()
                                 val file = descriptor.item.toVirtualFile() ?: return@Processor true
                                 appendCandidate(file)
@@ -97,7 +104,7 @@ class NativeFileSearchProvider(private val project: Project) : FileSearchProvide
                             normalizedSearchText,
                             false,
                             progressIndicator,
-                            Processor<FoundItemDescriptor<*>> { descriptor ->
+                            Processor { descriptor ->
                                 ProgressManager.checkCanceled()
                                 val file = descriptor.item.toVirtualFile() ?: return@Processor true
                                 appendCandidate(file)
@@ -111,7 +118,7 @@ class NativeFileSearchProvider(private val project: Project) : FileSearchProvide
                             normalizedSearchText,
                             false,
                             progressIndicator,
-                            Processor<Any> { item ->
+                            Processor { item ->
                                 ProgressManager.checkCanceled()
                                 val file = item.toVirtualFile() ?: return@Processor true
                                 appendCandidate(file)

@@ -26,18 +26,14 @@ class TagManager {
             .toSet()
     }
 
-    fun containsTag(file: VirtualFile): Boolean = tags.any {
-        // TODO: refactor
-        if (it is SelectionTagDetails) {
-            it.virtualFile == file
-        } else if (it is FileTagDetails) {
-            it.virtualFile == file
-        } else if (it is EditorSelectionTagDetails) {
-            it.virtualFile == file
-        } else if (it is EditorTagDetails) {
-            it.virtualFile == file
-        } else {
-            false
+    fun containsTag(file: VirtualFile): Boolean = tags.any { tag ->
+        when (tag) {
+            is SelectionTagDetails -> tag.virtualFile == file
+            is FileTagDetails -> tag.virtualFile == file
+            is EditorSelectionTagDetails -> tag.virtualFile == file
+            is EditorTagDetails -> tag.virtualFile == file
+            is FolderTagDetails -> tag.folder == file
+            else -> false
         }
     }
 

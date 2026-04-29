@@ -21,10 +21,10 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
-import ee.carlrobert.codegpt.EncodingManager
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.toolwindow.chat.ChatContextSupport
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.WrapLayout
@@ -35,7 +35,6 @@ import ee.carlrobert.codegpt.ui.textarea.TagDetailsComparator
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
-import ee.carlrobert.codegpt.util.file.FileUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -178,35 +177,21 @@ class UserInputHeaderPanel(
 
     override fun onTagAdded(tag: TagDetails) {
         onTagsChanged()
-        when (tag) {
-            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(
-                tag.virtualFile,
-                add = true
-            )
-
-            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(
-                tag.virtualFile,
-                add = true
-            )
-
-            else -> Unit
+        if (affectsReferencedFiles(tag)) {
+            refreshReferencedFilesTotal()
         }
     }
 
     override fun onTagRemoved(tag: TagDetails) {
         onTagsChanged()
-        when (tag) {
-            is FileTagDetails -> if (tag.selected) adjustReferencedTotal(
-                tag.virtualFile,
-                add = false
-            )
+        if (affectsReferencedFiles(tag)) {
+            refreshReferencedFilesTotal()
+        }
+    }
 
-            is EditorTagDetails -> if (tag.selected) adjustReferencedTotal(
-                tag.virtualFile,
-                add = false
-            )
-
-            else -> Unit
+    override fun onTagUpdated(tag: TagDetails) {
+        if (affectsReferencedFiles(tag)) {
+            refreshReferencedFilesTotal()
         }
     }
 
@@ -269,19 +254,6 @@ class UserInputHeaderPanel(
                 override fun onSelect(tagDetails: TagDetails) {
                     SwingUtilities.invokeLater {
                         onTagsChanged()
-                        when (tagDetails) {
-                            is FileTagDetails -> adjustReferencedTotal(
-                                tagDetails.virtualFile,
-                                add = isSelected
-                            )
-
-                            is EditorTagDetails -> adjustReferencedTotal(
-                                tagDetails.virtualFile,
-                                add = isSelected
-                            )
-
-                            else -> Unit
-                        }
                         tagManager.notifyTagUpdated(tagDetails)
                     }
                 }
@@ -302,20 +274,6 @@ class UserInputHeaderPanel(
         applyChip?.let { add(it) }
         add(copyButton)
         addInitialTags()
-    }
-
-    fun setApplyVisible(visible: Boolean) {
-        applyChip?.isVisible = visible
-        revalidate()
-        repaint()
-        onLayoutChanged()
-    }
-
-    fun setApplyEnabled(enabled: Boolean) {
-        applyChip?.isEnabled = enabled
-        revalidate()
-        repaint()
-        onLayoutChanged()
     }
 
     private fun addInitialTags() {
@@ -345,17 +303,20 @@ class UserInputHeaderPanel(
         }
     }
 
-    private fun adjustReferencedTotal(virtualFile: VirtualFile, add: Boolean) {
+    private fun refreshReferencedFilesTotal() {
         backgroundScope.launch {
-            val encodingManager = EncodingManager.getInstance()
-            val content = FileUtil.readContent(virtualFile)
-            val tokens = encodingManager.countTokens(content)
+            val selectedTags = getSelectedTags()
+            val referencedFileContents =
+                ChatContextSupport.getReferencedFiles(project, selectedTags)
+                    .map { it.fileContent }
             runInEdt {
-                val current = totalTokensPanel.getTokenDetails().referencedFilesTokens
-                val next = if (add) current + tokens else (current - tokens).coerceAtLeast(0)
-                totalTokensPanel.updateReferencedFilesTokens(next)
+                totalTokensPanel.updateReferencedFilesTokens(referencedFileContents)
             }
         }
+    }
+
+    private fun affectsReferencedFiles(tag: TagDetails): Boolean {
+        return tag is FileTagDetails || tag is EditorTagDetails || tag is FolderTagDetails
     }
 
     private fun initializeEventListeners() {

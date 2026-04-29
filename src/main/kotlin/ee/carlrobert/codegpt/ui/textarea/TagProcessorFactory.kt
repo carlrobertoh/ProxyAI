@@ -11,7 +11,7 @@ import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.diagnostics.ProjectDiagnosticsService
-import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.toolwindow.chat.ChatContextSupport
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
@@ -39,39 +39,39 @@ object TagProcessorFactory {
             is DiagnosticsTagDetails -> DiagnosticsTagProcessor(project, tagDetails)
         }
     }
-}
 
-class FileTagProcessor(
-    project: Project,
-    private val tagDetails: FileTagDetails,
-) : TagProcessor {
-    private val settingsService = project.service<ProxyAISettingsService>()
-
-    override fun process(message: Message, promptBuilder: StringBuilder) {
-        if (!settingsService.isVirtualFileVisible(tagDetails.virtualFile)) {
+    internal fun appendReferencedFilePaths(
+        project: Project,
+        message: Message,
+        virtualFiles: List<VirtualFile>
+    ) {
+        val referencedPaths = ChatContextSupport.collectVisibleFiles(project, virtualFiles)
+            .map(VirtualFile::getPath)
+        if (referencedPaths.isEmpty()) {
             return
         }
         if (message.referencedFilePaths == null) {
             message.referencedFilePaths = mutableListOf()
         }
-        message.referencedFilePaths?.add(tagDetails.virtualFile.path)
+        message.referencedFilePaths?.addAll(referencedPaths)
+    }
+}
+
+class FileTagProcessor(
+    private val project: Project,
+    private val tagDetails: FileTagDetails,
+) : TagProcessor {
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        TagProcessorFactory.appendReferencedFilePaths(project, message, listOf(tagDetails.virtualFile))
     }
 }
 
 class EditorTagProcessor(
-    project: Project,
+    private val project: Project,
     private val tagDetails: EditorTagDetails,
 ) : TagProcessor {
-    private val settingsService = project.service<ProxyAISettingsService>()
-
     override fun process(message: Message, promptBuilder: StringBuilder) {
-        if (!settingsService.isVirtualFileVisible(tagDetails.virtualFile)) {
-            return
-        }
-        if (message.referencedFilePaths == null) {
-            message.referencedFilePaths = mutableListOf()
-        }
-        message.referencedFilePaths?.add(tagDetails.virtualFile.path)
+        TagProcessorFactory.appendReferencedFilePaths(project, message, listOf(tagDetails.virtualFile))
     }
 }
 
@@ -117,32 +117,14 @@ class PersonaTagProcessor(
 }
 
 class FolderTagProcessor(
-    project: Project,
+    private val project: Project,
     private val tagDetails: FolderTagDetails,
 ) : TagProcessor {
-    private val settingsService = project.service<ProxyAISettingsService>()
-
     override fun process(
         message: Message,
         promptBuilder: StringBuilder
     ) {
-        if (message.referencedFilePaths == null) {
-            message.referencedFilePaths = mutableListOf()
-        }
-
-        processFolder(tagDetails.folder, message.referencedFilePaths ?: mutableListOf())
-    }
-
-    private fun processFolder(folder: VirtualFile, referencedFilePaths: MutableList<String>) {
-        folder.children.forEach { child ->
-            if (!settingsService.isVirtualFileVisible(child)) {
-                return@forEach
-            }
-            when {
-                child.isDirectory -> processFolder(child, referencedFilePaths)
-                else -> referencedFilePaths.add(child.path)
-            }
-        }
+        TagProcessorFactory.appendReferencedFilePaths(project, message, listOf(tagDetails.folder))
     }
 }
 

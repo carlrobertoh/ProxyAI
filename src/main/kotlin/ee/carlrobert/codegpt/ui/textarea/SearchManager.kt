@@ -3,14 +3,15 @@ package ee.carlrobert.codegpt.ui.textarea
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.psi.codeStyle.MinusculeMatcher
-import com.intellij.psi.codeStyle.NameUtil
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.LookupMatchers
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.git.IncludeCurrentChangesActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.*
 import kotlinx.coroutines.CancellationException
@@ -29,7 +30,9 @@ class SearchManager(
     private val featureType: FeatureType? = null,
 ) {
     private val fileSearchProvider = NativeFileSearchProvider(project)
-    private val foldersGroupItem = FoldersGroupItem(project, tagManager)
+    private val filesGroupItem = FilesGroupItem(project, tagManager, fileSearchProvider)
+    private var cachedSearchText: String = ""
+    private var cachedSearchResults: List<LookupActionItem> = emptyList()
 
     companion object {
         private val logger = thisLogger()
@@ -42,16 +45,14 @@ class SearchManager(
     }
 
     private fun getInlineEditGroups() = listOfNotNull(
-        FilesGroupItem(project, tagManager, fileSearchProvider),
-        foldersGroupItem,
+        filesGroupItem,
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
         DiagnosticsGroupItem(tagManager)
     ).filter { it.enabled }
 
     private fun getAgentGroups() = listOfNotNull(
-        FilesGroupItem(project, tagManager, fileSearchProvider),
-        foldersGroupItem,
+        filesGroupItem,
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         MCPGroupItem(tagManager),
         DiagnosticsGroupItem(tagManager),
@@ -59,8 +60,7 @@ class SearchManager(
     ).filter { it.enabled }
 
     private fun getAllGroups() = listOfNotNull(
-        FilesGroupItem(project, tagManager, fileSearchProvider),
-        foldersGroupItem,
+        filesGroupItem,
         if (GitFeatureAvailability.isAvailable) GitGroupItem(project) else null,
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
@@ -74,17 +74,12 @@ class SearchManager(
         val groups = getDefaultGroups()
         val results = mutableListOf<LookupActionItem>()
 
-        // Standalone action items that are normally buried inside heavy groups
-        if (groups.any { it is FilesGroupItem }) {
-            results.add(IncludeOpenFilesActionItem())
-        }
         if (GitFeatureAvailability.isAvailable && groups.any { it is GitGroupItem }) {
             results.add(IncludeCurrentChangesActionItem())
         }
 
-        // Lightweight groups (in-memory data only)
         val lightGroups = groups
-            .filterNot { it is FilesGroupItem || it is FoldersGroupItem || it is GitGroupItem }
+            .filterNot { it is FilesGroupItem || it is GitGroupItem }
             .filterNot { it is WebActionItem || it is ImageActionItem }
 
         lightGroups.forEach { group ->
@@ -114,17 +109,9 @@ class SearchManager(
     suspend fun performFileSearch(searchText: String): List<LookupActionItem> {
         val fileGroup = getDefaultGroups().filterIsInstance<FilesGroupItem>().firstOrNull()
             ?: return emptyList()
-        val matcher = createMatcher(searchText)
 
         return try {
             fileGroup.getLookupItems(searchText)
-                .filter { result ->
-                    result !is IncludeOpenFilesActionItem || matchesSearchText(
-                        result,
-                        searchText,
-                        matcher
-                    )
-                }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -136,16 +123,12 @@ class SearchManager(
     suspend fun performDeferredHeavySearch(searchText: String): List<LookupActionItem> =
         coroutineScope {
             val deferredGroups = getDefaultGroups()
-                .filter { it is FoldersGroupItem || it is GitGroupItem }
+                .filterIsInstance<GitGroupItem>()
 
             deferredGroups.map { group ->
                 async {
                     try {
-                        if (group is LookupGroupItem) {
-                            group.getLookupItems(searchText).filterIsInstance<LookupActionItem>()
-                        } else {
-                            emptyList()
-                        }
+                        group.getLookupItems(searchText)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -165,13 +148,36 @@ class SearchManager(
         searchText: String
     ): List<LookupActionItem> {
         val seenKeys = mutableSetOf<String>()
-        val orderedPrimary = primaryResults
-            .filter { candidate -> seenKeys.add(resultKey(candidate)) }
-        val orderedSecondary = filterAndSortResults(secondaryResults, searchText)
+        val combined = (primaryResults + secondaryResults)
             .filter { candidate -> seenKeys.add(resultKey(candidate)) }
 
-        return (orderedPrimary + orderedSecondary)
-            .take(PromptTextFieldConstants.MAX_SEARCH_RESULTS)
+        return filterAndSortResults(combined, searchText)
+    }
+
+    fun getOptimisticSearchResults(searchText: String): List<LookupActionItem> {
+        val normalizedSearchText = searchText.trim()
+        val cachedText = cachedSearchText
+        if (normalizedSearchText.isEmpty() ||
+            cachedText.isEmpty() ||
+            !normalizedSearchText.startsWith(cachedText, ignoreCase = true)
+        ) {
+            return emptyList()
+        }
+
+        return filterAndSortResults(cachedSearchResults, normalizedSearchText)
+    }
+
+    fun cacheSearchResults(
+        searchText: String,
+        results: List<LookupActionItem>
+    ) {
+        cachedSearchText = searchText.trim()
+        cachedSearchResults = results
+    }
+
+    fun clearSearchResultsCache() {
+        cachedSearchText = ""
+        cachedSearchResults = emptyList()
     }
 
     suspend fun performGlobalSearch(searchText: String): List<LookupActionItem> {
@@ -200,15 +206,7 @@ class SearchManager(
     }
 
     private fun createMatcher(searchText: String): MinusculeMatcher {
-        return NameUtil.buildMatcher("*$searchText").build()
-    }
-
-    private fun matchesSearchText(
-        result: LookupActionItem,
-        searchText: String,
-        matcher: MinusculeMatcher
-    ): Boolean {
-        return getMatchingDegree(result, searchText, matcher) != Int.MIN_VALUE
+        return LookupMatchers.createMatcher(searchText)
     }
 
     private fun getMatchingDegree(
@@ -225,6 +223,20 @@ class SearchManager(
                 }
             }
 
+            is FileActionItem -> {
+                maxOf(
+                    matcher.matchingDegree(result.displayName),
+                    matcher.matchingDegree(result.file.path)
+                )
+            }
+
+            is FolderActionItem -> {
+                maxOf(
+                    matcher.matchingDegree(result.displayName),
+                    matcher.matchingDegree(result.folder.path)
+                )
+            }
+
             else -> {
                 matcher.matchingDegree(result.displayName)
             }
@@ -233,10 +245,10 @@ class SearchManager(
 
     private fun resultKey(result: LookupActionItem): String {
         return when (result) {
-            is ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem ->
+            is FileActionItem ->
                 "file:${result.file.path}"
 
-            is ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem ->
+            is FolderActionItem ->
                 "folder:${result.folder.path}"
 
             else -> "${result::class.qualifiedName}:${result.displayName}"
@@ -244,17 +256,7 @@ class SearchManager(
     }
 
     fun getSearchTextAfterAt(text: String, caretOffset: Int): String? {
-        val atPos = text.lastIndexOf(PromptTextFieldConstants.AT_SYMBOL)
-        if (atPos == -1 || atPos >= caretOffset) return null
-
-        val searchText = text.substring(atPos + 1, caretOffset)
-        return if (searchText.contains(PromptTextFieldConstants.SPACE) ||
-            searchText.contains(PromptTextFieldConstants.NEWLINE)
-        ) {
-            null
-        } else {
-            searchText
-        }
+        return AtLookupToken.from(text, caretOffset)?.searchText
     }
 
     fun matchesAnyDefaultGroup(searchText: String): Boolean {
@@ -262,5 +264,4 @@ class SearchManager(
             groupName.startsWith(searchText, ignoreCase = true)
         }
     }
-
 }

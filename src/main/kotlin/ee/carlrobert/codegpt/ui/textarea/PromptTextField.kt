@@ -1,6 +1,5 @@
 package ee.carlrobert.codegpt.ui.textarea
 
-import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupEvent
 import com.intellij.codeInsight.lookup.LookupListener
 import com.intellij.codeInsight.lookup.impl.LookupImpl
@@ -8,8 +7,8 @@ import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.IdeActions
-import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -19,6 +18,8 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.actionSystem.EditorActionHandler
 import com.intellij.openapi.editor.actionSystem.EditorActionManager
+import com.intellij.openapi.editor.actionSystem.TypedAction
+import com.intellij.openapi.editor.actionSystem.TypedActionHandler
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -40,9 +41,7 @@ import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
-import ee.carlrobert.codegpt.ui.textarea.lookup.DynamicLookupGroupItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.*
 import kotlinx.coroutines.*
 import java.awt.Cursor
 import java.awt.Dimension
@@ -53,6 +52,20 @@ import java.awt.event.MouseMotionAdapter
 import java.util.*
 import javax.swing.JComponent
 import javax.swing.TransferHandler
+import kotlin.time.Duration.Companion.milliseconds
+
+private enum class LookupDisplayMode {
+    GROUPS,
+    GROUP_RESULTS,
+    GLOBAL_SEARCH
+}
+
+private data class PendingLookupSearch(
+    val generation: Long,
+    val mode: LookupDisplayMode,
+    val searchText: String,
+    val group: LookupGroupItem? = null
+)
 
 class PromptTextField(
     private val project: Project,
@@ -60,6 +73,7 @@ class PromptTextField(
     private val onTextChanged: (String) -> Unit,
     private val onBackSpace: () -> Unit,
     private val onLookupAdded: (LookupActionItem) -> Unit,
+    private val onLookupSearchLoadingChanged: (Boolean) -> Unit = {},
     private val onSubmit: (String) -> Unit,
     private val onFilesDropped: (List<VirtualFile>) -> Unit = {},
     featureType: FeatureType? = null,
@@ -81,6 +95,18 @@ class PromptTextField(
     private var showSuggestionsJob: Job? = null
     private var searchState = SearchState()
     private var activeLookupGroup: LookupGroupItem? = null
+    private var lookupMode: LookupDisplayMode? = null
+    private var lookupSearchText: String? = null
+    private var lookupSearchLoading = false
+    private var lookupSearchLoadingGeneration = 0L
+    private var lookupSearchLoadingShownAt: Long? = null
+    private var lookupSearchLoadingJob: Job? = null
+    private var pendingLookupSearch: PendingLookupSearch? = null
+    private var lastVisibleLookupItems: List<LookupItem> = emptyList()
+    private var lastVisibleLookupItemsSearchText: String? = null
+    private var lastVisibleLookupItemsMode: LookupDisplayMode? = null
+    private var lastVisibleLookupItemsGroup: LookupGroupItem? = null
+    private val globalSearchTextProvider: () -> String = { lookupSearchText.orEmpty() }
 
     val dispatcherId: UUID = UUID.randomUUID()
     var lookup: LookupImpl? = null
@@ -90,7 +116,7 @@ class PromptTextField(
         document.putUserData(PROMPT_FIELD_KEY, this)
         setPlaceholder(CodeGPTBundle.get("toolwindow.chat.textArea.emptyText"))
 
-        installPasteHandler()
+        installEditorInputHandlers()
     }
 
     override fun onEditorAdded(editor: Editor) {
@@ -192,6 +218,7 @@ class PromptTextField(
 
         withContext(Dispatchers.Main) {
             editor?.let { editor ->
+                hideLookupIfShown()
                 lookup = lookupManager.showGroupLookup(
                     editor = editor,
                     lookupElements = lookupItems,
@@ -205,32 +232,108 @@ class PromptTextField(
                         onLookupAdded(codeAnalyzeAction)
                     }
                 )
+                lookupMode = LookupDisplayMode.GROUPS
+                lookupSearchText = null
             }
         }
     }
 
     private fun showGlobalSearchResults(
         results: List<LookupActionItem>,
-        searchText: String
+        searchText: String,
+        isCalculating: Boolean = false,
+        generation: Long? = null,
+        showEmptyStatus: Boolean = true
     ) {
         editor?.let { editor ->
             try {
-                val existingLookup = lookup
-                val currentSearchText = runReadAction {
+                if (generation != null && generation != lookupSearchLoadingGeneration) {
+                    return
+                }
+                val currentSearchText = runReadActionBlocking {
                     searchManager.getSearchTextAfterAt(
                         editor.document.text,
                         editor.caretModel.offset
                     )
                 }
-                if (existingLookup != null && existingLookup.isShown && !existingLookup.isLookupDisposed) {
-                    if (currentSearchText == searchText) {
-                        lookupManager.updateSearchResultsLookup(existingLookup, results)
-                        return
+                if (currentSearchText != searchText) {
+                    return
+                }
+
+                val existingLookup = lookup
+                val canReuseGlobalLookup = lookupMode == LookupDisplayMode.GLOBAL_SEARCH &&
+                        existingLookup != null &&
+                        existingLookup.isShown &&
+                        !existingLookup.isLookupDisposed
+
+                val previousItems = getRelatedVisibleLookupItems(
+                    LookupDisplayMode.GLOBAL_SEARCH,
+                    searchText,
+                    group = null
+                )
+                val lookupItems = toSearchLookupItems(
+                    results,
+                    searchText,
+                    isCalculating,
+                    previousItems,
+                    showEmptyStatus
+                )
+
+                if (canReuseGlobalLookup) {
+                    lookupSearchText = searchText
+                    lookupManager.updateSearchResultsLookup(
+                        existingLookup,
+                        lookupItems,
+                        searchText,
+                        isCalculating,
+                        globalSearchTextProvider,
+                        matcherPrefix = getLookupPrefix(editor)
+                    )
+                    searchManager.cacheSearchResults(searchText, results)
+                    rememberVisibleLookupItems(
+                        LookupDisplayMode.GLOBAL_SEARCH,
+                        searchText,
+                        group = null,
+                        lookupItems
+                    )
+                    return
+                }
+
+                if (lookupItems.isEmpty() && existingLookup != null) {
+                    return
+                }
+
+                run {
+                    val previouslySelectedKey = existingLookup
+                        ?.takeIf { it.isShown && !it.isLookupDisposed }
+                        ?.let(lookupManager::getSelectedLookupItemKey)
+                    hideLookupIfShown()
+                    lookupSearchText = searchText
+                    lookup = lookupManager.showSearchResultsLookup(
+                        editor,
+                        lookupItems,
+                        searchText,
+                        isCalculating,
+                        globalSearchTextProvider,
+                        lookupPrefix = getLookupPrefix(editor)
+                    )
+                    lookupMode = LookupDisplayMode.GLOBAL_SEARCH
+                    lookup?.let {
+                        lookupManager.restoreSelectedLookupItem(
+                            it,
+                            previouslySelectedKey
+                        )
+                        addLookupCleanupListener(it)
                     }
                 }
 
-                hideLookupIfShown()
-                lookup = lookupManager.showSearchResultsLookup(editor, results, searchText)
+                searchManager.cacheSearchResults(searchText, results)
+                rememberVisibleLookupItems(
+                    LookupDisplayMode.GLOBAL_SEARCH,
+                    searchText,
+                    group = null,
+                    lookupItems
+                )
             } catch (e: Exception) {
                 logger.error("Error showing lookup: $e", e)
             }
@@ -239,6 +342,8 @@ class PromptTextField(
 
     private fun handleGroupSelected(group: LookupGroupItem) {
         activeLookupGroup = group
+        searchManager.clearSearchResultsCache()
+        clearVisibleLookupItems()
         searchState = searchState.copy(
             isInSearchContext = true,
             isInGroupLookupContext = true,
@@ -259,53 +364,48 @@ class PromptTextField(
             return
         }
 
-        val lookupElements = suggestions.map { it.createLookupElement(searchText) }.toTypedArray()
-
         withContext(Dispatchers.Main) {
-            showSuggestionLookup(lookupElements, group)
+            showSuggestionLookup(suggestions, searchText)
         }
     }
 
     private fun showSuggestionLookup(
-        lookupElements: Array<LookupElement>,
-        parentGroup: LookupGroupItem,
+        lookupItems: List<LookupItem>,
+        searchText: String = ""
     ) {
         editor?.let { editor ->
             searchState = searchState.copy(isInGroupLookupContext = true)
 
             lookup = lookupManager.showSuggestionLookup(
                 editor = editor,
-                lookupElements = lookupElements,
-                parentGroup = parentGroup,
-                onDynamicUpdate = { searchText ->
-                    handleDynamicUpdate(parentGroup, lookupElements, searchText)
-                }
+                lookupItems = lookupItems,
+                searchText = searchText,
+                lookupPrefix = getLookupPrefix(editor),
+            )
+            lookupMode = LookupDisplayMode.GROUP_RESULTS
+            lookupSearchText = null
+            rememberVisibleLookupItems(
+                LookupDisplayMode.GROUP_RESULTS,
+                searchText,
+                activeLookupGroup,
+                lookupItems
             )
 
             lookup?.addLookupListener(object : LookupListener {
                 override fun lookupCanceled(event: LookupEvent) {
                     searchState = searchState.copy(isInGroupLookupContext = false)
+                    lookupMode = null
+                    lookupSearchText = null
+                    clearVisibleLookupItems()
+                }
+
+                override fun itemSelected(event: LookupEvent) {
+                    searchState = searchState.copy(isInGroupLookupContext = false)
+                    lookupMode = null
+                    lookupSearchText = null
+                    clearVisibleLookupItems()
                 }
             })
-        }
-    }
-
-    private fun handleDynamicUpdate(
-        parentGroup: LookupGroupItem,
-        lookupElements: Array<LookupElement>,
-        searchText: String
-    ) {
-        showSuggestionsJob?.cancel()
-        showSuggestionsJob = coroutineScope.launch {
-            if (parentGroup is DynamicLookupGroupItem) {
-                if (searchText.length >= PromptTextFieldConstants.MIN_DYNAMIC_SEARCH_LENGTH) {
-                    parentGroup.updateLookupList(lookup!!, searchText)
-                } else if (searchText.isEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        showSuggestionLookup(lookupElements, parentGroup)
-                    }
-                }
-            }
         }
     }
 
@@ -333,6 +433,8 @@ class PromptTextField(
     override fun dispose() {
         isFieldDisposed = true
         showSuggestionsJob?.cancel()
+        stopLookupSearchLoading()
+        lookupSearchLoadingJob?.cancel()
         clearPlaceholders()
         val ed = this.editor
         mouseClickListener?.let { l -> ed?.contentComponent?.removeMouseListener(l) }
@@ -560,6 +662,10 @@ class PromptTextField(
     }
 
     private fun handleAtSymbolTyped() {
+        activeLookupGroup = null
+        searchManager.clearSearchResultsCache()
+        stopLookupSearchLoading()
+        clearVisibleLookupItems()
         searchState = searchState.copy(
             isInSearchContext = true,
             lastSearchText = ""
@@ -573,12 +679,11 @@ class PromptTextField(
 
     private fun handleTextChange(text: String, caretOffset: Int) {
         val searchText = searchManager.getSearchTextAfterAt(text, caretOffset)
-
         when {
             searchText != null && activeLookupGroup != null -> handleActiveGroupSearch(searchText)
             searchText != null && searchText.isEmpty() -> handleEmptySearch()
             !searchText.isNullOrEmpty() -> handleNonEmptySearch(searchText)
-            searchText == null -> handleNoSearch()
+            searchText == null && !searchState.isInGroupLookupContext -> handleNoSearch()
         }
     }
 
@@ -594,13 +699,48 @@ class PromptTextField(
                 lastSearchText = searchText
             )
 
-            showSuggestionsJob?.cancel()
-            showSuggestionsJob = coroutineScope.launch {
-                if (searchText.isNotEmpty()) {
-                    delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
+            scheduleGroupLookupRefresh(group, searchText)
+        }
+    }
+
+    private fun scheduleGroupLookupRefresh(
+        group: LookupGroupItem,
+        searchText: String
+    ) {
+        val effectiveSearchText = getEffectiveGroupSearchText(group, searchText)
+        showSuggestionsJob?.cancel()
+        val loadingGeneration = if (effectiveSearchText.isNotEmpty()) {
+            beginLookupSearchLoading(
+                LookupDisplayMode.GROUP_RESULTS,
+                effectiveSearchText,
+                group
+            )
+        } else {
+            null
+        }
+        showSuggestionsJob = coroutineScope.launch {
+            try {
+                if (effectiveSearchText.isNotEmpty()) {
+                    delay(PromptTextFieldConstants.SEARCH_DELAY_MS.milliseconds)
                 }
-                updateLookupWithGroupResults(group, searchText)
+                updateLookupWithGroupResults(group, effectiveSearchText, loadingGeneration)
+            } finally {
+                loadingGeneration?.let(::finishLookupSearchLoading)
             }
+        }
+    }
+
+    private fun getEffectiveGroupSearchText(
+        group: LookupGroupItem,
+        searchText: String
+    ): String {
+        return if (
+            group is DynamicLookupGroupItem &&
+            searchText.length < group.minimumSearchTextLength
+        ) {
+            ""
+        } else {
+            searchText
         }
     }
 
@@ -613,6 +753,7 @@ class PromptTextField(
             )
 
             showSuggestionsJob?.cancel()
+            stopLookupSearchLoading()
             showSuggestionsJob = coroutineScope.launch {
                 updateLookupWithGroups()
             }
@@ -630,9 +771,31 @@ class PromptTextField(
                     )
 
                     showSuggestionsJob?.cancel()
+                    val loadingGeneration = beginLookupSearchLoading(
+                        LookupDisplayMode.GLOBAL_SEARCH,
+                        searchText
+                    )
                     showSuggestionsJob = coroutineScope.launch {
-                        delay(PromptTextFieldConstants.SEARCH_DELAY_MS)
-                        updateLookupWithSearchResults(searchText)
+                        try {
+                            val optimisticResults =
+                                searchManager.getOptimisticSearchResults(searchText)
+                            withContext(Dispatchers.Main) {
+                                showGlobalSearchResults(
+                                    optimisticResults,
+                                    searchText,
+                                    isCalculating = isLookupSearchLoadingVisible(loadingGeneration),
+                                    generation = loadingGeneration,
+                                    showEmptyStatus = false
+                                )
+                            }
+                            updateLookupWithSearchResults(
+                                searchText,
+                                optimisticResults,
+                                loadingGeneration
+                            )
+                        } finally {
+                            finishLookupSearchLoading(loadingGeneration)
+                        }
                     }
                 }
             }
@@ -644,8 +807,248 @@ class PromptTextField(
             searchState = SearchState()
             activeLookupGroup = null
             showSuggestionsJob?.cancel()
+            searchManager.clearSearchResultsCache()
+            stopLookupSearchLoading()
             hideLookupIfShown()
         }
+    }
+
+    private fun beginLookupSearchLoading(
+        mode: LookupDisplayMode,
+        searchText: String,
+        group: LookupGroupItem? = null
+    ): Long {
+        lookupSearchLoadingGeneration += 1
+        val generation = lookupSearchLoadingGeneration
+        val pendingSearch = PendingLookupSearch(generation, mode, searchText, group)
+        pendingLookupSearch = pendingSearch
+        lookupSearchLoadingJob?.cancel()
+        lookupSearchLoadingJob = coroutineScope.launch {
+            delay(PromptTextFieldConstants.LOOKUP_LOADING_REVEAL_MS.milliseconds)
+            if (!isCurrentLookupSearch(pendingSearch)) {
+                return@launch
+            }
+            setLookupSearchLoading(true)
+            refreshLookupLoadingState(pendingSearch, isCalculating = true)
+        }
+        return generation
+    }
+
+    private fun finishLookupSearchLoading(generation: Long) {
+        if (lookupSearchLoadingGeneration == generation) {
+            lookupSearchLoadingJob?.cancel()
+            lookupSearchLoadingJob = coroutineScope.launch {
+                val shownAt = lookupSearchLoadingShownAt
+                if (lookupSearchLoading && shownAt != null) {
+                    val elapsedMs = System.currentTimeMillis() - shownAt
+                    val remainingMs =
+                        PromptTextFieldConstants.LOOKUP_LOADING_MIN_VISIBLE_MS - elapsedMs
+                    if (remainingMs > 0) {
+                        delay(remainingMs.milliseconds)
+                    }
+                }
+                if (lookupSearchLoadingGeneration == generation) {
+                    val completedSearch = pendingLookupSearch
+                    pendingLookupSearch = null
+                    setLookupSearchLoading(false)
+                    completedSearch?.let {
+                        refreshLookupLoadingState(it, isCalculating = false)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopLookupSearchLoading() {
+        lookupSearchLoadingGeneration += 1
+        lookupSearchLoadingJob?.cancel()
+        pendingLookupSearch = null
+        setLookupSearchLoading(false)
+    }
+
+    private fun setLookupSearchLoading(loading: Boolean) {
+        if (lookupSearchLoading == loading) {
+            return
+        }
+        lookupSearchLoading = loading
+        lookupSearchLoadingShownAt = if (loading) System.currentTimeMillis() else null
+        runInEdt {
+            if (!isFieldDisposed) {
+                onLookupSearchLoadingChanged(loading)
+            }
+        }
+    }
+
+    private fun isLookupSearchLoadingVisible(generation: Long?): Boolean {
+        return generation != null &&
+                lookupSearchLoading &&
+                lookupSearchLoadingGeneration == generation
+    }
+
+    private fun isCurrentLookupSearch(search: PendingLookupSearch): Boolean {
+        if (isFieldDisposed || lookupSearchLoadingGeneration != search.generation) {
+            return false
+        }
+        val editor = editor ?: return false
+        val currentSearchText = runReadActionBlocking {
+            searchManager.getSearchTextAfterAt(
+                editor.document.text,
+                editor.caretModel.offset
+            )
+        } ?: return false
+
+        return when (search.mode) {
+            LookupDisplayMode.GLOBAL_SEARCH ->
+                !searchState.isInGroupLookupContext && currentSearchText == search.searchText
+
+            LookupDisplayMode.GROUP_RESULTS ->
+                activeLookupGroup == search.group &&
+                        search.group != null &&
+                        getEffectiveGroupSearchText(search.group, currentSearchText) ==
+                        search.searchText
+
+            LookupDisplayMode.GROUPS -> false
+        }
+    }
+
+    private fun refreshLookupLoadingState(
+        search: PendingLookupSearch,
+        isCalculating: Boolean
+    ) {
+        if (!isCurrentLookupSearch(search)) {
+            return
+        }
+        when (search.mode) {
+            LookupDisplayMode.GLOBAL_SEARCH -> {
+                val cachedResults = if (isCalculating) {
+                    emptyList()
+                } else {
+                    getRelatedVisibleLookupItems(
+                        LookupDisplayMode.GLOBAL_SEARCH,
+                        search.searchText,
+                        group = null
+                    ).filterIsInstance<LookupActionItem>()
+                }
+                showGlobalSearchResults(
+                    cachedResults,
+                    search.searchText,
+                    isCalculating,
+                    search.generation
+                )
+            }
+
+            LookupDisplayMode.GROUP_RESULTS -> showGroupLookupLoadingState(search, isCalculating)
+            LookupDisplayMode.GROUPS -> Unit
+        }
+    }
+
+    private fun showGroupLookupLoadingState(
+        search: PendingLookupSearch,
+        isCalculating: Boolean
+    ) {
+        val group = search.group ?: return
+        val editor = editor ?: return
+        val previousItems = getRelatedVisibleLookupItems(
+            LookupDisplayMode.GROUP_RESULTS,
+            search.searchText,
+            group
+        )
+        val lookupItems = toLookupItemsWithLoading(
+            previousItems,
+            search.searchText,
+            isCalculating
+        )
+        val existingLookup = lookup
+        if (lookupMode == LookupDisplayMode.GROUP_RESULTS &&
+            existingLookup != null &&
+            existingLookup.isShown &&
+            !existingLookup.isLookupDisposed
+        ) {
+            lookupManager.updateSuggestionLookup(
+                existingLookup,
+                lookupItems,
+                search.searchText,
+                isCalculating,
+                matcherPrefix = getLookupPrefix(editor)
+            )
+        } else {
+            showSuggestionLookup(lookupItems, search.searchText)
+        }
+        rememberVisibleLookupItems(
+            LookupDisplayMode.GROUP_RESULTS,
+            search.searchText,
+            group,
+            lookupItems
+        )
+    }
+
+    private fun getRelatedVisibleLookupItems(
+        mode: LookupDisplayMode,
+        searchText: String,
+        group: LookupGroupItem?
+    ): List<LookupItem> {
+        val cachedSearchText = lastVisibleLookupItemsSearchText ?: return emptyList()
+        if (lastVisibleLookupItemsMode != mode || lastVisibleLookupItemsGroup != group) {
+            return emptyList()
+        }
+        if (!areRelatedLookupSearches(cachedSearchText, searchText)) {
+            return emptyList()
+        }
+        return lastVisibleLookupItems
+    }
+
+    private fun rememberVisibleLookupItems(
+        mode: LookupDisplayMode,
+        searchText: String,
+        group: LookupGroupItem?,
+        lookupItems: List<LookupItem>
+    ) {
+        val reusableItems = lookupItems
+            .filterNot { it is LoadingLookupItem || it is StatusLookupItem }
+            .take(PromptTextFieldConstants.MAX_SEARCH_RESULTS)
+        if (reusableItems.isEmpty()) {
+            if (!lookupSearchLoading) {
+                clearVisibleLookupItems()
+            }
+            return
+        }
+        lastVisibleLookupItems = reusableItems
+        lastVisibleLookupItemsSearchText = searchText
+        lastVisibleLookupItemsMode = mode
+        lastVisibleLookupItemsGroup = group
+    }
+
+    private fun clearVisibleLookupItems() {
+        lastVisibleLookupItems = emptyList()
+        lastVisibleLookupItemsSearchText = null
+        lastVisibleLookupItemsMode = null
+        lastVisibleLookupItemsGroup = null
+    }
+
+    private fun areRelatedLookupSearches(
+        previousSearchText: String,
+        currentSearchText: String
+    ): Boolean {
+        return currentSearchText.startsWith(previousSearchText, ignoreCase = true) ||
+                previousSearchText.startsWith(currentSearchText, ignoreCase = true)
+    }
+
+    private fun addLookupCleanupListener(lookup: LookupImpl) {
+        lookup.addLookupListener(object : LookupListener {
+            override fun lookupCanceled(event: LookupEvent) {
+                if (lookupMode == LookupDisplayMode.GLOBAL_SEARCH) {
+                    clearVisibleLookupItems()
+                    lookupMode = null
+                    lookupSearchText = null
+                }
+            }
+
+            override fun itemSelected(event: LookupEvent) {
+                clearVisibleLookupItems()
+                lookupMode = null
+                lookupSearchText = null
+            }
+        })
     }
 
     private fun hideLookupIfShown() {
@@ -654,10 +1057,41 @@ class PromptTextField(
                 runInEdt { existingLookup.hide() }
             }
         }
+        lookupMode = null
+        lookupSearchText = null
+        clearVisibleLookupItems()
+    }
+
+    private fun runGuardedLookupDocumentChange(
+        documentChange: () -> Unit
+    ) {
+        val currentLookup = lookup
+        if (currentLookup != null &&
+            currentLookup.isShown &&
+            !currentLookup.isLookupDisposed &&
+            isCaretInsideAtLookupToken(currentLookup.editor)
+        ) {
+            currentLookup.performGuardedChange {
+                documentChange()
+            }
+            return
+        }
+
+        documentChange()
+    }
+
+    private fun isCaretInsideAtLookupToken(editor: Editor): Boolean {
+        return AtLookupToken.from(editor) != null
+    }
+
+    private fun getLookupPrefix(editor: Editor): String {
+        return AtLookupToken.from(editor)?.prefix.orEmpty()
     }
 
     private suspend fun updateLookupWithGroups() {
         activeLookupGroup = null
+        searchManager.clearSearchResultsCache()
+        clearVisibleLookupItems()
         val lookupItems = searchManager.getDefaultGroups()
             .map { it.createLookupElement() }
             .toTypedArray()
@@ -675,54 +1109,116 @@ class PromptTextField(
                     lookupElements = lookupItems,
                     onGroupSelected = { group -> handleGroupSelected(group) },
                     onWebActionSelected = { webAction -> onLookupAdded(webAction) },
-                    onCodeAnalyzeSelected = { codeAnalyzeAction -> onLookupAdded(codeAnalyzeAction) },
+                    onCodeAnalyzeSelected = { codeAnalyzeAction -> onLookupAdded(codeAnalyzeAction) }
                 )
+                lookupMode = LookupDisplayMode.GROUPS
+                lookupSearchText = null
             }
         }
     }
 
-    private suspend fun updateLookupWithSearchResults(searchText: String) {
+    private suspend fun updateLookupWithSearchResults(
+        searchText: String,
+        optimisticResults: List<LookupActionItem> = emptyList(),
+        generation: Long? = null
+    ) {
         val instantResults = searchManager.performInstantSearch(searchText)
-        if (instantResults.isNotEmpty()) {
-            withContext(Dispatchers.Main) {
-                showGlobalSearchResults(instantResults, searchText)
-            }
+        val initialResults =
+            searchManager.mergeResults(optimisticResults, instantResults, searchText)
+        withContext(Dispatchers.Main) {
+            showGlobalSearchResults(
+                initialResults,
+                searchText,
+                isCalculating = isLookupSearchLoadingVisible(generation),
+                generation = generation,
+                showEmptyStatus = false
+            )
         }
 
+        delay(PromptTextFieldConstants.SEARCH_DELAY_MS.milliseconds)
         val fileResults = searchManager.performFileSearch(searchText)
-        val earlyResults = searchManager.mergeResults(fileResults, instantResults, searchText)
-        if (earlyResults.isNotEmpty()) {
-            withContext(Dispatchers.Main) {
-                showGlobalSearchResults(earlyResults, searchText)
-            }
+        val earlyResults = searchManager.mergeResults(fileResults, initialResults, searchText)
+        withContext(Dispatchers.Main) {
+            showGlobalSearchResults(
+                earlyResults,
+                searchText,
+                isCalculating = isLookupSearchLoadingVisible(generation),
+                generation = generation,
+                showEmptyStatus = false
+            )
         }
 
         val deferredHeavyResults = searchManager.performDeferredHeavySearch(searchText)
-        if (deferredHeavyResults.isNotEmpty()) {
-            val allResults =
-                searchManager.mergeResults(earlyResults, deferredHeavyResults, searchText)
-            withContext(Dispatchers.Main) {
-                showGlobalSearchResults(allResults, searchText)
-            }
+        val allResults =
+            searchManager.mergeResults(earlyResults, deferredHeavyResults, searchText)
+        withContext(Dispatchers.Main) {
+            showGlobalSearchResults(
+                allResults,
+                searchText,
+                isCalculating = isLookupSearchLoadingVisible(generation),
+                generation = generation
+            )
         }
     }
 
     private suspend fun updateLookupWithGroupResults(
         group: LookupGroupItem,
-        searchText: String
+        searchText: String,
+        generation: Long? = null
     ) {
         val suggestions = group.getLookupItems(searchText)
-        if (suggestions.isEmpty()) {
-            withContext(Dispatchers.Main) {
-                hideLookupIfShown()
-            }
-            return
-        }
+        val previousItems = getRelatedVisibleLookupItems(
+            LookupDisplayMode.GROUP_RESULTS,
+            searchText,
+            group
+        )
+        val lookupItems = toLookupItemsWithLoading(
+            suggestions,
+            searchText,
+            isLookupSearchLoadingVisible(generation),
+            previousItems
+        )
 
-        val lookupElements = suggestions.map { it.createLookupElement(searchText) }.toTypedArray()
         withContext(Dispatchers.Main) {
-            hideLookupIfShown()
-            showSuggestionLookup(lookupElements, group)
+            if (generation != null && generation != lookupSearchLoadingGeneration) {
+                return@withContext
+            }
+            val editor = editor ?: return@withContext
+            val currentSearchText = runReadActionBlocking {
+                searchManager.getSearchTextAfterAt(
+                    editor.document.text,
+                    editor.caretModel.offset
+                )
+            } ?: return@withContext
+            if (activeLookupGroup != group ||
+                getEffectiveGroupSearchText(group, currentSearchText) != searchText
+            ) {
+                return@withContext
+            }
+
+            val existingLookup = lookup
+            if (lookupMode == LookupDisplayMode.GROUP_RESULTS &&
+                existingLookup != null &&
+                existingLookup.isShown &&
+                !existingLookup.isLookupDisposed
+            ) {
+                lookupManager.updateSuggestionLookup(
+                    existingLookup,
+                    lookupItems,
+                    searchText,
+                    isCalculating = isLookupSearchLoadingVisible(generation),
+                    matcherPrefix = getLookupPrefix(editor)
+                )
+                rememberVisibleLookupItems(
+                    LookupDisplayMode.GROUP_RESULTS,
+                    searchText,
+                    group,
+                    lookupItems
+                )
+                return@withContext
+            }
+
+            showSuggestionLookup(lookupItems, searchText)
         }
     }
 
@@ -761,42 +1257,141 @@ class PromptTextField(
         private val PROMPT_FIELD_KEY: Key<PromptTextField> =
             Key.create("codegpt.promptTextField.instance")
 
-        private var pasteHandlerInstalled = false
-        private var originalPasteHandler: EditorActionHandler? = null
+        private var editorInputHandlersInstalled = false
 
-        private fun installPasteHandler() {
-            if (pasteHandlerInstalled) return
-            synchronized(PromptTextField::class.java) {
-                if (pasteHandlerInstalled) return
-                val manager = EditorActionManager.getInstance()
-                val existing = manager.getActionHandler(IdeActions.ACTION_EDITOR_PASTE)
-                originalPasteHandler = existing
-                manager.setActionHandler(
-                    IdeActions.ACTION_EDITOR_PASTE,
-                    object : EditorActionHandler() {
-                        override fun doExecute(
-                            editor: Editor,
-                            caret: Caret?,
-                            dataContext: DataContext
-                        ) {
-                            val field = editor.document.getUserData(PROMPT_FIELD_KEY)
-                            if (field != null) {
-                                val pasted = try {
-                                    CopyPasteManager.getInstance()
-                                        .getContents(DataFlavor.stringFlavor) as? String
-                                } catch (_: Exception) {
-                                    null
-                                }
-                                if (!pasted.isNullOrEmpty()) {
-                                    field.insertPlaceholderFor(pasted)
-                                    return
-                                }
-                            }
-                            originalPasteHandler?.execute(editor, caret, dataContext)
-                        }
-                    })
-                pasteHandlerInstalled = true
+        internal fun toSearchLookupItems(
+            results: List<LookupActionItem>,
+            searchText: String,
+            isCalculating: Boolean,
+            previousVisibleLookupItems: List<LookupItem> = emptyList(),
+            showEmptyStatus: Boolean = true
+        ): List<LookupItem> {
+            return toLookupItemsWithLoading(
+                results,
+                searchText,
+                isCalculating,
+                previousVisibleLookupItems,
+                showEmptyStatus
+            )
+        }
+
+        internal fun toLookupItemsWithLoading(
+            results: List<LookupItem>,
+            searchText: String,
+            isCalculating: Boolean,
+            previousVisibleLookupItems: List<LookupItem> = emptyList(),
+            showEmptyStatus: Boolean = true
+        ): List<LookupItem> {
+            val baseItems = when {
+                results.isNotEmpty() -> results
+                isCalculating -> previousVisibleLookupItems
+                !showEmptyStatus -> emptyList()
+                else -> listOf(
+                    StatusLookupItem(
+                        displayName = PromptTextFieldLookupManager.EMPTY_RESULTS_TEXT,
+                        lookupString = searchText
+                    )
+                )
             }
+
+            return if (isCalculating) {
+                baseItems.filterNot { it is LoadingLookupItem || it is StatusLookupItem } +
+                        LoadingLookupItem(searchText)
+            } else {
+                baseItems
+            }
+        }
+
+        private fun installEditorInputHandlers() {
+            if (editorInputHandlersInstalled) return
+            synchronized(PromptTextField::class.java) {
+                if (editorInputHandlersInstalled) return
+                val manager = EditorActionManager.getInstance()
+                installTypedHandler()
+                installGuardedEditorActionHandler(manager, IdeActions.ACTION_EDITOR_BACKSPACE)
+                installGuardedEditorActionHandler(manager, IdeActions.ACTION_EDITOR_DELETE)
+                installPasteHandler(manager)
+                editorInputHandlersInstalled = true
+            }
+        }
+
+        private fun installTypedHandler() {
+            val typedAction = TypedAction.getInstance()
+            val existing = typedAction.rawHandler
+            typedAction.setupRawHandler(object : TypedActionHandler {
+                override fun execute(
+                    editor: Editor,
+                    charTyped: Char,
+                    dataContext: DataContext
+                ) {
+                    val field = editor.document.getUserData(PROMPT_FIELD_KEY)
+                    if (field == null) {
+                        existing.execute(editor, charTyped, dataContext)
+                        return
+                    }
+
+                    field.runGuardedLookupDocumentChange {
+                        existing.execute(editor, charTyped, dataContext)
+                    }
+                }
+            })
+        }
+
+        private fun installGuardedEditorActionHandler(
+            manager: EditorActionManager,
+            actionId: String,
+        ) {
+            val existing = manager.getActionHandler(actionId)
+            manager.setActionHandler(
+                actionId,
+                object : EditorActionHandler() {
+                    override fun doExecute(
+                        editor: Editor,
+                        caret: Caret?,
+                        dataContext: DataContext
+                    ) {
+                        val field = editor.document.getUserData(PROMPT_FIELD_KEY)
+                        if (field == null) {
+                            existing.execute(editor, caret, dataContext)
+                            return
+                        }
+
+                        field.runGuardedLookupDocumentChange {
+                            existing.execute(editor, caret, dataContext)
+                        }
+                    }
+                })
+        }
+
+        private fun installPasteHandler(manager: EditorActionManager) {
+            val existing = manager.getActionHandler(IdeActions.ACTION_EDITOR_PASTE)
+            manager.setActionHandler(
+                IdeActions.ACTION_EDITOR_PASTE,
+                object : EditorActionHandler() {
+                    override fun doExecute(
+                        editor: Editor,
+                        caret: Caret?,
+                        dataContext: DataContext
+                    ) {
+                        val field = editor.document.getUserData(PROMPT_FIELD_KEY)
+                        if (field != null) {
+                            val pasted = try {
+                                CopyPasteManager.getInstance()
+                                    .getContents(DataFlavor.stringFlavor) as? String
+                            } catch (_: Exception) {
+                                null
+                            }
+                            if (!pasted.isNullOrEmpty()) {
+                                field.runGuardedLookupDocumentChange {
+                                    field.insertPlaceholderFor(pasted)
+                                }
+                                return
+                            }
+                        }
+
+                        existing.execute(editor, caret, dataContext)
+                    }
+                })
         }
     }
 }

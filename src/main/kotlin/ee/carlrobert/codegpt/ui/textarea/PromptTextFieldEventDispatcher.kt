@@ -2,24 +2,24 @@ package ee.carlrobert.codegpt.ui.textarea
 
 import com.intellij.ide.IdeEventQueue
 import com.intellij.openapi.application.runUndoTransparentWriteAction
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.ui.ComponentUtil.findParentByCondition
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import java.awt.AWTEvent
 import java.awt.Component
 import java.awt.KeyboardFocusManager
+import java.awt.datatransfer.DataFlavor
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
 import java.util.*
-import com.intellij.openapi.ide.CopyPasteManager
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import java.awt.datatransfer.DataFlavor
 
 class PromptTextFieldEventDispatcher(
     private val dispatcherId: UUID,
     private val onBackSpace: () -> Unit,
     private val onSubmit: (KeyEvent) -> Unit
-) : IdeEventQueue.EventDispatcher {
+) : IdeEventQueue.NonLockedEventDispatcher {
 
     override fun dispatch(e: AWTEvent): Boolean {
         if ((e is KeyEvent || e is MouseEvent) && findParent() is PromptTextField) {
@@ -41,6 +41,7 @@ class PromptTextFieldEventDispatcher(
                                 }
                             }
                         }
+
                         KeyEvent.VK_ENTER -> {
                             val settings =
                                 ConfigurationSettings.getState().chatCompletionSettings
@@ -49,11 +50,15 @@ class PromptTextFieldEventDispatcher(
 
                             if (anyModifierConfigured) {
                                 var expectedModifiers = 0
-                                if (settings.sendWithCtrlEnter) expectedModifiers = expectedModifiers or InputEvent.CTRL_DOWN_MASK
-                                if (settings.sendWithAltEnter) expectedModifiers = expectedModifiers or InputEvent.ALT_DOWN_MASK
-                                if (settings.sendWithShiftEnter) expectedModifiers = expectedModifiers or InputEvent.SHIFT_DOWN_MASK
+                                if (settings.sendWithCtrlEnter) expectedModifiers =
+                                    expectedModifiers or InputEvent.CTRL_DOWN_MASK
+                                if (settings.sendWithAltEnter) expectedModifiers =
+                                    expectedModifiers or InputEvent.ALT_DOWN_MASK
+                                if (settings.sendWithShiftEnter) expectedModifiers =
+                                    expectedModifiers or InputEvent.SHIFT_DOWN_MASK
 
-                                val eventModifiers = e.modifiersEx and (InputEvent.CTRL_DOWN_MASK or InputEvent.ALT_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK)
+                                val eventModifiers =
+                                    e.modifiersEx and (InputEvent.CTRL_DOWN_MASK or InputEvent.ALT_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK)
 
                                 if (eventModifiers == expectedModifiers) {
                                     onSubmit(e)
@@ -151,7 +156,11 @@ class PromptTextFieldEventDispatcher(
     private fun handlePaste(e: KeyEvent): Boolean {
         val parent = findParent()
         if (parent is PromptTextField) {
-            val clipText: String? = try { CopyPasteManager.getInstance().getContents(DataFlavor.stringFlavor) as? String } catch (_: Exception) { null }
+            val clipText: String? = try {
+                CopyPasteManager.getInstance().getContents(DataFlavor.stringFlavor) as? String
+            } catch (_: Exception) {
+                null
+            }
             if (clipText.isNullOrEmpty()) return false
             parent.insertPlaceholderFor(clipText)
             e.consume()

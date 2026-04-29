@@ -55,6 +55,7 @@ import java.awt.geom.Rectangle2D
 import java.awt.geom.RoundRectangle2D
 import java.util.*
 import javax.swing.JComponent
+import javax.swing.JLabel
 import javax.swing.JPanel
 
 class UserInputPanel @JvmOverloads constructor(
@@ -104,6 +105,7 @@ class UserInputPanel @JvmOverloads constructor(
             onTextChanged = ::updateUserTokens,
             onBackSpace = ::handleBackSpace,
             onLookupAdded = ::handleLookupAdded,
+            onLookupSearchLoadingChanged = ::setLookupSearchVisible,
             onSubmit = ::handleSubmit,
             onFilesDropped = { files ->
                 includeFiles(files.toMutableList())
@@ -140,8 +142,23 @@ class UserInputPanel @JvmOverloads constructor(
         InlineEditChips.rejectAll { onRejectAll?.invoke() }.apply { isVisible = false }
     private var inlineEditControls: List<JComponent> = listOf(acceptChip, rejectChip)
 
+    private val lookupSearchIcon = AsyncProcessIcon("lookup-search").apply {
+        isVisible = false
+        toolTipText = "Searching..."
+    }
+    private val lookupSearchPanel =
+        JPanel(FlowLayout(FlowLayout.LEFT, 0, 0)).apply {
+            isOpaque = false
+            add(lookupSearchIcon)
+            val iconSize = lookupSearchIcon.preferredSize
+            minimumSize = iconSize
+            preferredSize = iconSize
+            maximumSize = iconSize
+            toolTipText = "Searching..."
+            isVisible = true
+        }
     private val thinkingIcon = AsyncProcessIcon("inline-edit-thinking").apply { isVisible = false }
-    private val thinkingLabel = javax.swing.JLabel(CodeGPTBundle.get("shared.thinking")).apply {
+    private val thinkingLabel = JLabel(CodeGPTBundle.get("shared.thinking")).apply {
         foreground = service<EditorColorsManager>().globalScheme.defaultForeground
         isVisible = false
     }
@@ -635,6 +652,7 @@ class UserInputPanel @JvmOverloads constructor(
                             if (agentTokenCounterPanel != null) {
                                 cell(agentTokenCounterPanel).gap(RightGap.SMALL)
                             }
+                            cell(lookupSearchPanel).gap(RightGap.SMALL)
                             cell(thinkingPanel).gap(RightGap.SMALL)
                             cell(acceptChip).gap(RightGap.SMALL)
                             cell(rejectChip).gap(RightGap.SMALL)
@@ -666,6 +684,12 @@ class UserInputPanel @JvmOverloads constructor(
                 })
         }.andTransparent()
         return pnl
+    }
+
+    private fun setLookupSearchVisible(visible: Boolean) {
+        lookupSearchIcon.isVisible = visible
+        revalidate()
+        repaint()
     }
 
     fun setInlineEditControlsVisible(visible: Boolean) {

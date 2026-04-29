@@ -13,7 +13,7 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
 class FolderActionItem(
     private val project: Project,
     val folder: VirtualFile
-) : AbstractLookupActionItem(), InsertsDisplayNameLookupItem {
+) : AbstractLookupActionItem() {
 
     override val displayName = folder.name
     override val icon = AllIcons.Nodes.Folder
@@ -32,5 +32,12 @@ class FolderActionItem(
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
         userInputPanel.addTag(FolderTagDetails(folder))
+    }
+
+    override fun getAdditionalLookupStrings(): Collection<String> {
+        val projectRelativePath = project.guessProjectDir()?.let { projectDir ->
+            VfsUtil.getRelativePath(folder, projectDir)
+        }
+        return listOfNotNull(folder.path, projectRelativePath)
     }
 }

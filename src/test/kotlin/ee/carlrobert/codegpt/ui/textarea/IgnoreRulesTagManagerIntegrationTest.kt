@@ -10,7 +10,6 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.FilesGroupItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.group.FoldersGroupItem
 import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
@@ -143,7 +142,7 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
         val filesGroupItem = FilesGroupItem(project, TagManager())
         val searchManager = SearchManager(project, TagManager())
 
-        val fileGroupSuggestions = runBlocking { filesGroupItem.getLookupItems("needle") }
+        val fileGroupSuggestions = runBlocking { filesGroupItem.getLookupItems("") }
         val globalSearchResults = runBlocking { searchManager.performGlobalSearch("needle") }
 
         assertThat(fileGroupSuggestions.first()).isInstanceOf(IncludeOpenFilesActionItem::class.java)
@@ -168,13 +167,39 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
             .anyMatch { it.endsWith("/app/src/test/Recent.kt") }
     }
 
-    fun `test folders group should not suggest ignored folders`() {
+    fun `test files group typed search should include matching folders`() {
+        val matchingFolder =
+            myFixture.addFileToProject("app/docs/NeedleFolder/Visible.kt", "class Visible")
+                .virtualFile.parent
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val folderSuggestions = runBlocking { filesGroupItem.getLookupItems("NeedleFolder") }
+            .filterIsInstance<FolderActionItem>()
+
+        assertThat(folderSuggestions.map { it.folder.path })
+            .contains(matchingFolder.path)
+    }
+
+    fun `test files group typed search should include folders by path`() {
+        val matchingFolder =
+            myFixture.addFileToProject("app/docs/NestedFolder/Visible.kt", "class Visible")
+                .virtualFile.parent
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val folderSuggestions = runBlocking { filesGroupItem.getLookupItems("app/docs/Nested") }
+            .filterIsInstance<FolderActionItem>()
+
+        assertThat(folderSuggestions.map { it.folder.path })
+            .contains(matchingFolder.path)
+    }
+
+    fun `test files group should not suggest ignored folders`() {
         myFixture.addFileToProject("app/src/main/Hidden.kt", "class Hidden")
         myFixture.addFileToProject("app/src/test/Visible.kt", "class Visible")
         writeSettings(ignoreEntries = listOf("app/src/main/**"))
-        val foldersGroupItem = FoldersGroupItem(project, TagManager())
+        val filesGroupItem = FilesGroupItem(project, TagManager())
 
-        val folderSuggestions = runBlocking { foldersGroupItem.getLookupItems("src") }
+        val folderSuggestions = runBlocking { filesGroupItem.getLookupItems("src") }
             .filterIsInstance<FolderActionItem>()
             .map { it.folder.path }
 
@@ -183,19 +208,39 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
             .anyMatch { it.endsWith("/app/src/test") }
     }
 
-    fun `test folders group should include folders added after the first lookup`() {
-        myFixture.addFileToProject("app/src/main/Existing.kt", "class Existing")
-        val foldersGroupItem = FoldersGroupItem(project, TagManager())
+    fun `test files group should not suggest dotfiles or files inside dot folders`() {
+        val dotFile = myFixture.addFileToProject(".env", "SECRET=value").virtualFile
+        val dotFolderFile =
+            myFixture.addFileToProject(".github/workflows/build.yml", "name: build").virtualFile
+        val visibleFile =
+            myFixture.addFileToProject("app/src/test/VisibleEnv.kt", "class VisibleEnv")
+                .virtualFile
+        openFiles(dotFile, dotFolderFile, visibleFile)
+        val filesGroupItem = FilesGroupItem(project, TagManager())
 
-        runBlocking { foldersGroupItem.getLookupItems("src") }
-        myFixture.addFileToProject("app/docs/NewDoc.kt", "class NewDoc")
+        val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("env") }
+            .filterIsInstance<FileActionItem>()
+            .map { it.file.path }
 
-        val folderSuggestions = runBlocking { foldersGroupItem.getLookupItems("docs") }
+        assertThat(fileSuggestions)
+            .noneMatch { it.endsWith("/.env") }
+            .noneMatch { it.contains("/.github/") }
+            .anyMatch { it.endsWith("/app/src/test/VisibleEnv.kt") }
+    }
+
+    fun `test files group should not suggest dot folders or their child folders`() {
+        myFixture.addFileToProject(".github/workflows/build.yml", "name: build")
+        myFixture.addFileToProject("app/github/Visible.kt", "class Visible")
+        val filesGroupItem = FilesGroupItem(project, TagManager())
+
+        val folderSuggestions = runBlocking { filesGroupItem.getLookupItems("github") }
             .filterIsInstance<FolderActionItem>()
             .map { it.folder.path }
 
         assertThat(folderSuggestions)
-            .anyMatch { it.endsWith("/app/docs") }
+            .noneMatch { it.endsWith("/.github") }
+            .noneMatch { it.contains("/.github/") }
+            .anyMatch { it.endsWith("/app/github") }
     }
 
     fun `test merge results should keep folders with the same display name`() {

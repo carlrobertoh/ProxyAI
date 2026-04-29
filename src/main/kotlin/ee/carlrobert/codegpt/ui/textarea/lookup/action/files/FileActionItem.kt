@@ -11,14 +11,12 @@ import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.FileSearchSource
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.AbstractLookupActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.InsertsDisplayNameLookupItem
 
 class FileActionItem(
     private val project: Project,
     val file: VirtualFile,
     val source: FileSearchSource = FileSearchSource.OPEN
-) :
-    AbstractLookupActionItem(), InsertsDisplayNameLookupItem {
+) : AbstractLookupActionItem() {
 
     override val displayName = file.name
     override val icon = file.fileType.icon ?: AllIcons.FileTypes.Any_type
@@ -37,5 +35,12 @@ class FileActionItem(
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
         userInputPanel.addTag(FileTagDetails(file))
+    }
+
+    override fun getAdditionalLookupStrings(): Collection<String> {
+        val projectRelativePath = project.guessProjectDir()?.let { projectDir ->
+            VfsUtil.getRelativePath(file, projectDir)
+        }
+        return listOfNotNull(file.path, projectRelativePath)
     }
 }

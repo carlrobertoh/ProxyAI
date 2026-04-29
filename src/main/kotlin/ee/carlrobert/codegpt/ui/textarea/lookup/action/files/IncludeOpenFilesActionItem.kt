@@ -7,6 +7,7 @@ import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
+import ee.carlrobert.codegpt.ui.textarea.isHiddenFileOrInHiddenDirectory
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.AbstractLookupActionItem
 import javax.swing.Icon
 
@@ -21,6 +22,7 @@ class IncludeOpenFilesActionItem : AbstractLookupActionItem() {
         project.service<FileEditorManager>().openFiles
             .filter { openFile ->
                 settingsService.isVirtualFileVisible(openFile) &&
+                        !openFile.isHiddenFileOrInHiddenDirectory() &&
                         fileTags.none { it.virtualFile == openFile }
             }
             .forEach {
