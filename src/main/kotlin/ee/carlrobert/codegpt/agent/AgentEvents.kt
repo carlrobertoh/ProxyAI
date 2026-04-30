@@ -25,6 +25,7 @@ interface AgentEvents {
     }
 
     fun onRetry(attempt: Int, maxAttempts: Int) {}
+    fun onRetrySucceeded() {}
     fun onRunCheckpointUpdated(runMessageId: UUID, ref: CheckpointRef?) {}
     fun onQueuedMessagesResolved(message: MessageWithContext? = null)
     fun onTokenUsageAvailable(tokenUsage: Long) {}

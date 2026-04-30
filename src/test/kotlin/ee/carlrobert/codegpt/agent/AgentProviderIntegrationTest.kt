@@ -34,6 +34,7 @@ import testsupport.json.JSONUtil.jsonMap
 import testsupport.json.JSONUtil.jsonMapResponse
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.io.path.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.createTempFile
@@ -498,6 +499,75 @@ class AgentProviderIntegrationTest : IntegrationTest() {
 
         assertThat(result.output).isEqualTo("Custom Responses streaming read: ${fixture.contents}")
         assertThat(result.events.text.toString()).isEqualTo("Custom Responses streaming read: ${fixture.contents}")
+    }
+
+    fun testCustomOpenAIContinuationAfterCancelledToolCallDoesNotSendDanglingToolHistory() {
+        configureCustomOpenAIService()
+        val agentId = "cancelled-tool-agent-${UUID.randomUUID()}"
+        val checkpointId = "checkpoint-${UUID.randomUUID()}"
+        val checkpointStorage =
+            JVMFilePersistenceStorageProvider(Path(project.basePath ?: "", ".proxyai"))
+        runBlocking {
+            checkpointStorage.saveCheckpoint(
+                agentId,
+                AgentCheckpointData(
+                    checkpointId = checkpointId,
+                    createdAt = Clock.System.now(),
+                    nodePath = "$agentId/single_run/nodeExecuteTool",
+                    lastOutput = JSONObject(emptyMap()),
+                    messageHistory = listOf(
+                        Message.User("Investigate with a subagent", RequestMetaInfo.Empty),
+                        Message.Tool.Call(
+                            id = "call_cancelled_task",
+                            tool = "Task",
+                            content = """{"subagent_type":"Explore","description":"Inspect code","prompt":"Find the bug"}""",
+                            metaInfo = ResponseMetaInfo.Empty
+                        )
+                    ),
+                    version = 0
+                )
+            )
+        }
+
+        val contentManager = project.service<AgentToolWindowContentManager>()
+        val sessionId = "session-${UUID.randomUUID()}"
+        contentManager.createNewAgentTab(
+            AgentSession(
+                sessionId = sessionId,
+                conversation = Conversation(),
+                agentId = agentId,
+                resumeCheckpointRef = CheckpointRef(agentId, checkpointId)
+            ),
+            select = false
+        )
+        val observedRequest = AtomicReference<RequestEntity>()
+        val events = RecordingAgentEvents()
+
+        try {
+            expectCustomOpenAI(BasicHttpExchange { request ->
+                observedRequest.set(request)
+                ResponseEntity(customOpenAiResponse("ok"))
+            })
+
+            project.service<AgentService>()
+                .submitMessage(MessageWithContext("Continue after cancellation"), events, sessionId)
+            awaitSessionToFinish(sessionId)
+
+            val request = requireNotNull(observedRequest.get()) {
+                "Expected a Custom OpenAI request"
+            }
+            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(extractPromptText(request)).contains(
+                "Investigate with a subagent",
+                "Continue after cancellation"
+            )
+            assertThat(hasDanglingToolCallBeforeUser(request))
+                .describedAs("continuation request must not include an unanswered tool call before the new user message")
+                .isFalse()
+        } finally {
+            contentManager.removeSession(sessionId)
+        }
     }
 
     private fun runAgent(
@@ -1142,6 +1212,38 @@ class AgentProviderIntegrationTest : IntegrationTest() {
                 item["call_id"] == callId &&
                 (item["output"] as? String).orEmpty().contains(fixture.contents)
         }).isTrue()
+    }
+
+    private fun hasDanglingToolCallBeforeUser(request: RequestEntity): Boolean {
+        val messages = request.body["messages"] as? List<*> ?: return false
+        val pendingToolCallIds = LinkedHashSet<String>()
+        messages.mapNotNull { it as? Map<*, *> }.forEach { message ->
+            when (message["role"]) {
+                "assistant" -> {
+                    if (pendingToolCallIds.isNotEmpty()) {
+                        return true
+                    }
+                    val toolCalls = message["tool_calls"] as? List<*> ?: emptyList<Any>()
+                    toolCalls
+                        .mapNotNull { it as? Map<*, *> }
+                        .mapNotNullTo(pendingToolCallIds) { it["id"] as? String }
+                }
+
+                "tool" -> {
+                    val toolCallId = message["tool_call_id"] as? String
+                    if (!toolCallId.isNullOrBlank()) {
+                        pendingToolCallIds.remove(toolCallId)
+                    }
+                }
+
+                "user" -> {
+                    if (pendingToolCallIds.isNotEmpty()) {
+                        return true
+                    }
+                }
+            }
+        }
+        return pendingToolCallIds.isNotEmpty()
     }
 
     private fun extractGooglePromptText(request: RequestEntity): String {

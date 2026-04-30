@@ -11,6 +11,7 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.agent.external.ExternalAcpAgentService
 import ee.carlrobert.codegpt.agent.history.AgentCheckpointHistoryService
+import ee.carlrobert.codegpt.agent.history.AgentMessageHistorySanitizer
 import ee.carlrobert.codegpt.agent.history.CheckpointRef
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -310,7 +311,7 @@ class AgentService(private val project: Project) {
             ?: existingConversationId
 
         project.service<AgentMcpContextService>()
-            .update(sessionId, conversationId, selectedServerIds)
+            .update(sessionId, conversationId, selectedServerIds, message.tags)
         return selectedServerIds
     }
 
@@ -348,9 +349,13 @@ class AgentService(private val project: Project) {
         val messageHistory = resumeSource?.messageHistory
             ?: session.seededMessageHistory
             ?: return clearPendingRunContinuation(sessionId)
+        val sanitizedHistory = AgentMessageHistorySanitizer.sanitizeForNewUserTurn(messageHistory)
+        if (sanitizedHistory.isEmpty() && messageHistory.isNotEmpty()) {
+            return clearPendingRunContinuation(sessionId)
+        }
 
         pendingRunContinuations[sessionId] = PendingRunContinuation(
-            messageHistory = messageHistory,
+            messageHistory = sanitizedHistory,
             input = message
         )
         if (resumeSource != null) {

@@ -177,6 +177,47 @@ class AgentCheckpointHistoryServiceTest : IntegrationTest() {
         }
     }
 
+    fun testLoadLatestResumeCheckpointSkipsDanglingToolCallCheckpoint() {
+        runBlocking {
+            val storage = storage()
+            val agentId = "agent-dangling-tool-${UUID.randomUUID()}"
+            storage.saveCheckpoint(
+                agentId,
+                checkpoint(
+                    checkpointId = "safe-resume",
+                    createdAt = Instant.parse("2026-02-04T01:00:00Z"),
+                    nodePath = "$agentId/single_run/nodeExecuteTool",
+                    history = listOf(
+                        Message.User("Investigate issue", RequestMetaInfo.Empty),
+                        Message.Assistant("I will inspect it", ResponseMetaInfo.Empty)
+                    )
+                )
+            )
+            storage.saveCheckpoint(
+                agentId,
+                checkpoint(
+                    checkpointId = "dangling-tool",
+                    createdAt = Instant.parse("2026-02-04T01:01:00Z"),
+                    nodePath = "$agentId/single_run/nodeExecuteTool",
+                    history = listOf(
+                        Message.User("Investigate issue", RequestMetaInfo.Empty),
+                        Message.Tool.Call(
+                            id = "call-1",
+                            tool = "Task",
+                            content = """{"prompt":"inspect"}""",
+                            metaInfo = ResponseMetaInfo.Empty
+                        )
+                    )
+                )
+            )
+
+            val latestResume = historyService().loadLatestResumeCheckpoint(agentId)
+
+            assertThat(latestResume).isNotNull
+            assertThat(latestResume!!.checkpointId).isEqualTo("safe-resume")
+        }
+    }
+
     fun testPrefersLatestTodoWriteTitleForThreadTitle() {
         runBlocking {
             val storage = storage()

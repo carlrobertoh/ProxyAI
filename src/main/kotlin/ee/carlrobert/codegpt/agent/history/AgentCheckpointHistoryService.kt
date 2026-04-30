@@ -69,16 +69,21 @@ class AgentCheckpointHistoryService(project: Project) {
 
             val preferred = checkpoints.firstOrNull { it.checkpointId == ref.checkpointId }
             if (preferred == null) {
-                return@withContext checkpoints.firstOrNull { it.isResumableNode() }
+                return@withContext checkpoints.firstOrNull { it.isSafeResumeCheckpoint() }
+                    ?: checkpoints.firstOrNull { it.isResumableNode() }
             }
-            if (preferred.isResumableNode()) {
+            if (preferred.isSafeResumeCheckpoint()) {
                 return@withContext preferred
             }
 
             checkpoints
                 .asSequence()
                 .filter { it.createdAt <= preferred.createdAt }
-                .firstOrNull { it.isResumableNode() }
+                .firstOrNull { it.isSafeResumeCheckpoint() }
+                ?: checkpoints
+                    .asSequence()
+                    .filter { it.createdAt <= preferred.createdAt }
+                    .firstOrNull { it.isResumableNode() }
                 ?: checkpoints.firstOrNull { it.isResumableNode() }
         }
 
@@ -86,8 +91,11 @@ class AgentCheckpointHistoryService(project: Project) {
         withContext(Dispatchers.IO) {
             val checkpoints = getCheckpoints(agentId)
             checkpoints
-                .filter { it.isResumableNode() }
+                .filter { it.isSafeResumeCheckpoint() }
                 .maxByOrNull { it.createdAt }
+                ?: checkpoints
+                    .filter { it.isResumableNode() }
+                    .maxByOrNull { it.createdAt }
                 ?: checkpoints.maxByOrNull { it.createdAt }
         }
 
@@ -179,6 +187,11 @@ class AgentCheckpointHistoryService(project: Project) {
 
     private fun AgentCheckpointData.isResumableNode(): Boolean {
         return nodePath.substringAfterLast('/') != "__finish__"
+    }
+
+    private fun AgentCheckpointData.isSafeResumeCheckpoint(): Boolean {
+        return isResumableNode() &&
+                AgentMessageHistorySanitizer.isSafeForNewUserTurn(messageHistory)
     }
 
     private suspend fun getCheckpoints(agentId: String): List<AgentCheckpointData> =

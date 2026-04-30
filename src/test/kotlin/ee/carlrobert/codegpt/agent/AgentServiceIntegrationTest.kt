@@ -118,6 +118,22 @@ class AgentServiceIntegrationTest : IntegrationTest() {
         assertThat(actualCreatedServices).hasSize(2)
     }
 
+    fun testAgentMcpContextServiceRetainsSelectedTagsForSharedResolution() {
+        val sessionId = "agent-mcp-tags-${UUID.randomUUID()}"
+        val mcpTag = McpTagDetails(serverId = "server-1", serverName = "Server 1")
+
+        project.service<AgentMcpContextService>().update(
+            sessionId,
+            UUID.randomUUID(),
+            setOf("server-1"),
+            listOf(mcpTag)
+        )
+
+        val context = project.service<AgentMcpContextService>().get(sessionId)
+        assertThat(context?.selectedServerIds).containsExactly("server-1")
+        assertThat(context?.selectedTags).containsExactly(mcpTag)
+    }
+
     fun testSubmitMessageEmitsRunCheckpointCallback() {
         val sessionId = createSession("agent-runtime-callback")
         val factory = RecordingRuntimeFactory(agentModel())

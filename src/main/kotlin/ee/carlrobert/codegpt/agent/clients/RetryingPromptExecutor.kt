@@ -91,12 +91,19 @@ class RetryingPromptExecutor(
         tools: List<ToolDescriptor>
     ): Flow<StreamFrame> {
         var hasReceivedData: Boolean
+        var waitingForRetrySuccess = false
 
         fun createStream(attemptNum: Int): Flow<StreamFrame> {
             hasReceivedData = false
 
             return delegate.executeStreaming(prompt, model, tools)
-                .onEach { hasReceivedData = true }
+                .onEach {
+                    hasReceivedData = true
+                    if (waitingForRetrySuccess) {
+                        events?.onRetrySucceeded()
+                        waitingForRetrySuccess = false
+                    }
+                }
                 .catch { error ->
                     val retryable = isRetryableFailure(error)
                     val shouldRetry =
@@ -114,6 +121,7 @@ class RetryingPromptExecutor(
                         logger.warn {
                             "Retrying streaming request (attempt $nextAttempt/${retryPolicy.maxAttempts})"
                         }
+                        waitingForRetrySuccess = true
                         events?.onRetry(nextAttempt, retryPolicy.maxAttempts)
 
                         val delayMs = if (attemptNum == 1) {
@@ -141,6 +149,10 @@ class RetryingPromptExecutor(
             while (currentAttempt <= retryPolicy.maxAttempts) {
                 try {
                     createStream(currentAttempt).collect { emit(it) }
+                    if (waitingForRetrySuccess) {
+                        events?.onRetrySucceeded()
+                        waitingForRetrySuccess = false
+                    }
                     break
                 } catch (_: RetryStreamingRequestException) {
                     if (currentAttempt < retryPolicy.maxAttempts) {
@@ -179,15 +191,21 @@ class RetryingPromptExecutor(
         var attempt = 1
         var delay = retryPolicy.initialDelay
         var lastError: Throwable? = null
+        var waitingForRetrySuccess = false
 
         while (attempt <= retryPolicy.maxAttempts) {
             try {
-                return delegate.execute(prompt, model, tools)
+                return delegate.execute(prompt, model, tools).also {
+                    if (waitingForRetrySuccess) {
+                        events?.onRetrySucceeded()
+                    }
+                }
             } catch (t: Throwable) {
                 lastError = t
                 val retryable = isRetryableFailure(t)
                 if (!retryable || attempt >= retryPolicy.maxAttempts) throw t
 
+                waitingForRetrySuccess = true
                 events?.onRetry(attempt + 1, retryPolicy.maxAttempts)
 
                 val jitter = (delay.inWholeMilliseconds * retryPolicy.jitterFactor).toLong()

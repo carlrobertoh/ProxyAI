@@ -65,6 +65,7 @@ class AgentEventHandler(
     private val pendingToolOutput = ConcurrentHashMap<String, MutableList<ToolOutputLine>>()
     private val scheduledToolOutputFlushes =
         Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    private val toolOutputLock = Any()
     private val uiRefreshLock = Any()
 
     private val toolOutputPublisher = ApplicationManager.getApplication()
@@ -73,6 +74,8 @@ class AgentEventHandler(
 
     @Volatile
     private var lastReportedPromptTokens: Long = 0
+    private var currentLoadingText: String = CodeGPTBundle.get("toolwindow.chat.loading")
+    private var loadingTextBeforeRetry: String? = null
 
     private fun keyFor(toolId: String): String = "$sessionId:$toolId"
 
@@ -139,7 +142,24 @@ class AgentEventHandler(
         runViewHolder = null
         subagentViewHolders.clear()
         lastReportedPromptTokens = 0
+        currentLoadingText = CodeGPTBundle.get("toolwindow.chat.loading")
+        loadingTextBeforeRetry = null
         currentRollbackRunId = null
+    }
+
+    private fun showLoading(text: String) {
+        currentLoadingText = text
+        if (loadingTextBeforeRetry != null) {
+            loadingTextBeforeRetry = text
+        }
+        onShowLoading(text)
+    }
+
+    private fun showRetryLoading(text: String) {
+        if (loadingTextBeforeRetry == null) {
+            loadingTextBeforeRetry = currentLoadingText
+        }
+        onShowLoading(text)
     }
 
     private fun clearApprovalContainer() {
@@ -404,7 +424,7 @@ class AgentEventHandler(
                     val inProgressTask =
                         uiArgs.todos.find { it.status == TodoWriteTool.TodoStatus.IN_PROGRESS }
                     if (inProgressTask != null) {
-                        onShowLoading(inProgressTask.activeForm)
+                        showLoading(inProgressTask.activeForm)
                     }
                     todoListPanel.updateTodos(uiArgs.todos)
                     todoListPanel.isVisible = true
@@ -481,7 +501,7 @@ class AgentEventHandler(
             val inProgressTask =
                 args.todos.find { it.status == TodoWriteTool.TodoStatus.IN_PROGRESS }
             if (inProgressTask != null) {
-                onShowLoading(inProgressTask.activeForm)
+                showLoading(inProgressTask.activeForm)
             }
         }
 
@@ -657,7 +677,15 @@ class AgentEventHandler(
 
     override fun onRetry(attempt: Int, maxAttempts: Int) {
         runInEdt {
-            onShowLoading(CodeGPTBundle.get("toolwindow.agent.retrying", attempt, maxAttempts))
+            showRetryLoading(CodeGPTBundle.get("toolwindow.agent.retrying", attempt, maxAttempts))
+        }
+    }
+
+    override fun onRetrySucceeded() {
+        runInEdt {
+            val textToRestore = loadingTextBeforeRetry ?: currentLoadingText
+            loadingTextBeforeRetry = null
+            showLoading(textToRestore)
         }
     }
 
@@ -665,7 +693,7 @@ class AgentEventHandler(
         val key =
             if (isCompressing) "toolwindow.chat.compressingHistory" else "toolwindow.chat.loading"
         runInEdt {
-            onShowLoading(CodeGPTBundle.get(key))
+            showLoading(CodeGPTBundle.get(key))
         }
     }
 
@@ -931,11 +959,14 @@ class AgentEventHandler(
     }
 
     fun handleToolOutput(toolId: String, text: String, isError: Boolean) {
-        val lines = pendingToolOutput.computeIfAbsent(toolId) {
-            Collections.synchronizedList(mutableListOf())
+        val shouldScheduleFlush = synchronized(toolOutputLock) {
+            val lines = pendingToolOutput.computeIfAbsent(toolId) {
+                Collections.synchronizedList(mutableListOf())
+            }
+            lines.add(ToolOutputLine(text, isError))
+            scheduledToolOutputFlushes.add(toolId)
         }
-        lines.add(ToolOutputLine(text, isError))
-        if (!scheduledToolOutputFlushes.add(toolId)) {
+        if (!shouldScheduleFlush) {
             return
         }
         runInEdt { flushToolOutput(toolId) }
@@ -945,15 +976,24 @@ class AgentEventHandler(
         serviceScope.dispose()
         agentApprovalManager.dispose()
         mainToolCards.clear()
-        pendingToolOutput.clear()
-        scheduledToolOutputFlushes.clear()
+        synchronized(toolOutputLock) {
+            pendingToolOutput.clear()
+            scheduledToolOutputFlushes.clear()
+        }
         approvalQueue.clear()
         subagentViewHolders.clear()
     }
 
     private fun flushToolOutput(toolId: String) {
-        scheduledToolOutputFlushes.remove(toolId)
-        val lines = pendingToolOutput.remove(toolId).orEmpty()
+        val lines = synchronized(toolOutputLock) {
+            scheduledToolOutputFlushes.remove(toolId)
+            val buffered = pendingToolOutput.remove(toolId)
+            if (buffered == null) {
+                emptyList()
+            } else {
+                synchronized(buffered) { buffered.toList() }
+            }
+        }
         if (lines.isEmpty()) {
             return
         }
