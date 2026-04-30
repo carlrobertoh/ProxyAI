@@ -6,7 +6,6 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.codeInsight.lookup.LookupElementPresentation
 import com.intellij.codeInsight.lookup.LookupElementRenderer
-import com.intellij.openapi.util.TextRange
 
 abstract class AbstractLookupItem : LookupItem {
     override fun createLookupElement(
@@ -23,10 +22,6 @@ abstract class AbstractLookupItem : LookupItem {
                     presentation: LookupElementPresentation
                 ) {
                     setPresentation(element, presentation)
-                    emphasizeMatch(
-                        presentation,
-                        searchTextProvider?.invoke() ?: searchText
-                    )
                 }
             })
         getAdditionalLookupStrings().forEach { lookupString ->
@@ -36,24 +31,6 @@ abstract class AbstractLookupItem : LookupItem {
             putUserData(LookupItem.KEY, this@AbstractLookupItem)
         }
         return PrioritizedLookupElement.withPriority(lookupElement, 1.0)
-    }
-
-    private fun emphasizeMatch(
-        presentation: LookupElementPresentation,
-        searchText: String
-    ) {
-        val normalizedSearchText = searchText.trim()
-        if (normalizedSearchText.isEmpty()) {
-            return
-        }
-
-        val matcher = LookupMatchers.createMatcher(normalizedSearchText)
-        matcher.match(displayName)?.forEach { fragment ->
-            presentation.decorateItemTextRange(
-                TextRange(fragment.startOffset, fragment.endOffset),
-                LookupElementPresentation.LookupItemDecoration.HIGHLIGHT_MATCHED
-            )
-        }
     }
 
     abstract fun getLookupString(): String

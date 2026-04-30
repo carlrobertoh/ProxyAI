@@ -4,6 +4,7 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementPresentation
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.ui.textarea.lookup.AbstractLookupItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.LookupItemKeepOpenPrefixMatcher
 import ee.carlrobert.codegpt.ui.textarea.lookup.LoadingLookupItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.StatusLookupItem
@@ -77,6 +78,30 @@ class PromptTextFieldLookupItemsTest {
 
         assertThat(items).containsExactly(previous, items.last())
         assertThat(items.last()).isInstanceOf(LoadingLookupItem::class.java)
+    }
+
+    @Test
+    fun `keep open matcher exposes matching fragments for lookup highlighting`() {
+        val matcher = LookupItemKeepOpenPrefixMatcher("@files abc", "abc", null)
+
+        val fragments = matcher.getMatchingFragments("abc", "my-abc-file.kt")
+
+        assertThat(fragments).isNotNull
+        assertThat(fragments!!.map { it.startOffset to it.endOffset })
+            .contains(3 to 6)
+    }
+
+    @Test
+    fun `keep open matcher uses latest provided search text for lookup highlighting`() {
+        var searchText = "abc"
+        val matcher = LookupItemKeepOpenPrefixMatcher("@files abc", "ignored") { searchText }
+
+        searchText = "file"
+        val fragments = matcher.getMatchingFragments("@files abc", "my-abc-file.kt")
+
+        assertThat(fragments).isNotNull
+        assertThat(fragments!!.map { it.startOffset to it.endOffset })
+            .contains(7 to 11)
     }
 
     private class TestLookupActionItem(

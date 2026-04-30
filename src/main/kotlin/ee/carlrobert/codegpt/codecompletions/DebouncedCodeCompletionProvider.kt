@@ -121,8 +121,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             return false
         }
 
-        return event is LookupInlineCompletionEvent
-                || event is InlineCompletionEvent.DirectCall
+        return event is InlineCompletionEvent.DirectCall
                 || event is InlineCompletionEvent.DocumentChange
     }
 }
