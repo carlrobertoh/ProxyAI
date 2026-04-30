@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded Koog and the IntelliJ Platform baseline to 2026.1 / build 261
+
+### Fixed
+
+- Files and Folders `@` lookup now searches project files and folders together, prioritizes open and recent files, and keeps results stable while search results are still loading.
+- Agent continuation now skips unsafe checkpoints and removes dangling tool-call history before starting a new user turn.
+- Agent loading state is restored correctly after retries succeed.
+- Agent write and edit approval diffs now respect the configured tool approval mode.
+- Agent todo-list reminders are now shown only once per run.
+- TodoWrite progress updates in Agent run cards
+- External ACP agent switching no longer freezes the IDE when changing runtimes such as OpenCode and Codex [#1213](https://github.com/carlrobertoh/ProxyAI/issues/1213)
+- Bash tool execution now uses `sh` on BSD systems [#1208](https://github.com/carlrobertoh/ProxyAI/issues/1208)
+
 ## [3.8.0-241.1] - 2026-04-02
 
 ### Added
