@@ -47,7 +47,6 @@ internal object AgentCompletionRunner : CompletionRunner {
                 it.isNotEmpty() && request.callParameters.toolApprovalMode != ToolApprovalMode.BLOCK_ALL
             }
             ?: emptyList()
-
         val messageBuilder = StringBuilder()
         val stream = shouldStreamAgentToolLoop(request)
         val toolCallHandler = request.project.let { McpToolCallHandler.getInstance(it) }

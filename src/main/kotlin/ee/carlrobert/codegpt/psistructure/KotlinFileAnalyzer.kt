@@ -7,14 +7,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.PsiShortNamesCache
 import com.intellij.psi.util.PsiTreeUtil
-import ee.carlrobert.codegpt.psistructure.models.ClassName
-import ee.carlrobert.codegpt.psistructure.models.ClassStructure
-import ee.carlrobert.codegpt.psistructure.models.ClassType
-import ee.carlrobert.codegpt.psistructure.models.ConstructorStructure
-import ee.carlrobert.codegpt.psistructure.models.EnumEntryName
-import ee.carlrobert.codegpt.psistructure.models.FieldStructure
-import ee.carlrobert.codegpt.psistructure.models.MethodStructure
-import ee.carlrobert.codegpt.psistructure.models.ParameterInfo
+import ee.carlrobert.codegpt.psistructure.models.*
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
@@ -103,6 +96,7 @@ class KotlinFileAnalyzer(
 
     private fun getClassStructure(ktClass: KtClassOrObject): ClassStructure? {
         val classNameString = ktClass.fqName?.asString() ?: return null
+        val virtualFile = ktFile.virtualFile?.takeIf { it.isValid } ?: return null
         val className = ClassName(classNameString)
 
         val classType = when {
@@ -120,7 +114,7 @@ class KotlinFileAnalyzer(
             modifierList = getModifiers(ktClass),
             packageName = ktClass.fqName?.parent()?.asString().orEmpty(),
             repositoryName = ktFile.project.name,
-            virtualFile = ktFile.virtualFile,
+            virtualFile = virtualFile,
         )
 
         analyzeSupertypes(
@@ -248,7 +242,8 @@ class KotlinFileAnalyzer(
     }
 
     private fun analyzeProperty(property: KtProperty): FieldStructure {
-        val type = property.typeReference?.text ?: kotlinPropertyAnalyzer.resolveInferredType(property)
+        val type =
+            property.typeReference?.text ?: kotlinPropertyAnalyzer.resolveInferredType(property)
         val resolvedType = resolveType(type)
         val modifierList = getModifiers(property)
         return FieldStructure(property.name ?: "", resolvedType, modifierList)
@@ -263,7 +258,12 @@ class KotlinFileAnalyzer(
             ParameterInfo(parameter.name.orEmpty(), resolvedType, getModifiers(parameter))
         }
         val modifierList = getModifiers(function)
-        return MethodStructure(function.name.orEmpty(), resolvedReturnType, parameters, modifierList)
+        return MethodStructure(
+            function.name.orEmpty(),
+            resolvedReturnType,
+            parameters,
+            modifierList
+        )
     }
 
     private fun resolveType(shortType: String): ClassName {

@@ -48,4 +48,30 @@ class CompleteMessageParserTest {
         assertThat(code.language).isEqualTo("kotlin")
         assertThat(code.filePath).isEqualTo("src/Main.kt")
     }
+
+    @Test
+    fun `test recovers inline search marker from code header`() {
+        val parser = CompleteMessageParser()
+        val input = """
+            ```kotlin:RetryingPromptExecutorRetryabilityTest.kt<<<<<<< SEARCH @Test fun oldRetryTest() {
+                assertThat(false).isTrue()
+            }
+            =======
+            @Test fun newRetryTest() {
+                assertThat(true).isTrue()
+            }
+            >>>>>>> REPLACE
+            ```
+        """.trimIndent()
+
+        val segments = parser.parse(input)
+        val codeHeader = segments.filterIsInstance<CodeHeader>().single()
+        val searchReplace = segments.filterIsInstance<SearchReplace>().single()
+
+        assertThat(codeHeader.language).isEqualTo("kotlin")
+        assertThat(codeHeader.filePath).isEqualTo("RetryingPromptExecutorRetryabilityTest.kt")
+        assertThat(searchReplace.search).contains("@Test fun oldRetryTest")
+        assertThat(searchReplace.search).doesNotContain("<<<<<<<")
+        assertThat(searchReplace.replace).contains("@Test fun newRetryTest")
+    }
 }

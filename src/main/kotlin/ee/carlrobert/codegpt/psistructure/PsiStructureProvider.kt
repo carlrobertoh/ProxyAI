@@ -7,11 +7,7 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.psi.PsiFile
 import com.intellij.util.io.await
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asExecutor
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.*
 import org.jetbrains.kotlin.psi.KtFile
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -21,6 +17,13 @@ class PsiStructureProvider {
         psiFiles: List<PsiFile>,
         analyzeDepth: Int,
     ): Set<ClassStructure> {
+        val physicalPsiFiles = psiFiles.filter { psiFile ->
+            psiFile.virtualFile?.isValid == true
+        }
+        if (physicalPsiFiles.isEmpty()) {
+            return emptySet()
+        }
+
         var result: Set<ClassStructure>? = null
         var attempts = 0
         val maxAttempts = 5
@@ -32,7 +35,7 @@ class PsiStructureProvider {
         while (result == null && attempts < maxAttempts) {
             attempts++
             try {
-                val project = psiFiles
+                val project = physicalPsiFiles
                     .map { it.project }
                     .firstOrNull { !it.isDisposed } ?: error("Project not available")
 
@@ -40,7 +43,7 @@ class PsiStructureProvider {
                 val future = ReadAction.nonBlocking<Set<ClassStructure>> {
                     val classStructureSet = mutableSetOf<ClassStructure>()
                     val processedPsiFiles = mutableSetOf<PsiFile?>()
-                    val psiFileDepthQueue = PsiFileDepthQueue(psiFiles, analyzeDepth)
+                    val psiFileDepthQueue = PsiFileDepthQueue(physicalPsiFiles, analyzeDepth)
 
                     while (true) {
                         coroutineContext.ensureActive()

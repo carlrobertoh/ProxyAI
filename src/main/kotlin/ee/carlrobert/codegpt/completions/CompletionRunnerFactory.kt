@@ -5,6 +5,7 @@ internal object CompletionRunnerFactory {
         return when (request) {
             is CompletionRunnerRequest.Chat ->
                 if (shouldUseAgentRunner(request)) AgentCompletionRunner else ChatStreamingCompletionRunner
+
             is CompletionRunnerRequest.Streaming -> StreamingCompletionRunner
         }
     }

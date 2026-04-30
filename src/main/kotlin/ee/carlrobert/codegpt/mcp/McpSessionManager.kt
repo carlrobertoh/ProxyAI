@@ -50,7 +50,10 @@ class McpSessionManager {
                 }
 
                 val mergedEnv =
-                    McpPathHelper.createEnvironment(serverDetails.environmentVariables, resolvedCommand)
+                    McpPathHelper.createEnvironment(
+                        serverDetails.environmentVariables,
+                        resolvedCommand
+                    )
 
                 val serverParameters = ServerParameters.builder(resolvedCommand)
                     .args(*serverDetails.arguments.toTypedArray())
@@ -113,7 +116,7 @@ class McpSessionManager {
 
     fun ensureClientConnected(clientKey: String): CompletableFuture<McpSyncClient?> {
         return CompletableFuture.supplyAsync {
-            var client = activeClients[clientKey]
+            val client = activeClients[clientKey]
             if (client != null) {
                 return@supplyAsync client
             }

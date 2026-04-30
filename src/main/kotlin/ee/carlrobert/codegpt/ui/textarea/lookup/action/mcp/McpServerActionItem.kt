@@ -3,7 +3,7 @@ package ee.carlrobert.codegpt.ui.textarea.lookup.action.mcp
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.conversations.ConversationsState
+import ee.carlrobert.codegpt.mcp.McpSelectionResolver
 import ee.carlrobert.codegpt.mcp.McpStatusBridge
 import ee.carlrobert.codegpt.settings.mcp.McpServerDetailsState
 import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
@@ -18,13 +18,13 @@ class McpServerActionItem(
 
     override fun execute(project: Project, userInputPanel: UserInputPanel) {
         val conversationId = userInputPanel.getConversationId()
-            ?: ConversationsState.getCurrentConversation()?.id
         if (conversationId == null) {
+            val pendingTag = service<McpSelectionResolver>().toPendingTag(serverDetails)
+            userInputPanel.addTag(pendingTag)
             return
         }
 
-        val statusBridge = service<McpStatusBridge>()
-        statusBridge.attachServerAndUpdateUi(
+        service<McpStatusBridge>().attachServerAndUpdateUi(
             conversationId,
             serverDetails.id.toString(),
             serverDetails.name ?: "Unknown Server",

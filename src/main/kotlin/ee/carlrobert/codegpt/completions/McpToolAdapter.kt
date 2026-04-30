@@ -1,13 +1,15 @@
 package ee.carlrobert.codegpt.completions
 
 import ai.koog.agents.core.tools.Tool
+import ai.koog.agents.core.tools.ToolDescriptor
+import ai.koog.serialization.typeToken
 import ee.carlrobert.codegpt.mcp.McpTool
 import ee.carlrobert.codegpt.mcp.McpToolCallHandler
+import ee.carlrobert.codegpt.mcp.ToolSchemaParser
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.CompletableFuture
 import javax.swing.JPanel
 import kotlin.coroutines.resume
@@ -20,10 +22,9 @@ internal class McpToolAdapter(
     private val toolCallHandler: McpToolCallHandler,
     private val onToolCallUIUpdate: (JPanel) -> Unit
 ) : Tool<JsonObject, String>(
-    argsSerializer = JsonObject.serializer(),
-    resultSerializer = String.serializer(),
-    name = exposedName,
-    description = tool.description.ifBlank { "MCP tool" }
+    argsType = typeToken<JsonObject>(),
+    resultType = typeToken<String>(),
+    descriptor = buildDescriptor(exposedName, tool)
 ) {
     override suspend fun execute(args: JsonObject): String {
         val callId = UUID.randomUUID().toString()
@@ -59,4 +60,19 @@ internal class McpToolAdapter(
             }
             continuation.invokeOnCancellation { future.cancel(true) }
         }
+}
+
+private fun buildDescriptor(exposedName: String, tool: McpTool): ToolDescriptor {
+    val description = tool.description.ifBlank { "MCP tool" }
+    val schema = tool.schema as Map<String, Any?>
+    val allParameters = ToolSchemaParser.parseParameterDescriptors(schema)
+    val requiredNames = ToolSchemaParser.parseRequiredNames(schema).toSet()
+    val required = allParameters.filter { it.name in requiredNames }
+    val optional = allParameters.filterNot { it.name in requiredNames }
+    return ToolDescriptor(
+        name = exposedName,
+        description = description,
+        requiredParameters = required,
+        optionalParameters = optional
+    )
 }

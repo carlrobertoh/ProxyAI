@@ -8,11 +8,14 @@ import ee.carlrobert.codegpt.completions.ConversationType
 import ee.carlrobert.codegpt.conversations.ConversationAttachedFile
 import ee.carlrobert.codegpt.conversations.ConversationService
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.mcp.ConnectionStatus
 import ee.carlrobert.codegpt.settings.models.ModelSettings
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState
+import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
+import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
 import testsupport.http.RequestEntity
@@ -130,6 +133,37 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         waitExpecting {
             conversation.attachedFiles == listOf(ConversationAttachedFile(tempFile.path, true))
         }
+    }
+
+    fun testChatInputExposesConversationIdForMcpAttachments() {
+        val conversation = ConversationService.getInstance().startConversation(project)
+        val panel = ChatToolWindowTabPanel(project, ToolWindowInitialState(conversation))
+
+        val userInputPanel = ChatToolWindowTabPanel::class.java
+            .getDeclaredField("userInputPanel")
+            .apply { isAccessible = true }
+            .get(panel) as UserInputPanel
+
+        assertThat(userInputPanel.getConversationId()).isEqualTo(conversation.id)
+    }
+
+    fun testLandingDraftStatePreservesPendingMcpTagBeforeConversationSend() {
+        val conversation = ConversationService.getInstance().startConversation(project)
+        val pendingTag = McpTagDetails(
+            serverId = "server-landing",
+            serverName = "Landing Server",
+            connectionStatus = ConnectionStatus.DISCONNECTED
+        )
+        val panel = ChatToolWindowTabPanel(
+            project,
+            ToolWindowInitialState(conversation, listOf(pendingTag))
+        )
+
+        panel.restoreDraftState(ToolWindowInitialState(conversation, listOf(pendingTag)))
+
+        assertThat(panel.selectedTags.filterIsInstance<McpTagDetails>())
+            .extracting<String> { it.serverId }
+            .contains("server-landing")
     }
 
     private fun expectOpenAIStreamingHello(assertPrompt: (String) -> Unit) {

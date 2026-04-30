@@ -27,6 +27,10 @@ class CompleteMessageParser : MessageParser {
 
         private val TOLERANT_SEARCH_START =
             Regex("""^\s*<{3,}(\s*SEARCH.*)?$""", RegexOption.IGNORE_CASE)
+        private val INLINE_SEARCH_START =
+            Regex("""<{3,}\s*SEARCH\b.*""", RegexOption.IGNORE_CASE)
+        private val INLINE_SEARCH_PREFIX =
+            Regex("""^\s*<{3,}\s*SEARCH\s*""", RegexOption.IGNORE_CASE)
         private val TOLERANT_SEPARATOR = Regex("""^\s*={3,}\s*$""")
         private val TOLERANT_REPLACE_END =
             Regex("""^\s*>{3,}(\s*REPLACE.*)?$""", RegexOption.IGNORE_CASE)
@@ -101,8 +105,12 @@ class CompleteMessageParser : MessageParser {
      * Processes a code block and adds all related segments.
      */
     private fun MutableList<Segment>.addCodeBlockSegments(codeBlockMatcher: Matcher) {
-        val header = parseCodeHeader(codeBlockMatcher.group(CODE_HEADER_GROUP_INDEX).orEmpty())
-        val codeContent = codeBlockMatcher.group(CODE_CONTENT_GROUP_INDEX).orEmpty()
+        val rawHeader = codeBlockMatcher.group(CODE_HEADER_GROUP_INDEX).orEmpty()
+        val headerSplit = splitInlineSearchMarker(rawHeader)
+        val header = parseCodeHeader(headerSplit.headerText)
+        val codeContent = headerSplit.asCodeContent(
+            codeBlockMatcher.group(CODE_CONTENT_GROUP_INDEX).orEmpty()
+        )
 
         add(CodeHeader(header.language, header.filePath))
         processCodeContent(codeContent, header.language, header.filePath)
@@ -368,5 +376,38 @@ class CompleteMessageParser : MessageParser {
             language = normalizedLanguage,
             filePath = filePath
         )
+    }
+
+    private fun splitInlineSearchMarker(headerText: String): HeaderSearchSplit {
+        val markerMatch = INLINE_SEARCH_START.find(headerText)
+        if (markerMatch == null || markerMatch.range.first == 0) {
+            return HeaderSearchSplit(headerText, null)
+        }
+
+        val markerText = headerText.substring(markerMatch.range.first)
+        val inlineSearchContent = markerText
+            .replaceFirst(INLINE_SEARCH_PREFIX, "")
+        return HeaderSearchSplit(
+            headerText = headerText.substring(0, markerMatch.range.first).trimEnd(),
+            inlineSearchContent = inlineSearchContent
+        )
+    }
+
+    private data class HeaderSearchSplit(
+        val headerText: String,
+        val inlineSearchContent: String?
+    ) {
+        fun asCodeContent(codeContent: String): String {
+            val searchContent = inlineSearchContent ?: return codeContent
+            return buildString {
+                append("<<<<<<< SEARCH")
+                append('\n')
+                if (searchContent.isNotBlank()) {
+                    append(searchContent.trimStart())
+                    append('\n')
+                }
+                append(codeContent)
+            }
+        }
     }
 }

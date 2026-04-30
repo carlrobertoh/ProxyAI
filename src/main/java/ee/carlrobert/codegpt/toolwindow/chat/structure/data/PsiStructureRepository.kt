@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -18,7 +19,6 @@ import ee.carlrobert.codegpt.psistructure.PsiStructureProvider
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
-import com.intellij.openapi.editor.SelectionModel
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers
 import ee.carlrobert.codegpt.util.coroutines.DisposableCoroutineScope
 import kotlinx.coroutines.Job
@@ -197,11 +197,19 @@ class PsiStructureRepository(
                     .await()
 
                 val virtualFilesToRemoveFromStructure = tags.getExcludedVirtualFiles()
-                val result = psiStructureProvider.get(psiFiles, analyzePsiDepth)
-                    .filter { classStructure ->
-                        !virtualFilesToRemoveFromStructure.contains(classStructure.virtualFile)
+                val result = try {
+                    psiStructureProvider.get(psiFiles, analyzePsiDepth)
+                        .filter { classStructure ->
+                            !virtualFilesToRemoveFromStructure.contains(classStructure.virtualFile)
+                        }
+                        .toSet()
+                } catch (ex: Exception) {
+                    if (ex is ProcessCanceledException) {
+                        throw ex
                     }
-                    .toSet()
+                    logger.warn("Failed to update PSI structure", ex)
+                    emptySet()
+                }
 
                 _structureState.value = PsiStructureState.Content(tags, result)
             }
@@ -234,7 +242,7 @@ class PsiStructureRepository(
                     is DiagnosticsTagDetails -> null
                 }
 
-                virtualFile?.takeIf { it.isValid && it.exists()}
+                virtualFile?.takeIf { it.isValid && it.exists() }
             }
         }
             .toSet()
@@ -290,7 +298,7 @@ class PsiStructureRepository(
                     is DiagnosticsTagDetails -> null
                 }
 
-                virtualFile?.takeIf { it.isValid && it.exists()}
+                virtualFile?.takeIf { it.isValid && it.exists() }
             }
         }
             .toSet()

@@ -6,11 +6,7 @@ import ai.koog.serialization.typeToken
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.agent.AgentMcpContext
-import ee.carlrobert.codegpt.mcp.ConnectionStatus
-import ee.carlrobert.codegpt.mcp.McpToolAliasResolver
-import ee.carlrobert.codegpt.mcp.McpSessionAttachment
-import ee.carlrobert.codegpt.mcp.McpSessionManager
-import ee.carlrobert.codegpt.mcp.ToolSchemaParser
+import ee.carlrobert.codegpt.mcp.*
 import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.spec.McpSchema
 import kotlinx.serialization.json.JsonObject
@@ -27,9 +23,18 @@ object McpDynamicToolRegistry {
         val conversationId = context.conversationId ?: return emptyList()
         if (!context.hasSelection()) return emptyList()
 
-        val attachments = context.selectedServerIds.mapNotNull { serverId ->
-            ensureConnectedAttachment(conversationId, serverId)
-        }.filter { it.availableTools.isNotEmpty() }
+        val selectedTags = context.selectedTags.ifEmpty {
+            context.selectedServerIds.map { serverId ->
+                ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails(
+                    serverId = serverId,
+                    serverName = serverId,
+                    connectionStatus = ConnectionStatus.DISCONNECTED
+                )
+            }
+        }
+        val resolution =
+            service<McpSelectionResolver>().ensureConnected(conversationId, selectedTags)
+        val attachments = resolution.attachments.filter { it.availableTools.isNotEmpty() }
 
         if (attachments.isEmpty()) return emptyList()
 
@@ -52,28 +57,6 @@ object McpDynamicToolRegistry {
         }
     }
 
-    private fun ensureConnectedAttachment(
-        conversationId: UUID,
-        serverId: String
-    ): McpSessionAttachment? {
-        val sessionManager = service<McpSessionManager>()
-        val existing = runCatching {
-            sessionManager.getSessionAttachments(conversationId)
-                .firstOrNull { it.serverId == serverId }
-        }.getOrNull()
-        if (existing != null && existing.connectionStatus == ConnectionStatus.CONNECTED) {
-            return existing
-        }
-        val attachment = runCatching {
-            sessionManager.attachServerToSession(conversationId, serverId).get()
-        }.onFailure { error ->
-            logger.warn("Failed to attach MCP server '$serverId': ${error.message}")
-        }.getOrNull()
-        if (attachment?.connectionStatus != ConnectionStatus.CONNECTED) {
-            return null
-        }
-        return attachment
-    }
 }
 
 internal interface McpAgentToolMarker {

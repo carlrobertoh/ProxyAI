@@ -1,7 +1,9 @@
 package ee.carlrobert.codegpt.completions
 
 import ee.carlrobert.codegpt.util.ReasoningFrameTextAdapter
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 internal object ChatStreamingCompletionRunner : CompletionRunner {
 
@@ -68,9 +70,7 @@ internal object ChatStreamingCompletionRunner : CompletionRunner {
         request: CompletionRunnerRequest.Chat,
         messageBuilder: StringBuilder
     ) {
-        if (text.isNotBlank()) {
-            messageBuilder.append(text)
-            request.eventListener.onMessage(text)
-        }
+        messageBuilder.append(text)
+        request.eventListener.onMessage(text)
     }
 }

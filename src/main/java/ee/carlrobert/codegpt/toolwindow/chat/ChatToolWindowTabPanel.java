@@ -33,9 +33,9 @@ import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.ConversationAttachedFile;
 import ee.carlrobert.codegpt.conversations.ConversationService;
 import ee.carlrobert.codegpt.conversations.message.Message;
-import ee.carlrobert.codegpt.mcp.ConnectionStatus;
-import ee.carlrobert.codegpt.mcp.McpSessionManager;
-import ee.carlrobert.codegpt.mcp.McpTool;
+import ee.carlrobert.codegpt.mcp.McpResolutionResult;
+import ee.carlrobert.codegpt.mcp.McpSelectionResolver;
+import ee.carlrobert.codegpt.mcp.McpTagStatusUpdater;
 import ee.carlrobert.codegpt.psistructure.PsiStructureProvider;
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
@@ -123,15 +123,8 @@ public class ChatToolWindowTabPanel implements Disposable {
         EditorUtil.getSelectedEditorSelectedText(project),
         this,
         psiStructureRepository);
-    userInputPanel = new UserInputPanel(
-        project,
-        totalTokensPanel,
-        this,
-        FeatureType.CHAT,
-        tagManager,
-        this::handleSubmit,
-        this::handleCancel,
-        true);
+    userInputPanel = createUserInputPanel();
+    registerMcpTagManager();
     initializeConversationAttachedFiles();
     userInputPanel.requestFocus();
 
@@ -175,6 +168,32 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   public TotalTokensDetails getTokenDetails() {
     return totalTokensPanel.getTokenDetails();
+  }
+
+  private UserInputPanel createUserInputPanel() {
+    return new UserInputPanel(
+        project,
+        totalTokensPanel,
+        this,
+        FeatureType.CHAT,
+        tagManager,
+        this::handleSubmit,
+        this::handleCancel,
+        true,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        conversation::getId);
+  }
+
+  private void registerMcpTagManager() {
+    ApplicationManager.getApplication()
+        .getService(McpTagStatusUpdater.class)
+        .registerTagManager(conversation.getId(), tagManager);
   }
 
   public void requestFocusForTextArea() {
@@ -273,17 +292,11 @@ public class ChatToolWindowTabPanel implements Disposable {
     findTagOfType(selectedTags, GitCommitTagDetails.class)
         .ifPresent(tag -> builder.gitDiff(tag.getFullMessage()));
 
-    var mcpTools = new ArrayList<McpTool>();
-    var mcpServerIds = new ArrayList<String>();
-
-    ApplicationManager.getApplication().getService(McpSessionManager.class)
-        .getSessionAttachments(conversation.getId())
-        .stream()
-        .filter(attachment -> attachment.getConnectionStatus() == ConnectionStatus.CONNECTED)
-        .forEach(attachment -> {
-          mcpTools.addAll(attachment.getAvailableTools());
-          mcpServerIds.add(attachment.getServerId());
-        });
+    McpResolutionResult mcpResolution = ApplicationManager.getApplication()
+        .getService(McpSelectionResolver.class)
+        .ensureConnected(conversation.getId(), selectedTags);
+    var mcpTools = new ArrayList<>(mcpResolution.getTools());
+    var mcpServerIds = new ArrayList<>(mcpResolution.getConnectedServerIds());
 
     if (!mcpTools.isEmpty()) {
       builder.mcpTools(mcpTools)
