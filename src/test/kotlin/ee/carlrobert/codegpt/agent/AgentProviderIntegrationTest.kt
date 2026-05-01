@@ -363,6 +363,22 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         assertThat(result.events.text.toString()).isEqualTo("Hello from Custom OpenAI")
     }
 
+    fun testCustomOpenAIAgentAllowsMissingApiKey() {
+        val customService = configureCustomOpenAIService(apiKey = null)
+        expectCustomOpenAI(BasicHttpExchange { request ->
+            assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
+            assertThat(request.method).isEqualTo("POST")
+            assertThat(extractPromptText(request)).contains("Say hello without Custom OpenAI auth")
+            ResponseEntity(customOpenAiResponse("Hello without Custom OpenAI auth"))
+        })
+
+        val result = runAgent(ServiceType.CUSTOM_OPENAI, "Say hello without Custom OpenAI auth")
+
+        assertThat(customService.id).isNotBlank()
+        assertThat(result.output).isEqualTo("Hello without Custom OpenAI auth")
+        assertThat(result.events.text.toString()).isEqualTo("Hello without Custom OpenAI auth")
+    }
+
     fun testCustomOpenAIAgentStreamsWhenStoredSelectionUsesModelId() {
         val customService = configureCustomOpenAIService(stream = true)
         service<ModelSettings>().setModel(
@@ -1144,7 +1160,8 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         path: String = "/v1/chat/completions",
         model: String = "custom-agent-model",
         stream: Boolean = false,
-        useResponsesApiBody: Boolean = false
+        useResponsesApiBody: Boolean = false,
+        apiKey: String? = "TEST_API_KEY"
     ): CustomServiceSettingsState {
         val settings = service<CustomServicesSettings>()
         val serviceState = CustomServiceSettingsState().apply {
@@ -1163,7 +1180,7 @@ class AgentProviderIntegrationTest : IntegrationTest() {
         settings.state.services.add(serviceState)
         setCredential(
             CustomServiceApiKeyById(requireNotNull(serviceState.id)),
-            "TEST_API_KEY"
+            apiKey
         )
         service<ModelSettings>().setModel(
             FeatureType.AGENT,

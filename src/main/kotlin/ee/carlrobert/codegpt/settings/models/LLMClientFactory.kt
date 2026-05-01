@@ -140,7 +140,7 @@ object LLMClientFactory {
                     service<CustomServicesSettings>().customServiceStateForFeatureType(featureType)
                 val serviceId = state.id ?: error("No custom service configured")
                 val apiKey = getCredential(CredentialKey.CustomServiceApiKeyById(serviceId))
-                    ?: error("No API key found for custom service: $serviceId")
+                    ?: ""
 
                 when (featureType) {
                     FeatureType.CODE_COMPLETION -> CustomOpenAILLMClient.fromCodeCompletionSettingsState(
