@@ -54,14 +54,13 @@ import ee.carlrobert.codegpt.toolwindow.chat.parser.Text;
 import ee.carlrobert.codegpt.toolwindow.chat.parser.Thinking;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseBodyProgressPanel;
 import ee.carlrobert.codegpt.toolwindow.ui.WebpageList;
-import ee.carlrobert.codegpt.ui.ThoughtProcessPanel;
+import ee.carlrobert.codegpt.ui.ThinkingPanel;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.ui.hover.PsiLinkHoverPreview;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import java.awt.BorderLayout;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.stream.Stream;
 import javax.swing.DefaultListModel;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
@@ -87,6 +86,7 @@ public class ChatMessageResponseBody extends JPanel {
       new JPanel(new VerticalFlowLayout(VerticalFlowLayout.TOP, 0, 4, true, false));
   private final StringBuilder accumulatedThinking = new StringBuilder();
 
+  private ThinkingPanel currentThinkingPanel;
   private ResponseEditorPanel currentlyProcessedEditorPanel;
   private MermaidResponsePanel currentlyProcessedMermaidPanel;
   private JEditorPane currentlyProcessedTextPane;
@@ -142,10 +142,7 @@ public class ChatMessageResponseBody extends JPanel {
         currentlyProcessedEditorPanel = null;
         currentlyProcessedMermaidPanel = null;
       }
-      var thoughtProcessPanel = getExistingThoughtProcessPanel();
-      if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
-        thoughtProcessPanel.setFinished();
-      }
+      finishThinkingSection(false);
     } catch (Exception e) {
       LOG.error("Something went wrong while processing input", e);
     }
@@ -153,6 +150,7 @@ public class ChatMessageResponseBody extends JPanel {
   }
 
   public void addToolStatusPanel(JComponent component) {
+    finishThinkingSection(false);
     finishCurrentStreamingSection();
     streamOutputParser.startNewVisualSection();
     contentPanel.add(component);
@@ -259,10 +257,7 @@ public class ChatMessageResponseBody extends JPanel {
 
   public void finishThinking() {
     ApplicationManager.getApplication().invokeLater(() -> {
-      var thoughtProcessPanel = getExistingThoughtProcessPanel();
-      if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
-        thoughtProcessPanel.setFinished();
-      }
+      finishThinkingSection(false);
     });
   }
 
@@ -270,6 +265,7 @@ public class ChatMessageResponseBody extends JPanel {
     contentPanel.removeAll();
     streamOutputParser.clear();
     accumulatedThinking.setLength(0);
+    currentThinkingPanel = null;
 
     // Reset for the next incoming message
     prepareProcessingText(true);
@@ -314,21 +310,26 @@ public class ChatMessageResponseBody extends JPanel {
   private void processThinkingOutput(String thoughtProcess) {
     progressPanel.setVisible(false);
 
-    var thoughtProcessPanel = getExistingThoughtProcessPanel();
-    if (thoughtProcessPanel == null) {
-      thoughtProcessPanel = new ThoughtProcessPanel();
-      thoughtProcessPanel.updateText(thoughtProcess);
-      contentPanel.add(thoughtProcessPanel);
-    } else {
-      thoughtProcessPanel.updateText(thoughtProcess);
+    if (currentThinkingPanel == null || currentThinkingPanel.isFinished()) {
+      currentThinkingPanel = new ThinkingPanel();
+      contentPanel.add(currentThinkingPanel);
     }
+    currentThinkingPanel.updateText(thoughtProcess);
+    contentPanel.revalidate();
+    contentPanel.repaint();
   }
 
-  private ThoughtProcessPanel getExistingThoughtProcessPanel() {
-    return (ThoughtProcessPanel) Stream.of(contentPanel.getComponents())
-        .filter(it -> it instanceof ThoughtProcessPanel)
-        .findFirst()
-        .orElse(null);
+  private void finishThinkingSection(boolean resetStreamingSection) {
+    if (currentThinkingPanel != null && !currentThinkingPanel.isFinished()) {
+      currentThinkingPanel.setFinished();
+    }
+    currentThinkingPanel = null;
+    accumulatedThinking.setLength(0);
+    if (resetStreamingSection) {
+      finishCurrentStreamingSection();
+    }
+    contentPanel.revalidate();
+    contentPanel.repaint();
   }
 
   private void processResponse(Segment item, boolean caretVisible) {
@@ -337,9 +338,8 @@ public class ChatMessageResponseBody extends JPanel {
       return;
     }
 
-    var thoughtProcessPanel = getExistingThoughtProcessPanel();
-    if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
-      thoughtProcessPanel.setFinished();
+    if (currentThinkingPanel != null && !currentThinkingPanel.isFinished()) {
+      finishThinkingSection(true);
     }
 
     if (item instanceof CodeEnd) {

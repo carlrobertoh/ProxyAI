@@ -4,15 +4,16 @@ import com.intellij.icons.AllIcons
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
-import ee.carlrobert.codegpt.util.MarkdownUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
+import ee.carlrobert.codegpt.util.MarkdownUtil
 import java.awt.BorderLayout
 import java.awt.event.ItemEvent
 import javax.swing.*
 
-class ThoughtProcessPanel : JPanel(BorderLayout()) {
+class ThinkingPanel : BorderLayoutPanel() {
 
     private var finished: Boolean = false
+    private val startedAtMillis = System.currentTimeMillis()
     private val responseBodyContent = UIUtil.createTextPane("", false).apply {
         foreground = JBUI.CurrentTheme.Label.disabledForeground()
     }
@@ -31,7 +32,7 @@ class ThoughtProcessPanel : JPanel(BorderLayout()) {
     fun setFinished() {
         if (finished) return
 
-        toggleButton.text = CodeGPTBundle.get("thoughtProcess.title")
+        toggleButton.text = formatFinishedTitle()
         toggleButton.isSelected = false
         finished = true
 
@@ -44,11 +45,17 @@ class ThoughtProcessPanel : JPanel(BorderLayout()) {
                 )
             )
         )
+        revalidate()
+        repaint()
     }
 
     fun updateText(text: String) {
         responseBodyContent.text = MarkdownUtil.convertMdToHtml(text)
     }
+
+    fun getTitleText(): String = toggleButton.text
+
+    fun getRenderedText(): String = responseBodyContent.text
 
     private fun createContentPanel(): JPanel {
         val panel = JPanel().apply {
@@ -64,7 +71,11 @@ class ThoughtProcessPanel : JPanel(BorderLayout()) {
     }
 
     private fun createToggleButton() =
-        JToggleButton(CodeGPTBundle.get("thoughtProcess.thinking"), AllIcons.General.ArrowUp, true).apply {
+        JToggleButton(
+            CodeGPTBundle.get("thoughtProcess.thinking"),
+            AllIcons.General.ArrowRight,
+            true
+        ).apply {
             isFocusPainted = false
             isContentAreaFilled = false
             background = background
@@ -77,4 +88,14 @@ class ThoughtProcessPanel : JPanel(BorderLayout()) {
                 contentPanel.isVisible = e.stateChange == ItemEvent.SELECTED
             }
         }
+
+    private fun formatFinishedTitle(): String {
+        val elapsedSeconds = ((System.currentTimeMillis() - startedAtMillis) / 1000).toInt()
+            .coerceAtLeast(1)
+        return if (elapsedSeconds < 60) {
+            CodeGPTBundle.get("thoughtProcess.duration.seconds", elapsedSeconds)
+        } else {
+            CodeGPTBundle.get("thoughtProcess.duration.minutes", elapsedSeconds / 60)
+        }
+    }
 }
