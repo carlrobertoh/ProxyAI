@@ -38,6 +38,7 @@ import com.intellij.util.IncorrectOperationException
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
@@ -1005,7 +1006,7 @@ class PromptTextField(
     ) {
         val reusableItems = lookupItems
             .filterNot { it is LoadingLookupItem || it is StatusLookupItem }
-            .take(PromptTextFieldConstants.MAX_SEARCH_RESULTS)
+            .take(ContextSuggestionSettings.maxLookupResults())
         if (reusableItems.isEmpty()) {
             if (!lookupSearchLoading) {
                 clearVisibleLookupItems()

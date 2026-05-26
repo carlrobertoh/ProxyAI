@@ -11,6 +11,7 @@ import ee.carlrobert.codegpt.ui.textarea.UserInputPanel
 import ee.carlrobert.codegpt.ui.textarea.FileSearchSource
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FileTagDetails
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.AbstractLookupActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.contextSuggestionTypeText
 
 class FileActionItem(
     private val project: Project,
@@ -23,13 +24,7 @@ class FileActionItem(
 
     override fun setPresentation(element: LookupElement, presentation: LookupElementPresentation) {
         super.setPresentation(element, presentation)
-
-        val projectDir = project.guessProjectDir()
-        presentation.typeText = if (projectDir != null) {
-            VfsUtil.getRelativePath(file, projectDir) ?: file.path
-        } else {
-            file.path
-        }
+        presentation.typeText = contextSuggestionTypeText(project, file)
         presentation.isTypeGrayed = true
     }
 

@@ -13,6 +13,10 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.codeStyle.MinusculeMatcher
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.settings.ProxyAISettingsService
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionBlankFileSuggestionMode
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionFileSortMode
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionSettings
 import ee.carlrobert.codegpt.ui.textarea.FileSearchCandidate
 import ee.carlrobert.codegpt.ui.textarea.FileSearchProvider
 import ee.carlrobert.codegpt.ui.textarea.FileSearchSource
@@ -25,6 +29,7 @@ import ee.carlrobert.codegpt.ui.textarea.lookup.LookupMatchers
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.FileActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.files.IncludeOpenFilesActionItem
+import kotlin.math.max
 
 class FilesGroupItem(
     private val project: Project,
@@ -32,6 +37,12 @@ class FilesGroupItem(
     private val fileSearchProvider: FileSearchProvider = NativeFileSearchProvider(project)
 ) : AbstractLookupGroupItem(), DynamicLookupGroupItem {
     private val settingsService = project.service<ProxyAISettingsService>()
+    @Volatile
+    private var cachedProjectFiles: List<VirtualFile> = emptyList()
+    @Volatile
+    private var cachedProjectFileStructureModCount: Long = -1L
+    @Volatile
+    private var cachedProjectFileRootModCount: Long = -1L
     @Volatile
     private var cachedFolders: List<VirtualFile> = emptyList()
     @Volatile
@@ -45,7 +56,10 @@ class FilesGroupItem(
     override suspend fun getLookupItems(searchText: String): List<LookupActionItem> {
         val normalizedSearchText = searchText.trim()
         val openFiles = getOpenFileCandidates(normalizedSearchText)
-        val providerMatches = fileSearchProvider.search(normalizedSearchText, MAX_SEARCH_FILES)
+        val providerMatches = fileSearchProvider.search(
+            normalizedSearchText,
+            maxFileSearchCandidates()
+        )
         val visibleProviderMatches = readAction {
             val projectFileIndex = project.service<ProjectFileIndex>()
             providerMatches.filter { candidate ->
@@ -58,7 +72,8 @@ class FilesGroupItem(
         val orderedCandidates = if (normalizedSearchText.isEmpty()) {
             buildDefaultCandidates(
                 openFiles = openFiles,
-                recentFiles = getRecentFileCandidates(normalizedSearchText)
+                recentFiles = getRecentFileCandidates(normalizedSearchText),
+                projectFiles = getDefaultProjectFileCandidates()
             )
         } else {
             val recentFiles = if (openFiles.isEmpty()) {
@@ -73,15 +88,12 @@ class FilesGroupItem(
             }.distinctBy { it.file.path }
         }
 
-        return orderedCandidates.toFileSuggestions(normalizedSearchText) + folderItems
+        return sortCandidates(orderedCandidates).toFileSuggestions(normalizedSearchText) + folderItems
     }
 
     companion object {
-        private const val MAX_SEARCH_FILES = 200
-        private const val MAX_DEFAULT_FILE_SUGGESTIONS = 25
+        private const val DEFAULT_SEARCH_FILES = 200
         private const val MAX_SEARCH_FOLDERS = 200
-        private const val MAX_DEFAULT_FOLDER_SUGGESTIONS = 10
-        private const val MAX_OPEN_FILE_SUGGESTIONS = 15
     }
 
     private fun createMatcher(searchText: String): MinusculeMatcher {
@@ -115,7 +127,7 @@ class FilesGroupItem(
                 .filter { file ->
                     matchingDegree(file, projectFileIndex, matcher) != Int.MIN_VALUE
                 }
-                .take(MAX_SEARCH_FILES)
+                .take(maxFileSearchCandidates())
                 .map { file ->
                     FileSearchCandidate(
                         file = file,
@@ -128,24 +140,60 @@ class FilesGroupItem(
 
     private fun buildDefaultCandidates(
         openFiles: List<FileSearchCandidate>,
-        recentFiles: List<FileSearchCandidate>
+        recentFiles: List<FileSearchCandidate>,
+        projectFiles: List<FileSearchCandidate>
     ): List<FileSearchCandidate> {
-        val prioritizedOpenFiles = openFiles.take(MAX_OPEN_FILE_SUGGESTIONS)
-        val openFilePaths = prioritizedOpenFiles.mapTo(mutableSetOf()) { it.file.path }
-        val recentBackfill = recentFiles
-            .filterNot { it.file.path in openFilePaths }
-            .take(MAX_DEFAULT_FILE_SUGGESTIONS - prioritizedOpenFiles.size)
+        val baseCandidates = when (blankFileSuggestionMode()) {
+            ContextSuggestionBlankFileSuggestionMode.OPEN_AND_RECENT ->
+                openFiles + recentFiles
 
-        return prioritizedOpenFiles + recentBackfill
+            ContextSuggestionBlankFileSuggestionMode.OPEN_RECENT_AND_PROJECT ->
+                openFiles + recentFiles + projectFiles
+        }
+
+        if (fileSortMode() != ContextSuggestionFileSortMode.PRESERVE_CURRENT_ORDER) {
+            return baseCandidates.distinctBy { it.file.path }
+        }
+
+        val maxFileSuggestions = maxFileSuggestions()
+        val prioritizedOpenFiles = openFiles.take(maxFileSuggestions)
+        val selectedFilePaths = prioritizedOpenFiles.mapTo(mutableSetOf()) { it.file.path }
+        val recentBackfill = recentFiles
+            .filterNot { it.file.path in selectedFilePaths }
+            .take((maxFileSuggestions - prioritizedOpenFiles.size).coerceAtLeast(0))
+        selectedFilePaths.addAll(recentBackfill.map { it.file.path })
+        val projectBackfill = if (
+            blankFileSuggestionMode() == ContextSuggestionBlankFileSuggestionMode.OPEN_RECENT_AND_PROJECT
+        ) {
+            projectFiles
+                .filterNot { it.file.path in selectedFilePaths }
+                .take((maxFileSuggestions - prioritizedOpenFiles.size - recentBackfill.size).coerceAtLeast(0))
+        } else {
+            emptyList()
+        }
+
+        return prioritizedOpenFiles + recentBackfill + projectBackfill
+    }
+
+    private suspend fun getDefaultProjectFileCandidates(): List<FileSearchCandidate> {
+        return readAction {
+            val projectFileIndex = project.service<ProjectFileIndex>()
+            getProjectFiles(projectFileIndex)
+                .asSequence()
+                .filter { file -> isVisibleProjectFile(file, projectFileIndex) }
+                .map { file ->
+                    FileSearchCandidate(
+                        file = file,
+                        source = FileSearchSource.NATIVE
+                    )
+                }
+                .toList()
+        }
     }
 
     private suspend fun getFolderSuggestions(searchText: String): List<FolderActionItem> {
         val matcher = createMatcher(searchText)
-        val resultLimit = if (searchText.isEmpty()) {
-            MAX_DEFAULT_FOLDER_SUGGESTIONS
-        } else {
-            MAX_SEARCH_FOLDERS
-        }
+        val resultLimit = minOf(maxDirectorySuggestions(), MAX_SEARCH_FOLDERS)
 
         return readAction {
             val projectFileIndex = project.service<ProjectFileIndex>()
@@ -236,7 +284,7 @@ class FilesGroupItem(
     }
 
     private fun Iterable<FileSearchCandidate>.toFileSuggestions(searchText: String): List<LookupActionItem> {
-        val fileItems = map { candidate ->
+        val fileItems = take(maxFileSuggestions()).map { candidate ->
             FileActionItem(project, candidate.file, candidate.source)
         }
 
@@ -271,5 +319,73 @@ class FilesGroupItem(
         cachedFolderStructureModCount = structureModCount
         cachedFolderRootModCount = rootModCount
         return folders
+    }
+
+    @Synchronized
+    private fun getProjectFiles(projectFileIndex: ProjectFileIndex): List<VirtualFile> {
+        val structureModCount = VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS.modificationCount
+        val rootModCount = ProjectRootManager.getInstance(project).modificationCount
+        if (cachedProjectFileStructureModCount == structureModCount &&
+            cachedProjectFileRootModCount == rootModCount
+        ) {
+            return cachedProjectFiles
+        }
+
+        val files = mutableListOf<VirtualFile>()
+        projectFileIndex.iterateContent { file ->
+            if (file.isValid && !file.isDirectory) {
+                files += file
+            }
+            true
+        }
+        cachedProjectFiles = files
+        cachedProjectFileStructureModCount = structureModCount
+        cachedProjectFileRootModCount = rootModCount
+        return files
+    }
+
+    private fun maxFileSuggestions(): Int {
+        return ContextSuggestionSettings.normalizeMaxFileSuggestions(
+            ConfigurationSettings.getState().contextSuggestionSettings.maxFileSuggestions
+        )
+    }
+
+    private fun maxDirectorySuggestions(): Int {
+        return ContextSuggestionSettings.normalizeMaxDirectorySuggestions(
+            ConfigurationSettings.getState().contextSuggestionSettings.maxDirectorySuggestions
+        )
+    }
+
+    private fun maxFileSearchCandidates(): Int {
+        return max(DEFAULT_SEARCH_FILES, maxFileSuggestions())
+    }
+
+    private fun blankFileSuggestionMode(): ContextSuggestionBlankFileSuggestionMode {
+        return ConfigurationSettings.getState().contextSuggestionSettings.blankFileSuggestionMode
+    }
+
+    private fun fileSortMode(): ContextSuggestionFileSortMode {
+        return ConfigurationSettings.getState().contextSuggestionSettings.fileSortMode
+    }
+
+    private fun sortCandidates(candidates: List<FileSearchCandidate>): List<FileSearchCandidate> {
+        return when (fileSortMode()) {
+            ContextSuggestionFileSortMode.PRESERVE_CURRENT_ORDER -> candidates
+            ContextSuggestionFileSortMode.FILE_NAME_ASCENDING ->
+                candidates.sortedWith(
+                    compareBy<FileSearchCandidate, String>(String.CASE_INSENSITIVE_ORDER) {
+                        it.file.name
+                    }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.file.path }
+                )
+
+            ContextSuggestionFileSortMode.FOLDER_THEN_FILE_ASCENDING ->
+                candidates.sortedWith(
+                    compareBy<FileSearchCandidate, String>(String.CASE_INSENSITIVE_ORDER) {
+                        it.file.parent?.path.orEmpty()
+                    }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.file.name }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.file.path }
+                )
+        }
     }
 }

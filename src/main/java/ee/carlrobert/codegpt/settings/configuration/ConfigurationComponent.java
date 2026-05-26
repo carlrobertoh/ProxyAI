@@ -29,6 +29,7 @@ public class ConfigurationComponent {
   private final JBTextField temperatureField;
   private final CodeCompletionConfigurationForm codeCompletionForm;
   private final ChatCompletionConfigurationForm chatCompletionForm;
+  private final ContextSuggestionConfigurationForm contextSuggestionForm;
   private final ScreenshotConfigurationForm screenshotForm;
 
   public ConfigurationComponent(
@@ -75,6 +76,7 @@ public class ConfigurationComponent {
 
     codeCompletionForm = new CodeCompletionConfigurationForm();
     chatCompletionForm = new ChatCompletionConfigurationForm();
+    contextSuggestionForm = new ContextSuggestionConfigurationForm();
     screenshotForm = new ScreenshotConfigurationForm();
     screenshotForm.loadState(configuration.getScreenshotWatchPaths());
 
@@ -96,6 +98,9 @@ public class ConfigurationComponent {
         .addComponent(new TitledSeparator(
             CodeGPTBundle.get("configurationConfigurable.section.chatCompletion.title")))
         .addComponent(chatCompletionForm.createPanel())
+        .addComponent(new TitledSeparator(
+            CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.title")))
+        .addComponent(contextSuggestionForm.createPanel())
         .addComponentFillVertically(new JPanel(), 0)
         .getPanel();
   }
@@ -114,6 +119,7 @@ public class ConfigurationComponent {
     state.setAutoFormattingEnabled(autoFormattingCheckBox.isSelected());
     state.setCodeCompletionSettings(codeCompletionForm.getFormState());
     state.setChatCompletionSettings(chatCompletionForm.getFormState());
+    state.setContextSuggestionSettings(contextSuggestionForm.getFormState());
 
     var screenshotPaths = screenshotForm.getState();
     state.getScreenshotWatchPaths().clear();
@@ -132,6 +138,7 @@ public class ConfigurationComponent {
     autoFormattingCheckBox.setSelected(configuration.getAutoFormattingEnabled());
     codeCompletionForm.resetForm(configuration.getCodeCompletionSettings());
     chatCompletionForm.resetForm(configuration.getChatCompletionSettings());
+    contextSuggestionForm.resetForm(configuration.getContextSuggestionSettings());
     screenshotForm.loadState(configuration.getScreenshotWatchPaths());
   }
 

@@ -3,7 +3,12 @@ package ee.carlrobert.codegpt.ui.textarea
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.codeInsight.lookup.LookupElementPresentation
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionBlankFileSuggestionMode
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionFileSortMode
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionPathDetailsMode
 import ee.carlrobert.codegpt.ui.textarea.header.tag.FolderTagDetails
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.FolderActionItem
@@ -79,7 +84,7 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
         assertThat(fileSuggestions[1].source).isEqualTo(FileSearchSource.RECENT)
     }
 
-    fun `test files group should cap blank suggestions at 15 open files and backfill to 25 with recent files`() {
+    fun `test files group should cap blank suggestions at configured max and backfill with project files`() {
         val openProjectFiles = (1..20).map { index ->
             myFixture.addFileToProject("app/src/test/Open$index.kt", "class Open$index").virtualFile
         }
@@ -89,6 +94,47 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
                 "class Recent$index"
             ).virtualFile
         }
+        (1..120).forEach { index ->
+            myFixture.addFileToProject(
+                "app/src/test/Project$index.kt",
+                "class Project$index"
+            )
+        }
+
+        recentFiles.forEach { file -> openThenCloseFiles(file) }
+        openFiles(*openProjectFiles.toTypedArray())
+        withBlankFileSuggestionMode(ContextSuggestionBlankFileSuggestionMode.OPEN_RECENT_AND_PROJECT) {
+            val filesGroupItem = FilesGroupItem(project, TagManager())
+
+            val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("") }
+                .filterIsInstance<FileActionItem>()
+
+            assertThat(fileSuggestions).hasSize(50)
+            assertThat(fileSuggestions.take(20).map { it.source })
+                .allMatch { it == FileSearchSource.OPEN }
+            assertThat(fileSuggestions.drop(20).take(20).map { it.source })
+                .allMatch { it == FileSearchSource.RECENT }
+            assertThat(fileSuggestions.drop(40).map { it.source })
+                .allMatch { it == FileSearchSource.NATIVE }
+        }
+    }
+
+    fun `test default blank suggestions should only show open and recent files`() {
+        val openProjectFiles = (1..20).map { index ->
+            myFixture.addFileToProject("defaultscope/Open$index.kt", "class Open$index").virtualFile
+        }
+        val recentFiles = (1..20).map { index ->
+            myFixture.addFileToProject(
+                "defaultscope/Recent$index.kt",
+                "class Recent$index"
+            ).virtualFile
+        }
+        (1..120).forEach { index ->
+            myFixture.addFileToProject(
+                "defaultscope/Project$index.kt",
+                "class Project$index"
+            )
+        }
 
         recentFiles.forEach { file -> openThenCloseFiles(file) }
         openFiles(*openProjectFiles.toTypedArray())
@@ -97,11 +143,74 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
         val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("") }
             .filterIsInstance<FileActionItem>()
 
-        assertThat(fileSuggestions).hasSize(25)
-        assertThat(fileSuggestions.take(15).map { it.source })
+        assertThat(fileSuggestions).hasSize(40)
+        assertThat(fileSuggestions.take(20).map { it.source })
             .allMatch { it == FileSearchSource.OPEN }
-        assertThat(fileSuggestions.drop(15).map { it.source })
+        assertThat(fileSuggestions.drop(20).map { it.source })
             .allMatch { it == FileSearchSource.RECENT }
+    }
+
+    fun `test files group should sort files alphabetically by file name when configured`() {
+        myFixture.addFileToProject("sorting/zeta/SortBeta.kt", "class SortBeta")
+        myFixture.addFileToProject("sorting/alpha/SortAlpha.kt", "class SortAlpha")
+        myFixture.addFileToProject("sorting/beta/SortGamma.kt", "class SortGamma")
+
+        withFileSortMode(ContextSuggestionFileSortMode.FILE_NAME_ASCENDING) {
+            val filesGroupItem = FilesGroupItem(project, TagManager())
+
+            val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("Sort") }
+                .filterIsInstance<FileActionItem>()
+
+            assertThat(fileSuggestions.take(3).map { it.file.name })
+                .containsExactly("SortAlpha.kt", "SortBeta.kt", "SortGamma.kt")
+        }
+    }
+
+    fun `test files group should sort files by folder then file name when configured`() {
+        myFixture.addFileToProject("sorting/zeta/FolderSortAlpha.kt", "class FolderSortAlpha")
+        myFixture.addFileToProject("sorting/alpha/FolderSortGamma.kt", "class FolderSortGamma")
+        myFixture.addFileToProject("sorting/alpha/FolderSortBeta.kt", "class FolderSortBeta")
+
+        withFileSortMode(ContextSuggestionFileSortMode.FOLDER_THEN_FILE_ASCENDING) {
+            val filesGroupItem = FilesGroupItem(project, TagManager())
+
+            val fileSuggestions = runBlocking { filesGroupItem.getLookupItems("FolderSort") }
+                .filterIsInstance<FileActionItem>()
+
+            assertThat(fileSuggestions.take(3).map { it.file.path.substringAfter("/sorting/") })
+                .containsExactly(
+                    "alpha/FolderSortBeta.kt",
+                    "alpha/FolderSortGamma.kt",
+                    "zeta/FolderSortAlpha.kt"
+                )
+        }
+    }
+
+    fun `test file suggestion can show directory only in path details`() {
+        val file =
+            myFixture.addFileToProject("display/path/FileDisplay.kt", "class FileDisplay").virtualFile
+
+        withPathDetailsMode(ContextSuggestionPathDetailsMode.DIRECTORY_ONLY) {
+            val presentation = LookupElementPresentation()
+            FileActionItem(project, file).createLookupElement("", null).renderElement(presentation)
+
+            assertThat(presentation.itemText).isEqualTo("FileDisplay.kt")
+            assertThat(presentation.typeText).isEqualTo("display/path")
+        }
+    }
+
+    fun `test folder suggestion can show parent directory only in path details`() {
+        val folder =
+            myFixture.addFileToProject("display/folder/Inner/Visible.kt", "class Visible")
+                .virtualFile.parent
+
+        withPathDetailsMode(ContextSuggestionPathDetailsMode.DIRECTORY_ONLY) {
+            val presentation = LookupElementPresentation()
+            FolderActionItem(project, folder).createLookupElement("", null).renderElement(presentation)
+
+            assertThat(presentation.itemText).isEqualTo("Inner")
+            assertThat(presentation.typeText).isEqualTo("display/folder")
+        }
     }
 
     fun `test files group typed search should include closed project files even when files are open`() {
@@ -316,5 +425,47 @@ class IgnoreRulesTagManagerIntegrationTest : IntegrationTest() {
             FileTime.fromMillis(System.currentTimeMillis() + 1000)
         )
         return file
+    }
+
+    private fun withFileSortMode(
+        sortMode: ContextSuggestionFileSortMode,
+        block: () -> Unit
+    ) {
+        val settings = ConfigurationSettings.getState().contextSuggestionSettings
+        val previousSortMode = settings.fileSortMode
+        try {
+            settings.fileSortMode = sortMode
+            block()
+        } finally {
+            settings.fileSortMode = previousSortMode
+        }
+    }
+
+    private fun withBlankFileSuggestionMode(
+        blankFileSuggestionMode: ContextSuggestionBlankFileSuggestionMode,
+        block: () -> Unit
+    ) {
+        val settings = ConfigurationSettings.getState().contextSuggestionSettings
+        val previousBlankFileSuggestionMode = settings.blankFileSuggestionMode
+        try {
+            settings.blankFileSuggestionMode = blankFileSuggestionMode
+            block()
+        } finally {
+            settings.blankFileSuggestionMode = previousBlankFileSuggestionMode
+        }
+    }
+
+    private fun withPathDetailsMode(
+        pathDetailsMode: ContextSuggestionPathDetailsMode,
+        block: () -> Unit
+    ) {
+        val settings = ConfigurationSettings.getState().contextSuggestionSettings
+        val previousPathDetailsMode = settings.pathDetailsMode
+        try {
+            settings.pathDetailsMode = pathDetailsMode
+            block()
+        } finally {
+            settings.pathDetailsMode = previousPathDetailsMode
+        }
     }
 }

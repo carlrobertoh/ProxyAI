@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.ui.textarea
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.psi.codeStyle.MinusculeMatcher
+import ee.carlrobert.codegpt.settings.configuration.ContextSuggestionSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
@@ -202,7 +203,7 @@ class SearchManager(
         }
             .sortedByDescending { it.second }
             .map { it.first }
-            .take(PromptTextFieldConstants.MAX_SEARCH_RESULTS)
+            .take(ContextSuggestionSettings.maxLookupResults())
     }
 
     private fun createMatcher(searchText: String): MinusculeMatcher {

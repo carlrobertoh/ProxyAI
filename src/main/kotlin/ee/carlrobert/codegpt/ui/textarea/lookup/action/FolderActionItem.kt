@@ -20,13 +20,7 @@ class FolderActionItem(
 
     override fun setPresentation(element: LookupElement, presentation: LookupElementPresentation) {
         super.setPresentation(element, presentation)
-
-        val projectDir = project.guessProjectDir()
-        presentation.typeText = if (projectDir != null) {
-            VfsUtil.getRelativePath(folder, projectDir) ?: folder.path
-        } else {
-            folder.path
-        }
+        presentation.typeText = contextSuggestionTypeText(project, folder)
         presentation.isTypeGrayed = true
     }
 
