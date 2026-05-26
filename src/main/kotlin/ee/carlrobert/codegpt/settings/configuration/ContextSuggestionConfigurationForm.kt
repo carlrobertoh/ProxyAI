@@ -6,7 +6,6 @@ import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.EnumComboBoxModel
 import com.intellij.ui.components.fields.IntegerField
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import java.awt.Component
 import javax.swing.DefaultListCellRenderer
@@ -22,151 +21,57 @@ class ContextSuggestionConfigurationForm {
         columns = 12
         value = service<ConfigurationSettings>().state.contextSuggestionSettings.maxFileSuggestions
     }
-
-    private val maxDirectorySuggestionsField = IntegerField(
-        "max_directory_suggestions",
-        1,
-        ContextSuggestionSettings.MAX_DIRECTORY_SUGGESTIONS
-    ).apply {
-        columns = 12
-        value = service<ConfigurationSettings>().state.contextSuggestionSettings.maxDirectorySuggestions
-    }
+    private val maxDirectorySuggestionsField =
+        IntegerField(
+            "max_directory_suggestions",
+            1,
+            ContextSuggestionSettings.MAX_DIRECTORY_SUGGESTIONS
+        ).apply {
+            columns = 12
+            value =
+                service<ConfigurationSettings>().state.contextSuggestionSettings.maxDirectorySuggestions
+        }
     private val blankFileSuggestionModeComboBox =
-        ComboBox(EnumComboBoxModel(ContextSuggestionBlankFileSuggestionMode::class.java)).apply {
-            selectedItem = service<ConfigurationSettings>().state.contextSuggestionSettings.blankFileSuggestionMode
-            renderer = object : DefaultListCellRenderer() {
-                override fun getListCellRendererComponent(
-                    list: JList<*>?,
-                    value: Any?,
-                    index: Int,
-                    isSelected: Boolean,
-                    cellHasFocus: Boolean
-                ): Component {
-                    val displayValue =
-                        (value as? ContextSuggestionBlankFileSuggestionMode)?.displayName() ?: value
-                    return super.getListCellRendererComponent(
-                        list,
-                        displayValue,
-                        index,
-                        isSelected,
-                        cellHasFocus
-                    )
-                }
-            }
-        }
+        createEnumComboBox(
+            service<ConfigurationSettings>().state.contextSuggestionSettings.blankFileSuggestionMode,
+            ContextSuggestionBlankFileSuggestionMode::displayName
+        )
     private val fileSortModeComboBox =
-        ComboBox(EnumComboBoxModel(ContextSuggestionFileSortMode::class.java)).apply {
-            selectedItem = service<ConfigurationSettings>().state.contextSuggestionSettings.fileSortMode
-            renderer = object : DefaultListCellRenderer() {
-                override fun getListCellRendererComponent(
-                    list: JList<*>?,
-                    value: Any?,
-                    index: Int,
-                    isSelected: Boolean,
-                    cellHasFocus: Boolean
-                ): Component {
-                    val displayValue = (value as? ContextSuggestionFileSortMode)?.displayName() ?: value
-                    return super.getListCellRendererComponent(
-                        list,
-                        displayValue,
-                        index,
-                        isSelected,
-                        cellHasFocus
-                    )
-                }
-            }
-        }
+        createEnumComboBox(
+            service<ConfigurationSettings>().state.contextSuggestionSettings.fileSortMode,
+            ContextSuggestionFileSortMode::displayName
+        )
     private val pathDetailsModeComboBox =
-        ComboBox(EnumComboBoxModel(ContextSuggestionPathDetailsMode::class.java)).apply {
-            selectedItem = service<ConfigurationSettings>().state.contextSuggestionSettings.pathDetailsMode
-            renderer = object : DefaultListCellRenderer() {
-                override fun getListCellRendererComponent(
-                    list: JList<*>?,
-                    value: Any?,
-                    index: Int,
-                    isSelected: Boolean,
-                    cellHasFocus: Boolean
-                ): Component {
-                    val displayValue = (value as? ContextSuggestionPathDetailsMode)?.displayName() ?: value
-                    return super.getListCellRendererComponent(
-                        list,
-                        displayValue,
-                        index,
-                        isSelected,
-                        cellHasFocus
-                    )
-                }
-            }
-        }
+        createEnumComboBox(
+            service<ConfigurationSettings>().state.contextSuggestionSettings.pathDetailsMode,
+            ContextSuggestionPathDetailsMode::displayName
+        )
 
     fun createPanel(): DialogPanel {
         return panel {
-            row {
-                label(
-                    CodeGPTBundle.get(
-                        "configurationConfigurable.section.contextSuggestions.maxFileSuggestions.title"
-                    )
-                )
-                cell(maxFileSuggestionsField)
-                    .comment(
-                        CodeGPTBundle.get(
-                            "configurationConfigurable.section.contextSuggestions.maxFileSuggestions.description"
-                        )
-                    )
+            indent {
+                row(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.maxFileSuggestions.title")) {
+                    cell(maxFileSuggestionsField)
+                        .comment(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.maxFileSuggestions.title"))
+                }
+                row(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.maxDirectorySuggestions.title")) {
+                    cell(maxDirectorySuggestionsField)
+                        .comment(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.maxDirectorySuggestions.description"))
+                }
+                row(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.blankFileSuggestionMode.title")) {
+                    cell(blankFileSuggestionModeComboBox)
+                        .comment(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.blankFileSuggestionMode.description"))
+                }
+                row(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.fileSortMode.title")) {
+                    cell(fileSortModeComboBox)
+                        .comment(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.fileSortMode.description"))
+                }
+                row(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.pathDetailsMode.title")) {
+                    cell(pathDetailsModeComboBox)
+                        .comment(CodeGPTBundle.get("configurationConfigurable.section.contextSuggestions.pathDetailsMode.description"))
+                }
             }
-            row {
-                label(
-                    CodeGPTBundle.get(
-                        "configurationConfigurable.section.contextSuggestions.maxDirectorySuggestions.title"
-                    )
-                )
-                cell(maxDirectorySuggestionsField)
-                    .comment(
-                        CodeGPTBundle.get(
-                            "configurationConfigurable.section.contextSuggestions.maxDirectorySuggestions.description"
-                        )
-                    )
-            }
-            row {
-                label(
-                    CodeGPTBundle.get(
-                        "configurationConfigurable.section.contextSuggestions.blankFileSuggestionMode.title"
-                    )
-                )
-                cell(blankFileSuggestionModeComboBox)
-                    .comment(
-                        CodeGPTBundle.get(
-                            "configurationConfigurable.section.contextSuggestions.blankFileSuggestionMode.description"
-                        )
-                    )
-            }
-            row {
-                label(
-                    CodeGPTBundle.get(
-                        "configurationConfigurable.section.contextSuggestions.fileSortMode.title"
-                    )
-                )
-                cell(fileSortModeComboBox)
-                    .comment(
-                        CodeGPTBundle.get(
-                            "configurationConfigurable.section.contextSuggestions.fileSortMode.description"
-                        )
-                    )
-            }
-            row {
-                label(
-                    CodeGPTBundle.get(
-                        "configurationConfigurable.section.contextSuggestions.pathDetailsMode.title"
-                    )
-                )
-                cell(pathDetailsModeComboBox)
-                    .comment(
-                        CodeGPTBundle.get(
-                            "configurationConfigurable.section.contextSuggestions.pathDetailsMode.description"
-                        )
-                    )
-            }
-        }.withBorder(JBUI.Borders.emptyLeft(16))
+        }
     }
 
     fun resetForm(prevState: ContextSuggestionSettingsState) {
@@ -186,8 +91,36 @@ class ContextSuggestionConfigurationForm {
                     ?: ContextSuggestionBlankFileSuggestionMode.OPEN_AND_RECENT
             fileSortMode = fileSortModeComboBox.selectedItem as? ContextSuggestionFileSortMode
                 ?: ContextSuggestionFileSortMode.PRESERVE_CURRENT_ORDER
-            pathDetailsMode = pathDetailsModeComboBox.selectedItem as? ContextSuggestionPathDetailsMode
-                ?: ContextSuggestionPathDetailsMode.FULL_PATH
+            pathDetailsMode =
+                pathDetailsModeComboBox.selectedItem as? ContextSuggestionPathDetailsMode
+                    ?: ContextSuggestionPathDetailsMode.FULL_PATH
+        }
+    }
+
+    private inline fun <reified T : Enum<T>> createEnumComboBox(
+        selectedValue: T,
+        noinline displayName: (T) -> String
+    ): ComboBox<T> {
+        return ComboBox(EnumComboBoxModel(T::class.java)).apply {
+            selectedItem = selectedValue
+            renderer = object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(
+                    list: JList<*>?,
+                    value: Any?,
+                    index: Int,
+                    isSelected: Boolean,
+                    cellHasFocus: Boolean
+                ): Component {
+                    val displayValue = (value as? T)?.let(displayName) ?: value
+                    return super.getListCellRendererComponent(
+                        list,
+                        displayValue,
+                        index,
+                        isSelected,
+                        cellHasFocus
+                    )
+                }
+            }
         }
     }
 }
