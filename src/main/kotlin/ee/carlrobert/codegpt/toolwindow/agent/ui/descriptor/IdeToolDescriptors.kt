@@ -2,7 +2,6 @@ package ee.carlrobert.codegpt.toolwindow.agent.ui.descriptor
 
 import com.intellij.icons.AllIcons
 import com.intellij.ui.JBColor
-import com.intellij.util.IconUtil
 import ee.carlrobert.codegpt.agent.tools.ide.*
 
 /**
@@ -31,15 +30,10 @@ object IdeToolDescriptors {
                 if (result.configurations.isNotEmpty()) {
                     val configList = buildConfigurationsList(result.configurations)
                     actions.add(
-                        ToolAction(
-                            "${result.totalCount} configurations",
-                            AllIcons.Actions.Show
-                        ) {
-                            ToolCallDescriptorFactory.showTextDialog(
-                                configList,
-                                "Available Run Configurations"
-                            )
-                        }
+                        createShowDialogAction(
+                            label = "${result.totalCount} configurations",
+                            dialogTitle = "Available Run Configurations"
+                        ) { configList }
                     )
                 }
             }
@@ -47,14 +41,7 @@ object IdeToolDescriptors {
             is GetRunConfigurationsTool.Result.Error -> {
                 badges.add(Badge("error", JBColor.RED))
                 detailText = result.message
-                val errorMsg = result.message
-                if (errorMsg.isNotEmpty()) {
-                    actions.add(
-                        ToolAction("Error", AllIcons.General.Error) {
-                            ToolCallDescriptorFactory.showTextDialog(errorMsg, "Error Details")
-                        }
-                    )
-                }
+                createErrorDialogAction(result.message, "Error Details")?.let(actions::add)
             }
         }
 
@@ -106,16 +93,10 @@ object IdeToolDescriptors {
             is ExecuteRunConfigurationTool.Result.Error -> {
                 badges.add(Badge("error", JBColor.RED))
                 detailText = result.message
-                if (result.message.isNotBlank()) {
-                    actions.add(
-                        ToolAction("Error", AllIcons.General.Error) {
-                            ToolCallDescriptorFactory.showTextDialog(
-                                result.message,
-                                "Run Configuration Error"
-                            )
-                        }
-                    )
-                }
+                createErrorDialogAction(
+                    result.message,
+                    "Run Configuration Error"
+                )?.let(actions::add)
             }
         }
 
@@ -180,28 +161,11 @@ object IdeToolDescriptors {
             is BreakpointTool.Result.Error -> {
                 badges.add(Badge("Failed", JBColor.RED))
                 detailText = result.message
-                val err = result.message
-                if (err.isNotEmpty()) {
-                    actions.add(
-                        ToolAction("Error", AllIcons.General.Error) {
-                            ToolCallDescriptorFactory.showTextDialog(err, "Breakpoint Error")
-                        }
-                    )
-                }
+                createErrorDialogAction(result.message, "Breakpoint Error")?.let(actions::add)
             }
         }
 
-        val fileLink = if (filePath.isNotEmpty()) {
-            FileLink(
-                path = filePath,
-                displayName = buildString {
-                    append(filePath.substringAfterLast('/'))
-                    line?.let { append(":L$it") }
-                },
-                enabled = true,
-                line = line
-            )
-        } else null
+        val fileLink = createFileLink(filePath, line)
 
         val actionLabel = when (requestedAction) {
             "delete" -> "Remove"
@@ -211,9 +175,9 @@ object IdeToolDescriptors {
 
         return ToolCallDescriptor(
             kind = ToolKind.IDE_BREAKPOINT,
-            icon = IconUtil.scale(AllIcons.Debugger.Db_set_breakpoint, null, 0.75f),
-            titlePrefix = "",
-            titleMain = "$actionLabel breakpoint",
+            icon = AllIcons.Debugger.Db_set_breakpoint,
+            titlePrefix = "$actionLabel breakpoint:",
+            titleMain = "",
             tooltip = if (filePath.isNotEmpty()) "$actionLabel breakpoint at ${filePath}:${line}" else "$actionLabel breakpoint",
             secondaryBadges = badges,
             fileLink = fileLink,
@@ -250,8 +214,11 @@ object IdeToolDescriptors {
                     sessionName
                 )
                 actions.add(
-                    ToolAction("State", AllIcons.Actions.Show) {
-                        val content = buildString {
+                    createShowDialogAction(
+                        label = "State",
+                        dialogTitle = "Debug Session"
+                    ) {
+                        buildString {
                             appendLine(debugResult.message)
                             appendLine()
                             appendLine("Session: ${debugResult.sessionName}")
@@ -260,7 +227,6 @@ object IdeToolDescriptors {
                             appendLine("Before: ${formatDebugState(debugResult.beforeState)}")
                             appendLine("After: ${formatDebugState(debugResult.afterState)}")
                         }
-                        ToolCallDescriptorFactory.showTextDialog(content, "Debug Session")
                     }
                 )
             }
@@ -268,16 +234,10 @@ object IdeToolDescriptors {
             is DebugSessionControlTool.Result.Error -> {
                 badges.add(Badge("failed", JBColor.RED))
                 detailText = debugResult.message
-                if (debugResult.message.isNotBlank()) {
-                    actions.add(
-                        ToolAction("Error", AllIcons.General.Error) {
-                            ToolCallDescriptorFactory.showTextDialog(
-                                debugResult.message,
-                                "Debug Session Error"
-                            )
-                        }
-                    )
-                }
+                createErrorDialogAction(
+                    debugResult.message,
+                    "Debug Session Error"
+                )?.let(actions::add)
             }
 
             null -> Unit
@@ -287,19 +247,7 @@ object IdeToolDescriptors {
             (debugResult as? DebugSessionControlTool.Result.Success)?.afterState?.currentFile
         val currentLine =
             (debugResult as? DebugSessionControlTool.Result.Success)?.afterState?.currentLine
-        val fileLink = if (!currentFile.isNullOrBlank()) {
-            FileLink(
-                path = currentFile,
-                displayName = buildString {
-                    append(currentFile.substringAfterLast('/'))
-                    currentLine?.let { append(":L$it") }
-                },
-                enabled = true,
-                line = currentLine
-            )
-        } else {
-            null
-        }
+        val fileLink = createFileLink(currentFile, currentLine)
 
         val actionName = (debugArgs?.action?.replace('_', ' ') ?: "control session")
             .replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
@@ -376,9 +324,9 @@ object IdeToolDescriptors {
             is GetBreakpointsTool.Result.Success -> {
                 if (result.breakpoints.isNotEmpty()) {
                     actions.add(
-                        ToolAction(
-                            "${result.totalCount} breakpoints",
-                            AllIcons.Actions.Show
+                        createShowDialogAction(
+                            label = "${result.totalCount} breakpoints",
+                            dialogTitle = "Breakpoints"
                         ) {
                             val content = buildString {
                                 appendLine(result.message)
@@ -391,7 +339,7 @@ object IdeToolDescriptors {
                                     appendLine()
                                 }
                             }
-                            ToolCallDescriptorFactory.showTextDialog(content, "Breakpoints")
+                            content
                         }
                     )
                 }
@@ -399,20 +347,15 @@ object IdeToolDescriptors {
 
             is GetBreakpointsTool.Result.Error -> {
                 badges.add(Badge("error", JBColor.RED))
-                val err = result.message
-                if (err.isNotEmpty()) actions.add(
-                    ToolAction("Error", AllIcons.General.Error) {
-                        ToolCallDescriptorFactory.showTextDialog(err, "Breakpoints Error")
-                    }
-                )
+                createErrorDialogAction(result.message, "Breakpoints Error")?.let(actions::add)
             }
         }
 
         return ToolCallDescriptor(
             kind = ToolKind.IDE_BREAKPOINTS,
-            icon = IconUtil.scale(AllIcons.Debugger.Db_set_breakpoint, null, 0.75f),
-            titlePrefix = "",
-            titleMain = "Breakpoints",
+            icon = AllIcons.Debugger.Db_set_breakpoint,
+            titlePrefix = "Breakpoints:",
+            titleMain = "",
             tooltip = "List breakpoints in project",
             secondaryBadges = badges,
             actions = actions,
@@ -459,14 +402,11 @@ object IdeToolDescriptors {
                 )
                 if (result.sessions.isNotEmpty()) {
                     actions.add(
-                        ToolAction(
-                            "${result.totalCount} sessions",
-                            AllIcons.Actions.Show
+                        createShowDialogAction(
+                            label = "${result.totalCount} sessions",
+                            dialogTitle = "Debug Sessions"
                         ) {
-                            ToolCallDescriptorFactory.showTextDialog(
-                                formatDebugSessionsContent(result),
-                                "Debug Sessions"
-                            )
+                            formatDebugSessionsContent(result)
                         }
                     )
                 }
@@ -475,30 +415,16 @@ object IdeToolDescriptors {
             is GetDebugSessionsTool.Result.Error -> {
                 badges.add(Badge("error", JBColor.RED))
                 detailText = result.message
-                val err = result.message
-                if (err.isNotEmpty()) actions.add(
-                    ToolAction("Error", AllIcons.General.Error) {
-                        ToolCallDescriptorFactory.showTextDialog(err, "Debug Sessions Error")
-                    }
-                )
+                createErrorDialogAction(
+                    result.message,
+                    "Debug Sessions Error"
+                )?.let(actions::add)
             }
         }
 
         val firstWithLocation =
             sessionResult?.sessions?.firstOrNull { !it.currentFile.isNullOrBlank() }
-        val fileLink = if (firstWithLocation?.currentFile != null) {
-            FileLink(
-                path = firstWithLocation.currentFile,
-                displayName = buildString {
-                    append(firstWithLocation.currentFile.substringAfterLast('/'))
-                    firstWithLocation.currentLine?.let { append(":L$it") }
-                },
-                enabled = true,
-                line = firstWithLocation.currentLine
-            )
-        } else {
-            null
-        }
+        val fileLink = createFileLink(firstWithLocation?.currentFile, firstWithLocation?.currentLine)
 
         return ToolCallDescriptor(
             kind = ToolKind.IDE_DEBUG_SESSIONS,
@@ -561,12 +487,7 @@ object IdeToolDescriptors {
             is GetRunOutputTool.Result.Error -> {
                 badges.add(Badge("error", JBColor.RED))
                 detailText = result.message
-                val err = result.message
-                if (err.isNotEmpty()) actions.add(
-                    ToolAction("Error", AllIcons.General.Error) {
-                        ToolCallDescriptorFactory.showTextDialog(err, "Error Details")
-                    }
-                )
+                createErrorDialogAction(result.message, "Error Details")?.let(actions::add)
             }
         }
 
@@ -599,6 +520,49 @@ object IdeToolDescriptors {
             else -> breakpoint.condition?.takeIf { it.isNotBlank() }
                 ?.let { "Breakpoint created with condition: $it" }
                 ?: "Breakpoint created at $location"
+        }
+    }
+
+    private fun createFileLink(path: String?, line: Int?): FileLink? {
+        if (path.isNullOrBlank()) {
+            return null
+        }
+
+        return FileLink(
+            path = path,
+            displayName = formatFileDisplayName(path, line),
+            enabled = true,
+            line = line
+        )
+    }
+
+    private fun formatFileDisplayName(path: String, line: Int?): String {
+        return buildString {
+            append(path.substringAfterLast('/'))
+            line?.let { append(":L$it") }
+        }
+    }
+
+    private fun createShowDialogAction(
+        label: String,
+        dialogTitle: String,
+        content: () -> String
+    ): ToolAction {
+        return ToolAction(label, AllIcons.Actions.Show) {
+            ToolCallDescriptorFactory.showTextDialog(content(), dialogTitle)
+        }
+    }
+
+    private fun createErrorDialogAction(
+        message: String,
+        dialogTitle: String
+    ): ToolAction? {
+        if (message.isBlank()) {
+            return null
+        }
+
+        return ToolAction("Error", AllIcons.General.Error) {
+            ToolCallDescriptorFactory.showTextDialog(message, dialogTitle)
         }
     }
 
