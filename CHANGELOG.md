@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- IDE debugging tools in Agent mode, including run configuration, breakpoint, and debug session actions
+- Context editor improvements for picking files and folders in lookup suggestions
+
+### Changed
+
+- Write and edit tool calls now render diff previews in the agent UI
+- Agent tool call rendering and panel lifecycle handling were improved for more reliable response display
+
+### Fixed
+
+- Custom OpenAI test connection now works when the API key is optional
+
 ## [3.8.1-261] - 2026-04-30
 
 ### Changed
