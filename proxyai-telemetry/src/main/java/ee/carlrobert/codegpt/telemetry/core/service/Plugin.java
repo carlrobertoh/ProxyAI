@@ -11,8 +11,7 @@
 package ee.carlrobert.codegpt.telemetry.core.service;
 
 import com.intellij.ide.plugins.IdeaPluginDescriptor;
-import com.intellij.ide.plugins.PluginManagerCore;
-import java.util.Arrays;
+import com.intellij.ide.plugins.PluginManager;
 
 public class Plugin extends Application {
 
@@ -30,7 +29,7 @@ public class Plugin extends Application {
         }
 
         private IdeaPluginDescriptor getPluginDescriptor(ClassLoader classLoader) {
-            return Arrays.stream(PluginManagerCore.getPlugins())
+            return PluginManager.getLoadedPlugins().stream()
                     .filter(descriptor -> classLoader.equals(descriptor.getPluginClassLoader()))
                     .findFirst()
                     .orElse(null);
