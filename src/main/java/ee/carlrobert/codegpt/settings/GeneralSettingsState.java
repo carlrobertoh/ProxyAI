@@ -7,6 +7,7 @@ public class GeneralSettingsState {
   private String displayName = "";
   private String avatarBase64 = "";
   private ServiceType selectedService = null;
+  private int chatFontSize = 0;
 
   public String getDisplayName() {
     if (displayName == null || displayName.isEmpty()) {
@@ -37,5 +38,13 @@ public class GeneralSettingsState {
 
   public void setSelectedService(ServiceType selectedService) {
     this.selectedService = selectedService;
+  }
+
+  public int getChatFontSize() {
+    return chatFontSize;
+  }
+
+  public void setChatFontSize(int chatFontSize) {
+    this.chatFontSize = chatFontSize;
   }
 }

@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.toolwindow.chat.ui
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.util.Disposer
+import ee.carlrobert.codegpt.settings.GeneralSettings
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel
 import org.assertj.core.api.Assertions.assertThat
 import testsupport.IntegrationTest
@@ -65,6 +66,56 @@ class ChatMessageResponseBodyTest : IntegrationTest() {
             } finally {
                 Disposer.dispose(disposable)
             }
+        }
+    }
+
+    fun testTextPaneUsesConfiguredChatFontSize() {
+        withChatFontSize(18) {
+            ApplicationManager.getApplication().invokeAndWait {
+                val disposable = Disposer.newDisposable()
+                try {
+                    val responseBody = ChatMessageResponseBody(project, false, disposable)
+                        .withResponse("Hello")
+
+                    val textPanes = findComponents(responseBody, JTextPane::class.java)
+                    assertThat(textPanes).hasSize(1)
+                    assertThat(textPanes.first().font.size).isEqualTo(18)
+                } finally {
+                    Disposer.dispose(disposable)
+                }
+            }
+        }
+    }
+
+    fun testExistingTextPaneUpdatesConfiguredChatFontSize() {
+        withChatFontSize(16) {
+            ApplicationManager.getApplication().invokeAndWait {
+                val disposable = Disposer.newDisposable()
+                try {
+                    val responseBody = ChatMessageResponseBody(project, false, disposable)
+                        .withResponse("Hello")
+
+                    GeneralSettings.getCurrentState().chatFontSize = 20
+                    responseBody.applyConfiguredFontSize()
+
+                    val textPanes = findComponents(responseBody, JTextPane::class.java)
+                    assertThat(textPanes).hasSize(1)
+                    assertThat(textPanes.first().font.size).isEqualTo(20)
+                } finally {
+                    Disposer.dispose(disposable)
+                }
+            }
+        }
+    }
+
+    private fun withChatFontSize(chatFontSize: Int, block: () -> Unit) {
+        val state = GeneralSettings.getCurrentState()
+        val previousFontSize = state.chatFontSize
+        state.chatFontSize = chatFontSize
+        try {
+            block()
+        } finally {
+            state.chatFontSize = previousFontSize
         }
     }
 
