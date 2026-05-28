@@ -255,6 +255,12 @@ public class ChatMessageResponseBody extends JPanel {
     }
   }
 
+  public void applyConfiguredFontSize() {
+    ChatMessageFontSize.applyTo(this);
+    revalidate();
+    repaint();
+  }
+
   public void finishThinking() {
     ApplicationManager.getApplication().invokeLater(() -> {
       finishThinkingSection(false);
@@ -530,6 +536,7 @@ public class ChatMessageResponseBody extends JPanel {
       textPane.getCaret().setVisible(true);
       textPane.setCaretPosition(textPane.getDocument().getLength());
     }
+    ChatMessageFontSize.applyTo(textPane);
     textPane.setBorder(JBUI.Borders.empty());
 
     installPopupMenu(textPane);

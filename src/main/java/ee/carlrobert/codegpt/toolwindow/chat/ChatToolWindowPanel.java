@@ -1,9 +1,11 @@
 package ee.carlrobert.codegpt.toolwindow.chat;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
 import com.intellij.openapi.actionSystem.ActionToolbar;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultCompactActionGroup;
 import com.intellij.openapi.actionSystem.Presentation;
@@ -34,11 +36,16 @@ import ee.carlrobert.codegpt.settings.service.ProviderChangeNotifier;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.codegpt.CodeGPTUserDetailsNotifier;
 import ee.carlrobert.codegpt.toolwindow.ToolWindowInitialState;
+import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageFontSize;
+import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.ToolWindowFooterNotification;
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier;
 import java.awt.CardLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.nio.file.Path;
 import java.util.Set;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import org.jetbrains.annotations.NotNull;
@@ -199,12 +206,108 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     actionGroup.addSeparator();
     actionGroup.add(new OpenInEditorAction());
     actionGroup.addSeparator();
+    actionGroup.add(new AdjustChatFontSizeAction(
+        "Decrease Chat Font Size",
+        "Decrease chat message font size",
+        AllIcons.General.Remove,
+        -1,
+        this::refreshChatFontSize));
+    actionGroup.add(new AdjustChatFontSizeAction(
+        "Increase Chat Font Size",
+        "Increase chat message font size",
+        AllIcons.General.Add,
+        1,
+        this::refreshChatFontSize));
+    actionGroup.add(new ResetChatFontSizeAction(this::refreshChatFontSize));
+    actionGroup.addSeparator();
     actionGroup.add(new SelectedPersonaActionLink(project));
 
     var toolbar = ActionManager.getInstance()
         .createActionToolbar("NAVIGATION_BAR_TOOLBAR", actionGroup, true);
     toolbar.setTargetComponent(this);
     return toolbar;
+  }
+
+  private void refreshChatFontSize() {
+    applyChatFontSize(centerPanel);
+    centerPanel.revalidate();
+    centerPanel.repaint();
+  }
+
+  private void applyChatFontSize(Component component) {
+    if (component instanceof ChatMessageResponseBody responseBody) {
+      responseBody.applyConfiguredFontSize();
+      return;
+    }
+    if (component instanceof Container container) {
+      for (Component child : container.getComponents()) {
+        applyChatFontSize(child);
+      }
+    }
+  }
+
+  private static class AdjustChatFontSizeAction extends DumbAwareAction {
+
+    private final int delta;
+    private final Runnable onChanged;
+
+    AdjustChatFontSizeAction(
+        String text,
+        String description,
+        Icon icon,
+        int delta,
+        Runnable onChanged) {
+      super(text, description, icon);
+      this.delta = delta;
+      this.onChanged = onChanged;
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent event) {
+      if (delta > 0) {
+        ChatMessageFontSize.increase();
+      } else {
+        ChatMessageFontSize.decrease();
+      }
+      onChanged.run();
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent event) {
+      event.getPresentation().setEnabled(
+          delta > 0 ? ChatMessageFontSize.canIncrease() : ChatMessageFontSize.canDecrease());
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+  }
+
+  private static class ResetChatFontSizeAction extends DumbAwareAction {
+
+    private final Runnable onChanged;
+
+    ResetChatFontSizeAction(Runnable onChanged) {
+      super("Reset Chat Font Size", "Reset chat message font size", AllIcons.General.Reset);
+      this.onChanged = onChanged;
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent event) {
+      ChatMessageFontSize.reset();
+      onChanged.run();
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent event) {
+      event.getPresentation().setEnabled(ChatMessageFontSize.hasCustomFontSize());
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
   }
 
   private static class SelectedPersonaActionLink extends DumbAwareAction implements
