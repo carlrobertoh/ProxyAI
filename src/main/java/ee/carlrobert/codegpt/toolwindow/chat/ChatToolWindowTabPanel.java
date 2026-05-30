@@ -202,6 +202,12 @@ public class ChatToolWindowTabPanel implements Disposable {
     userInputPanel.requestFocus();
   }
 
+  public void refreshChatFontSize() {
+    toolWindowScrollablePanel.refreshChatFontSize();
+    rootPanel.revalidate();
+    rootPanel.repaint();
+  }
+
   public void displayLandingView() {
     toolWindowScrollablePanel.displayLandingView(getLandingView());
     totalTokensPanel.updateConversationTokens(conversation);

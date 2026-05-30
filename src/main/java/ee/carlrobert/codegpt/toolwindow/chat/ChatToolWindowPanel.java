@@ -1,8 +1,10 @@
 package ee.carlrobert.codegpt.toolwindow.chat;
 
+import com.intellij.icons.AllIcons;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.ActionManager;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultCompactActionGroup;
@@ -39,6 +41,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.AttachImageNotifier;
 import java.awt.CardLayout;
 import java.nio.file.Path;
 import java.util.Set;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
 import org.jetbrains.annotations.NotNull;
@@ -199,12 +202,58 @@ public class ChatToolWindowPanel extends SimpleToolWindowPanel {
     actionGroup.addSeparator();
     actionGroup.add(new OpenInEditorAction());
     actionGroup.addSeparator();
+    actionGroup.add(new AdjustChatFontSizeAction(
+        "Decrease chat font size",
+        "Decrease the chat message font size",
+        AllIcons.General.Remove,
+        -1,
+        tabbedPane));
+    actionGroup.add(new AdjustChatFontSizeAction(
+        "Increase chat font size",
+        "Increase the chat message font size",
+        AllIcons.General.Add,
+        1,
+        tabbedPane));
+    actionGroup.addSeparator();
     actionGroup.add(new SelectedPersonaActionLink(project));
 
     var toolbar = ActionManager.getInstance()
         .createActionToolbar("NAVIGATION_BAR_TOOLBAR", actionGroup, true);
     toolbar.setTargetComponent(this);
     return toolbar;
+  }
+
+  private static class AdjustChatFontSizeAction extends DumbAwareAction {
+
+    private final int delta;
+    private final ChatToolWindowTabbedPane tabbedPane;
+
+    AdjustChatFontSizeAction(
+        String text,
+        String description,
+        Icon icon,
+        int delta,
+        ChatToolWindowTabbedPane tabbedPane) {
+      super(text, description, icon);
+      this.delta = delta;
+      this.tabbedPane = tabbedPane;
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+      return ActionUpdateThread.EDT;
+    }
+
+    @Override
+    public void actionPerformed(@NotNull AnActionEvent e) {
+      ChatFontSize.adjust(delta);
+      tabbedPane.refreshChatFontSize();
+    }
+
+    @Override
+    public void update(@NotNull AnActionEvent e) {
+      e.getPresentation().setEnabled(ChatFontSize.canAdjust(delta));
+    }
   }
 
   private static class SelectedPersonaActionLink extends DumbAwareAction implements

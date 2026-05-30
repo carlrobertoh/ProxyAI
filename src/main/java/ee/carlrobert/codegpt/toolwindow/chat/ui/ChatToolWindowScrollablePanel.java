@@ -3,6 +3,8 @@ package ee.carlrobert.codegpt.toolwindow.chat.ui;
 import com.intellij.openapi.roots.ui.componentsList.components.ScrollablePanel;
 import com.intellij.openapi.roots.ui.componentsList.layout.VerticalStackLayout;
 import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Rectangle;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -70,6 +72,24 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
   public void update() {
     repaint();
     revalidate();
+  }
+
+  public void refreshChatFontSize() {
+    for (var component : getComponents()) {
+      refreshChatFontSize(component);
+    }
+    update();
+  }
+
+  private static void refreshChatFontSize(Component component) {
+    if (component instanceof ChatMessageResponseBody responseBody) {
+      responseBody.refreshFontSize();
+    }
+    if (component instanceof Container container) {
+      for (var child : container.getComponents()) {
+        refreshChatFontSize(child);
+      }
+    }
   }
 
   public JPanel getLastComponent() {

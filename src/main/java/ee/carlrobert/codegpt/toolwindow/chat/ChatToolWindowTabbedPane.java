@@ -64,6 +64,12 @@ public class ChatToolWindowTabbedPane extends JBTabbedPane {
     return activeTabMapping;
   }
 
+  public void refreshChatFontSize() {
+    activeTabMapping.values().forEach(ChatToolWindowTabPanel::refreshChatFontSize);
+    repaint();
+    revalidate();
+  }
+
   public void setTabLifecycleCallbacks(Runnable onTabsOpened, Runnable onAllTabsClosed) {
     this.onTabsOpened = onTabsOpened;
     this.onAllTabsClosed = onAllTabsClosed;

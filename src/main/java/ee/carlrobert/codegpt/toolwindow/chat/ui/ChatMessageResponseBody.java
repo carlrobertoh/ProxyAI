@@ -38,6 +38,7 @@ import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.models.ModelSettings;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
+import ee.carlrobert.codegpt.toolwindow.chat.ChatFontSize;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.actions.CopyAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.header.DefaultHeaderPanel;
@@ -59,6 +60,8 @@ import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.ui.hover.PsiLinkHoverPreview;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Container;
 import java.util.Locale;
 import java.util.Objects;
 import javax.swing.DefaultListModel;
@@ -274,6 +277,23 @@ public class ChatMessageResponseBody extends JPanel {
 
     repaint();
     revalidate();
+  }
+
+  public void refreshFontSize() {
+    refreshFontSize(contentPanel);
+    revalidate();
+    repaint();
+  }
+
+  private static void refreshFontSize(Component component) {
+    if (component instanceof JTextPane textPane) {
+      ChatFontSize.apply(textPane);
+    }
+    if (component instanceof Container container) {
+      for (var child : container.getComponents()) {
+        refreshFontSize(child);
+      }
+    }
   }
 
   private void displayErrorMessage(String message, HyperlinkListener hyperlinkListener) {
@@ -526,6 +546,7 @@ public class ChatMessageResponseBody extends JPanel {
 
       UIUtil.handleHyperlinkClicked(event);
     });
+    ChatFontSize.apply(textPane);
     if (caretVisible) {
       textPane.getCaret().setVisible(true);
       textPane.setCaretPosition(textPane.getDocument().getLength());
