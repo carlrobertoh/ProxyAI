@@ -35,7 +35,7 @@ abstract class AbstractEditorPromptPanel(
     private fun createEditor(): Editor {
         return service<EditorFactory>()
             .run {
-                createEditor(createDocument(details.instructions ?: ""))
+                createEditor(createDocument(StringUtil.convertLineSeparators(details.instructions ?: "")))
             }
             .apply {
                 settings.additionalLinesCount = 0
