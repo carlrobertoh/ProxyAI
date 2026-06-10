@@ -311,3 +311,42 @@ data class DiagnosticsTagDetails(
 ) : TagDetails("${virtualFile.name} Problems (${filter.displayName})", AllIcons.General.InspectionsEye) {
     override fun getTooltipText(): String = "${virtualFile.path} (${filter.displayName})"
 }
+
+data class SingleDiagnosticTagDetails(
+    val virtualFile: VirtualFile,
+    val line: Int,
+    val column: Int,
+    val severityName: String,
+    val description: String
+) : TagDetails(
+    buildSingleDiagnosticTagName(virtualFile, line, description),
+    iconForDiagnosticSeverity(severityName)
+) {
+    override fun getTooltipText(): String {
+        val location = if (column > 0) "$line:$column" else line.toString()
+        return "${virtualFile.path}:$location\n[$severityName] $description"
+    }
+}
+
+private fun buildSingleDiagnosticTagName(
+    virtualFile: VirtualFile,
+    line: Int,
+    description: String
+): String {
+    val prefix = "${virtualFile.name}:$line"
+    val shortDesc = description.lineSequence().firstOrNull().orEmpty().trim()
+    return if (shortDesc.isEmpty()) {
+        prefix
+    } else {
+        "$prefix  ${shortDesc.take(48)}".trimEnd()
+    }
+}
+
+private fun iconForDiagnosticSeverity(severityName: String): Icon {
+    return when (severityName.uppercase()) {
+        "ERROR" -> AllIcons.General.Error
+        "WARNING" -> AllIcons.General.Warning
+        "WEAK_WARNING" -> AllIcons.General.Warning
+        else -> AllIcons.General.Information
+    }
+}

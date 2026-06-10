@@ -320,6 +320,11 @@
       <override-text place="popup" use-text-of-place="MainMenu"/>
     </action>
     <action
+      id="ProxyAI.AddProblemToContext"
+      text="ProxyAI: Add Selected Problem to Chat Context"
+      description="Add the problem currently selected in the Problems tool window to the ProxyAI Chat context"
+      class="ee.carlrobert.codegpt.actions.AddProblemToContextAction"/>
+    <action
       id="statusbar.enableCompletions"
       class="ee.carlrobert.codegpt.actions.EnableCompletionsAction">
       <keyboard-shortcut first-keystroke="ctrl shift alt c" keymap="$default"/>
