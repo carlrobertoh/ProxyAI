@@ -220,6 +220,10 @@ public class ChatToolWindowTabPanel implements Disposable {
     userInputPanel.addSelection(editorFile, selectionModel);
   }
 
+  public void addContextTag(TagDetails tag) {
+    userInputPanel.addTag(tag);
+  }
+
   public void addCommitReferences(List<GitCommitTagDetails> gitCommits) {
     userInputPanel.addCommitReferences(gitCommits);
   }

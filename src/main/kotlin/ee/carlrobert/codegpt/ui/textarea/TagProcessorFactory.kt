@@ -37,6 +37,7 @@ object TagProcessorFactory {
             is EmptyTagDetails -> TagProcessor { _, _ -> }
             is CodeAnalyzeTagDetails -> TagProcessor { _, _ -> }
             is DiagnosticsTagDetails -> DiagnosticsTagProcessor(project, tagDetails)
+            is SingleDiagnosticTagDetails -> SingleDiagnosticTagProcessor(project, tagDetails)
         }
     }
 
@@ -256,5 +257,32 @@ class DiagnosticsTagProcessor(
             .append("\n## ${tagDetails.virtualFile.name} Problems (${tagDetails.filter.displayName})\n")
             .append(diagnostics.error ?: diagnostics.content)
             .append("\n")
+    }
+}
+
+class SingleDiagnosticTagProcessor(
+    private val project: Project,
+    private val tagDetails: SingleDiagnosticTagDetails,
+) : TagProcessor {
+
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        TagProcessorFactory.appendReferencedFilePaths(
+            project,
+            message,
+            listOf(tagDetails.virtualFile)
+        )
+
+        val locationSuffix = if (tagDetails.column > 0) {
+            "${tagDetails.line}:${tagDetails.column}"
+        } else {
+            tagDetails.line.toString()
+        }
+
+        promptBuilder
+            .append("\n## Problem in ${tagDetails.virtualFile.name}\n")
+            .append("- Path: ${tagDetails.virtualFile.path}\n")
+            .append("- Location: line $locationSuffix\n")
+            .append("- Severity: ${tagDetails.severityName}\n")
+            .append("- Message: ${tagDetails.description}\n")
     }
 }
