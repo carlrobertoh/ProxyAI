@@ -319,6 +319,17 @@
       <override-text place="MainMenu" text="Open Settings"/>
       <override-text place="popup" use-text-of-place="MainMenu"/>
     </action>
+
+    <action
+      id="ProxyAI.FocusAgentInput"
+      text="ProxyAI: Focus Agent Input"
+      description="Open the ProxyAI tool window, switch to the Agent tab and focus its input"
+      class="ee.carlrobert.codegpt.actions.FocusAgentInputAction"/>
+    <action
+      id="ProxyAI.FocusChatInput"
+      text="ProxyAI: Focus Chat Input"
+      description="Open the ProxyAI tool window, switch to the Chat tab and focus its input"
+      class="ee.carlrobert.codegpt.actions.FocusChatInputAction"/>
     <action
       id="statusbar.enableCompletions"
       class="ee.carlrobert.codegpt.actions.EnableCompletionsAction">

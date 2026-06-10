@@ -85,6 +85,14 @@ class AgentToolWindowPanel(
 
     fun getTabbedPane(): AgentToolWindowTabbedPane = tabbedPane
 
+    fun focusActiveInput() {
+        landingPanel?.let {
+            it.requestFocusForTextArea()
+            return
+        }
+        contentManager.getActiveTabPanel()?.requestFocusForTextArea()
+    }
+
     private fun showTabsView() {
         disposeLandingPanel()
         centerLayout.show(centerPanel, TABS_CARD)
