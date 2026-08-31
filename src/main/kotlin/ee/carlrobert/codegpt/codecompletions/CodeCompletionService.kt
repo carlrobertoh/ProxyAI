@@ -4,6 +4,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.agent.clients.CodeCompletionCapable
 import ee.carlrobert.codegpt.agent.clients.CustomOpenAILLMClient
+import ee.carlrobert.codegpt.agent.clients.HttpClientProvider
 import ee.carlrobert.codegpt.agent.clients.toCompletionError
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.codegpt.completions.CancellableRequest
@@ -79,7 +80,8 @@ class CodeCompletionService {
             clientProvider = {
                 CustomOpenAILLMClient.fromCodeCompletionSettingsState(
                     apiKey.orEmpty(),
-                    settings
+                    settings,
+                    HttpClientProvider.createHttpClient(customOpenAIUrl = settings.url)
                 )
             },
             infillRequest = InfillRequest.Builder("Hello", "!", 0).build(),

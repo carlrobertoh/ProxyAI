@@ -146,7 +146,9 @@ object LLMClientFactory {
                     FeatureType.CODE_COMPLETION -> CustomOpenAILLMClient.fromCodeCompletionSettingsState(
                         apiKey,
                         state.codeCompletionSettings,
-                        HttpClientProvider.createHttpClient()
+                        HttpClientProvider.createHttpClient(
+                            customOpenAIUrl = state.codeCompletionSettings.url
+                        )
                     )
 
                     else -> CustomOpenAILLMClient.fromSettingsState(
