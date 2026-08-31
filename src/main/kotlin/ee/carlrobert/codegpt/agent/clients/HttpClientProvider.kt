@@ -13,9 +13,18 @@ import org.apache.hc.client5.http.auth.AuthScope
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials
 import org.apache.hc.client5.http.impl.async.HttpAsyncClientBuilder
 import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider
+import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder
 import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner
+import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder
+import org.apache.hc.client5.http.ssl.HostnameVerificationPolicy
+import org.apache.hc.client5.http.ssl.HttpsSupport
 import org.apache.hc.core5.http.HttpHost
+import java.net.URI
 import java.net.Proxy
+import java.security.cert.X509Certificate
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSession
 
 /**
  * Provides configured Ktor HttpClient instances with proxy support for Agent mode.
@@ -28,12 +37,20 @@ object HttpClientProvider {
      * Creates a Ktor HttpClient configured with proxy settings from AdvancedSettings.
      * Supports both HTTP and SOCKS proxies with optional authentication.
      */
-    fun createHttpClient(): HttpClient {
+    fun createHttpClient(customOpenAIUrl: String? = null): HttpClient {
         val advancedSettings = AdvancedSettings.getCurrentState()
         val debugModeEnabled = ConfigurationSettings.getState().debugModeEnabled
+        val certificateManagerSslContext = CertificateManager.getInstance().sslContext
+        val customOpenAIHost = customOpenAIUrl?.let(::extractHost)
         return HttpClient(Apache5) {
             engine {
-                configureProxy(advancedSettings)
+                sslContext = certificateManagerSslContext
+                if (customOpenAIHost != null) {
+                    // The custom verifier must run after the TLS handshake so an IDE-trusted
+                    // certificate can be used when the endpoint has no matching SAN.
+                    sslHostnameVerificationPolicy = HostnameVerificationPolicy.CLIENT
+                }
+                configureProxy(advancedSettings, customOpenAIHost, certificateManagerSslContext)
             }
 
             install(HttpTimeout) {
@@ -61,14 +78,18 @@ object HttpClientProvider {
         }
     }
 
-    private fun Apache5EngineConfig.configureProxy(settings: AdvancedSettingsState) {
+    private fun Apache5EngineConfig.configureProxy(
+        settings: AdvancedSettingsState,
+        customOpenAIHost: String?,
+        sslContext: SSLContext
+    ) {
         val proxyHost = settings.proxyHost
         val proxyPort = settings.proxyPort
 
         if (proxyHost.isBlank() || proxyPort == 0) {
             logger.info("No proxy configured for Agent mode")
             customizeClient {
-                sslContext = CertificateManager.getInstance().sslContext
+                configureCustomOpenAITls(customOpenAIHost, sslContext)
             }
             return
         }
@@ -78,13 +99,13 @@ object HttpClientProvider {
         val proxy = createProxy(settings) ?: run {
             logger.warn("Invalid proxy type configured: ${settings.proxyType}")
             customizeClient {
-                sslContext = CertificateManager.getInstance().sslContext
+                configureCustomOpenAITls(customOpenAIHost, sslContext)
             }
             return
         }
 
         customizeClient {
-            sslContext = CertificateManager.getInstance().sslContext
+            configureCustomOpenAITls(customOpenAIHost, sslContext)
 
             setRoutePlanner(DefaultProxyRoutePlanner(proxy))
 
@@ -92,6 +113,56 @@ object HttpClientProvider {
                 configureProxyAuthentication(settings, proxy, this)
             }
         }
+    }
+
+    private fun HttpAsyncClientBuilder.configureCustomOpenAITls(
+        customOpenAIHost: String?,
+        sslContext: SSLContext
+    ) {
+        if (customOpenAIHost == null) {
+            return
+        }
+
+        setConnectionManager(
+            PoolingAsyncClientConnectionManagerBuilder.create()
+                .setTlsStrategy(
+                    ClientTlsStrategyBuilder.create()
+                        .setSslContext(sslContext)
+                        .setHostVerificationPolicy(HostnameVerificationPolicy.CLIENT)
+                        .setHostnameVerifier(ideHostnameVerifier(customOpenAIHost))
+                        .build()
+                )
+                .build()
+        )
+    }
+
+    private val defaultHostnameVerifier = HttpsSupport.getDefaultHostnameVerifier()
+    private fun ideHostnameVerifier(customOpenAIHost: String): HostnameVerifier = HostnameVerifier { hostname, session ->
+        defaultHostnameVerifier.verify(hostname, session) ||
+            (hostname.equals(customOpenAIHost, ignoreCase = true) && isExplicitlyStoredCertificate(session))
+    }
+
+    private fun isExplicitlyStoredCertificate(session: SSLSession): Boolean {
+        val peerCertificate = runCatching {
+            session.peerCertificates.firstOrNull() as? X509Certificate
+        }
+            .getOrNull()
+            ?: return false
+
+        return runCatching {
+            CertificateManager.getInstance()
+                .getCustomTrustManager()
+                .getCertificates()
+                .contains(peerCertificate)
+        }.getOrDefault(false)
+    }
+
+    private fun extractHost(url: String): String? {
+        return runCatching { URI.create(url) }
+            .getOrNull()
+            ?.takeIf { it.scheme.equals("https", ignoreCase = true) }
+            ?.host
+            ?.takeIf { it.isNotBlank() }
     }
 
     private fun createProxy(settings: AdvancedSettingsState): HttpHost? {
